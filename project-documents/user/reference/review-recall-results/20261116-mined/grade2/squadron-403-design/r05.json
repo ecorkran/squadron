@@ -1,0 +1,40 @@
+{
+ "review": "r05",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "A git failure during range resolution is reported as an unresolved slice",
+   "description": "The failure-mode table treats a `None` from the merge search or reflog read as \"this path can't answer\" and falls through to the next path, ending in an INFO line. But `run_git` returns `None` for hangs, timeouts and non-zero exits (line 158), so a timed-out `git log --merges` on a merge-commit slice falls into the fast-forward path. There it surfaces as `landed_elsewhere` or `no_landing`: a wrong reason, exit 0, at INFO.\n\nThis conflicts with two things:\n- **The design's own API contract.** Line 275 says `slice-ranges` \"exits 1 on a git or store error\".\n- **The failure-mode rule.** Each failure mode must be observable at WARNING or above; this one is only INFO.\n\nLines 349 and 342 then lock the INFO behaviour in as a tested criterion. The design should separate \"git answered: nothing found\" from \"git did not answer\". The second should be a WARNING or higher naming the call, with either exit 1 or a distinct `RangeUnresolvedReason`. The table also doesn't say what happens when `merge-base` or `cat-file` fails partway through a multi-landing resolution.",
+   "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:164"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "The editable self-install risk has no test that can detect it",
+   "description": "The risk at line 375 is that pyright resolves `import squadron` through the live editable install instead of the exported tree, so export type counts would reflect live code. The two stated mitigations cannot catch this:\n- **Criterion 5 (in place equals export at HEAD).** At HEAD the live `src` and the exported tree are identical, so both resolutions give the same count.\n- **Walkthrough step 4 (an older commit).** There is no reference value for that commit, and the step only expects \"absent if the lockfile changed\".\n\nThe architecture's first design goal is deterministic numbers for the measured commit, and D6 leans on this path whenever lockfiles match. The fix is one export test: a throwaway repo with an editable self-install, where the exported commit and the live tree differ in a type error under an identical `uv.lock`. The test asserts that the count is the exported commit's.",
+   "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:380"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "A concurrent write can silently and permanently drop a fast-forward landing",
+   "description": "The design accepts last-write-wins on `slice_ranges` with \"Signal: None\", citing 400's precedent. The precedent doesn't carry over, for three reasons:\n- **Not reproducible.** A 400 snapshot can be re-taken; a fast-forward landing can't once its reflog expires.\n- **Wide blast radius.** D1 puts every slice of the project in one record, so one lost write can drop landings for several slices.\n- **Long window.** The data flow (lines 110-124) reads the record first, runs all git resolution, then writes.\n\nThe slice plan's risk entry says \"the persistence has to be right the first time\", and squadron routinely runs several agents and worktrees against one user-level store. A cheap fix that keeps the coarse-record design is to re-read the record immediately before the merge and write. If the loss stays accepted, the design should at least give it a WARNING when the record changed since it was read.",
+   "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:166"
+  },
+  {
+   "i": 3,
+   "severity": "NOTE",
+   "title": "Which ref the merge search uses in a fresh clone is unspecified",
+   "description": "The search runs against `<target>` from `resolve_diff_base`. In a fresh clone only the remote's default branch has a local ref; an integration-branch target exists only as `origin/<target>`. Criterion 1 promises resolution \"including in a fresh clone\", so the design should say whether the remote-tracking ref is tried. Walkthrough step 2 (`git clone .`) also yields a different `ProjectId`, since the clone's remote is a local path. That step therefore shows topology resolution, not the store sharing described at line 176.",
+   "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:109-112"
+  },
+  {
+   "i": 4,
+   "severity": "NOTE",
+   "title": "Live-checkout settings at both boundaries is a documented deviation",
+   "description": "The architecture says limits and exclusions come from the project's config and that an exported commit reads that commit's config. D5 does this for rule-set configs but reads squadron settings from the live checkout. This is acceptable: 400 D9 already makes `.squadron.toml` checkout-local, each record states the settings it used, and line 377 names the consequence. No action needed.",
+   "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:214"
+  }
+ ]
+}

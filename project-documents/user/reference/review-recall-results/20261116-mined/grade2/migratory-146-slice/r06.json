@@ -1,0 +1,96 @@
+{
+ "review": "r06",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "FAIL",
+   "title": "Bounds sync-back uploads positions only, but reflect and soft change velocities",
+   "description": "`apply_bounds_policy()` takes `velocities=` (line 188) because reflect flips velocity components and soft applies a velocity correction. The sync-back sends back only positions: `notify_positions_modified(positions)` \u2192 `GpuAgentState.upload_positions()`. On the next tick the GPU still holds the old velocities that point out of bounds. Reflected agents keep pushing outward, and each tick undoes the GPU's integration step instead of reflecting the agent. This breaks A4 (line 330) for `reflect` and `soft`, and it breaks the architecture's first design goal, \"Preserve behavioral fidelity across scaling tiers\" (`140-arch.simulation-scaling.md:26`). Test 7 (line 315) only covers wrap, which changes positions only, so it would not catch the bug.\n\n**Fix:** sync back both positions and velocities, for example `notify_state_modified(positions, velocities)` with an `upload_velocities()` method. Add reflect and soft cases to the tests that check velocity direction after a boundary crossing.",
+   "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:203-227"
+  },
+  {
+   "i": 1,
+   "severity": "FAIL",
+   "title": "No single owner of agent state between EntityManager and GpuAgentState; spawn/despawn sync is underspecified",
+   "description": "On the GPU path, state advances in GPU fields and `entity_manager.state` is never written back. The design never says which copy is authoritative, and four problems follow:\n\n1. **Stale re-upload.** `sync_from_entity_manager()` re-uploads `entity_manager.state`. Unless something copies each tick's `TickResult` back into `EntityManager`, that state is from setup or the last sync. Every spawn or despawn would teleport the whole population back to old positions.\n2. **Ordering bug with the dirty flag.** In `step()`, `sync_from_entity_manager()` runs first (line 179). Then `gpu_driver.step()` uploads `_pending_positions` from the previous tick, sized for the old N (line 213). After a count change, this overwrites the fresh sync with data of the wrong length. The design does not say that sync clears the dirty flag.\n3. **Field capacity.** `setup_from_server()` allocates fields for `n = entity_manager.count` (line 143). Nothing says whether `sync_from_entity_manager()` reallocates fields, pre-allocates a maximum capacity, or fails when the count grows past the allocation.\n4. **Net-count detection.** `count_changed_since_last_tick()` checks only the net count. A spawn and a despawn in the same tick leave the count unchanged, so the GPU silently keeps the wrong agent identities and profile indices.\n\n**Fix:** state that `EntityManager` is authoritative and is updated from `TickResult` every tick, or that the GPU is authoritative and spawn/despawn writes go to the GPU. Use an explicit mutation generation counter instead of comparing counts. Say how field capacity is handled. Make sync and the pending upload mutually exclusive. The simplest option is to drop the deferred dirty flag and upload right after `apply_bounds_policy()`, which removes the ordering hazard.",
+   "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:168-201"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "`_select_arch()` chooses by OS, not by detecting a GPU, so A7 is unreachable on Linux without CUDA",
+   "description": "The scope (line 33) and A7 (line 336) promise a fallback to CPU \"if neither is detected\". But `_select_arch()` returns `qd.cuda` for any Linux host. On Linux without an NVIDIA driver, `qd.init(arch=qd.cuda)` raises. Open Notes (line 382) say that error goes up and the server exits, so a Linux host without CUDA crashes. The warning text \"No supported GPU detected\" is misleading because no detection happens. The fallback only triggers on Windows and other non-Darwin, non-Linux platforms.\n\n**Fix:** either detect the GPU (try `qd.init` with the GPU arch, catch the specific init error, log a WARNING, and re-init on `qd.cpu`, after confirming Quadrants allows re-init after `qd.reset()`), or narrow A7 and the scope wording to \"unsupported OS\".",
+   "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:98-117"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "The default backend contradicts the \"CPU default\" walkthrough",
+   "description": "The slice plan, the architecture (`140-arch.simulation-scaling.md:28`), A1 and test 1 all make `quadrants` the default. The walkthrough section titled \"CPU default (no GPU)\" says that removing the `compute:` block means \"No GPU initialization should appear in logs\". With the stated default, removing the block selects `quadrants`. Line 298 also says `default.yaml` gets a *commented* `compute:` block, while line 342 has the user add one.\n\n**Fix:** correct the walkthrough so that only `backend: cpu` avoids GPU init.",
+   "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:358-362"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "GPU driver lives in the server package, so server code now depends on the compute substrate",
+   "description": "The architecture says \"the world server should not need to know whether forces are computed by NumPy or Quadrants\" (`140-arch.simulation-scaling.md:32`) and that the engine's external interface is preserved (line 80). The slice plan says \"the world server call site is unchanged\". This design instead:\n\n- puts `GpuSimulationDriver` in `src/migratory_server/`;\n- has `server.py` branch on `backend == \"quadrants\"` and construct and finalize the driver (lines 233-254).\n\nSo the server package now imports Quadrants and owns `qd.init` and `qd.reset`. Moving `GpuAgentState` into `migratory.gpu` (line 294) shows the right home.\n\n**Fix:** put the driver next to it in the engine package (`migratory.gpu`). Expose a small factory or protocol, for example `build_tick_driver(compute_config, ...)`, that `SimulationManager` consumes. That keeps `server.py` free of backend knowledge, as the plan intends.",
+   "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md#new-file-gpu_driverpy"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "GPU path silently ignores configured forces and environment state changes",
+   "description": "The CPU branch passes `forces=self._forces` (built by `_build_forces()` from config) and `spatial=self._spatial`. The GPU branch ignores both, because the fused kernel hard-codes all seven forces with parameters from the profile table. `_environment.pre_tick()` still runs, but any changes it makes to `entity_manager.state` (terrain, seasonal effects) never reach GPU fields. A config that disables or reweights a force, or an environment that changes agent state, behaves differently by backend with no error. That conflicts with \"Never use silent fallback values\".\n\n**Fix:** list which force and environment settings the GPU path honors. Fail at startup when the config uses something the fused kernel doesn't support, or state that environment hooks are read-only for agent state.",
+   "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:171-183"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "The TPS gate depends on slices 148 and 149, which the frontmatter doesn't declare",
+   "description": "The frontmatter lists only `\"145\"`. However:\n\n- A6 requires \u226560 TPS at N=50k.\n- Slice 145 measured 38 TPS at that size (slice plan item 9). Tier 2 was reached only through 148 (cell tiling) and 149 (early exit, subdivision).\n- `subdivision_factor` and its `[1, 8]` range come from 149 (lines 27, 386).\n\n**Fix:** add `\"148\"` and `\"149\"` to `dependencies`.",
+   "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:12-13"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "Bench-harness scope statements contradict the file list",
+   "description": "Out of scope (line 40) says \"Any changes to the bench harness\", and line 301 says the bench backends \"are **not changed**\". But the file table moves `GpuAgentState` out of `bench/backends/quadrants_fused_state.py` and edits `bench/backends/quadrants_fused_backend.py` (line 296). The move is the right call (Open Notes, line 383). The scope statements should say it is a move plus an import update with no logic change, so the task breakdown doesn't treat it as out of bounds.",
+   "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:294-301"
+  },
+  {
+   "i": 8,
+   "severity": "CONCERN",
+   "title": "Testing doesn't account for the `qd.init` once-per-process constraint",
+   "description": "Open Notes (line 382) say a second `qd.init()` in one process is undefined behavior, so tests must run in subprocesses. Tests 5\u20138 all call `setup()` in one module, and the Testing section never mentions isolation. Line 307 is also self-contradictory: \"All tests are CPU-only (skip if \u2026 GPU not available)\".\n\n**Fix:** specify the isolation method (per-test subprocess, or one module-scoped fixture shared by all tests) and remove the CPU-only claim.",
+   "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:303-316"
+  },
+  {
+   "i": 9,
+   "severity": "CONCERN",
+   "title": "Runtime GPU failure has no defined observable path",
+   "description": "The design covers `qd.init` failure at startup. A failure after startup (`step()` or `qd.sync()` raising, device lost, a hang in `qd.sync()`) is called \"fatal to the process\", but the design doesn't say:\n\n- how the exception leaves the server tick loop: logged at ERROR and the process exits, or caught and swallowed by the loop;\n- whether `finalize()` runs on that path;\n- what happens if `qd.sync()` hangs: there is no watchdog or timeout, and the tick loop simply stalls.\n\n**Fix:** state that the exception propagates to the process-boundary handler, is logged with `logger.exception`, triggers `finalize()`, and exits non-zero. State explicitly that a hang is accepted as unmitigated for this slice.",
+   "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:380-382"
+  },
+  {
+   "i": 10,
+   "severity": "CONCERN",
+   "title": "Backend values are bare strings compared in several places",
+   "description": "`backend: str` is compared against `\"quadrants\"` and `\"cpu\"` in config validation, in `server.py` (line 235) and in tests. The `arch` property returns more literal strings. The project rule in CLAUDE.md says comparison values must be defined once.\n\n**Fix:** use a `ComputeBackend` enum (and an arch enum or constant) in `ComputeConfig`.",
+   "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:59-65"
+  },
+  {
+   "i": 11,
+   "severity": "NOTE",
+   "title": "`arch` values are documented inconsistently",
+   "description": "Line 224 says `\"metal\" | \"cuda\" | \"cpu\"`. Line 252 says `\"cuda\"` or `\"metal\"`. The CPU fallback makes `\"cpu\"` reachable, so line 252 should include it.",
+   "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:252"
+  },
+  {
+   "i": 12,
+   "severity": "NOTE",
+   "title": "The TPS gate doesn't say which bounds policy it runs with",
+   "description": "Under a non-OPEN bounds policy, the per-tick download \u2192 NumPy bounds \u2192 upload round trip is part of the measured cost. Naming the policy for the 50k/60 TPS gate makes the result reproducible.",
+   "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:318-320"
+  }
+ ]
+}

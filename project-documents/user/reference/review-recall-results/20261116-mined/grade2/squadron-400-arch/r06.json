@@ -1,0 +1,82 @@
+{
+ "review": "r06",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "\"Review templates emit the audit vocabulary\" conflicts with review vocabularies that already exist",
+   "description": "The Overview (line 23) limits normalization to *code-review* findings. The Envisioned State (line 73) and Technical Considerations (line 91) instead say \"review templates\" in general. The difference matters, because review output does not have one free-form category today:\n- `src/squadron/data/templates/arch.yaml:86` already sets a closed, document-review vocabulary: `consistency, completeness, feasibility, technology, abstraction, extension-points, dependencies, antipattern, other`. None of these map onto `AuditCategory` code-debt classes. Forcing arch, slice or task reviews into `AuditCategory` would make that output worse.\n- The shared prompt suffix in `src/squadron/review/review_client.py:73-86` gives `category: error-handling` as its example. That value is not in `AuditCategory`, whose value is `error-handling-observability`. This is the hallucination trap CLAUDE.md warns about: write-time categorization will be pulled toward the example. The Design Goals example on line 35, \"error-handling findings\", repeats the mismatch.\n- Squadron also mints its own categories: `merge-step` (`task_gate.py:25`) and `review-coverage` (`coverage.py:7`). The doc doesn't say whether these are ingested, mapped to `other`, or excluded. Mapping them to `other` would inflate the \"vocabulary doesn't fit\" signal that `AuditCategory.OTHER` exists to carry.\n\nThe doc should state which review types get the audit vocabulary (code review only), what happens to the shared suffix example, and how synthetic categories are handled.",
+   "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md:73"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Fork-point vs merge-commit does not isolate a slice's effect",
+   "description": "\"A slice's before and after is the snapshot at its fork point against the snapshot at its merge.\" The merge commit measures the whole target. That includes everything merged into the target between the fork and the merge: other slices, fix commits that land directly on the target (which line 93 acknowledges), and worktree-branch refreshes. With the project's integration-branch and worktree model, concurrent slices are normal. The delta then credits one slice with other people's changes.\n\nThe right pair is the merge commit's first parent vs the merge commit, or the fork point vs the slice-branch tip before merge, which is less exact. Fast-forward and squash merges don't produce a distinguishable merge commit at all. The doc also doesn't address measuring a *past* commit while \"taking a snapshot doesn't modify the measured repository\" (line 71). On-demand snapshots of historical fork points need a temporary worktree or export, and that mechanism isn't mentioned.",
+   "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md:75"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Type-error and coverage counts aren't deterministic under the recorded identity",
+   "description": "Design Goal 1 promises the \"same value on the same commit with the same tool versions\". The snapshot identity (line 37) records project, commit, language, tool versions, rule set and exclusions. Pyright counts also depend on the installed environment: with `reportMissingImports = true`, the project's required strict config, every unresolved dependency adds errors. A brownfield repo measured without its dependencies installed will report a large type-error count that is environment noise. Coverage has the same problem.\n\nThe identity needs an environment fingerprint (interpreter version, lockfile hash, whether dependencies were resolved), or these metrics should be recorded as absent when the environment isn't provisioned. Line 87 defers only the \"install dependencies?\" question. It doesn't notice that the answer changes the type-error count, not just coverage.",
+   "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md:33"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "The adapter is split by language, but the measurement identity is per tool",
+   "description": "The design calls each language \"a pluggable adapter\" (line 39). The principle on line 59 says tool and version are recorded *per metric*. Line 83 admits that language-agnostic tools cover several metrics: lizard alone gives cyclomatic complexity and function length across about 20 languages, and jscpd gives duplication across languages. A per-language adapter will either wrap the same multi-language tool N times or leave each language free to pick a different complexity tool. The second option produces the cross-language definitional drift that line 83 then has to label in reports.\n\nTool-level adapters (one per metric tool, each declaring the languages it covers) with language as an input would fit the stated identity model better. They would also cut the work in the \"Additional language adapters\" slice to adding a type checker and a linter.",
+   "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md:39"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Rollups can't tell \"no review findings\" from \"never ingested\"",
+   "description": "Ingest is a separate, manually triggered step. Review files live in the repo, while the store is user-level under `~/.config`. A slice whose reviews were never ingested looks exactly like a slice with zero findings. That breaks the doc's own \"Absent is not zero\" principle (line 51) for the review source, and it will flatter exactly the slices nobody ingested. The doc applies absent-with-reason only to snapshot metrics. Reports need a coverage check per source, for example comparing review files present for the slice against ingested records, before they show counts.",
+   "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md:73"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Ingest and repeat snapshots aren't idempotent in the existing store",
+   "description": "`MetrologyStore` mints a uuid id per write (`store.py:87-108`). Only graduations and floors support replace-in-place, through an explicit `record_id`. The doc says a snapshot \"keys on project and commit SHA\", but the store has no notion of a natural key. Re-running ingest over the same review files doubles every finding. Re-running a snapshot on the same commit, which the baseline command, a pipeline action and manual CLI use can all do, leaves several snapshot records for one commit with no rule for choosing between them. Review rounds also rewrite the same review file. The doc needs a deterministic record id, such as a hash of project, commit and instrument for snapshots and of review file and finding id for findings, plus a stated dedupe rule.",
+   "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md:47"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "The \"no new store\" principle hasn't been checked against the store's full-scan query model",
+   "description": "Every `list_*` call in `store.py` globs and Pydantic-validates **every** record of every type and every project (`_iter_records`, line 176), then filters in memory. This component adds two of the highest-volume record types: one finding record per review finding across all historical reviews, and per-commit snapshots that carry per-file and per-function length distributions. \"Over time\" rollups join all three sources, so each report runs several full scans of the whole user-level store.\n\nThe doc asserts reuse \"as they are\" without estimating volume. At minimum it should state the expected record count and size, and either partition by record type or project directory or accept the scan cost explicitly.",
+   "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md:47"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "Extending `MetrologyRecord` with more sibling payloads grows a store that already has too many responsibilities",
+   "description": "The doc prescribes the 322/323/177 pattern: one more optional field on `MetrologyRecord`, plus one more `RECORD_TYPE_*` constant, `write_*` and `list_*` method per type. `store.py` is already 455 lines against the project's ~300-line guideline. Each new type copies the same envelope, write and filter code, and every addition means editing the envelope and the store (an Open/Closed violation). Making this component add two more types this way is a design choice the doc should own. A generic typed `write(payload)` / `iter(record_type, project_id)` before adding them would be cheaper than adding two more copies.",
+   "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md:47"
+  },
+  {
+   "i": 8,
+   "severity": "CONCERN",
+   "title": "Where project-declared limits live is undefined, and brownfield projects will never have them",
+   "description": "\"Limits come from the project \u2026 its own config\" never names the config: a squadron config key, ruff or pylint settings such as `max-statements`, or something else. That is load-bearing for the keystone slice. It also conflicts with two other statements:\n- The motivating case (line 18, line 67) is squadron's *prose* limits in CLAUDE.md, which no config holds.\n- \"Cheap to start measuring \u2026 without editing the project's config files\" (line 41) means a brownfield baseline will always record \"no limits set\". So the length-violation metric is structurally empty for 440's main consumer.\n\nThe doc should say where the limits come from. If the source is linter config the project already has, such as ruff's `C901` or `PLR0915`, the doc should say so, because that also settles the brownfield case.",
+   "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md:53"
+  },
+  {
+   "i": 9,
+   "severity": "CONCERN",
+   "title": "Mechanisms to cut or defer",
+   "description": "These items add mechanism without a consumer that needs them now:\n- **Read-side mapping of historical reviews** (line 91, slice on line 105). The doc admits a lookup table \"will miss\" and an LLM call \"adds noise\". It then needs its own provenance marker and a separate reporting path. Review frontmatter categories are often `None` (line 65), so the mapped data has little value. Cut it: measure from the write-time change forward.\n- **A dual rule set for lint and type counts** (line 85, \"either or both\"). The reference rule set doubles tool runs and record shape so projects can be compared with each other, which only 420 hypothetically needs. Ship the project's own rule set first and defer the reference set until 420 asks for it.\n- **Automatic pipeline capture at fork and merge** (line 95). It's left open, but it adds a failure path to every run. With fork and merge attribution unresolved (see above), on-demand snapshots are enough for now.",
+   "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md:85"
+  },
+  {
+   "i": 10,
+   "severity": "NOTE",
+   "title": "420 needs \"comparable scores\", but the doc bans any composite with no stated owner",
+   "description": "The Motivation says 420 \"needs objective, comparable scores for implementation output\". Line 57 and Non-Goal line 111 ban a composite \"anywhere, including as an intermediate value\" and \"not as an internal ranking signal\". Ranking models in a benchmark needs some aggregation. The doc should say whether that ban covers 420's use of these records, or only this component's own output. Otherwise 420's design will either break this principle or rebuild a composite outside it.",
+   "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md:29"
+  }
+ ]
+}

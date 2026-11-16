@@ -1,0 +1,40 @@
+{
+ "review": "r08",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Commit points are checkbox tasks, not plain `**Commit**:` lines",
+   "description": "All ten commit points (2C, 3C, 5C, 6C, 8C, 9C, 11C, 13C, 14C, 15C) are written as `- [ ] **Task nC: Commit** \u2014 \u2026`. A commit checkbox can only be ticked after the commit it describes, which leaves a dirty tree or forces a check-off-only commit. Convert each to a plain `**Commit**: <message>` line under the preceding task. Their placement is fine: each sits after a tested group. Task 15C (line 269) commits only walkthrough notes; fold it into 14C or the last defect-fix commit.",
+   "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:78"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Renderer behaviour for three outcome kinds is unspecified and untested",
+   "description": "The slice's Technical Requirements ask for `renderAdoptionFacts` tests on \"every outcome\". Task 8 requires an exhaustive switch on `outcome.kind`, but Task 8T covers only brownfield, adoption-in-progress and `NOT_EVALUATED`. Task 8 never says what the outcome bullet reads for `greenfield`, `already-planned` or `adoption-closed`, so the implementer has to invent that text. Add one line to Task 8 stating the text (or that these kinds throw as unreachable), and a matching case each in 8T.",
+   "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:163-176"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Byte-identical walkthrough step does not say where each build runs",
+   "description": "This step is the only coverage of the Integration Requirement \"planned projects build byte-identical prompts before and after\". \"A temporary `git worktree add` of `main`, built there\" can be read as running `cfl build` inside the temp worktree. I did not check how `cf` resolves a project from an unregistered path, but that reading risks a failed build or a diff caused by the path rather than the slice. State it explicitly: compile the CLI in the temp worktree, then run both the main-built and slice-built `dist/index.js build` from the same registered checkout directory.",
+   "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:262"
+  },
+  {
+   "i": 3,
+   "severity": "NOTE",
+   "title": "History `unknown` reason will carry gitExec's full message",
+   "description": "Task 5 sets `reason` to the error message. `gitExec` wraps that as `git <args> failed in <cwd>: \u2026` and passes it through `withNetworkErrorHint`, whose patterns match \"timed out after Ns\". The Adoption Facts history bullet may therefore include an absolute path and a network hint, not the design's short \"git timed out after 5s\". Task 5T's `contains 'timed out'` assertion still passes; decide whether Task 5 should trim the reason.",
+   "location": "packages/core/src/guides/gitExec.ts:96-101"
+  },
+  {
+   "i": 4,
+   "severity": "NOTE",
+   "title": "`context_build` error result and CLI non-zero exit have no new automated test",
+   "description": "No task adds a test for the criterion \"`cf build` exits non-zero; `context_build` returns it as an error\". Coverage is adequate without one:\n- **Rethrow:** Task 10T asserts the integrator rejects on `AdoptionError`.\n- **Pipeline:** Task 12 fixture 12 asserts the pipeline rejects on a guide without the profile.\n- **MCP:** the existing catch turns any thrown error into `errorResult`, and `packages/mcp-server/tests/contextTools.test.ts:271` is an existing test named \"returns isError on core generation failure\".\n- **CLI:** Task 15 walkthrough step 4 checks the exit code by hand.",
+   "location": "packages/mcp-server/src/tools/contextTools.ts:210-213"
+  }
+ ]
+}

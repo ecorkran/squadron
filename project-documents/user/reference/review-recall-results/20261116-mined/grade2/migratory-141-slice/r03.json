@@ -1,0 +1,96 @@
+{
+ "review": "r03",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Numba runner deferred to 144 although its prerequisite is complete",
+   "description": "The design puts the Numba runner in slice 144 (\"144 / 118 territory\", lines 92-93). Its registration section says 144 registers `numba` by delegating to `forces_jit` through the existing JIT-config flag (lines 341-344). Plan entry 141 says Numba \"slot[s] in as those backends become available\" (140-slices, line 26). Slice 118 is `status: complete`, and that flag and kernel module already exist, so the reason for waiting no longer holds. Slice 142's plan requires benchmarking the Quadrants cohesion force \"against the existing NumPy and Numba implementations\" (140-slices, line 30), and 142 depends on 118, not 144. As written, 142 has no Numba runner and no named owner for one. Either register `numba` in this slice as one registry row, or name 142 as the owner and change Integration Requirements lines 589-591.",
+   "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:92-93"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Per-force timing deferred although plan entry 141 assigns it",
+   "description": "Plan entry 141 lists \"force totals per force\" in the required breakdown (140-slices, line 26). The design keeps `force_total_ns` as a single number and defers per-force timing to 142. The instrumented loop already iterates the force list, so per-force timing is one dict entry per force in this slice. Deferring it means schema v1 is published without it and then bumped, which the design itself treats as a compatibility event (lines 530-532). Slice 142's gate also needs per-force resolution (140-slices, line 30). Add `force_breakdown: dict[str, int]` now and keep `force_total_ns` as the sum.",
+   "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:292-296"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Whole-tick backend registry cannot express the 142 and 143 gates",
+   "description": "Integration Requirements say slice 142 can register a `quadrants` backend \"by adding one file \u2026 zero changes elsewhere.\" But `BackendRunner` (lines 322-334) builds and ticks the whole simulation. Slice 142's deliverable is one `@ti.kernel` force compared against NumPy and Numba for that force (140-slices, line 30). Slice 143 is validated by parity against `KDTreeQuery` and timing at N=10k, 50k, and 250k (140-slices, line 32), which means swapping the spatial component while holding the forces fixed. The registry has no component axis for either case. Define the registry at the force and spatial-query level, with a whole-tick backend as a composition of component runners. Alternatively, state that 142 and 143 add their own bench mode and drop the \"one file\" criterion for them. The large-N workloads are deferred to 143 (lines 527-529), which is fine only if 143's gate says so.",
+   "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:586-588"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "The parity hash cannot carry the tolerance contract the project uses",
+   "description": "The design says slices 142, 144, and 145 compare against a NumPy golden hash (lines 463-467), and that for GPU backends \"a downstream consumer interprets it within the documented tolerance band\" (lines 469-473). A SHA-256 is an equality check and cannot be read within a tolerance. The project's convention is already tolerance-based: slice 118 asserts `allclose` at atol 1e-12, and it states that a JIT'd force differing from NumPy at the bit level \"is acceptable\" (118 slice, lines 111 and 178-182). The Numba backend the design registers in 144 would therefore fail the hash comparison while being correct by project standard. Plan entry 145 also needs a numeric tolerance (140-slices, line 78). For cross-backend comparison, persist reference positions and velocities, or the trajectory tool's output, and compare against a stated tolerance. Keep the hash only as a same-backend, same-platform determinism check (success criteria, lines 559-560). The design should also say whether the hash is expected to match across platform tuples, such as arm64 versus x86 or Apple versus NVIDIA hosts. It currently does not.",
+   "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:458-473"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Two parity oracles with overlapping authority, and parity is outside plan entry 141",
+   "description": "The Provides section says slice 145's tick-level parity test \"consumes the harness's NumPy parity hash as the reference\" (lines 533-534). The Open Questions say the slice 140 trajectory tool \"is the parity oracle; the bench is the timing oracle\" (lines 748-755). Both cannot be the reference for 145. Plan entry 141 asks for timings, machine-readable output, and a summary (140-slices, line 26). Parity is not in that list, so the hash duplicates an existing tool. Remove the hash from this slice and defer the reference decision to 145's design, or make the bench consume the trajectory tool's output. Either way, name one oracle.",
+   "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:533-534"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "The instrumented copy of the tick body measures code production does not run",
+   "description": "The design justifies the duplication as \"~5 lines per phase\" (lines 265-267). The engine's tick body is larger than that. It has an early return for empty state, two neighbor-cap paths (a k-NN fast path and a radius path with a conditional cap), inline CSR assembly, and an optional density hook. `tick_instrumented` must replicate all of it. The NumPy backend's setup must also replicate `SimulationManager`-style setup, which the design says it does not depend on (lines 136 and 145-146). The bit-equal test catches output drift (lines 688-690), but not timing drift. A production change that adds an allocation or a branch lands in `tick()` and not in the bench, so the harness reports a faster number than the server achieves. That conflicts with the architecture's principle that \"every scaling change is benchmarked against the current state\" (140-arch, Architectural Principles).\n\nRecommended, in order:\n1. Take `total_ns` and TPS from the unmodified `tick()` in the same loop. Use the instrumented run only for the phase split, and report the instrumented-minus-production total as a fidelity metric with a stated bound.\n2. Reconsider the rejected option A, a null-object timer parameter on `tick()`. The stated reasons are contract preservation and branch clutter. Against duplicating most of the function body, a few branch checks per tick are cheap. If option A is chosen, the \"no engine changes\" criterion (lines 570-572) must change.",
+   "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:260-267"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "Configuration and force construction are duplicated, and the stated mechanism does not exist",
+   "description": "The design says profile names resolve against a registry in the bench workload module that mirrors `config/default.yaml`. It also says force names resolve to \"module-level singleton instances \u2026 (e.g. `flocking.cohesion_force`).\" A search of the engine finds no identifier by that name. The bench package's workload module already has a name-to-constructor map that builds new instances instead. Forces are built with configuration by the server's force builder, and the design says the harness does not depend on the server package (lines 143-146). So the claim that the harness \"does not duplicate the engine's force list\" (lines 139-141) cannot be satisfied as written. The `mid-flock` workload also hard-codes N, world size, and cluster centers (lines 353-368) that the live config already defines, so the two will drift. State a single source for profiles and forces, such as the same loader and builder the server uses. Then have `mid-flock` reference that source, or assert equality with it in a test.",
+   "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:392-400"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "Failure modes are not enumerated for the new I/O and external-state paths",
+   "description": "The section lists four failure modes and says \"no silent fallbacks anywhere on these paths\" (line 519). The following are missing:\n- **Workload parsing and validation.** Nothing says what happens to `n <= 0`, `measure_ticks: 0`, profile fractions that do not sum to 1 (which silently changes the agent count), or a `cluster_centers` count that does not match the cluster count.\n- **Results write.** Directory creation under `bench/results/`, permission failure, and partial writes are not covered.\n- **Repo SHA and dirty state.** `git rev-parse HEAD` (lines 232-234) can fail because the directory is not a repository or git is missing. The usual silent placeholder for this is what the project forbids. A dirty tree is not recorded, yet the reproducibility claim (lines 44-48) depends on it.\n- **Exceptions during warmup or measure.** The try/finally covers only `setup` (lines 514-515). Device backends need `finalize` to release memory, so the guarantee must cover the whole run.\n- **Workload lookup root.** `bench/workloads/` is at repo root (lines 183-185), but the design does not say how the CLI resolves it. Behavior would depend on the working directory.\n- **Hang or timeout.** None is stated. For NumPy the risk is low, but it must be specified before the device backends in 142 and 145 are registered.\n\nEach failure mode needs an observable signal (a stderr error or warning with a non-zero exit) and at least one test that asserts it.",
+   "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:508-519"
+  },
+  {
+   "i": 8,
+   "severity": "CONCERN",
+   "title": "Internal contradictions in the report and call contracts",
+   "description": "An implementer cannot resolve these from the text:\n- **JSON shape.** \"One record per `(workload, backend, phase)`\" (line 76) conflicts with \"one file per run\" and a nested `phases` object (lines 408-438).\n- **Markdown scope.** \"One table per workload across all backends in `bench/results/`\" (line 440) conflicts with per-run stdout (verification steps 3 and 6, lines 619 and 646). \"Sortable on TPS\" (lines 79-80) conflicts with a renderer described as \"dumb\" (lines 452-453).\n- **Parity timing.** \"Post-warmup\" (lines 81-82) conflicts with \"after the measure phase\" (line 460).\n- **NumPy call path.** The design says the runner \"calls `tick()` directly\" (lines 131-132) and that `engine.tick.tick` is \"called by the NumPy backend\" (line 541). Elsewhere it says the backend \"wraps a `tick_instrumented()`\" (lines 721-722).\n- **Backend name.** `register_backend(name)` (line 305) and `BackendRunner.name` (lines 326-327) both carry the name. Keep one source.\n- **KDTree path.** Listed as `engine.spatial.KDTreeQuery` (line 542), but the spatial package is `migratory.spatial` (lines 136-137).\n\nSettle the JSON shape and the NumPy call path before implementation.",
+   "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md#reports"
+  },
+  {
+   "i": 9,
+   "severity": "CONCERN",
+   "title": "Tier 3 CUDA validation has no owner",
+   "description": "Plan entry 141 covers NVIDIA CUDA (140-slices, line 26). The tier note says Tier 2 is \"validated on CUDA via (141)\" (line 61). The design defers all NVIDIA work to \"when someone runs the same workload on an NVIDIA box later\" (lines 96-99), with no owner. The architecture's Design Goals say CUDA is not required below 250k (140-arch, Design Goals), so deferral is consistent with the Apple-first goal. But the Tier 3 gate then has no named slice. Plan entry 145 covers the 250k NVIDIA milestone (140-slices, line 36), so name it as the owner of the NVIDIA pass. Also add an acceptance criterion that a NumPy run on a Linux x86 host succeeds with no platform-specific assumptions. That run is cheap and checks portability now.",
+   "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:96-99"
+  },
+  {
+   "i": 10,
+   "severity": "CONCERN",
+   "title": "Several features in the CLI and tests are not needed for this slice",
+   "description": "The design is close to plan size (effort 3/5, matching plan entry 141). These items have no consumer in this slice and can be cut or deferred without changing the success criteria:\n- `--workload-dir` (line 482): three checked-in workloads in one fixed directory.\n- `--all-backends` (line 481): with one backend it reduces to the single-backend case. The design already defers subprocess isolation until a second backend exists (lines 763-766), and the same logic applies here.\n- `pytest-benchmark` reuse in the stub tests (lines 122-124): no described test needs it.\n- The duplicate `name` attribute on `BackendRunner` (see the contradictions finding above).\n- Markdown sorting on TPS (lines 79-80), given the renderer is described as dumb.",
+   "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md#cli"
+  },
+  {
+   "i": 11,
+   "severity": "NOTE",
+   "title": "Illustrative numbers conflict with the architecture's baseline convention",
+   "description": "The example JSON labels `\"n\": 3500` with `tps_observed: 65.1` and per-phase values copied from the N=2,492 profile. The architecture gives 3,500 at 57 TPS as the live operating point and calls the 2,492 breakdown \"a profile-shape reference\" (140-arch, Current State note). Label the example N=2,492, or use placeholders, so that developers comparing against verification step 9 (lines 661-668) do not expect 65 TPS at 3,500.",
+   "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:415-427"
+  },
+  {
+   "i": 12,
+   "severity": "NOTE",
+   "title": "The live-server measurement principle has no owner",
+   "description": "The architecture's first principle says synthetic benchmarks are \"supplemented with live-server measurements across formation states\" (140-arch, Architectural Principles). The design excludes world-server-in-the-loop work (lines 100-103). That exclusion is right for wire benchmarks, but it leaves live compute measurement unassigned. Name the owner, for example the performance-journal process, so the gap is recorded rather than implicit.",
+   "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:100-103"
+  }
+ ]
+}

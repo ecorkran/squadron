@@ -1,0 +1,54 @@
+{
+ "review": "r03",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "FAIL",
+   "title": "The overwrite guard is on a write path that `sq review code` never uses",
+   "description": "T12 adds archive-on-overwrite only to `save_review_file` (`persistence.py:220-254`). But the CLI writes reviews through `save_review_result`: `cli/commands/review.py:451, 523, 610, 746` (line 746 is `sq review code`). The pipeline's main path also uses `save_review_result` (`pipeline/actions/review.py:255`). `save_review_file` is only reached by the pipeline's no-slice-info fallback (`pipeline/actions/review.py:272`). `save_review_result` calls `path.write_text` directly at lines 300 and 303.\n\nSo after T12/T13, re-running `sq review code <N>` still destroys hand edits without warning. That leaves two success criteria unmet: \"Re-running `sq review code <N>` \u2026 archives the prior content\" and the F003 fail-closed criterion. The slice design names `save_review_file`, but the success criteria name the real command, and the tasks have to meet the criteria.\n\n`save_review_result` also has no \"return `None` on failure\" contract. It returns `Path` and raises, so T12's \"matching the function's existing failure-return contract\" doesn't carry over. The fix:\n- Put the guard in a shared helper called by both writers (or have `save_review_result` delegate to the guarded write).\n- Define what `save_review_result` does on an aborted overwrite.\n- Have T13 test through `save_review_result`, or through the `sq review code` CLI path.",
+   "location": "src/squadron/review/persistence.py:257-314"
+  },
+  {
+   "i": 1,
+   "severity": "FAIL",
+   "title": "The Part 0 move makes `review/` import `pipeline/`, the exact cycle F002 was meant to remove",
+   "description": "T1 moves `models.py` \"verbatim\", but it imports `squadron.pipeline.models.ActionResult` (line 14), which `read_findings` uses (line 93). T3 moves `verification.py`, which imports `RoundDiff` from `pipeline.actions.findings_addressed.screens` (`verification.py:17`). T3 calls that import \"pipeline\u2192review\". It isn't: once moved, `review/addressed/verification.py` imports `pipeline`, which is review\u2192pipeline. T5's `judge_residue_core` takes `diff: RoundDiff` too (today's `judge.py:21`), so the moved judge core inherits the same import.\n\nAfter Part 0 as written, `review/addressed/` depends on `pipeline/` in three places. That's the package-level cycle the slice design's \"Dependency direction (review F002)\" section exists to prevent. Pyright and the 305 suite won't catch it, so T2/T4/T6/T8 would all pass.\n\nThe tasks need to:\n- Move the `RoundDiff` dataclass (not `compute_round_diff`/screens) into `review/addressed/`, or into a neutral module.\n- Leave the `ActionResult`-based `read_findings` adapter in the pipeline package, or have it take the raw findings list instead.\n- Add a check, such as a grep or test, that nothing under `src/squadron/review/` imports `squadron.pipeline`.",
+   "location": "src/squadron/pipeline/actions/findings_addressed/models.py:14"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "The cf archive-scanning check comes after Part D's commit, not before",
+   "description": "The slice design's Phase 5 note says the cf `archive/` verification must be \"sequenced before Part D lands\" because it decides the filename scheme. T14 comes after T12 and T13, and T13's commit line (line 272) commits Part D before T14 runs. T12 and T14 each try to make up for this with \"do not mark done until\u2026\" text. Since a checkbox can't block a commit, the fix is to move T14 ahead of T12.",
+   "location": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-1.md:275-296"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Only one of the two persistence paths gets a `reviewedSha` test, and T10 is vague about where HEAD is resolved",
+   "description": "Success criterion 1 requires `reviewedSha` \"from both the CLI and the pipeline persistence paths\". T11 tests one of them, \"whichever is more directly testable\", so the other goes unproven.\n\nT10 also doesn't match the code:\n- The pipeline's main path already goes through `save_review_result` (line 255). Resolving HEAD in both `save_review_result` and the pipeline action would run it twice for that path.\n- The fallback path calls `format_review_markdown` directly (line 265) and needs the SHA passed in there.\n- `save_review_result` has no `cwd` parameter, yet T10 writes `run_git([...], cwd=...)`.\n\nT10 should name one helper that resolves HEAD (DRY), show where it is called on each of the three write sites, and T11 should test both entry points.",
+   "location": "src/squadron/pipeline/actions/review.py:252-278"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "A second re-run overwrites the earlier archive copy without warning",
+   "description": "T12 archives to `archive/{original filename}` with no collision handling. Here's how content gets lost:\n1. Edit a review, then re-run: the edited v1 goes to `archive/`.\n2. Edit v2, then re-run again: `archive/{name}` is replaced, and the edited v1 is gone with no warning.\n\nThat breaks success criterion 7's \"nothing is silently destroyed\". Add a non-colliding archive name (for example a timestamp or `-a{n}` suffix, compatible with T14's possible renaming) and a test that re-saves twice.\n\nAlso, derive the archive directory from the review file's own parent (`path.parent / \"archive\"`) rather than the cwd-relative literal `project-documents/user/reviews/archive/`. Otherwise tmp-dir fixtures and the `reviews_dir=` override would archive into the wrong place.",
+   "location": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-1.md:233-237"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "An aborted overwrite doesn't keep the new review's content",
+   "description": "The design's Part D says that on abort \"the review content is still printed to the terminal\". T12 only returns `None` and logs an ERROR. On the CLI path, that means a fresh review that cost a model call disappears when the archive fails. Add the content-preserving behavior to T12 and an assertion for it to T13's abort test.",
+   "location": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-1.md:238-246"
+  },
+  {
+   "i": 6,
+   "severity": "NOTE",
+   "title": "Commit markers and the baseline wording are a bit off",
+   "description": "- Commit lines are written as `Commit:` bullets inside tasks rather than plain `**Commit**:` lines. They do sit at tested points.\n- Part 0 has four refactor commits. That's fine, but they could be merged into one, since only the end state needs to be green.\n- T8 says the expected count is \"2832 passed \u2026 plus this slice's later additions\", but no additions exist by T8. It should just say \"unchanged from the 305 baseline\".",
+   "location": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-1.md:99"
+  }
+ ]
+}

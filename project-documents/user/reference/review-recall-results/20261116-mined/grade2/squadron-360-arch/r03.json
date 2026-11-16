@@ -1,0 +1,75 @@
+{
+ "review": "r03",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Graph extraction is the hard part and is specified as \"grep for the needed section\"",
+   "description": "\"Read discipline\" says to grep `knowledge-graph.json` and never load it whole, but the file is JSON, not line-oriented text.\n- **Minified output:** if the plugin writes one line, a grep returns the entire file.\n- **Pretty-printed output:** selecting `nodes[]` entries by `type`, with their `summary`, `filePath` and `complexity`, is a structural query that grep cannot do reliably.\n- **No extractor named:** the document names no `jq` dependency or script, while Delivery promises \"no installer, manifest, or CLI change\".\n- **Volume:** file-level nodes for a real engagement codebase can still number in the thousands, and no budget or sampling rule is given.\n- **Fields with no source in the stated schema:** the analysis doc promises \"entry points\" and Initial Technical Direction promises \"languages, frameworks, dependencies\"; neither appears in the node/edge/layer shape, and the contents of `project` are never described.\n- **Initiative candidates:** \"complexity clustering\" is named with no algorithm or criteria.",
+   "location": "project-documents/user/architecture/360-arch.document-intelligence.md#the-understand-anything-output-contract"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Graph contract is asserted from memory of v2.8.1, with no version check or drift behaviour",
+   "description": "The schema is taken \"from the plugin's own reference\" for a plugin the document itself calls \"actively developed\".\n- **Only one failure mode handled:** \"graph missing\". Nothing covers `tour[]` absent or empty, renamed fields, or a partial graph from an interrupted run.\n- **Silent-degradation risk:** a concept doc built without the tour would still look complete, which conflicts with the project's no-silent-fallback rule.\n- **No fixture:** no `.understand-anything/` directory exists in this repo, so there is no real graph to test against. The project's parsing rule requires a fixture in the actual production format.\n- **Plugin check contradicts a principle:** Flow step 1 requires verifying the plugin is installed, yet \"Graph is an input, not a dependency\" and the graph is tracked in git. A teammate with the committed graph but no plugin would be blocked for no reason.\n- **Detection mechanism unstated:** the document does not say how a markdown skill detects a user-scope marketplace plugin.",
+   "location": "project-documents/user/architecture/360-arch.document-intelligence.md#the-understand-anything-output-contract"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Staleness check will fire on essentially every run because the graph is tracked",
+   "description": "`meta.json` records the `gitCommitHash` at analysis time, and the hygiene section says `meta.json` and the graph stay tracked. Committing them moves `HEAD`, so the hash differs from `HEAD` by at least one commit immediately after a fresh analysis.\n- **Warning fatigue:** a \"prominent\" warning that always fires stops being read, defeating the stated purpose.\n- **Fix:** compare on changes outside `.understand-anything/` (and ideally within `analyzedFiles`), not on raw hash inequality.\n- **Unhandled cases:** a dirty working tree (hash equals `HEAD` but the graph is stale), and a recorded hash that is unreachable after rebase, squash or shallow clone, where \"commit distance\" cannot be computed.\n- **\"Provenance\" is undefined:** no frontmatter field or body section is named, and it is unclear whether it applies to the concept doc as well as the analysis doc.",
+   "location": "project-documents/user/architecture/360-arch.document-intelligence.md#flow"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Index allocation contradicts itself and collides with other uses of the 900 band",
+   "description": "- **Internal contradiction:** Output Conventions says \"no change to `file-naming-conventions.md`\" and then sanctions overflow past 949. Resolved Design Decisions says \"in the 940-949 reserved range\" with no mention of overflow.\n- **Collisions:** the project conventions name 990 as the standing-fixes slice, and maintenance slices already use 908, 913 and 914. \"Remaining slots in the 900 band as needed\" has no stated ceiling or exclusion list.\n- **Conflicting identity models for the overview:** \"incrementing per run\u2026 each run is an independent sample\" means every `/sq:overview` run mints a new index. The Output section instead describes one `{index}-analysis.overview.md` with a topic suffix for extras. A regenerated client document is a revision, not a sample.\n- **No allocator:** nothing says who computes the next index or what happens at exhaustion. With seven slots left and per-run consumption, exhaustion is near-term.",
+   "location": "project-documents/user/architecture/360-arch.document-intelligence.md#output-conventions"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Capability 2's source table depends on the concept, which is absent on the \"tested path\"",
+   "description": "Problem, Audience and Approach are sourced only from concept sections, yet Inputs calls the no-concept case \"the tested path, not an edge case\".\n- **No fallback column:** the only fallback is \"initiative plan plus interview\", and no interview is designed for Capability 2.\n- **Contradicts the derivation rule:** \"Client document is derived, not authored\" and \"every claim traces to an input artifact\". Interview answers are new, unapproved claims going straight into a client deliverable.\n- **Weak sources for other fields:** Scope cites \"non-goals\" and Risks cites \"initiative plan notes\", neither of which the initiative plan format guarantees.\n- **Status source is unreliable:** in the real plan, initiative 900 reads `not_started` while slices 908\u2013914 have been worked on. \"Status is honest\" cannot be met from that field alone.\n- **Invalid example:** the translation example \"Initiative 140 status draft\" uses `draft`, which Output Conventions says the gate rejects.",
+   "location": "project-documents/user/architecture/360-arch.document-intelligence.md#document-field-schema"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Emphasis parameter is both specified and deferred",
+   "description": "Translation Rules says \"Emphasis is a generation parameter\". Resolved Design Decisions says \"one neutral document\u2026 An emphasis parameter is added only if real use demonstrates the need\". Delete the Translation Rules sentence; the Resolved Decision is the proportionate choice.",
+   "location": "project-documents/user/architecture/360-arch.document-intelligence.md#translation-rules"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "Capability 1 output locations contradict Output Conventions, and write semantics are unspecified",
+   "description": "Output Conventions says both capabilities write to `user/analysis/` with `docType: analysis`. Capability 1's main output is `project-guides/000-concept.{project}.md` with `docType: concept`, plus a possible initiative plan.\n- **Existing concept:** nothing says what happens if `000-concept` already exists. Its User-Provided Concept section is one the skill must never modify.\n- **Existing initiative plan:** squadron already has `001-initiative-plan.squadron.md`. \"Written only on explicit confirmation\" does not say whether confirmation appends, overwrites or refuses.\n- **Unconfirmed candidates:** it is not stated where candidates live before confirmation (the analysis doc, or chat only).\n- **User-Provided Concept contents:** putting interview answers there \"verbatim\" needs a rule for PM answers that are fragments or corrections across turns. Otherwise the skill is editing the one section it may not edit.",
+   "location": "project-documents/user/architecture/360-arch.document-intelligence.md#outputs"
+  },
+  {
+   "i": 7,
+   "severity": "NOTE",
+   "title": "Tracked-artifact list is incomplete and tracking a large generated graph has unexamined cost",
+   "description": "- **`intermediate/scan-result.json` is unclassified:** it is neither in the ignore entry nor in the \"Not ignored\" list. By default it gets tracked, though it is machine-incremental state.\n- **Repo cost:** the document calls the graph \"large\" and tracks it anyway. Churn, merge conflicts on generated JSON, and the interaction with `config.json`'s `autoUpdate` are not discussed.\n- **Motivation claim unchecked:** I could not confirm that tracking `meta.json` \"makes staleness visible in review\" works as described; given the staleness finding above, it may show the opposite.",
+   "location": "project-documents/user/architecture/360-arch.document-intelligence.md#working-tree-hygiene"
+  },
+  {
+   "i": 8,
+   "severity": "NOTE",
+   "title": "Delivery section has loose ends for the first-party command",
+   "description": "- **Duplicate paragraphs:** Delivery contains two \"Capability (b)\" paragraphs that should be merged.\n- **Existing test will fail:** `tests/cli/test_install_commands.py` asserts an exact set of nine command files, so adding `overview.md` needs a test change that Delivery does not mention.\n- **Possible CLI mapping:** that test also maps command files such as `review.md` and `shutdown.md` to `sq` subcommands. I did not confirm whether every file must map to one, and the document does not say whether `/sq:overview` is prompt-only. Dependencies cites [100] \"CLI command registration\", which implies a CLI surface.\n- **Placement argument cuts both ways:** (b) is kept out of the analysis dispatcher because it \"audits nothing\", yet its output is `docType: analysis` in `user/analysis/`.\n- **Stale name:** the initiative plan entry still calls the artifact a \"brief\" in one place.\n- **Skill-name ambiguity:** dispatcher namespacing separates the typed commands, but a pack skill named `understand` alongside the plugin's `/understand` can still be confused when the model selects a skill by name or description.",
+   "location": "project-documents/user/architecture/360-arch.document-intelligence.md#delivery"
+  },
+  {
+   "i": 9,
+   "severity": "NOTE",
+   "title": "No verification strategy for prompt-only skills",
+   "description": "Cross-cutting, so no single section applies. The document calls the no-concept path \"tested\" and promises gate-valid frontmatter, but defines no test mechanism. At minimum, each skill should end by running `cf validate frontmatter` on what it wrote, and the slice should include a golden run against squadron's own repo.",
+   "location": "unverified"
+  }
+ ]
+}

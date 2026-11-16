@@ -1,0 +1,225 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Imposed CONCERNS is fed into review loops as a finding the dispatcher cannot fix",
+      "description": "D4 justifies capping to CONCERNS only against `CheckpointTrigger.ON_CONCERNS`. It does not address the loop path that slice 910 Part A made live, where the next dispatch round is built from the prior review's findings.\n\n- **What happens:** in a `design/implement \u2192 review until pass` loop, the synthetic `review-coverage` finding becomes the fix prompt. Its remedy is \"raise `review.max_file_size_bytes`, narrow the diff, or use a tool-enabled model\", none of which the implementing agent can do in code.\n- **Consequence:** the diff stays large and the reviewer stays tool-less, so every round re-imposes the cap. The loop spends `max` iterations of dispatch and review before `on_exhaust`, and the agent may try to \"address\" the finding by editing config.\n- **What to add:** state the intended loop behaviour. Either accept exhaustion explicitly, or exclude the synthetic finding from the dispatch fix prompt (by category constant, not by title text). Add one success criterion for a capped review inside a loop body.",
+      "file_ref": null,
+      "category": "integration",
+      "raw_category": null,
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:127-152"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "D9 equivalence rule is settled for only four of the six provider profiles",
+      "description": "The slice plan requires the design to decide what counts as \"differs\" for dated or routed variants, so that an alias resolving to its own snapshot is not reported as a substitution. D9 decides the dated-suffix case and leaves every other form to a Phase 6 capture.\n\n- **Missing profile:** the capture (D9, walkthrough step 6 at lines 348-353) lists `sdk, openai, openrouter, local`. The slice plan's entry 906 names six profiles; `gemini` appears nowhere in the design, and `openai-oauth` is handled separately by D8/D11.\n- **Uncaptured profiles:** the capture runs only \"for each profile with credentials\", so any profile not exercised ships with the unverified rule.\n- **Why it matters:** a false positive is not just \"one extra key and a WARNING\". D10 makes `requestedModel` presence the gate-facing substitution signal, so every run on an affected profile would report a substitution.\n- **What to add:** name `gemini` in D8/D9 and the walkthrough, with its expected id form or an explicit capture. State what happens for a profile that was not captured, for example listing it as unverified in the DEVLOG.",
+      "file_ref": null,
+      "category": "under-specification",
+      "raw_category": null,
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:176-187"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Synthetic finding and header text are specified only for the per-file limit",
+      "description": "D3 folds a diff skipped by `review.max_total_injection_bytes` into `DiffInjection(total, 0)`. The overview calls this the \"second, worse path\", but the artifact cannot name it correctly.\n\n- **Wrong text:** the only synthetic-finding text given names `review.max_file_size_bytes` and tells the operator to raise it. For a skipped diff that is the wrong limit and the wrong remedy.\n- **No cause recorded:** `DiffInjection` carries no cause, and success criterion 2 checks only the counts.\n- **What to add:** specify the wording for the `injected_chars == 0` case, covering both the finding and the `**Diff:**` line, and say how the limit is identified. Deriving it from `injected_chars == 0` is enough if the design says so. Extend criterion 2 to assert the named limit.",
+      "file_ref": null,
+      "category": "under-specification",
+      "raw_category": null,
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:123-152"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "\"Any successful tool call\" is weaker than the Value claim and the plan's \"did read files\"",
+      "description": "The Value section promises that a PASS means the model \"either saw the whole diff or read files with its tools\". The slice plan's Part B exempts a run \"where the model did read files\".\n\n- **The gap:** D4's rule is `tool_calls_made - failed_tool_calls > 0`. One successful `Glob` or directory listing on a truncated diff keeps a clean stated PASS. That is the #135 outcome with one trivial call added.\n- **What to do:** if tool telemetry can tell read-type calls from others, count only those. Otherwise narrow the Value claim to what is measured (\"made at least one successful tool call\") and record the proxy as an accepted limitation in D4, so gates do not over-trust it.",
+      "file_ref": null,
+      "category": "architectural-alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:27"
+    },
+    {
+      "severity": "PASS",
+      "title": "Scope matches the slice plan entry; deferrals are the ones the plan permits",
+      "description": "- Parts A, B and C map one-to-one onto plan entry 25.\n- Diff ordering and `--stat` are deferred to #137 with a reason (D7), which the plan allows (\"in scope only if design shows it is small; otherwise it becomes an issue\").\n- The two plan exclusions (limit defaults, #114) are honoured.\n- File-body truncation (#138) is correctly kept out.\n- The work fits the 900 architecture's \"bug fixes / operational\" scope and adds no new capability.",
+      "file_ref": null,
+      "category": "scope",
+      "raw_category": null,
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md#technical-scope"
+    },
+    {
+      "severity": "PASS",
+      "title": "Verdict-surface change respects the closed-set precedent",
+      "description": "- The design adds no `Verdict` member, consistent with slice 916's Part B reasoning about allowlist consumers.\n- It moves PASS to the existing CONCERNS and adds one `VerdictSource` member that only one function sets.\n- It notes that the 917 commit validator needs no change.\n- D6 is a necessary consequence of the synthetic finding, not scope creep.",
+      "file_ref": null,
+      "category": "architectural-alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:154-156"
+    },
+    {
+      "severity": "PASS",
+      "title": "Interface parity and single source of truth",
+      "description": "Every new fact rides `ReviewResult` through the one function both the CLI and the pipeline action call. This satisfies the plan's \"must hold on both paths\" requirement without a second code path. Dependency directions are correct: providers stamp metadata, the review layer folds it, and persistence renders it.",
+      "file_ref": null,
+      "category": "integration",
+      "raw_category": null,
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:101"
+    },
+    {
+      "severity": "PASS",
+      "title": "Failure modes for the new read paths are explicit and non-silent",
+      "description": "The slice adds no new I/O path; it reads fields off existing streams. Each degenerate case has a stated, artifact-visible outcome:\n\n- A provider that reports nothing keeps the requested id and adds a digest line (D11).\n- `<synthetic>` and subagent messages are skipped (D8).\n- Multiple answering models are listed in the digest with a WARNING (D12).\n- A provider failure writes the unchanged failure artifact (D13).\n\nNo fabricated ids, consistent with the no-silent-fallback rule. The parent architecture states no NFR for this path.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:198-210"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Proportionality is acceptable for a two-issue slice; one item is unused",
+      "description": "Thirteen decisions and ten touched components is heavy for a maintenance slice, but each traces to a plan requirement or a regression it prevents, and effort matches the plan's 3/5. The one item with no named consumer is pipeline `metadata[\"requested_model\"]`; cut it unless a step reads it.",
+      "file_ref": null,
+      "category": "proportionality",
+      "raw_category": null,
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:76"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "integration",
+      "raw_category": null,
+      "summary": "Imposed CONCERNS is fed into review loops as a finding the dispatcher cannot fix",
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:127-152",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "under-specification",
+      "raw_category": null,
+      "summary": "D9 equivalence rule is settled for only four of the six provider profiles",
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:176-187",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "under-specification",
+      "raw_category": null,
+      "summary": "Synthetic finding and header text are specified only for the per-file limit",
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:123-152",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "architectural-alignment",
+      "raw_category": null,
+      "summary": "\"Any successful tool call\" is weaker than the Value claim and the plan's \"did read files\"",
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:27",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "pass",
+      "category": "scope",
+      "raw_category": null,
+      "summary": "Scope matches the slice plan entry; deferrals are the ones the plan permits",
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md#technical-scope",
+      "location_verified": null
+    },
+    {
+      "id": "F006",
+      "severity": "pass",
+      "category": "architectural-alignment",
+      "raw_category": null,
+      "summary": "Verdict-surface change respects the closed-set precedent",
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:154-156",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "pass",
+      "category": "integration",
+      "raw_category": null,
+      "summary": "Interface parity and single source of truth",
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:101",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "pass",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "Failure modes for the new read paths are explicit and non-silent",
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:198-210",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "note",
+      "category": "proportionality",
+      "raw_category": null,
+      "summary": "Proportionality is acceptable for a two-issue slice; one item is unused",
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:76",
+      "location_verified": true
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md",
+    "against": "project-documents/user/architecture/900-slices.maintenance-and-refactoring.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/squadron-927-design"
+  },
+  "timestamp": "2026-11-16T12:09:38.835117",
+  "model": "claude-fable-5-2",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 6,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-fable-5-2",
+  "answering_models": [
+    "claude-fable-5-2"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 9,
+    "in_fences": 0,
+    "in_section": 9,
+    "surviving": 9
+  },
+  "effort": "medium",
+  "profile": "sdk",
+  "turns": 7,
+  "prompt_tokens": 360313,
+  "cached_tokens": 231031,
+  "cache_write_tokens": 129274,
+  "completion_tokens": 7938,
+  "reasoning_tokens": null,
+  "duration_seconds": 83.3743012920022,
+  "cost_usd": 2.4328454,
+  "cost_basis": "provider"
+}

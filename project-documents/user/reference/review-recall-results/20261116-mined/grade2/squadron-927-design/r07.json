@@ -1,0 +1,26 @@
+{
+ "review": "r07",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Part B treats any successful tool call as \"read the rest\", but the plan says \"read files\"",
+   "description": "The plan entry (900-slices:442) keeps a truncated diff as a normal verdict only when \"the model did read files\". D4 checks for something weaker: `(tool_calls_made or 0) - (failed_tool_calls or 0) > 0`, so any successful call counts. That includes one `Glob`/`list_files` or a `Grep` that never opens the omitted files. A model that makes one directory listing and then returns PASS on a truncated diff skips the cap and gives a clean PASS. That is close to the #135 failure this slice exists to prevent.\n\nThe design should do one of two things:\n- Limit the count to file-reading tools. This works only if tool telemetry records tool names, and the design should say whether it does.\n- State openly that any call counts, because the count telemetry can't tell tools apart, and record that this accepts the gap the plan describes. Walkthrough step 3 would then need to check which tool was called, not only that `toolCallsMade > 0`.\n\nThe plan's success criterion SC5 (\"at least one successful tool call \u2192 verdict unchanged\") has the same weakness.",
+   "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:131-135"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "No stated handling when the final stamped message never arrives",
+   "description": "`answering_models` is stamped only on the final Message: the SDK `ResultMessage` translation, and OpenAI's `_stamp_tool_telemetry`. If the stream hangs, times out or disconnects after assistant messages have arrived but before that final message, the models already seen are thrown away. D11 then writes \"Answering model: not reported by provider (aiModel is the requested id)\". That sentence is false here, because the provider did report a model and squadron dropped it. That is exactly the \"artifact states the request, not the run\" problem this slice is meant to fix.\n\nThe design mentions `ended_mid_task` and the #92 recovery turn, but it never covers a partial first turn. It should state which artifact (if any) a cut-off stream produces. If it does produce a `ReviewResult` artifact, there are two options:\n- Stamp the models as they are seen, not only at the end.\n- Have the digest wording tell \"provider reported nothing\" (Codex) apart from \"turn ended before the stamp\".\n\nEither way, add a stubbed-stream test that cuts the stream after one assistant message.",
+   "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md#D8 \u2014 Where each provider reads the answering model"
+  },
+  {
+   "i": 6,
+   "severity": "NOTE",
+   "title": "No NFR applies",
+   "description": "`900-arch.maintenance-and-refactoring.md` states no latency or throughput targets for the review path, so the slice doesn't need to restate one.",
+   "location": "unverified"
+  }
+ ]
+}

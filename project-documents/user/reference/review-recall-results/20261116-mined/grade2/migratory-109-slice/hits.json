@@ -1,0 +1,60 @@
+{
+ "case": "migratory-109-slice",
+ "flaws": [
+  {
+   "id": "F1",
+   "text": "Architecture, Vectorized Force Patterns, Cohesion sketch: `center_of_mass = np.sum(neighbor_pos, axis=1) / np.maximum(counts, 1)` then `cohesion = (ce",
+   "hits": {
+    "r07": [
+     0
+    ]
+   }
+  },
+  {
+   "id": "F2",
+   "text": "Verification Walkthrough step 4 runs `grep -n \"for.*agent_idx\\|for.*eval_indices\\|for.*list_idx\"` on the force modules and expects no matches, while t",
+   "hits": {
+    "r02": [
+     1
+    ],
+    "r03": [
+     0
+    ],
+    "r06": [
+     0
+    ],
+    "r07": [
+     1
+    ],
+    "r08": [
+     2
+    ]
+   }
+  },
+  {
+   "id": "F3",
+   "text": "Technical Scope and Success Criteria call all five forces \"neighbor-dependent\" and include `MomentumForce`, which the document later says \"does not us",
+   "hits": {
+    "r02": [
+     11
+    ],
+    "r04": [
+     7
+    ],
+    "r05": [
+     5
+    ],
+    "r06": [
+     4
+    ],
+    "r07": [
+     7
+    ],
+    "r08": [
+     6
+    ]
+   }
+  }
+ ],
+ "note": "F2: r01, r04 and r05 flag the per-agent weight loop but claim the grep would not catch it, so they are not counted; only reviews saying the grep would match the line are hits. F1 only r07 names the zero-neighbor nonzero force."
+}

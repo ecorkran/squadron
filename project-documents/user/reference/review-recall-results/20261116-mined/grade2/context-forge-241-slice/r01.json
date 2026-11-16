@@ -1,0 +1,54 @@
+{
+ "review": "r01",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "A single `pending-review` status across four boundaries hides which review is owed",
+   "description": "The architecture's goal of \"First-class status representation\" (240-arch, Design Goals) says runners should act on the status \"without parsing recommendation strings\". In this design, all four boundaries produce the same `pending-review` / `review-failed` statuses. The `NextAction` type does not change (TD-7), and the review type (`arch`/`slice`/`tasks`/`code`) appears only in the free-text `rationale`. A runner that needs to start the right review agent would have to parse that string.\n\nThe status also replaces the lifecycle status that was there before (`needs-tasks`, `in-implementation`, `complete`). So `getStatus()` consumers, like the visualizer, can no longer see where the slice is in its lifecycle.\n\nFix: return the review type in a structured way without changing the `NextAction` shape. Either add an optional additive field, or use a defined machine-readable field already on `SliceStatus`/`enrich()`. Name that field in \"Provides to Other Slices\" so Amoeba and Squadron have a contract.",
+   "location": "project-documents/user/slices/241-slice.gate-logic-in-workflownavigator.md#TD-7: Recommendation vocabulary \u2014 additive only"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "The pre-slice-plan (`arch`) boundary has no defined owner or index",
+   "description": "`pending-review` / `review-failed` are values of the per-slice `SliceStatus`. At pre-slice-plan there is no slice and no slice plan yet. The design says to \"extend the no-active-slice / pre-slice-plan path \u2026 Set `pending-review` / `review-failed` accordingly\", but it never says:\n- which entity carries that status, or where it shows up in `getStatus()`;\n- which index goes to `detectDocuments(projectPath, sliceIndex, 'arch')`. The arch review is named by the initiative/arch index, not a slice index;\n- what the \"arch file exists, no slice plan\" check is when a project has several initiatives.\n\nThis boundary only arrived with the 244 fold-in, and it is the one with a different insertion point (240-arch, Anticipated Slices: \"different insertion point in the cascade\"). Fix: give it its own short subsection that covers status ownership, how the index is resolved, and the recommendation shape. Add a matching fixture to the test list. The `arch` fixtures are currently optional (\"`arch`/`slice`\").",
+   "location": "project-documents/user/slices/241-slice.gate-logic-in-workflownavigator.md:57"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Parse failures can't be told apart from a missing verdict, which the architecture requires",
+   "description": "240-arch, Technical Considerations (\"File-read failure modes\") says: \"The rationale returned to the caller names the parse failure explicitly.\" The design calls `parseFrontmatter` swallowing errors \"exactly the behavior the gate needs\". The data flow (line 161) reads only `.data.verdict`, so a malformed, unreadable or permission-denied file looks the same as a valid file with no `verdict`. The TD-7 rationale templates have no parse-failure wording, and the failure isn't logged anywhere.\n\nThe routing is correct (both cases go to `UNKNOWN` and then to `unknownAs`). Only the required, observable signal is missing. Fix: use the `found` flag `parseFrontmatter` already returns. Have `found: false` on an existing file produce a rationale that names the parse failure, plus a warning in the `enrich()` warnings. Add a test that checks for that signal.",
+   "location": "project-documents/user/slices/241-slice.gate-logic-in-workflownavigator.md:79"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Leaving `review_type` keys set but unread ignores user config without telling them",
+   "description": "TD-4 keeps `workflow.review_gates.*.review_type` defined but unread. A user who sets `review_gates.pre_advance.review_type = \"slice\"` gets no error, and the gate looks for `code` anyway. This conflicts with the architecture's \"Fail-fast on configuration errors\" principle (an \"unrecognized per-gate config is a config error \u2026 not a silent pass or silent block\") and the project's rule against silent fallbacks.\n\nThe stated reason for keeping the keys (not breaking an existing `.context-forge.toml`) can be met without silence. Fix: either remove the keys, or keep them and add a warning to `NextAction.warnings` (or reject them in `validate`) when one is non-empty. Also, the parenthetical deferring this choice to implementation leaves the decision the slice plan gave to this design partly open. State the choice.",
+   "location": "project-documents/user/slices/241-slice.gate-logic-in-workflownavigator.md#TD-4: reviewType is position-derived \u2014 the 240 per-gate `review_type` keys become inert"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Mapping from boundary to per-gate threshold key, and the `resolveGateConfig` signature, are inconsistent",
+   "description": "`resolveGateConfig(config)` is said to resolve \"the boundary-specific threshold\", but it doesn't take a `Boundary` parameter. The design names boundaries in camelCase (`preAdvance`, `preSlicePlan`). The keys shipped by 240 use snake_case (`workflow.review_gates.pre_advance.threshold`; see 240-slice:268-275). Nothing defines how one becomes the other, so the code would have to build key names from strings or keep a second table that isn't mentioned.\n\nFix: add the boundary parameter (`resolveGateConfig(config, boundary)`). Then either put the config-key segment in the `BOUNDARY_REVIEW_TYPE` record or add a sibling constant, so each boundary is defined in one place.",
+   "location": "project-documents/user/slices/241-slice.gate-logic-in-workflownavigator.md:188-191"
+  },
+  {
+   "i": 5,
+   "severity": "NOTE",
+   "title": "Per-boundary trigger for pre-implementation fires mid-implementation",
+   "description": "\"Task file exists, not complete\" covers both zero boxes checked and partly checked. A slice that's halfway through implementation with no `tasks` review would switch from `in-implementation` to `pending-review`. That may be the intent (the review was owed before work started), but the design should say so explicitly and include it in the per-boundary test. Only the current boundary is evaluated, so a `complete` slice with a passing code review and no slice/tasks review will advance. That also deserves one sentence so nobody reads it as a bug.",
+   "location": "project-documents/user/slices/241-slice.gate-logic-in-workflownavigator.md:138"
+  },
+  {
+   "i": 6,
+   "severity": "NOTE",
+   "title": "Deferral target 910 has no document yet",
+   "description": "`interfaces: [..., 910]` and TD-6 send the ~50-site `STATUS` cleanup to maintenance slice 910. No `910-*` document exists under `project-documents/user/`. The slice plan does mention 910, so this is in scope, but the cleanup has nowhere to be tracked until 910 is planned.",
+   "location": "project-documents/user/slices/241-slice.gate-logic-in-workflownavigator.md:7"
+  }
+ ]
+}

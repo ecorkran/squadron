@@ -1,0 +1,47 @@
+{
+ "review": "r04",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "`unset --project` cannot clear the stale shared-file copy, but the design depends on it doing so",
+   "description": "The Delete section (line 89) says `delete` \"deletes from whichever project file the key's scope maps to.\" For `git.integration_branch`, that is `.context-forge.local.toml`. But two places tell the user to run `cf config unset <key> --project` to clear the stale copy in the *shared* file:\n- Collision semantics (line 146).\n- Walkthrough step 9 (line 259).\n\nUnder the routing as designed, that command does two wrong things:\n- It deletes the developer's personal value (`legacy/value`), which is the value the collision rule exists to protect.\n- It leaves the shared-file copy in place, so `cf check` keeps warning.\n\nAs a result, step 9's \"confirm `cf check` is clean again\" cannot pass, and the CLI has no supported way to remove a skipped stale copy. Pick one fix and state it:\n- **Option (a), preferred because it adds no new surface:** for a personal key, `delete(key, 'project')` removes the key from both project files. This matches what \"unset at project scope\" means to a user.\n- **Option (b):** in the different-value case, `migrate-personal` deletes the shared copy too. Reporting it as \"discarded stale shared value X\" keeps it visible.",
+   "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:89"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "The checker rule and `migrate-personal` need per-file access that the \"no API change\" claim rules out",
+   "description": "Line 49 and line 181 say `ConfigManager`'s public API is unchanged, and the only new export is `getProjectPersonalConfigPath` (line 61). Two new consumers need more than that:\n- **Detection (line 142).** The checker must list the keys that are physically present in the *shared* file. `ConsistencyChecker` only reaches config through an injected, optional `ConfigManager` (`ConsistencyChecker.ts:47`), and `get()` returns only the winning value. When a key exists in both files, `get()` reports `source: 'project-personal'` and the shared copy is hidden. So the warning cannot be detected through the existing API in exactly the collision case the design describes.\n- **Migration (lines 89, 144).** `migrate-personal` must read the shared file and delete a personal key *from the shared file*. Under the new routing, `delete()` can never do that. The doc calls this \"the one exception \u2026 by design\" but never says how it happens.\n\n`readToml`, `resolveKey` and `deleteKey` are private module functions in `ConfigManager.ts`. Without a named API, the likely result is that the CLI or the checker re-implements TOML file access, which duplicates code and moves file I/O out of the config layer.\n\nName the addition. One small `ConfigManager` method is enough, for example `readProjectFile(kind: 'shared' | 'personal')` plus `deleteFromProjectFile(key, kind)`, or a single `migratePersonalKeys()` that returns per-key outcomes. Also state what the checker rule does when no `ConfigManager` is injected.",
+   "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:49"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Projects that already exist get no gitignore protection for the new personal file",
+   "description": "The slice plan says `git.integration_branch` \"must never be committed.\" The slice's Value section (line 23) promises to prevent personal settings \"from being silently committed.\" But the gitignore line is only added by `cf init` (line 32, lines 157\u2013159).\n\nEvery project that already exists, including this repo and every project the migration plan targets, never re-runs `cf init`. So after this slice ships:\n1. `cf config set git.integration_branch \u2026 --project` creates `.context-forge.local.toml`.\n2. Nothing ignores that file.\n3. A routine `git add .` commits it.\n\nThat is the same leak, moved to a new file. The new checker rule (line 142) only looks for personal keys inside the shared file; it would not catch this.\n\nThe lightest fix is to call the same ensure-gitignore helper the first time `ConfigManager.set` creates the personal file, or from `migrate-personal`. Alternatively, add a `cf check` warning when the personal file exists but is not ignored.",
+   "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:157-159"
+  },
+  {
+   "i": 3,
+   "severity": "NOTE",
+   "title": "The read data flow can be stated as a plain precedence chain",
+   "description": "Step 2's condition (\"only if the key's own scope is `shared`, OR it's a personal key falling through\u2026\") is always true for any key that reaches it. So the read path is just: personal file (personal keys only) \u2192 shared file \u2192 user \u2192 default.\n\nWriting it that way, and having `list()` reuse `get()` as it does today, removes a condition an implementer might code literally.",
+   "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:77-81"
+  },
+  {
+   "i": 4,
+   "severity": "NOTE",
+   "title": "Small interface consistency items",
+   "description": "- **Option syntax.** The `migrate-personal` signature uses `-p, --project <id>`. The existing `config get/set/unset` commands all use `-p, --project [id]`, where a bare flag resolves the project from the current directory (`packages/cli/src/commands/config.ts:68,110,140`). Use the same `[id]` form.\n- **MCP description text.** `config_get`'s description hard-codes \"Resolution order: project config \u2192 user config \u2192 built-in default\" (`configTools.ts:15`). Line 34 updates only the `configPaths` payload; the description string should change too so agents see the new order.",
+   "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:193"
+  },
+  {
+   "i": 5,
+   "severity": "NOTE",
+   "title": "Dependency on 914 is stricter than the plan entry but correct",
+   "description": "The plan entry lists \"Dependencies: none.\" The slice declares `[914]` because it classifies `git.integration_branch` under its final name. 914 is complete, so this is accurate and blocks nothing.",
+   "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:6"
+  }
+ ]
+}

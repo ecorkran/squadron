@@ -1,0 +1,207 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Login and logout paths have unbounded steps and no failure-mode table",
+      "description": "D7 defines three timeouts:\n- `turn_timeout_s` covers `thread.run`.\n- `login_timeout_s` covers only `handle.wait()`.\n- `account_timeout_s` covers runtime start plus `account()`.\n\nThe Failure Modes table is scoped to \"Codex Turn\" and adds one login row (the `wait()` timeout). Several new I/O paths that spawn the runtime (line 82) are left out:\n\n- **`sq auth logout`**: runtime start and `AsyncCodex.logout()` have no timeout key, no hang behavior, and no stated handling for an SDK error or transport close. A hung runtime hangs the command with no limit.\n- **Login before `wait()`**: `AsyncCodex.__aenter__` and the `login_chatgpt()` / `login_chatgpt_device_code()` calls happen before the timeout starts. A runtime that never finishes `initialize` hangs `sq auth login` with no limit.\n- **Extra missing on `sq auth login/logout`**: Success Criteria line 190 requires that any `openai-oauth` use without the extra fail with the install command. The design does not say where `login.py` or `OAuthFileStrategy.login` raise it, or what exit path they use. Only `create_agent` is named (line 122).\n- **Transport closes mid-login**: there is no row saying the handle is cancelled and the runtime shut down, as the turn path does at lines 128-129.\n\nUnder the failure-mode rule, each of these needs an explicit, observable behavior and a test. Suggested fix: add a \"Failure Modes \u2014 Login/Logout\" table. Bounding runtime start, `login_chatgpt*()` and `logout()` with the existing `account_timeout_s` would cover the gaps without adding a new key.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:103-135"
+    },
+    {
+      "severity": "PASS",
+      "title": "Alignment with the architecture's auth model is explicit and sound",
+      "description": "`100-arch` says squadron does not unify authentication (arch line 243). The slice handles this directly:\n- `InteractiveLogin` is an optional capability with one implementer.\n- It hands the whole flow to the Codex runtime.\n- Squadron stores no credentials; `~/.codex/auth.json` stays the only store.\n\nDeferring the architecture text change until a second provider adopts the capability is the right size of response.",
+      "file_ref": null,
+      "category": "architecture",
+      "raw_category": null,
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md#relationship-to-the-architectures-auth-model"
+    },
+    {
+      "severity": "PASS",
+      "title": "Slice-plan scope fully covered, no scope cut",
+      "description": "Every item in plan entry (129) maps to the design:\n- **Part A:** the `openai_codex` port, bundled binary first with PATH as fallback, the `codex` extra, `ReasoningEffort` mapping (#171), and usage recording.\n- **Part B:** the error naming the install command, the doctor row (package, binary, login state), the model-list marker, and the README.\n- **Part C:** browser and device-code login, logout, and email/plan in status.\n\nThe exclusions (no squadron token store, no `login_api_key`) match the plan.",
+      "file_ref": null,
+      "category": "scope",
+      "raw_category": null,
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md#technical-scope"
+    },
+    {
+      "severity": "PASS",
+      "title": "Capability dispatch instead of profile-name checks",
+      "description": "D3 and D9 use `runtime_checkable` Protocols tested with `isinstance`. This respects slice 128's ban on string dispatch and ISP (API-key strategies don't have to stub login methods). The plan says \"a capability on the strategy, not a profile-name check\", and D3 does exactly that.",
+      "file_ref": null,
+      "category": "architecture",
+      "raw_category": null,
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:99"
+    },
+    {
+      "severity": "PASS",
+      "title": "Turn-path failure modes and silent-fallback removal",
+      "description": "- **Turn path:** hang, timeout, transport close and teardown are each listed with observable behavior and a test per row.\n- **D8:** removes `final_response or \"\"`, so an empty review can no longer reach the parser as a valid Message.\n- **`OPENAI_API_KEY` fallback:** the open silent-fallback question is settled by a verification task with two defined outcomes (line 232), not left open.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:114-135"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Lighter alternative to the new `ExtraRequirement` Protocol",
+      "description": "`ExtraRequirement` has one implementer and no planned consumer slice (frontmatter line 7). Because it is checked at runtime (`missing_extra_hint()`), it can't simply be a static `ProviderCapabilities` field, so a small Protocol is a reasonable choice. Even so, the \"Provides to Other Slices\" list (lines 179-181) describes reuse that nothing has planned yet. Keep the Protocol, but treat that list as speculative.",
+      "file_ref": null,
+      "category": "proportionality",
+      "raw_category": null,
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:112"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Dependency on slice 931 is not in the slice-plan entry",
+      "description": "The plan lists `Dependencies: [128]`. The design also depends on 931 for `AgentConfig.effort`, `applies_effort` and `core/usage.py`. That dependency is real and correctly declared here. The plan entry could be updated to match.",
+      "file_ref": null,
+      "category": "dependencies",
+      "raw_category": null,
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:6"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Version upper bound is stated and also called undecided",
+      "description": "D1 specifies `openai-codex>=0.159.3,<1`, but the same line and line 231 call the upper bound undecided. Either keep `<1` as the design's decision or drop it from the spec, so the task breakdown doesn't receive contradictory instructions. Also, D9 appears before D8 in the decision list (lines 112-114), which is cosmetic only.",
+      "file_ref": null,
+      "category": "under-specification",
+      "raw_category": null,
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:97"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "Login and logout paths have unbounded steps and no failure-mode table",
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:103-135",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "pass",
+      "category": "architecture",
+      "raw_category": null,
+      "summary": "Alignment with the architecture's auth model is explicit and sound",
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md#relationship-to-the-architectures-auth-model",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "pass",
+      "category": "scope",
+      "raw_category": null,
+      "summary": "Slice-plan scope fully covered, no scope cut",
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md#technical-scope",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "pass",
+      "category": "architecture",
+      "raw_category": null,
+      "summary": "Capability dispatch instead of profile-name checks",
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:99",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "pass",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "Turn-path failure modes and silent-fallback removal",
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:114-135",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "proportionality",
+      "raw_category": null,
+      "summary": "Lighter alternative to the new `ExtraRequirement` Protocol",
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:112",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "note",
+      "category": "dependencies",
+      "raw_category": null,
+      "summary": "Dependency on slice 931 is not in the slice-plan entry",
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:6",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "note",
+      "category": "under-specification",
+      "raw_category": null,
+      "summary": "Version upper bound is stated and also called undecided",
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:97",
+      "location_verified": true
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md",
+    "against": "project-documents/user/architecture/100-slices.orchestration-v2.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/squadron-129-design"
+  },
+  "timestamp": "2026-11-16T13:58:38.988163",
+  "model": "claude-opus-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 6,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-opus-5-5",
+  "answering_models": [
+    "claude-opus-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 8,
+    "in_fences": 0,
+    "in_section": 8,
+    "surviving": 8
+  },
+  "effort": "medium",
+  "profile": "sdk",
+  "turns": 7,
+  "prompt_tokens": 426517,
+  "cached_tokens": 421171,
+  "cache_write_tokens": 5336,
+  "completion_tokens": 5020,
+  "reasoning_tokens": null,
+  "duration_seconds": 59.59884395892732,
+  "cost_usd": 0.2280326,
+  "cost_basis": "provider"
+}

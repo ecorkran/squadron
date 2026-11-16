@@ -1,0 +1,75 @@
+{
+ "review": "r01",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Commit markers are checkboxes, follow almost every task, and several land on a broken test suite",
+   "description": "- **Format:** Every commit is written as a `- [ ] Commit: ...` checkbox. They should be plain `**Commit**:` lines.\n- **Count:** There are 13 commits for a slice the design rates 3/5.\n- **Untested commits:** Tasks 2, 4, 6, 7 and 8 each commit before their tests exist.\n- **Task 6:** It removes the `is_rate_limit_event(exc.data)` special case. After that, the existing tests that build a `MessageParseError` carrying a `rate_limit_event` (`tests/providers/sdk/test_agent.py:666`) stop getting the expected throttle, but they aren't rewritten until Task 10. So the Task 6 commit has failing tests.\n- **Task 9:** It deletes `install_rate_limit_parser_shim`, but `test_agent.py:701-760` still imports it until Task 10. The Task 9 commit can't even load that test file.\n\n**Fix:** Turn the markers into plain lines and cut them to about four, each at a point where tests pass:\n1. Pin bump (Task 1)\n2. Classification and translation, with their tests (Tasks 2\u20135)\n3. Agent path, with the `test_agent.py` rewrite (Tasks 6, 9, 10 together)\n4. Pipeline path, with the `test_sdk_session.py` rewrite (Tasks 7, 8, 11)",
+   "location": "project-documents/user/tasks/920-tasks.claude-agent-sdk-upgrade-and-rate-limit-parser-shim-retirement.md:28-147"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Tests don't come right after the code they test",
+   "description": "- The tests for Task 6 (`agent.py`) are in Task 10, three tasks later.\n- The tests for Tasks 7 and 8 (`sdk_session.py`) are in Task 11, with Tasks 9 and 10 in between.\n- Task 10 also deletes the shim tests, which is cleanup that belongs with Task 9's deletion.\n\n**Fix:** Order the tasks 6 \u2192 10 (plus the shim-test deletion) \u2192 9, then 7 \u2192 8 \u2192 11.",
+   "location": "project-documents/user/tasks/920-tasks.claude-agent-sdk-upgrade-and-rate-limit-parser-shim-retirement.md:58-108"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Task 6 contradicts itself on informational events",
+   "description": "Task 6 says to \"continue the loop without yielding it to the caller\" and also to \"let it flow to translation as normal.\" It can't do both. The design has the same split: D4 says informational events \"must not reach translation,\" while D6 and the Data Flow section say they do.\n\nTask 7 picks \"flow to translation\" for the pipeline path. Task 6 should say the same thing explicitly: yield the event so translation emits the system message from Task 4. Otherwise the two paths will behave differently, and a junior implementer has no way to resolve it.",
+   "location": "project-documents/user/tasks/920-tasks.claude-agent-sdk-upgrade-and-rate-limit-parser-shim-retirement.md:61"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "The second `sdk_type` filter, in `summary_oneshot.py`, would leak rate-limit notices into summaries",
+   "description": "`summary_oneshot` reads `agent.handle_message` output and skips only `(SDK_RESULT_TYPE, \"tool_use\", \"tool_result\")`. Once Task 4 translates informational events into system messages, they will be added to the summary prose through this agent path. That breaks criterion 4 and repeats issue #23's defect.\n\nTask 8 only says \"grep for other exclusion lists.\" Its success criterion and test cover `dispatch` alone.\n\n**Fix:** Name this file in Task 8, make its success criterion cover both filters, and add one test in `tests/pipeline/test_summary_oneshot.py`. Better still, put the tuple in one shared constant in `core.models` instead of adding `\"rate_limit_event\"` to two separate literals; the project rule against scattering comparison values calls for that.",
+   "location": "src/squadron/pipeline/summary_oneshot.py:139"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Task 6 misses a third substring check, which breaks criterion 6",
+   "description": "Task 6 replaces \"both\" gates (lines 167 and 216). After the retry budget runs out, line 180 decides between `ProviderRateLimitError` and `ProviderError` with `RATE_LIMIT_MARKER in str(exc)`.\n\nTask 2 says `RateLimitRejected` gets no behavior beyond subclassing, and Task 3 builds one as `RateLimitRejected(\"x\")`. So an exhausted *typed* rejection would raise a plain `ProviderError`. That breaks criterion 6 and, through it, the `AuditRunFailure.RATE_LIMITED` reporting.\n\n**Fix:** Change line 180 to use `_is_throttle(exc)` as well, and check whether the client-mode loop has the same pattern after line 216.",
+   "location": "src/squadron/providers/sdk/agent.py:180"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "No test keeps the plain-429 path, and Task 3 conflicts with Task 10's check",
+   "description": "- **Criterion 7 is untested at loop level:** Criterion 7 needs a plain `ClaudeSDKError` containing `rate_limit` to still trigger backoff in the retry loop. Task 10 rewrites every loop-level `ClaudeSDKError` test onto `RateLimitEvent`. Only Task 3's direct call to `_is_throttle` is left, which doesn't show the loop backs off.\n- **Self-contradiction:** Task 3 puts `ClaudeSDKError(\"rate_limit_event: slow down\")` into `test_agent.py`. Task 10's success grep forbids exactly that string in the same file, so the plan fails its own check.\n\n**Fix:** Add one loop-level test using 429-style text that doesn't mention `rate_limit_event` (for example `\"429 rate_limit_error\"`), and use that same text in Task 3.",
+   "location": "project-documents/user/tasks/920-tasks.claude-agent-sdk-upgrade-and-rate-limit-parser-shim-retirement.md:41, project-documents/user/tasks/920-tasks.claude-agent-sdk-upgrade-and-rate-limit-parser-shim-retirement.md:99"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "Criterion 3 (WARNING naming the attempt, throttle count going up) isn't asserted on any path",
+   "description": "Neither `tests/providers/sdk/test_agent.py` nor `tests/pipeline/test_sdk_session.py` uses `caplog` today, and no task adds it.\n\nTask 11's pipeline rewrite asserts only `\"done\" in result` and `call_count == 3`, not `RateLimitStats.throttles`. That leaves the pipeline path covered only by Task 15's manual forced-throttle check, even though the design calls the pipeline the most likely place for this slice to half-land.\n\n**Fix:** Add a `caplog` assertion for the WARNING with the attempt number, plus a `throttles` assertion, in Task 10 (one agent mode) and in Task 11.",
+   "location": "project-documents/user/tasks/920-tasks.claude-agent-sdk-upgrade-and-rate-limit-parser-shim-retirement.md:104"
+  },
+  {
+   "i": 7,
+   "severity": "NOTE",
+   "title": "The criterion 2 checks don't search `tests/` or `_errors`",
+   "description": "Task 9 greps only `src`. Criterion 2 and walkthrough step 1 also cover `tests/`, and criterion 2 also covers `claude_agent_sdk._errors` imports used for patching. Add `tests` to the grep in Task 9 or Task 13.",
+   "location": "project-documents/user/tasks/920-tasks.claude-agent-sdk-upgrade-and-rate-limit-parser-shim-retirement.md:88"
+  },
+  {
+   "i": 8,
+   "severity": "NOTE",
+   "title": "`_is_throttle` is a private name imported across modules",
+   "description": "Task 2 defines `_is_throttle` in `rate_limit.py`, but `agent.py` and `sdk_session.py` both import it. Under strict pyright that can trigger `reportPrivateUsage`. Giving it a public name (`is_throttle`) avoids the problem.",
+   "location": "project-documents/user/tasks/920-tasks.claude-agent-sdk-upgrade-and-rate-limit-parser-shim-retirement.md:33"
+  },
+  {
+   "i": 9,
+   "severity": "NOTE",
+   "title": "Task 12 only verifies, and some documentation steps go beyond the design",
+   "description": "I checked the claim in Task 12: `test_provider.py` contains no reference to the shim. The task is only a verification run, though, and fits naturally into Task 13. The DEVLOG notes in Tasks 12 and 16 about files that weren't changed aren't required by the design and can be dropped.",
+   "location": "project-documents/user/tasks/920-tasks.claude-agent-sdk-upgrade-and-rate-limit-parser-shim-retirement.md:110-115"
+  }
+ ]
+}

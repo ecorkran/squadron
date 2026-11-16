@@ -1,0 +1,225 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Walkthrough 8.1 does not verify SC4, SC10 (sourcing and `[INFERRED]` rule) or SC12",
+      "description": "Tasks 4.1, 7.1 and 7.3 write the text for these criteria, but no Task 8 check confirms the written document meets them:\n- **SC4** (why-now, audience evolution and methodology preference appear nowhere, as content or as gap markers): 8.1's checklist has no check for these topics. Add a step that scans the written `000-concept.squadron.md` for them, and for gap markers that name them.\n- **SC10**: 8.1 only checks that the engagement-questions and inferred-claims lines exist. It doesn't check for one Section-sourcing outcome per section (all seven) taken from the defined outcome set. It also doesn't check that each `[INFERRED]` sentence meets the rule from 7.1 (comes from a named field but says more than the field states; plain restatements are unmarked).\n- **SC12** (\"a PM would edit rather than discard\"): no task records this judgment, even though the PM is present in 8.1. Add a step that asks the PM for an edit-or-discard verdict and records it in the DEVLOG entry (9.2).\n- 8.1 also leaves out the design's own walkthrough check \"no interview content beyond Q1's half\" for Problem & Motivation and Target Users (design step 3, line 404). Without it, SC2 and SC3 are only partly checked.",
+      "file_ref": null,
+      "category": "test-coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/363-tasks.concept-generation.md:304-318"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Commit markers are checkboxes, and there is one after every task",
+      "description": "Every commit marker is a checklist item (`- [ ] Commit: ...`), at lines 99, 125, 164, 185, 221, 254, 296 and 351. Markers should be plain `**Commit**:` lines, not checkboxes.\n\nThere are also seven commits in Tasks 1\u20137 for a slice that edits one markdown file. At least one marks a point where the work doesn't function: after Task 1, `concept` routes to an empty section shell. Reduce to two or three markers at real working points:\n- after Task 4 (selector, preconditions, sources and mapping)\n- after Task 7 (flow complete)\n- after Task 8 (walkthrough evidence plus the generated concept)",
+      "file_ref": null,
+      "category": "process",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/363-tasks.concept-generation.md:99"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Text-only verify subtasks inflate the file; merge them into the authoring tasks",
+      "description": "Subtasks 1.2 and 4.2 (lines 181\u2013184) only re-read text against the design. Their authoring tasks' \"Success\" lines (1.1 and 4.1) already require this. Fold them in.\n\nSubtask 0.2 repeats the Verified anchors table traced on the same day (lines 36\u201346). It's harmless as a quick STOP gate, but it could be one line.\n\nKeep 5.3, because byte-identical question wording is central to SC2. Also keep 2.2, 3.4 and 6.3, which actually run against the repo. Merging gets the file to about 25 subtasks.",
+      "file_ref": null,
+      "category": "proportionality",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/363-tasks.concept-generation.md:94-98"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Scratch-copy walkthroughs 8.2 and 8.3 don't say how to set them up",
+      "description": "**8.2:** precondition 3 (2.1) requires the cf project registration to resolve a name. A copied tree may not be registered. If it isn't, the run stops at the precondition and never reaches the decline path. The task should say how the scratch copy gets a registration, or tell the agent to confirm `cf get` resolves there first.\n\n**8.3:** it says \"point the check at it\", but the skill reads a fixed path (`project-documents/ai-project-guide/...`). The task doesn't say how to point it elsewhere. One way is a scratch tree whose guide copy has the heading renamed. A junior agent needs that method spelled out, or may be tempted to touch the real guide.",
+      "file_ref": null,
+      "category": "clarity",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/363-tasks.concept-generation.md:320-330"
+    },
+    {
+      "severity": "NOTE",
+      "title": "SC7 failure is exercised only for the renamed heading",
+      "description": "SC7 has three failure cases: guide absent, guide unreadable, and section title missing. Task 8.3 exercises only the renamed-heading case. That matches the design's walkthrough, and the other two stop paths are written in 6.1. Removing the guide in the same scratch tree would be a cheap way to cover the absent case too.",
+      "file_ref": null,
+      "category": "test-coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/363-tasks.concept-generation.md:326-330"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Augment fill path in 8.4 is untested",
+      "description": "SC8 requires the \"mechanical refillability\" test for augment: re-runs fill only sections that are empty or hold just a gap marker. 8.4 checks that populated sections stay byte-identical, but the 8.1 document probably has no gap-only sections, so nothing gets filled. Running augment against the 8.2 decline-path document, which has Q1/Q2 gap markers, would exercise the fill side.",
+      "file_ref": null,
+      "category": "test-coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/363-tasks.concept-generation.md:332-336"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Task 0.1 assumes the target branch instead of reading it",
+      "description": "Task 0.1 states \"integration branch is unset; target is `main`\". Project rules say to run `cf config get git.integration_branch` and use its value, and this checkout is a git worktree, where that value can differ per checkout. Replace the claim with the command and branch from whatever it returns.",
+      "file_ref": null,
+      "category": "process",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/363-tasks.concept-generation.md:59-63"
+    },
+    {
+      "severity": "PASS",
+      "title": "Interview fidelity and question constraints are well covered",
+      "description": "5.1, 5.2 and 5.3 cover the following from the design, with a byte-identical diff and a check that the flow has exactly two questions and one confirmation (SC2, SC5):\n- verbatim questions\n- asking once, as one block\n- skip handling\n- using the answers in two sections\n- the defect rule\n- the three outcomes of the description confirmation",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/363-tasks.concept-generation.md:189-221"
+    },
+    {
+      "severity": "PASS",
+      "title": "Scope and discipline checks cover SC11",
+      "description": "8.6 checks four things:\n- every graph read is a field-scoped `jq` selection\n- no `function`/`class` node is read\n- `.understand-anything/` is untouched\n- the changed files are limited to `commands/analysis/understand.md`, the generated concept, slice documents and the DEVLOG, with an empty `src/` diff",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/363-tasks.concept-generation.md:343-351"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "test-coverage",
+      "raw_category": null,
+      "summary": "Walkthrough 8.1 does not verify SC4, SC10 (sourcing and `[INFERRED]` rule) or SC12",
+      "location": "project-documents/user/tasks/363-tasks.concept-generation.md:304-318",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "process",
+      "raw_category": null,
+      "summary": "Commit markers are checkboxes, and there is one after every task",
+      "location": "project-documents/user/tasks/363-tasks.concept-generation.md:99",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "note",
+      "category": "proportionality",
+      "raw_category": null,
+      "summary": "Text-only verify subtasks inflate the file; merge them into the authoring tasks",
+      "location": "project-documents/user/tasks/363-tasks.concept-generation.md:94-98",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "note",
+      "category": "clarity",
+      "raw_category": null,
+      "summary": "Scratch-copy walkthroughs 8.2 and 8.3 don't say how to set them up",
+      "location": "project-documents/user/tasks/363-tasks.concept-generation.md:320-330",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "test-coverage",
+      "raw_category": null,
+      "summary": "SC7 failure is exercised only for the renamed heading",
+      "location": "project-documents/user/tasks/363-tasks.concept-generation.md:326-330",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "test-coverage",
+      "raw_category": null,
+      "summary": "Augment fill path in 8.4 is untested",
+      "location": "project-documents/user/tasks/363-tasks.concept-generation.md:332-336",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "note",
+      "category": "process",
+      "raw_category": null,
+      "summary": "Task 0.1 assumes the target branch instead of reading it",
+      "location": "project-documents/user/tasks/363-tasks.concept-generation.md:59-63",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "pass",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "Interview fidelity and question constraints are well covered",
+      "location": "project-documents/user/tasks/363-tasks.concept-generation.md:189-221",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "pass",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "Scope and discipline checks cover SC11",
+      "location": "project-documents/user/tasks/363-tasks.concept-generation.md:343-351",
+      "location_verified": true
+    }
+  ],
+  "template_name": "tasks",
+  "input_files": {
+    "input": "project-documents/user/tasks/363-tasks.concept-generation.md",
+    "against": "project-documents/user/slices/363-slice.concept-generation.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/squadron-363-tasks"
+  },
+  "timestamp": "2026-11-16T12:21:34.276705",
+  "model": "claude-opus-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 2,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-opus-5-5",
+  "answering_models": [
+    "claude-opus-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 9,
+    "in_fences": 0,
+    "in_section": 9,
+    "surviving": 9
+  },
+  "effort": "high",
+  "profile": "sdk",
+  "turns": 3,
+  "prompt_tokens": 119196,
+  "cached_tokens": 28040,
+  "cache_write_tokens": 91152,
+  "completion_tokens": 5807,
+  "reasoning_tokens": null,
+  "duration_seconds": 75.08566191699356,
+  "cost_usd": 0.8515481,
+  "cost_basis": "provider"
+}

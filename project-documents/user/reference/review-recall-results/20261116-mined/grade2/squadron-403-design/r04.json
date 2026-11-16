@@ -1,0 +1,40 @@
+{
+ "review": "r04",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "The editable-install mitigation cannot detect the risk it is meant to catch",
+   "description": "The risk is that pyright resolves `import squadron` through the live editable install instead of the exported tree, so export type counts reflect live code. Neither named check can see that:\n\n- **Criterion 5 (in-place equals export at HEAD):** at HEAD the exported tree and the live `src` are identical, so the result is the same whichever one pyright reads.\n- **Walkthrough step 4 (older commit):** there is no reference value to compare against, and on squadron the lockfile gate will usually make type errors absent there anyway.\n\nThis leaves the architecture's \"a snapshot measures a commit\" and \"deterministic numbers\" principles unverified for type counts at an export. The fallback of marking them `environment_unresolved` \"if they differ\" has no trigger.\n\nAdd one export test where the exported tree differs from the live tree in a way that changes the type-error count, with an identical `uv.lock`. Assert the count reflects the exported tree.",
+   "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:375-380"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "The lockfile gate blanks type counts across every squadron release, and the design does not say so",
+   "description": "D6 compares the whole-file SHA-256 of the export's `uv.lock` with the live one. Squadron's `uv.lock` records the project's own version (`squadron-ai`, editable), and that version is bumped on every release. Any boundary commit from before the latest bump therefore fails the gate, and `type_errors` is absent for almost every historical slice.\n\n400 D8 avoided this same trap for rule-set hashes by hashing the pyproject table rather than the file. The design treats a lockfile difference as occasional (walkthrough step 4: \"if the lockfile changed since then\"), which undersells it.\n\nThe slice plan criterion is met literally, so this is not a violation. But the slice's stated value, a static before and after per slice, is largely lost for type counts on the project it is built for. Do one of two things:\n\n- State the consequence in D6 and Risks.\n- Compare lockfiles with the root project's own package entry excluded, and record that as the comparison rule.",
+   "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:220-224"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "`report history` has unowned git access and no rule for landings off the target's first-parent line",
+   "description": "Two gaps, both in the history report:\n\n- **Git access has no owner or failure row.** History orders snapshots by the target's first-parent history, and the slice report runs `git cat-file -e`. The component table (line 99) says the report modules do \"no git\", and no other module is assigned these calls. The failure-mode table has no row for the first-parent listing returning `None`. The `git_utils` contract (\"`None` is never an answer\") needs an explicit outcome: error and exit 1, not an empty history.\n- **Landings stored from another target are unhandled.** D2 expects a slice that landed on a worktree branch to be resolved from a checkout targeting that branch. The record is per project, not per target, so the main checkout later reads that landing. Its `after_sha` is not on main's first-parent line, so history has no row for it. The slice has a resolved landing, so its reviews don't fall into the \"no resolved landing\" closing line either. Those reviews are silently dropped, or their placement is left to the implementer.\n\nThe design also doesn't say whether `report slice` filters stored landings by `target_ref` or shows them under the \"landings on main\" header. State the rule for both reports.",
+   "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:298"
+  },
+  {
+   "i": 3,
+   "severity": "NOTE",
+   "title": "A lost concurrent write has no signal",
+   "description": "Two commands writing `slice_ranges` at once can drop a fast-forward landing, with signal \"None\". This follows 400's precedent and the exposure is small, since the landing is found again while the reflog lasts. But it is the one silent row in the table, and it touches the record whose durability is the slice's stated risk. A re-read before the write, with a WARNING when the stored record changed, would make it observable. Not required.",
+   "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:166"
+  },
+  {
+   "i": 4,
+   "severity": "NOTE",
+   "title": "Export limits and exclusions come from the live checkout, not the commit",
+   "description": "The architecture says limits come from the project and that an export reads that commit's config. D5 applies that to rule-set configs but reads squadron settings from the live checkout. A project that commits `.squadron.toml` has its committed limits ignored at an export. The design discloses the trade-off in Risks (line 377), and it is consistent with 400 D9 and D10, which make these settings checkout-local. Acceptable as stated.",
+   "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:214"
+  }
+ ]
+}

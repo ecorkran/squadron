@@ -1,0 +1,333 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Plan assumes a pre-313 codebase, but this checkout already implements it",
+      "description": "Task 2.1 says to create `bounds_enforcement.py` as a new file, and the Files-touched list marks it new. The file already exists (`src/migratory_server/bounds_enforcement.py`, 92 lines, with `apply_bounds_policy`, `_apply_wrap`, `_apply_reflect`). Also present: `BoundsPolicy` and a `policy` field (`config.py:17`, `config.py:52`); the loader (`config.py:198-210`); the enforcement call in `SimulationManager.step` (`simulation.py:10-11`, `simulation.py:112-114`); the startup log line (`server.py:135`); `policy: wrap` in `config/default.yaml:12` and `config/test.yaml:12`; `tests/test_bounds_enforcement.py`; and policy tests in `tests/test_config.py:177-219`. Tasks 1.1\u20131.3, 2.1, 2.2, 3.2, 4.1 and 4.2 would duplicate or overwrite this code. The tree also contains a `SOFT` variant (`config.py:23`, `force_builder.py:53`, `config/test-soft-bounds.yaml`). The slice puts SOFT out of scope, and criterion 1 lists three variants. Some line references in the plan are stale too: it cites `config.py` line 25 and about line 156, but the code is at 47 and 180. I cannot tell from here which checkout is the execution base. If this one is, the finding is a FAIL: reconcile the plan with the existing code before any task runs.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:102"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Status reads `complete` while every task box is unchecked",
+      "description": "The frontmatter says `status: complete`, and the slice says the same at `313-slice.world-bounds-policy.md:10`. Task 5.3 is the step that sets complete, and it runs last. Either the status was written early or the boxes were never ticked. Anything that reads status to select or skip work will misread this. Set the status to the true state and let Task 5.3 set it to complete.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:9"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Default `OPEN` is defined in two places, and the loader scatters valid values",
+      "description": "Task 1.2 adds `policy: BoundsPolicy = BoundsPolicy.OPEN` to the dataclass. Task 1.3 has the loader resolve an absent key to `OPEN`, and `config.py:199-200` does exactly that. The project rule is one definition per value, with defaults centralized at config level. Have the loader omit the key and rely on the dataclass default. Task 1.3 also offers \"a literal tuple\" for the valid options, which duplicates the enum; require `sorted(p.value for p in BoundsPolicy)` only. Keeping absent-key-to-OPEN is fine, since the slice chose it for backward compatibility. The problem is the duplicate definition.",
+      "file_ref": null,
+      "category": "design",
+      "raw_category": null,
+      "location": "src/migratory_server/config.py:199-200"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`WRAP` can produce exactly `width` for tiny negative input, which breaks the half-open contract",
+      "description": "`np.mod` uses Python semantics: it computes `fmod(a, b)` and adds `b` when the signs differ. For `a = -1e-17` and `b = 100.0`, the sum rounds to `100.0`, so the result is `width`, not `[0, width)`. This is from reading numpy's divmod algorithm, not from running it. Task 2.2 (line 134) says results land in `[0, width)`. Criterion 7 requires the half-open interval. Task 3.4 (line 229) asserts `x < width` over 50 steps. None of the listed wrap tests (lines 154\u2013161) use a tiny negative overshoot. Add that test. Then either map results equal to `width` back to 0, or change the invariant in the slice and tasks. Choose one.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "src/migratory_server/bounds_enforcement.py:59"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Task 5.2 cannot be completed by the implementing agent, and step 8 leaves the shipped policy open",
+      "description": "Criterion 14 requires observed viewer behavior. Task 5.2 asks the agent to connect a Three.js viewer, watch for 30\u201360 seconds, and judge that agents \"move and flock\" and \"no agent leaves the visible world.\" An agent cannot observe a viewer. Add a scripted check: connect a WebSocket client to `ws://localhost:8765`, read several snapshots, and assert every position is inside the rectangle under `wrap` and `reflect`. Keep the viewer walkthrough as an optional human check, outside the done criteria. Step 8 (line 306) says to restore `test.yaml` to \"whichever policy you want to keep (recommend `wrap`).\" The slice decided `wrap` (`313-slice.world-bounds-policy.md:319-323`, criterion 12). Change step 8 to \"restore `policy: wrap`.\"",
+      "file_ref": null,
+      "category": "verification",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:295"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Round-trip test checks policy only, but criterion 5 requires an equal `ServerConfig`",
+      "description": "Criterion 5 (`313-slice.world-bounds-policy.md:365-366`) says reloading the emitted YAML produces an equal `ServerConfig`. Task 1.4 asserts only that `policy` matches, and the existing test at `tests/test_config.py:207-219` does the same. Assert whole-config equality (`cfg2 == cfg`) so that drift in `soft_bounds` or other fields is caught. The StrEnum-to-string step is handled by `_serialize_for_yaml` (`config.py:657-669`), which the plan does not mention. The slice's worry that `yaml.dump` would emit enum tags is already covered by that helper.",
+      "file_ref": null,
+      "category": "testability",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:88"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Checklist format is broken: subitems lack `[ ]`, and commit markers are checkbox items",
+      "description": "Project rule: every item and subitem gets a `[ ]`. Subitems without one include lines 70\u201373, 82\u201387, 104\u2013108, 130\u2013140, 150\u2013170 and 228\u2013232. The commit markers are checkboxes written as `**Commit:**` (colon inside the bold): lines 96, 179, 249, 286 and 325. A commit marker should be a plain `**Commit**:` line. Their placement is right: each falls after a tested point. They are also standalone \"Task x.y: Commit\" headings (lines 93, 176, 246, 283, 322), which make commits look like work. Put each marker as a plain line under the section's last task.",
+      "file_ref": null,
+      "category": "convention",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:96"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Overweight for a 2/5-effort slice: 23 tasks, about 150 checkboxes, and repeated verification",
+      "description": "Cut or merge:\n- Merge 1.1 and 1.2. Together they are about six lines of code.\n- Merge 4.1 and 4.2. They are the same edit and check in two files.\n- Drop one full-suite run. Task 3.5, Task 5.1, and step 2 of Task 5.2 all run `pytest`.\n- Parametrize the axis-symmetric tests: wrap left/right, reflect top/bottom, and the single-overshoot pairs at lines 155\u2013156 and 166\u2013167. Keep the edge cases the slice names: edge-exact, single overshoot, large overshoot, negative, and both axes.\n- Fold the five commit tasks into plain markers (see the format finding).\n\nThis would leave about 12\u201314 tasks. Keep the round-trip test, the REFLECT corner cases, and the manual check.",
+      "file_ref": null,
+      "category": "proportionality",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Tasks 5.3 and 5.4 trace to no success criterion",
+      "description": "The CHANGELOG entry (Task 5.4) and the architecture-doc check-off (Task 5.3) are not named in the slice's success criteria. They are project-process items, and `CHANGELOG.md` exists. Keep them if the project convention requires them; otherwise cut them.",
+      "file_ref": null,
+      "category": "scope",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:316"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Frontmatter dependencies omit 309, which the slice says is needed for verification",
+      "description": "The slice's cross-slice notes (`313-slice.world-bounds-policy.md:335-336`) say 309 must be complete, or agents won't move and the walkthrough cannot show bounds behavior. The frontmatter lists only 302 and 303. Add 309, and 308 for the forces the walkthrough uses.",
+      "file_ref": null,
+      "category": "sequencing",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:6"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Expected config output contradicts itself and misstates `StrEnum` printing",
+      "description": "Task 4.1 expects output \"containing `wrap`\" in lowercase, then accepts `BoundsPolicy.WRAP`. That string does not contain `wrap`. The slice (`313-slice.world-bounds-policy.md:421-422`) says the print form depends on Python version. On 3.11+, `StrEnum.__str__` returns the value, so `print` gives `wrap` consistently. Specify the expected line as `300.0 300.0 wrap`.",
+      "file_ref": null,
+      "category": "verification",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:265"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Performance is claimed with no quantified target, so no load test is named",
+      "description": "The slice says \"zero overhead\" (line 57) and \"negligible\" (line 279) without numbers, so I can't name a requirement a load test would measure. There is no `tests/load/` in this checkout. The squadron Python rules (`.claude/rules/python.md`) require a load test and CI gate for code on simulation paths, and `step()` is one. The migratory rules in this checkout omit that tier. If the squadron rule governs this project, add a load-test task and CI gating.",
+      "file_ref": null,
+      "category": "testability",
+      "raw_category": null,
+      "location": "project-documents/user/slices/313-slice.world-bounds-policy.md:57"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`apply_bounds_policy` takes `policy` separately from `world_bounds.policy`",
+      "description": "The signature gives the policy two sources, and the two arguments can disagree. The slice (`313-slice.world-bounds-policy.md:235-240`) defines this signature, so the task mirrors it. Consider dropping the `policy` argument and reading `world_bounds.policy`. This is not a blocker.",
+      "file_ref": null,
+      "category": "design",
+      "raw_category": null,
+      "location": "src/migratory_server/bounds_enforcement.py:20-25"
+    },
+    {
+      "severity": "PASS",
+      "title": "All 14 success criteria map to tasks",
+      "description": "Mapping: 1\u21921.1; 2\u21921.2; 3 and 4\u21921.3, 1.4; 5\u21921.4 (see the round-trip finding); 6\u20139\u21922.2, 2.3; 10\u21923.2, 3.4; 11\u21923.4; 12\u21924.1, 4.2; 13\u21923.5, 5.1; 14\u21925.2 (see the manual-check finding). Tasks 3.1 and 3.3 trace to the slice's wiring snippet and walkthrough step 4. Only 5.3 and 5.4 trace to nothing, as noted above.",
+      "file_ref": null,
+      "category": "coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md"
+    },
+    {
+      "severity": "PASS",
+      "title": "Sequencing and test-with pattern hold within the plan",
+      "description": "The order is config, enforcement module, SimulationManager, server, then shipped configs, with no circular dependencies. Each implementation is followed by its tests. Config defaults land after the `step()` wiring, so `wrap` never ships unenforced. Each commit marker sits after a point where its tests pass.",
+      "file_ref": null,
+      "category": "sequencing",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:42"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "Plan assumes a pre-313 codebase, but this checkout already implements it",
+      "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:102",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "Status reads `complete` while every task box is unchecked",
+      "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:9",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "design",
+      "raw_category": null,
+      "summary": "Default `OPEN` is defined in two places, and the loader scatters valid values",
+      "location": "src/migratory_server/config.py:199-200",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "`WRAP` can produce exactly `width` for tiny negative input, which breaks the half-open contract",
+      "location": "src/migratory_server/bounds_enforcement.py:59",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "verification",
+      "raw_category": null,
+      "summary": "Task 5.2 cannot be completed by the implementing agent, and step 8 leaves the shipped policy open",
+      "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:295",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "testability",
+      "raw_category": null,
+      "summary": "Round-trip test checks policy only, but criterion 5 requires an equal `ServerConfig`",
+      "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:88",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "concern",
+      "category": "convention",
+      "raw_category": null,
+      "summary": "Checklist format is broken: subitems lack `[ ]`, and commit markers are checkbox items",
+      "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:96",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "concern",
+      "category": "proportionality",
+      "raw_category": null,
+      "summary": "Overweight for a 2/5-effort slice: 23 tasks, about 150 checkboxes, and repeated verification",
+      "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md",
+      "location_verified": null
+    },
+    {
+      "id": "F009",
+      "severity": "note",
+      "category": "scope",
+      "raw_category": null,
+      "summary": "Tasks 5.3 and 5.4 trace to no success criterion",
+      "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:316",
+      "location_verified": true
+    },
+    {
+      "id": "F010",
+      "severity": "note",
+      "category": "sequencing",
+      "raw_category": null,
+      "summary": "Frontmatter dependencies omit 309, which the slice says is needed for verification",
+      "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:6",
+      "location_verified": true
+    },
+    {
+      "id": "F011",
+      "severity": "note",
+      "category": "verification",
+      "raw_category": null,
+      "summary": "Expected config output contradicts itself and misstates `StrEnum` printing",
+      "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:265",
+      "location_verified": true
+    },
+    {
+      "id": "F012",
+      "severity": "note",
+      "category": "testability",
+      "raw_category": null,
+      "summary": "Performance is claimed with no quantified target, so no load test is named",
+      "location": "project-documents/user/slices/313-slice.world-bounds-policy.md:57",
+      "location_verified": true
+    },
+    {
+      "id": "F013",
+      "severity": "note",
+      "category": "design",
+      "raw_category": null,
+      "summary": "`apply_bounds_policy` takes `policy` separately from `world_bounds.policy`",
+      "location": "src/migratory_server/bounds_enforcement.py:20-25",
+      "location_verified": true
+    },
+    {
+      "id": "F014",
+      "severity": "pass",
+      "category": "coverage",
+      "raw_category": null,
+      "summary": "All 14 success criteria map to tasks",
+      "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md",
+      "location_verified": null
+    },
+    {
+      "id": "F015",
+      "severity": "pass",
+      "category": "sequencing",
+      "raw_category": null,
+      "summary": "Sequencing and test-with pattern hold within the plan",
+      "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:42",
+      "location_verified": true
+    }
+  ],
+  "template_name": "tasks",
+  "input_files": {
+    "input": "project-documents/user/tasks/313-tasks.world-bounds-policy.md",
+    "against": "project-documents/user/slices/313-slice.world-bounds-policy.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/migratory-313-tasks"
+  },
+  "timestamp": "2026-11-16T13:01:53.979203",
+  "model": "claude-haiku-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 11,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-haiku-5-5",
+  "answering_models": [
+    "claude-haiku-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 15,
+    "in_fences": 0,
+    "in_section": 15,
+    "surviving": 15
+  },
+  "effort": "xhigh",
+  "profile": "sdk",
+  "turns": 12,
+  "prompt_tokens": 511447,
+  "cached_tokens": 362359,
+  "cache_write_tokens": 149078,
+  "completion_tokens": 54260,
+  "reasoning_tokens": null,
+  "duration_seconds": 237.62642266601324,
+  "cost_usd": 0.17045597,
+  "cost_basis": "provider"
+}

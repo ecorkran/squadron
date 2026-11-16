@@ -1,0 +1,54 @@
+{
+ "review": "r07",
+ "findings": [
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Subdivision candidate arithmetic is wrong, and the composition claim rests on it",
+   "description": "The doc says \"With S=3 alone: candidates loaded drops to ~5000\" and \"With both: candidates loaded ~555\". Those are roughly one-cell occupancies, not scan totals. A 7\u00d77 scan at ~555 agents per cell is 49 \u00d7 555 \u2248 27,000 candidates, which is the figure in the source analysis (`148-notes.rediagnosis.md`, Intervention 2). Subdivision alone is therefore about a 1.65\u00d7 reduction (45,000 \u2192 27,000), not 9\u00d7.\n\nConsequences:\n- **Expected gain:** \"compose multiplicatively\" overstates the combined effect. Once early exit is in, the scan stops near the cap regardless of cell size, so the marginal gain from `S=3` is unquantified.\n- **Loop structure:** the `break` exits only the `kk` loop. The remaining cell iterations of the 49-cell scan still run their cell-range lookups before breaking immediately. This is cheap, but it is a cost that grows with `S` and the doc does not mention it.\n\nFix: correct the numbers to the rediagnosis figures. State that Intervention 2's benefit under early exit is an empirical question that the Step 3 ablation answers. A2/A3 should be judged on that data, not on the multiplicative expectation.",
+   "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:56-58"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Ablation walkthrough cannot be run as written",
+   "description": "Step 3 lists four configurations, but the commands are pairwise identical. \"Baseline (S=1, counter-gating)\" and \"Early exit only (S=1, break enabled)\" are the same command, as are the two `S=3` runs. The design defines no switch between counter-gating and `break`; Intervention 1 is an unconditional replacement. After implementation the counter-gated rows cannot be produced, so the A2 baseline has no reproducible source in this doc.\n\nFix (lightest option): do not add a toggle. State that the counter-gated baseline is the recorded slice 145 figure (38 TPS and its `force_total`), re-measured on the pre-149 commit on the same host. Reduce Step 3 to the two post-change runs (`S=1` and `S=3`).",
+   "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:160-176"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "`S` and `cell_size` are two inputs with an unstated coupling invariant",
+   "description": "`BenchConfig` carries both `cell_size` and `subdivision_factor`, and the kernel receives both independently. Correctness requires `S \u00d7 cell_size \u2265 query_radius`; otherwise the \u00b1S scan silently under-covers the neighborhood and drops neighbors with no error. The doc treats both as \"configuration inputs\" without saying which is authoritative or where the derivation happens.\n\nTwo related gaps:\n- **Existing mechanism:** `143-port-notes.md` documents `cell_size = max_query_radius \u00d7 DEFAULT_CELL_SIZE_MULTIPLIER`. The design does not say whether `S` replaces, wraps, or coexists with that multiplier.\n- **Which radius:** the doc says `query_radius`, while the existing rule uses the maximum across profiles.\n\nFix: make `S` the single input, derive `cell_size = max_query_radius / S` in one place at setup, and state the fate of the existing multiplier. That leaves no independently settable `cell_size` that can violate the invariant.",
+   "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:80-99"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "Verification commands and spill check diverge from slice 148's documented conventions",
+   "description": "The walkthrough uses entry points and flags that do not match sibling documents:\n- **Bench invocation:** this doc uses `python scripts/bench.py --config mid-flock --N 10000 --ticks \u2026` and `--parity-check numpy`. Slice 148 documents `uv run python -m migratory.bench.cli --backend \u2026 --workload mid-flock-50k`, with workloads as named YAML files (`mid-flock-10k`) rather than an `--N` override.\n- **Parity check:** in 148, parity is a pytest module, not a bench flag.\n- **Spill check (A5):** this doc cites `nvcc --ptxas-info` or \"`TI_PRINT_KERNEL_STATS=1` or equivalent\". The 148 docs give `--profile-kernel` / `qd.profiler.print_kernel_profiler_info()` with a `cuobjdump --dump-resource-usage` fallback.\n\n\"Or equivalent\" for A5 leaves a gate criterion without a defined measurement. The guessed env var is the kind of placeholder the project's hallucination-trap rule warns against, and it has already propagated into the 149 task file (T13).\n\nFix: reuse the 148 invocations verbatim, and name the one new flag (`--subdivision-factor`) as the only CLI addition this slice makes.",
+   "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:141-191"
+  },
+  {
+   "i": 7,
+   "severity": "NOTE",
+   "title": "The `S \u2264 8` cap rests on rationale that does not hold",
+   "description": "The `S \u2265 1` integer check is warranted. The upper bound is a magic constant justified by two claims that do not follow:\n- **\"Larger than the physical neighborhood\":** the scan always covers exactly `query_radius` by construction, whatever `S` is.\n- **GPU memory risk:** grid memory depends on world extent divided by `cell_size`, not on `S` alone. The rediagnosis estimates ~2,025 cells at `S=3`.\n\nOnly `S=1` and `S=3` are used. Either drop the cap, or keep it as a named config-level constant with an honest rationale (a sanity bound on scan cells).",
+   "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:74-78"
+  },
+  {
+   "i": 8,
+   "severity": "NOTE",
+   "title": "Production `S` for slice 146 is not stated",
+   "description": "Default `S=1` is per plan, but the Tier 2 gates are measured at `S=3`. Slice 146 inherits a default under which the NFR headroom is unmeasured. One sentence would close this: either the `S=1` post-change run from Step 3 is recorded as the production-default figure, or 146 is expected to configure `S=3`.",
+   "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:111-128"
+  },
+  {
+   "i": 9,
+   "severity": "NOTE",
+   "title": "Failure-mode enumeration is not applicable",
+   "description": "The slice adds no I/O path or message type. The one new input (`S`) fails explicitly at config load with a hard error and no silent clamp, consistent with the project's no-silent-fallback rule.",
+   "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:82-106"
+  }
+ ]
+}

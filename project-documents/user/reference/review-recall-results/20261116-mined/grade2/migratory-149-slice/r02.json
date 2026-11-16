@@ -1,0 +1,61 @@
+{
+ "review": "r02",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Gate runs can't separate the interventions, and the A2 baseline has no source",
+   "description": "Step 3 lists four runs labelled \"counter-gating\" and \"break enabled\". The commands come in identical pairs: lines 162\u2013163 match 166\u2013167, and 170\u2013171 match 174\u2013175. The design adds no flag or config value that switches early exit on or off. Intervention 1 makes the `break` unconditional (lines 36\u201346), so the \"Baseline \u2026 should reproduce slice 145 ~38 TPS\" run cannot happen after this slice ships. A2 (line 121) gates on \"\u2265 5\u00d7 faster than slice 145 CUDA baseline\", but the design never says where that baseline number comes from.\n\nRecommended fix: drop the two intermediate runs and name the A2/A3 baseline as the recorded slice 145 measurement (`145-notes.fused-tick-measurements.md`, 38 TPS at N=50k), or a run on the pre-149 commit. Add a bench-only early-exit toggle only if the per-intervention breakdown is really needed. Nothing in the slice plan requires it.",
+   "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:158-178"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Candidate-count arithmetic for subdivision is wrong by about 5\u00d7",
+   "description": "Line 58 says \"With S=3 alone: candidates loaded drops to ~5000\" and \"With both: candidates loaded ~555\". A (2S+1)\u00b2 = 49-cell scan at ~555 agents per cell loads about 27,000 candidates, not 5,000. The source diagnosis says so itself (`148-notes.rediagnosis.md:108-111`: \"49 cells \u00d7 555 = ~27,000 candidates\"). With early exit, the number loaded depends on how soon the cap is reached in scan order, not on one cell's occupancy. The total scanned area per agent only falls from (3\u00b750)\u00b2 to (7\u00b716.7)\u00b2, about 0.6\u00d7.\n\nThis matters because the expected-gain reasoning behind A2/A3 rests on these numbers. The S=3-only gain is overstated. Correct the figures so the gate thresholds are justified by the right model.",
+   "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:56-58"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Early-exit `break` puts the selection rule outside the A7 seam",
+   "description": "Option A puts `if k_found >= max_neighbors \u2026 : break` in the kernel loop, before the seam is called. After that, `get_neighbors_first_k` is reached only when `k_found < k_max`, so its accept rule is dead logic. The first-k policy now lives in the caller.\n\nSlice 145 A7 requires that \"swapping to distance-ranked does not require changing the tick kernel\" (145 design line 357\u2013359). The slice plan entry says \"Both interventions use the `getNeighbors` seam\" (`140-slices.simulation-scaling.md:50`). Distance-ranked k-nearest has to scan every candidate, so the future swap would need to edit this loop. Line 112's claim that the A7 seam is \"intact\" does not hold.\n\nLighter fix that keeps the seam: add a second `@qd.func` next to the accept rule, for example `neighbor_scan_complete(k_found, k_max) -> bool`. The loop does `if neighbor_scan_complete(...): break`. The distance-ranked variant then returns `False` from that function and the kernel body stays the same.",
+   "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:31-46"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "`cell_size` and `S` are separate config inputs that can disagree",
+   "description": "The component diagram lists `cell_size` and `subdivision_factor S` as two separate `BenchConfig` fields. Line 80 says `cell_size` \"reads from config\". There is also an existing `DEFAULT_CELL_SIZE_MULTIPLIER` (`143-port-notes.md:58`: `max_query_radius \u00d7 DEFAULT_CELL_SIZE_MULTIPLIER`), which is a third setting for the same quantity.\n\nIf `cell_size` is set below `query_radius / S`, the (2S+1)\u00b2 scan no longer covers the query radius. Neighbors at the edge are then dropped without any error, which violates the design goal that behavior is preserved. The project rules also say a value should be defined in one place.\n\nSpecify that `cell_size` is derived in exactly one place as `max_query_radius / S`, where the maximum is taken over profiles, since radii are per profile (145 design line 182). Also say what happens to the existing multiplier: replace it, or reject configs that set both.",
+   "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:84-92"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Where `S` lives and where it is validated for slice 146 is not stated",
+   "description": "The `S` validation is placed at \"config-load time\" in the bench config (line 69), and `S` is called a \"bench configuration\" value (line 50). The A3 rationale (line 116) justifies the 100 TPS gate as headroom \"before slice 146 wires the GPU tick into the production engine\". But 146 uses the engine config, not `BenchConfig`, so it would skip this validation. Because the default is `S=1` (line 67), 146 would also run at baseline speed unless it knows to pass `S`.\n\nThe \"Interface to (146)\" section (line 111) only says the API is unchanged. State three things: `S` is a `setup()` input of the `quadrants-fused` backend; validation lives in one shared function (or in `setup()`) that both callers reach; and which `S` 146 is expected to configure. Without that, the headroom A3 measures doesn't carry over to production.",
+   "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:69-80"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "\"Correct neighborhood is preserved\" ignores the bias from first-k scan order",
+   "description": "Subdivision keeps the physical radius the same, but first-k-found accepts the first 32 in-radius agents in scan order. The loop starts at `drow=-S, dcol=-S` (lines 62\u201365). At ~5000 agents per cell with S=1, all 32 accepted neighbors probably come from the corner cell (-1,-1). With S=3, they come from the first rows of the 7\u00d77 block. So the selected neighbors are biased in direction, and changing `S` changes that bias.\n\nThe A4 parity metrics (mean speed, mean NN distance) don't depend on direction, so they would not catch a steady cohesion pull toward one side. That conflicts with the first architecture design goal (\"Preserve behavioral fidelity across scaling tiers\"). Early exit doesn't make this worse, because counter-gating accepts the same set. Subdivision does change it.\n\nAt minimum, state the scan order and say whether the bias is accepted. The cheap fix is to scan the agent's own cell first, or go outward from the center. That costs nothing in the kernel and also makes the early exit reach its cap sooner.",
+   "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:56"
+  },
+  {
+   "i": 6,
+   "severity": "NOTE",
+   "title": "`max_neighbors > 0` treated as \"uncapped\" doesn't match the slice 145 seam",
+   "description": "The guard assumes `max_neighbors == 0` means uncapped. The slice 145 seam is `return k_found < k_max` (145 design line 213), and with `k_max=0` that accepts no neighbors. Check what the current kernel actually does with 0. Then state one meaning and keep it, so A1 (slice 145 parity preserved) holds.",
+   "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:46"
+  },
+  {
+   "i": 7,
+   "severity": "NOTE",
+   "title": "Reason given for the S \u2264 8 limit is inaccurate",
+   "description": "The limit is reasonable and it is a hard error, not a silent clamp, which is good. But \"risks pushing \u2026 auxiliary arrays past practical GPU memory\" overstates it. At S=8 and a 1200\u00d71200 world, the grid is about 192\u00b2 \u2248 37k cells, which is trivial (see also `148-notes.rediagnosis.md:113-116`). The real reason is the scan cost of (2S+1)\u00b2 cells per agent. Fix the wording so a later reader doesn't tune the limit for the wrong reason.",
+   "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:78"
+  }
+ ]
+}

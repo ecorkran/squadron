@@ -1,0 +1,54 @@
+{
+ "review": "r03",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "The recommendation strings contradict the stable `review` / `blocked` contract",
+   "description": "The architecture defines the gate's output as `recommendation: \"review\"` and `recommendation: \"blocked\"` (`240-arch\u2026md:118,124`). It says Amoeba routes on this stable vocabulary (`240-arch\u2026md:173`). The slice repeats that promise at line 286: \"`review` / `blocked` recommendation vocabulary \u2014 the stable strings runners route on\". But TD-7 sets `recommendation` to readable sentences: `'Review required before advancing'` and `'Blocked: review verdict does not clear threshold'`. It then says \"Exact strings finalized in implementation.\" The walkthrough (lines 340, 348) expects the sentence form.\n\nThat leaves the one value an external consumer depends on unspecified, and in conflict with itself. Fix: set `recommendation` to exactly `review` / `blocked`, define them once as constants, and put the readable text in `rationale`.",
+   "location": "project-documents/user/slices/241-slice.gate-logic-in-workflownavigator.md:253-268"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Runners cannot tell which review is owed without parsing text",
+   "description": "The architecture has two relevant goals:\n- The new statuses are first-class, so that \"the visualizer and runners can act on them without parsing recommendation strings\" (`240-arch\u2026md:32`).\n- The gate returns a stable, structured vocabulary (`:173`).\n\nThis slice sends all four boundaries to the same `pending-review` / `review-failed` status. The review type that is owed (`arch` / `slice` / `tasks` / `code`) appears only in the `rationale` text (line 268). A runner has to know which review agent to start, and its only option is to parse that text.\n\nFix: carry the derived review type as a structured value, for example an optional `pendingReviewType` on `SliceStatus`. That is additive and does not change the `NextAction` shape, which TD-7 rightly keeps fixed.",
+   "location": "project-documents/user/slices/241-slice.gate-logic-in-workflownavigator.md:21-28"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Parse failures can't be told apart, though the architecture requires naming them",
+   "description": "The architecture says that for a review file that exists but cannot be parsed, \"the rationale returned to the caller names the parse failure explicitly\" (`240-arch\u2026md:149`).\n\nThe slice treats \"parser never throws, read failure and missing frontmatter both surface as no `verdict`\" as \"exactly the behavior the gate needs\". TD-2 (line 216) and the success criteria (line 310) carry the same collapse forward. As designed, the rationale cannot say \"file unreadable or malformed\" versus \"verdict field missing\". Nothing observable separates the two failure modes either: no log at WARNING or above, and no test asserting the signal.\n\nThe parser already returns `found: false` on a read or parse failure, so the information is there. Fix: keep `found: false` separate from `found: true` with no `verdict`. Both still route through `UNKNOWN` \u2192 `review_unknown_as`, but the rationale should name the parse failure, and a test should cover each case.",
+   "location": "project-documents/user/slices/241-slice.gate-logic-in-workflownavigator.md:79"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Bad gate config is silently ignored instead of failing fast",
+   "description": "The architecture's principle is: \"An invalid `workflow.review_threshold` value or an unrecognized per-gate config is a config error surfaced immediately, not a silent pass or silent block\" (`240-arch\u2026md:48`). The slice breaks this in two ways:\n\n1. **Per-gate `review_type` keys are \"defined but unread\".** A user who sets `workflow.review_gates.pre-tasks.review_type = \"code\"` gets no error and no warning; the value is just dropped. Keeping the keys for backward compatibility is reasonable. Ignoring a value the user actually set is a silent fallback. At minimum, `resolveGateConfig` should report a non-empty `review_type` as a warning on the `NextAction` (the existing `warnings` pattern) or reject it at validation.\n2. **`resolveGateConfig` doesn't say what happens on bad input.** Lines 191 and 275 cover only how values are narrowed. They don't say what happens when `review_threshold` / `review_unknown_as` hold a value outside the token set, or the per-boundary threshold is invalid. That can happen when `.context-forge.toml` is edited by hand and bypasses the `validate` hook. Fix: say it throws (or returns a config error that surfaces in the result) and never falls back to a default, and add a test for it.",
+   "location": "project-documents/user/slices/241-slice.gate-logic-in-workflownavigator.md:226-231"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "The `arch` boundary leaves its status holder and lookup index undefined",
+   "description": "At the pre-slice-plan boundary no slice is active and no slice plan exists, but the slice says it will \"extend the no-active-slice / pre-slice-plan path for the `arch` gate. Set `pending-review` / `review-failed` accordingly.\" Two things are left open:\n\n- **Where the status lives.** `SliceStatus` describes a slice, and none exists here. The design doesn't say whether the initiative-level result appears in `getStatus()` (TD-3 says the statuses reach every consumer) or only in `getNext()`.\n- **Which index is looked up.** `detectDocuments(projectPath, sliceIndex, reviewType?)` (line 78) is keyed by slice index, but an arch review is named by the initiative or arch index (`NNN-review.arch.*.md`, `240-arch\u2026md:141`). The design doesn't say which index is passed, or whether the 240 detector supports the initiative case at all.\n\nThis boundary is the scope 241 took over from slice 244, so it needs the same level of detail as the other three. State the status carrier and the index source, and confirm the detector handles that index.",
+   "location": "project-documents/user/slices/241-slice.gate-logic-in-workflownavigator.md:57"
+  },
+  {
+   "i": 5,
+   "severity": "NOTE",
+   "title": "The architecture document is now out of date on two points",
+   "description": "Two points in the architecture no longer match the plan:\n- It still says `reviewType` is configured per gate (`240-arch\u2026md:30,82-85`).\n- It says pre-slice-plan gating is deferred out of v1 (`:22,139-141`).\n\nThe slice plan's Notes (lines 26-28) supersede both, and this slice follows the plan. That's acceptable. The architecture document should still be amended, either in 243 or as a docs fix, so later reviewers don't flag the slice as drifting from it.",
+   "location": "project-documents/user/slices/241-slice.gate-logic-in-workflownavigator.md:68"
+  },
+  {
+   "i": 6,
+   "severity": "NOTE",
+   "title": "`evaluateVerdict` is typed to return an outcome it never produces",
+   "description": "`GateOutcome` includes `'pending'`, but line 218 says `evaluateVerdict` returns only `clears` / `failed`, with the navigator supplying `pending` from `review === null`. Narrowing the return type to `'clears' | 'failed'` lets the compiler enforce that split. Without it, slice 242 might call `evaluateVerdict` expecting it to report absence.",
+   "location": "project-documents/user/slices/241-slice.gate-logic-in-workflownavigator.md:184-218"
+  }
+ ]
+}

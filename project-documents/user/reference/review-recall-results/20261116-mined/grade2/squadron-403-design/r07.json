@@ -1,0 +1,96 @@
+{
+ "review": "r07",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Unreadable or concurrently written slice-range record can silently lose landings",
+   "description": "The flow reads the stored record with `store.get_slice_ranges` (line 110) and writes the merged record once (line 124). 400's shared record scan (`_iter_records`) skips unreadable files with a WARNING, so a corrupt or unknown-version `slice_ranges` record reads as \"no stored ranges,\" and the next write replaces it. Fast-forward landings whose reflog has expired exist only in that record, so their loss is permanent. The failure table has no row for this case. Row 166 accepts that concurrent writes drop landings, with signal \"None,\" which the project's failure-mode rule does not allow. The rule that stored landings never change (line 186) is not enforced. Fix: make `get_slice_ranges` a targeted read that raises on an unreadable record, have writers refuse to overwrite it and name the path, and re-read before writing so a concurrent change logs a WARNING naming the landings at risk. Add a row for each case and a test for each.",
+   "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:110-124"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Review attribution ignores 402's roll-up rule for reviews without a commit",
+   "description": "402's Integration Points say records with `commit_sha is None` or `slice_index is None` \"roll up at project level only.\" This design's Integration Points (line 325) restate that rule without the commit clause. D9 (line 243) lists a review under a slice whenever its `slice_index` maps to a resolved landing, and report history (line 298) does the same. The 37 historical reviews with no `reviewedSha` (402 D6) would be counted under slices, which 402 forbids. Fix: add the commit condition to D9 and line 298, and restate it at line 325. If 402's rule should change instead, change it in 402's review and keep the two designs in agreement.",
+   "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:243"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Git failures are logged at INFO and reported as the wrong reason",
+   "description": "Row 164 treats a `None` from a reflog read or merge search as \"this path can't answer,\" logs one INFO line, and falls through to the next path. The table never says which reason a failed path reports. A failed branch lookup falls through to `NO_LANDING` (line 115), so a git error reads as \"no slice branch.\" Line 327 says a `None` from `run_git` is never an answer, which this contradicts. The project's failure-mode rule requires WARNING or above. Several git calls are missing from the table altogether: `git merge-base` for each merge landing's fork (line 113), `rev-parse` of the target, and `git log --merges` when the target ref is absent, which a fresh clone without the integration branch hits. Fix: log each failed git call at WARNING with the call name, give failed calls their own reason (for example `git_failed`), add rows for merge-base and a missing target, and add caplog tests.",
+   "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:164"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Fresh-clone durability has no test, and walkthrough step 2 never reads the store",
+   "description": "Criterion 2 (line 333) requires a fast-forward range to resolve after reflog expiry or with its branch deleted. No test in the list (line 347) covers persistence after loss. Those tests cover resolution only. Walkthrough step 2 (line 364) uses slice 400, which is a merge commit and resolves from topology without reading the store. It also runs `git clone .`, whose origin is the local path. `derive_project_id` keys on the git remote (400's identity rules), so the clone reads a different ProjectId and the step cannot show persistence. Fix: add a test that persists a fast-forward landing, deletes the branch and reflog, and resolves it from the store. For the walkthrough, set a recorded `metrology.project_id` in both checkouts and use a fast-forward slice.",
+   "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:364"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Adapter contract change to completed slice 400 is heavier than needed",
+   "description": "D5 adds a required `AdapterContext.environment_root` (line 211). The plan says 400 decides the adapter contract and every later slice inherits it (plan entry 400, Risk Level), and 401 is specified with no adapter-contract change (plan entry 401, criterion 3). This change touches both 400 adapters and every `AdapterContext` construction, including 400's test builders, so the claim that \"the 400 tests pass unchanged\" (line 389) is false. The plan also orders 401 before 403, so the contingency at line 74 would have 403 edit 401's adapters. The rejected option (line 218) is to symlink `.venv` into the export. D5 already symlinks `node_modules` for the same reason (line 136). The stated objection, that `uv sync --check` fails on a version-bumped export, applies only if D7's check runs inside the export. It can run against the live checkout, since D6 already requires the export's and the live `uv.lock` hashes to match. Cut: drop `environment_root` and the adapter conformance test (line 215), symlink `.venv` beside `node_modules`, and run D7's check on the live checkout. Keep the in-place-equals-export test (line 336). If the contract change stays, record it as an explicit amendment to 400's contract.",
+   "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:209-218"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Landing search misses or misclassifies three landing shapes",
+   "description": "(1) The fast-forward search runs only when no merge landing is found (line 114). A slice with a merge landing and a later fast-forward landing therefore shows only the merge, although D1 says slices can land more than once. (2) A squash-merged slice's tip is not contained in the target, so it becomes `NOT_LANDED` (line 116). That reason is never persisted and reads as \"in progress.\" Squash merges are not in Excluded (lines 59-66) or in the reason set, and 440 will adopt projects that may squash. (3) A fast-forward slice whose branch is gone returns `NO_LANDING` (line 115), which means \"never landed\" when the landing exists but cannot be identified without the branch. Fix: run the fast-forward search independently of the merge search, or state why case (1) cannot occur. Add reasons for squashed and branch-gone, or list squash in Excluded. Add a resolver test for each case.",
+   "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:111-121"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "Export drops 400's integrity check, and the working tree is not tested",
+   "description": "400 D9 requires an integrity check after every measurement, comparing the live repo's `git status --porcelain` before and after. The export flow (lines 127-140) has no such check, and the export tests (line 348) compare only the `.git` listing. Criterion 4 (line 335) also says the working tree is unchanged, but nothing automated checks it. Only manual walkthrough step 4 (line 366) does. Fix: compare porcelain output before and after the export (compare, not require clean), raise the integrity error on any change, and assert the working tree in the export tests.",
+   "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:127-140"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "Review noise floor is excluded, so the plan's noise-floor criterion is unmet for reviews",
+   "description": "Plan entry 403, criterion 4, requires LLM-sourced numbers to be \"shown against their noise floor.\" The architecture's Envisioned State says the same. This design excludes a review floor (line 61) and labels every review figure \"no floor measured\" (line 237). That is honest, but the criterion is met for audit only, and the design does not flag it as a deviation. Either measure a review floor in this slice, or record in plan entry 403 that the review part of criterion 4 is deferred, and state the decision in this design's Success Criteria.",
+   "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:61"
+  },
+  {
+   "i": 8,
+   "severity": "CONCERN",
+   "title": "Editable-install mitigation is not tested by the test it cites",
+   "description": "The risk (line 375) is that pyright resolves `import squadron` to the live `src` through the editable install. The mitigation (line 380) says criterion 5 (in-place equals export) catches it. It cannot. At a clean HEAD the live and exported trees are identical, so both imports give the same result. Fix: add a test that exports an older commit whose module differs from the installed package, and asserts that a diagnostic from the exported file appears in the export's type count. Or set pyright's import root explicitly and assert it.",
+   "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:375-380"
+  },
+  {
+   "i": 9,
+   "severity": "NOTE",
+   "title": "Export file set differs from in-place for tracked symlinks",
+   "description": "The export's file set is the archive's regular-file members (line 135). 400 D4's in-place set is `git ls-files`, which includes tracked symlinks. Criterion 5 (line 336) can therefore fail on any repo with tracked symlinks. The design addresses only the export-ignore case (line 217), which squadron and context-forge don't have. That paragraph is a cut candidate and can become a one-line note. State the symlink rule explicitly, and test it.",
+   "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:135"
+  },
+  {
+   "i": 10,
+   "severity": "NOTE",
+   "title": "Limits, exclusions and target come from the checkout, not the commit",
+   "description": "The architecture ties limits and exclusions to the project's config, and this design reads them from the live checkout for exports (line 214). The Risk section (lines 377-378) discloses that an in-slice change to either is invisible between two exports. Landings also persist with a `target_ref` (D1). The store is per project, but the target is per checkout under the worktree rule, and `report slice` does not say how it labels a landing from a different target. Have `report slice` print the settings and target each boundary used, and state that in-slice settings changes are not detected.",
+   "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:214"
+  },
+  {
+   "i": 11,
+   "severity": "NOTE",
+   "title": "Review records keyed on the file path can double-count moved reviews",
+   "description": "402 D5 keys a review record on its file path. A moved or renamed review leaves the old record in the store, so its findings would be counted twice in these reports. The architecture says records key on ProjectId, never on a filesystem path. 403 cannot fix this alone. Raise it in 402's review and decide whether the id moves to content or the store dedupes.",
+   "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:243"
+  },
+  {
+   "i": 12,
+   "severity": "NOTE",
+   "title": "Dependency declarations omit 323",
+   "description": "The frontmatter lists 400 and 402. The audit and noise-floor sections depend on 323's `baseline_report`, `compute_delta` and `is_within_floor` (line 73), and plan entry 403 omits 323 too. Add 323 to this frontmatter and to the plan entry's dependencies.",
+   "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:6-8"
+  }
+ ]
+}

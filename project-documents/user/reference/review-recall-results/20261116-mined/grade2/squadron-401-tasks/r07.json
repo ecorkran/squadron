@@ -1,0 +1,40 @@
+{
+ "review": "r07",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Task 14 makes a tokenizer `MemoryError` a per-file skip, which contradicts D3 and Task 11",
+   "description": "Task 14 lists `MemoryError` among the TypeScript token errors. Under Task 10 those errors send the file to `unparsed_files`. But D3, the failure-mode table and Task 10 all say a `MemoryError` during the pass makes `duplicated_lines` `tool_failed`. Task 11 tests that too (\"a tokenizer that raises `MemoryError` gives `tool_failed`\"). Which path runs depends on the order of the `except` clauses, so whoever implements it has to guess. The two languages also disagree: Task 12's Python token errors leave `MemoryError` out. 400 does pass `(TypeScriptParseError, MemoryError)` as parse errors (`src/squadron/metrology/snapshot/typescript_length.py:151`), which is probably where this was copied from. Fix: take `MemoryError` out of Task 14's token errors and say that `measure_duplication` handles `MemoryError` itself, ahead of `token_errors`.",
+   "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:160"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Task 13's \"function length is unaffected\" can't hold for the inputs it names",
+   "description": "An unterminated triple-quoted string and bad indentation are both `SyntaxError`s for `ast.parse`. Those files are already in function length's `unparsed_files` through `_PARSE_ERRORS` (`src/squadron/metrology/snapshot/python_adapter.py:81`). A junior agent reading \"function length is unaffected\" will likely assert that the file's functions are present, and that test can never pass. Restate it: function length's result for the repo is identical to 400's (the file is unparsed there for its own `ast` error), and the duplication pass changes nothing about it.",
+   "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:154"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Task 5 doesn't say the complexity walk must be iterative, and the TypeScript parse errors don't include `RecursionError`",
+   "description": "The failure-mode table says a `RecursionError` in a complexity walk is \"already one of the adapter's parse errors\". That's true for Python (`_PARSE_ERRORS`). For TypeScript the parse errors are only `(TypeScriptParseError, MemoryError)`. 400's `_extract_functions` uses an explicit `pending` stack (`src/squadron/metrology/snapshot/typescript_length.py:125-138`), so it never recurses. If Task 5's walk is written recursively, as a \"doesn't descend into nested functions\" walk naturally is, deeply nested TypeScript will raise an unhandled `RecursionError` and crash the adapter. Fix: Task 5 should require an explicit-stack walk, like `_extract_functions`. Task 9's `RecursionError` case currently names Python only and should do the same.",
+   "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:74"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Task 9's `RecursionError` test doesn't assert the WARNING",
+   "description": "The Technical Requirements say \"Failure-mode tests assert both the signal and the outcome for each row of the failure-mode table.\" Task 9 checks the outcome (the file is in `unparsed_files`) for both the parse-error and `RecursionError` cases, but not the WARNING per file. Every other row's test names its signal. Add the WARNING assertion here.",
+   "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:111"
+  },
+  {
+   "i": 4,
+   "severity": "NOTE",
+   "title": "`tool_support.tool_failed` requires a `command` argument that Tasks 10 and 23 don't define",
+   "description": "`tool_failed(..., *, command: str, ...)` is keyword-only and required. The duplication pass and the coverage reader run no external command, so the implementer will make up a value. A sentence in each task saying what to pass (for example the report path for coverage, or a fixed description for duplication) avoids two different made-up values. Also, `tool_failed` logs a WARNING per call. So a coverage failure logs once in `read_coverage` (Task 21) and once for each of the two metrics. That's harmless, but Task 24's \"with a WARNING\" assertion should allow more than one.",
+   "location": "src/squadron/metrology/snapshot/tool_support.py:42-54"
+  }
+ ]
+}

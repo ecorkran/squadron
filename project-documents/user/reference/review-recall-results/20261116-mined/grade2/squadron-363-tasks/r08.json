@@ -1,0 +1,47 @@
+{
+ "review": "r08",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Walkthrough never checks SC4, the per-sentence half of SC10, or SC12",
+   "description": "Each of these criteria has an authoring task. None of them has a check against the document that actually gets written:\n- **SC4 (dropped topics appear nowhere, as content or as gap markers).** Task 4.1 puts the rule into the skill. The 8.1 checklist never searches the generated `000-concept.squadron.md` for why-now, audience-evolution or methodology-preference content, or for gap markers about them. The design's main risk is the rejected design creeping back in, so this check matters most. Add it to 8.1, and to 8.2 where gap markers are expected.\n- **SC10, second clause (every `[INFERRED]` sentence satisfies the checkable rule).** 8.1 only confirms that the inferred-claims line exists. Add a step that goes through each `[INFERRED]` sentence and each unmarked restatement against the rule in 7.1.\n- **SC3, structural half.** 8.1 checks the README citations. It does not check that every structural claim names its graph field.\n- **SC12 (a concept a PM would edit rather than discard).** No task covers it. The PM is already live in 8.1, so add one step there: record the PM's edit-or-discard verdict on the written document and put it in the DEVLOG in 9.2.",
+   "location": "project-documents/user/tasks/363-tasks.concept-generation.md:304-318"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Step 8.4 uses `git diff` on a file that is not tracked yet, and leaves test answers in the committed concept",
+   "description": "- **The diff cannot work.** 8.4 proves byte-identity of the populated sections with `git diff`. The 8.1 document is not committed until the 8.6 marker (line 351), so at 8.4 it is an untracked file. `git diff` shows nothing for an untracked file, so the check passes no matter what changed.\n- **Test answers get committed.** The augment run appends walkthrough answers to the real concept, and 8.6 then commits them.\n\nFix either way:\n- commit (or at least `git add`) the 8.1 document before 8.4, or\n- run 8.4 against a copy and compare it with `diff` / `cmp` against a saved snapshot.\n\nAlso say whether the augmented document or the original 8.1 document is the one that gets committed.",
+   "location": "project-documents/user/tasks/363-tasks.concept-generation.md:332-336"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Commit markers are checkboxes, not plain `**Commit**:` lines",
+   "description": "The markers at lines 99, 125, 164, 185, 221, 254, 296 and 351 are all written as `- [ ] Commit: ...` checklist items. They are placed at sensible working points. Each should become a plain `**Commit**: ...` line, so that a check-off is never confused with doing the commit.",
+   "location": "project-documents/user/tasks/363-tasks.concept-generation.md:99"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Too many \"verify\" subtasks that only repeat the authoring task's success line",
+   "description": "This slice is markdown only, rated effort 3/5. Six authoring tasks each get their own verify subtask, and three of those only re-read the text just written against the design:\n- 1.2 restates 1.1's success line.\n- 4.2 restates 4.1's.\n- 5.3 overlaps 5.1/5.2, and the live check of the same thing is 8.1.\n\nFold 1.2 into 1.1, 4.2 into 4.1, and 5.3 into 5.2 as a final success check. Keep 2.2, 3.4 and 6.3: they run real commands against the repo and add evidence.",
+   "location": "project-documents/user/tasks/363-tasks.concept-generation.md:94-99"
+  },
+  {
+   "i": 4,
+   "severity": "NOTE",
+   "title": "SC7 absent/unreadable paths and SC8 refilling are written but never exercised",
+   "description": "- **SC7.** 8.3 tests only the renamed-heading failure. The guide-absent and guide-unreadable stops are never run.\n- **SC8.** In 8.4 the document comes from 8.1, where both questions were answered, so it may contain no `[GAP: ...]` sections. That means the \"fill gap-only sections\" half of the refillability test may never run. Consider running augment against the 8.2 decline-path document, which has gap markers.\n\nNeither gap leaves a criterion completely unbacked, because the authoring tasks state the behavior.",
+   "location": "project-documents/user/tasks/363-tasks.concept-generation.md:326-336"
+  },
+  {
+   "i": 5,
+   "severity": "NOTE",
+   "title": "Step 8.3 doesn't say how to \"point the check at\" the scratch guide",
+   "description": "The skill reads the guide from a fixed path. A junior implementer is not told how to send it to the scratch copy instead: instruct the session, or temporarily override the path. Spell out the method, and keep the existing rule never to touch the real guide.",
+   "location": "project-documents/user/tasks/363-tasks.concept-generation.md:326-330"
+  }
+ ]
+}

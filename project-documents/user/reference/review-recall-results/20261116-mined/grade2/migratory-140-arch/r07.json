@@ -1,0 +1,96 @@
+{
+ "review": "r07",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "FAIL",
+   "title": "Neighbor caching and a GPU-resident tick break the stateless engine contract the document says it keeps",
+   "description": "- **What 100-arch says:** \"The engine is stateless between ticks \u2014 all state lives in the arrays passed to it, including the spatial index. The caller (world server) owns the spatial index, rebuilds or updates it between ticks.\" Related Work in 140 calls 100-arch the thing \"this initiative optimizes but does not change.\"\n- **What 140 adds:**\n  - Slice 119 caches neighbor lists across ticks, which is state that lives between ticks.\n  - The Tier 2 GPU spatial hash and \"full tick on GPU\" put both the spatial index and the agent state on the device.\n- **What is left undecided:**\n  - Who owns the neighbor cache: the engine, the world server, or `SpatialQuery`?\n  - Who invalidates it when `EntityManager` spawns or removes agents, or when array indices compact?\n  - Where the GPU-resident spatial index lives, given the server is supposed to own it.\n  - How replay (307) rebuilds a stagger phase partway through a run.\n- **Fix:** Either amend 100-arch to allow engine-owned cross-tick state, with explicit invalidation hooks, or design the cache as caller-owned state passed into `tick()`. Remove the \"does not change\" claim either way.",
+   "location": "project-documents/user/architecture/140-arch.simulation-scaling.md#technical-considerations"
+  },
+  {
+   "i": 1,
+   "severity": "FAIL",
+   "title": "Client-side int16 delta accumulation diverges under the existing drop-oldest backpressure, and conflicts with planned slice 319",
+   "description": "- **The problem:** \"Delta compression and state representation\" has the client rebuild positions \"by accumulating deltas onto its last-known positions.\" Completed slice 318 added a drop-oldest policy for STATE_UPDATEs. Any dropped delta frame permanently corrupts that client's state.\n- **Rounding drift:** int16 quantization error also builds up every tick unless the server computes deltas against the client's quantized reconstruction rather than the true positions. The document doesn't say which.\n- **What's missing:** keyframes, a recovery path after a drop, and marking delta frames as non-droppable.\n- **Slice 319 already covers this better:** 300-slices plans (319) STATE_UPDATE Delta Encoding. It has keyframes every N ticks, a dead-band, a DELTA (0x06) message type, and capability negotiation. 140 lists \"Delta compression\" as a new world-server slice without mentioning 319, and its design is incompatible with it.\n- **Fix:** Point to 319 and add to it (quantization, interaction with stream decimation) rather than writing a competing design.",
+   "location": "project-documents/user/architecture/140-arch.simulation-scaling.md#technical-considerations"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "\"Current State\" describes the wire protocol and server as they were before slices 306 and 316",
+   "description": "- **Stale wire format:** The section says \"The wire protocol is currently uncompressed JSON over WebSocket.\" Slice 306, which is complete, replaced JSON with binary frames. Tier 2's \"Binary WebSocket replaces JSON\" is already shipped work.\n- **Byte counts don't match:** \"24 bytes \u00d7 3,500 agents\" is not what JSON costs per agent, and it doesn't match 306's layout of float64 positions plus velocities.\n- **Why it matters:** The wire projections for 10k and 50k are built on these numbers, so they need redoing from the actual 306 binary layout.\n- **Benchmark mix-up:** The compute baseline mixes a live run at N=3,500 / 57 TPS with a synthetic per-phase breakdown at N=2492, and presents both as one budget.",
+   "location": "project-documents/user/architecture/140-arch.simulation-scaling.md#current-state"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "int16 delta compression gives about 2\u00d7, not \"~32\u00d7\"",
+   "description": "- **The arithmetic:** An int16 delta is 2 bytes and a float32 position is 4 bytes, so the saving is 2\u00d7. Against the current float64 arrays it is 4\u00d7.\n- **Where 32\u00d7 could come from:** Only from also leaving out unchanged entities (319's dead-band) plus general-purpose compression. The document mentions neither.\n- **Why it matters:** The Tier 3 and Tier 4 transport conclusions (\"fits within 10G LAN or modern WiFi\", the need for a dedicated 25G link) depend on this number.",
+   "location": "project-documents/user/architecture/140-arch.simulation-scaling.md#technical-considerations"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Metal has no float64, but the engine and wire format are float64 and the goal is \"verifiable against NumPy\"",
+   "description": "- **The conflict:**\n  - Apple's Metal GPU API has no double-precision support.\n  - 100-arch leaves internal precision open, and 306 serializes float64 arrays.\n  - Tier 2 (Metal primary) therefore has to switch the simulation to f32, which is a behavioral change.\n- **Verification can't be exact anyway:**\n  - On the GPU, the order of atomic additions in the spatial-hash scatter and force accumulation varies from run to run.\n  - Flocking is chaotic, so trajectories diverge from the NumPy reference within a few ticks.\n- **What the document must define:**\n  - The precision for each backend.\n  - The comparison method: a single-step tolerance against identical inputs, or statistical metrics over a run.\n  - Whether replay (307) and the claim \"determinism within a given stagger configuration\" still hold on GPU.",
+   "location": "project-documents/user/architecture/140-arch.simulation-scaling.md#design-goals"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "A GPU spatial hash doesn't give the current kNN (k=13) semantics, and doesn't fit the `open` bounds policy",
+   "description": "- **kNN on a grid is not a single gather:** The current query is `cKDTree.query k=13`, a topological cap from slices 112 and 116. A cell-gather hash returns everything within a radius. Getting the 13 nearest means a per-agent selection over candidate sets. The journal records average neighbor counts of 279 (max 408) in a packed herd. That selection step is not the \"regular memory access pattern\" the document describes.\n- **Unbounded worlds:** Slice 313 keeps `open` bounds, where agents leave the world. A dense cell grid sized to world bounds breaks there. It needs a hashed or unbounded cell scheme, or a rule that the GPU tier requires `wrap`/`reflect`/`soft`.\n- **Missing from the 100-arch contract:** The document doesn't say how the GPU kernel keeps active-subset evaluation and heterogeneous (aggregate) neighbors, both of which 100-arch requires.",
+   "location": "project-documents/user/architecture/140-arch.simulation-scaling.md#technical-considerations"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "The \"single shared interface\" doesn't match the real server\u2013engine coupling",
+   "description": "- **The real interface:** The document describes it as `tick() \u2192 state arrays`. In practice, `SimulationManager.step(tick_number) -> None` mutates `EntityManager.state` in place (316). The server then changes the same arrays after `engine.tick`:\n  - bounds enforcement (313)\n  - environment writes such as stigmergic deposits (304)\n  - spawn and removal (302)\n- **Consequences of a GPU tier:**\n  - A host round trip every tick that the contract doesn't account for, or\n  - moving bounds and environment-write logic onto the device, which changes 300-arch's ownership split.\n- **The tick-return options:**\n  - Option (b) contradicts the goal that the server \"should not need to know\" the backend.\n  - Option (c), DLPack, gives nothing to the current consumer. The 306 serializer, 307 logging and any NumPy culling all need host memory, and NumPy's DLPack import only accepts CPU memory.\n- **\"Support all three behind an abstraction\" is extra machinery nobody needs yet.** Pick (a), host copy behind the existing step contract. Revisit only if profiling at 250k shows the transfer dominates.",
+   "location": "project-documents/user/architecture/140-arch.simulation-scaling.md#envisioned-state"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "Culling, delta encoding and serialization over 1M+ entities run on the asyncio event-loop thread, and the document calls this \"a separate problem\"",
+   "description": "- **Where the work runs:** Slice 316 states that the per-tick `broadcast` runs on the event-loop thread after the executor await returns.\n- **What lands there:** Server-side frustum culling and per-client delta computation over 250k\u20132M agents is O(N) NumPy work per client per tick, on that thread or competing for the GIL. That is the stall 316 fixed, at roughly 100\u2013500\u00d7 the size.\n- **Per-client baselines:** Culling plus deltas means separate delta baselines per client. Agents entering the frustum need a full position, and agents leaving need cleanup. Slice 319 explicitly lists \"per-client delta streams diverging from a shared canonical state\" as out of scope.\n- **\"The wire is a separate problem\" hides a compute problem.** The document needs to say where culling and encoding run: in the sim worker, on the GPU before transfer, or in a separate process. 316 already names process separation as \"the long-term path.\"",
+   "location": "project-documents/user/architecture/140-arch.simulation-scaling.md#architectural-principles"
+  },
+  {
+   "i": 8,
+   "severity": "CONCERN",
+   "title": "Numba and Quadrants kernels on the single-worker sim executor: GIL, thread affinity and JIT warm-up aren't addressed",
+   "description": "- **GIL:** Slice 316's concurrency depends on NumPy releasing the GIL inside `sim.step`. Numba `@njit` holds the GIL unless `nogil=True` is set. Slice 118 would bring back the SNAPSHOT/TERRAIN stall that 316 fixed.\n- **Thread oversubscription:** Combining `parallel=True` with the BLAS/NumPy thread pools needs a stated threading-layer policy.\n- **Quadrants threading:** Initialization and kernel launches would come from the `sim` worker thread, not the main thread. Taichi-family runtimes keep process-global state. Whether launching off the main thread is supported on Metal is unverified and should be checked in the Quadrants evaluation slice.\n- **Warm-up:** Both JITs compile on first call, which takes anywhere from hundreds of milliseconds to seconds. Without an explicit warm-up at server startup and Numba `cache=True`, the first ticks overrun badly and trip 316's `slow_callback_duration` debug threshold.",
+   "location": "project-documents/user/architecture/140-arch.simulation-scaling.md#anticipated-slices"
+  },
+  {
+   "i": 9,
+   "severity": "CONCERN",
+   "title": "World-server slices duplicate the existing 300 slice plan without referring to it",
+   "description": "- **Duplicates:**\n  - 300-slices already holds (319) Delta Encoding.\n  - It also holds (311) Client Spatial Culling, which has its own design: viewport/region-of-interest, aggregate descriptors for distant groups, and a relevance horizon.\n  - 140 lists \"Delta compression\" and \"Server-side frustum culling\" as new, unnumbered 300 slices.\n- **Overlaps:** 300-slices also has a \"GPU-Accelerated Spatial Queries\" Future Work item (WebGPU/CuPy) and a View-Driven Terrain Streaming item that shares the client\u2192server view channel 140 introduces.\n- **Fix:** Point to and amend 311, 319 and the GPU Future Work item instead of describing parallel work. Otherwise two worktrees will build conflicting wire formats.",
+   "location": "project-documents/user/architecture/140-arch.simulation-scaling.md#anticipated-slices"
+  },
+  {
+   "i": 10,
+   "severity": "CONCERN",
+   "title": "Too much scope: Tier 4/5 transport and render paths, and biome shading",
+   "description": "- **Tier 4/5 transport and rendering:** Tier 4 brings in a \"server-side render path (Vulkan framebuffer \u2192 H.264 stream)\" and a 10G/25G link choice. That is a whole video-streaming subsystem with no slice, no owner and no interface. It contradicts the stated exclusion of \"network hardware decisions\" and \"viewer/client rendering.\"\n- **Biome terrain shading:** Described as \"viewer-only\" with \"no sim-side cost,\" yet given a ship-timing requirement here.\n- **Cut:** Limit this architecture to Tiers 1\u20133, which have slices. Move Tier 4/5 transport and rendering, and biome shading, to Future Work or their own initiative (600 for the viewer).",
+   "location": "project-documents/user/architecture/140-arch.simulation-scaling.md#envisioned-state"
+  },
+  {
+   "i": 11,
+   "severity": "NOTE",
+   "title": "\"Algorithmic before constant-factor\" conflicts with the actual slice order",
+   "description": "- **The stated rule:** Staggered neighbor updates come before Numba JIT.\n- **The actual plan:** 100-slices orders (118) Numba first, and (119) Stagger lists (118) as a dependency.\n- **The data:** Entry 8's profile shows `spatial_query` (5.67 ms) still costs more than `force_total` (3.14 ms). That supports the stated principle and argues for reordering the slices.",
+   "location": "project-documents/user/architecture/140-arch.simulation-scaling.md#architectural-principles"
+  },
+  {
+   "i": 12,
+   "severity": "NOTE",
+   "title": "Backend selection and the failure path are undefined",
+   "description": "- **What's undefined:** \"Numba tier provides a working fallback\" is a fallback in the project plan, not at runtime. The document doesn't say:\n  - how a backend is chosen\n  - what happens when Quadrants initialization fails or a Metal or CUDA device is missing\n  - how a NumPy force and a Quadrants spatial query can share one tick when their data lives in different memory spaces\n- **Project rule:** Backend selection must be explicit config that fails loudly, with no silent downgrade to NumPy.",
+   "location": "project-documents/user/architecture/140-arch.simulation-scaling.md#technical-considerations"
+  }
+ ]
+}

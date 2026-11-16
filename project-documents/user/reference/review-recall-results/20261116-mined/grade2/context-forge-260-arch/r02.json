@@ -1,0 +1,96 @@
+{
+ "review": "r02",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Superseded content is kept inline and contradicts the amended design",
+   "description": "The amendment says \"the sections below are rewritten to match\" (line 24). Several sections still state the old design as current:\n- **Guide release coupling** (line 137) still says \"If cf selects the brownfield profile and the installed guide lacks it, `cf build` fails with a named error.\" Under the amendment, `cf build` never selects that profile.\n- **Dependencies** (line 159) says \"cf releases that select the brownfield profile require at least v0.22.2\". That version was chosen because it \"fixed the squadron-path gate\", which is probe logic the amendment removes.\n- **Anticipated Slices** (lines 145\u2013153) opens with \"In expected order\" and lists \"the persisted adoption state\", \"reading the probe\" and \"adoption steps while in progress\". Only line 143 says these are history.\n- **Responsibility split, row (c)** (line 120): \"CF writes the architecture doc on both paths\". There is now only one path.\n- **Technical Considerations**: the probe contract (line 135) and the original guide prompt contract (line 136) are about 600 words of removed design that sit next to the normative text.\n\nThe slice plan's \"Settled in the arch\" note goes further: it still lists \"A missing Adoption Facts section stops the prompt\" and \"A missing brownfield profile fails the build\" as settled. A slice designer reading 271 will have trouble telling which rules still apply. Move the superseded contracts into a history appendix or into the review file, and rewrite lines 137, 145\u2013153 and 159 to describe the current design.",
+   "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md:131-160"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Opt-out is checked before \"already planned\", so a planned project can be reported as greenfield",
+   "description": "The outcome order (lines 75\u201377) puts \"Opted out \u2192 greenfield\" ahead of \"Already planned\". The opt-out is the only stored value and is never cleared. Take a user who opts out, runs the greenfield concept flow, and writes an initiative plan and architecture. Detection still returns `greenfield` for that project from then on. `sq onboard` and any other consumer of the report would treat it as a fresh project and could re-run concept work over existing artifacts. That conflicts with the concept rule at line 125: \"nothing overwrites an existing concept without the PM saying so\". The opt-out only needs to suppress the brownfield outcome, so check \"already planned\" first and apply the opt-out only to the brownfield/greenfield choice.",
+   "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md#detection-a-read-only-report-amended-20261025"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Removing the force-brownfield override leaves false greenfield with no fix",
+   "description": "Line 133 lists repos that are \"squashed or imported with little history\" and shallow clones as known misfire cases, and calls \"the override\" the safety valve. Slice 261 shipped an override in both directions. The amendment keeps only the opt-out, which forces greenfield (lines 28, 75). Squashed and imported repos are the cases most likely to be misjudged as greenfield, and the user now has no way to correct that. Either restore a force-brownfield value or change line 133 so it no longer promises a safety valve for that direction.",
+   "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md#technical-considerations"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "An adoption run that stops partway gets stuck, because any planning artifact counts as \"already planned\"",
+   "description": "Detection treats any initiative plan, architecture doc or slice plan as \"already planned\" (line 76). Line 80 also says \"An adopted project lands here, so no completion state is needed.\" But adoption writes its artifacts one after another (step 5): concept, then architecture, then the existing-state slice plan.\n\nSuppose the session dies after the derived architecture is written and before the slice plan. Detection now says \"already planned\". `sq onboard` step 2 says adoption doesn't apply. `cf next` then sends the user into ordinary slice planning, with no retroactive entries and no adoption prompt.\n\nThe original profile promised that \"a re-run resumes from whatever artifacts exist\" (line 136). The amended flow drops that and puts nothing in its place. The document needs to choose one approach, for example:\n- only an existing-state slice plan, or any slice plan, counts as \"planned\" once code signals say brownfield, or\n- a derived architecture with no slice plan is reported as a distinct partial outcome.\n\nA related gap: the document never says how a \"CF/SQ planning artifact\" is recognized (by `docType` frontmatter, by a path under `project-documents/`, or both). That matters for repos that already contain a non-CF `ARCHITECTURE.md`.",
+   "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md#adoption-flow-under-sq-onboard-amended-20261025"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "cf cannot enforce \"set only by the adoption flow\" for the retroactive marker, and the design-file guard has a known gap",
+   "description": "Line 100 says the marker is \"set only by the adoption flow\". Under the amendment, though, the adoption flow is an agent following a guide prompt and editing a markdown slice plan (step 5). cf runs no adoption code, so it has no way to tell an adoption write from any other edit. The real guard is the checker rule: a retroactive entry with a design or task file is an error. The claim that \"real new work always produces those files\" is contradicted by line 60, which says the `missing-artifact` rule \"already tolerates plan entries without a design\". Small work done without a slice design could be marked retroactive and skip the review gate without any error. Either say plainly that the marker is unenforced and rely only on the checker, or add something cf can actually verify. For example, a retroactive entry could be required to sit before the first non-retroactive entry. The relative-order rule at line 99 already implies this, but nothing checks it.",
+   "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md#baseline-artifacts"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "The prompt-delivery primitive duplicates `cf build`'s context assembly, and its main design question is deferred",
+   "description": "The guide's `brownfield-adoption` profile relies on cf resolving `fileConcept`, `fileArch`, `fileSlicePlan` and `fileComprehension`. Line 136 defers this entirely: \"Slice 271's design settles how the profile's variables are delivered.\" If 271 resolves those variables itself, it builds a second template-and-variable pipeline next to `ContextIntegrator`/`ContextTemplateEngine`, which breaks the project's DRY rule. The amendment's real complaint about `cf build` was side effects and hidden profile selection, not context assembly. A side-effect-free `cf build` (or `context_build`) that takes an explicit profile from the caller, plus a comprehension path argument, would give `sq onboard` the same result without a parallel mechanism. This is the load-bearing decision of the rework, so the architecture should decide it rather than pass it to slice design.",
+   "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md:136"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "cf rediscovers a file that its caller just wrote",
+   "description": "In the amended flow, squadron writes the comprehension doc in step 3 and then immediately asks cf for the prompt in step 4. Even so, cf still finds the doc \"by filename and `docType` (plus squadron 361's provenance block)\". That keeps cf tied to squadron's file naming and provenance format, which is exactly the coupling the \"cf does not orchestrate squadron\" principle (line 50) is meant to remove. The document also never says which file wins when more than one `{n}-analysis.codebase-comprehension.md` exists, for example after a refresh. Have `sq onboard` pass the path as a parameter to the 271 primitive. That removes the discovery logic and the provenance parsing from cf, and removes the ambiguity.",
+   "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md:119"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "Slice 271's contract is being built before its only consumer is designed",
+   "description": "Adoption is parked until `sq onboard` exists (line 33). The slice plan itself marks 271 as risky, describing it as \"the contract squadron will build against; confirm it with the sq session before design is final\". The two primitives need different timing:\n- **The project-state report** is needed now. `cf init` and the one-line `cf next` message both use it.\n- **Prompt delivery** has no consumer until `sq onboard` is designed, and its shape depends on the open question in the previous finding.\n\nDefer prompt delivery until squadron starts designing `sq onboard`, so cf doesn't freeze an API that has no caller. The project-state report should stay in 271.",
+   "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md#anticipated-slices"
+  },
+  {
+   "i": 8,
+   "severity": "CONCERN",
+   "title": "Removing Adoption Facts in 268 breaks the guide's shipped prompt until 272 lands",
+   "description": "The installed guide (v0.22.2, the stated minimum) ships a brownfield prompt that tells agents to run `cf build`. Under the slice plan's settled rules, that prompt \"stops\" when the Adoption Facts section is missing. Slice 268 removes Adoption Facts, while the guide fix and the `MIN_GUIDE_VERSION` bump only arrive in 272, after 269\u2013271. Any release cut in between ships a guide prompt that halts with no explanation. Adoption is officially parked, but the guide's adoption guide still points users there. Either ship 268 and 272's guide change together, or make 268 also stop delivering the brownfield prompt.",
+   "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md:159"
+  },
+  {
+   "i": 9,
+   "severity": "CONCERN",
+   "title": "Where the opt-out is stored is unspecified, and it matters for \"derived from files\"",
+   "description": "\"The only stored value is the opt-out,\" but the document doesn't say where it lives. If it lives in cf's per-checkout config, it behaves like `git.integration_branch`, which project conventions say is stored per checkout directory. Then two clones or two worktrees of the same repo get different outcomes, and teammates disagree on whether the project is brownfield. That undermines \"derived from the files every time\" (line 48). The architecture should state that the opt-out is committed with the project (for example in project config under version control) so every checkout agrees.",
+   "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md:79"
+  },
+  {
+   "i": 10,
+   "severity": "CONCERN",
+   "title": "The ownership table assigns agent-written artifacts to \"CF\"",
+   "description": "Rows (c) and (d) name CF as the owner of \"Architecture from code\" and the \"Existing-state slice plan\". The concept row says \"exactly one writer per run\" but doesn't name that writer: it says \"squadron 363, or the guide's adoption prompt\". In the amended flow (step 5), an agent driven by a guide prompt writes all three. cf the tool writes none of them. Under squadron 364, \"candidates adopt\" also writes CF's initiative-plan format, which by line 76 would flip detection to \"already planned\". The table should separate who defines the format (CF), who supplies the prompt (guide) and who runs the step (sq onboard plus the agent). It should also say which of 363 and the guide prompt writes the concept on the only remaining path.",
+   "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md#responsibility-split-with-squadron-pm-approved-20261020-amended-20261025"
+  },
+  {
+   "i": 11,
+   "severity": "NOTE",
+   "title": "Monorepo scoping doesn't cover the history signal",
+   "description": "Detection is \"scoped to the project's own folder\", with CI as the only stated exception. Commit history is a repo-wide signal, though. Unless history is filtered by path (`git log -- <dir>`), a new subdirectory project inside an old monorepo looks brownfield on history alone. State whether history is filtered by path.",
+   "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md:79"
+  },
+  {
+   "i": 12,
+   "severity": "NOTE",
+   "title": "Detection runs on every `cf next`",
+   "description": "The outcome is never stored, and `cf next` consumes it, so every `cf next` scans the filesystem and reads git history. The source-volume floor limits the file count, but the git history read and the checks for docs, ADRs and rule files run every time. That is probably acceptable, but it should be confirmed on a large repo, or `cf next` could skip detection once planning artifacts exist. That check is cheap and comes first in the order anyway.",
+   "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md:48"
+  }
+ ]
+}

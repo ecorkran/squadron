@@ -1,0 +1,54 @@
+{
+ "review": "r02",
+ "findings": [
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "No task covers the \"no nested Python loops\" requirement",
+   "description": "The slice's Technical Requirements say: \"Both forces are vectorized within each agent's neighborhood \u2014 no nested Python loops.\" Task 4.1 writes the weighted heading as `sum(velocity[i] * leadership[i]) / sum(leadership)`. A junior implementer could reasonably read that as an inner loop over neighbors. No step in task 3.1, 4.1 or 6.x requires or checks vectorized code.\n\n**Fix:** add a step to task 4.1 that computes the weighted heading with NumPy on the neighbor index array, for example `(state.velocities[nbrs] * lw[:, None]).sum(axis=0) / lw.sum()`. Do the same for the per-agent work in task 3.1.",
+   "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:113-119"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "The convergence assertion would pass even if leadership did nothing",
+   "description": "The slice criterion is that \"the herd's mean heading converges toward the leaders' initial heading.\" Task 5.2 only asserts that the mean heading has a positive x-component.\n\nThe five leaders start at `[4.0, 0.0]` and the other agents have random velocities, so the population's mean velocity already points east at tick 0. Alignment alone (or momentum alone) would carry that bias forward. The test would pass with a `LeadershipForce` that returns zeros.\n\n**Fix:** assert something tied to convergence, such as:\n- the eastward component grows from tick 0 to tick 300, or\n- the angle between the mean heading and `[1, 0]` drops below a stated threshold.\n\nTask 5.3 compares against a flocking-only control, but its assertion uses \"or\" (see the next finding), so it does not close this gap.",
+   "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:147-154"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Several test pass conditions are vague or too lenient for a junior implementer",
+   "description": "- **Task 4.2, known geometry (line 126):** the test only checks that the force \"biases toward agent 1's heading.\" The slice asks for \"correct output for hand-constructed inputs,\" and the exact value is easy to compute. The weighted heading is `(0.1\u00b7[0,1] + 0.9\u00b7[1,0]) / 1.0 = [0.9, 0.1]`. Agent 2's velocity is zero and the weight is 1.0, so the expected force is `[0.9, 0.1]`. Assert that value with `np.allclose`.\n- **Task 4.2, uniform leadership (line 127):** \"should be similar to plain velocity averaging (like AlignmentForce direction)\" cannot be checked as written. With equal leadership, the expected force is exactly `(mean(neighbor_vel) \u2212 v) \u00b7 leadership_weight`. Assert that.\n- **Task 5.3 (lines 160-161):** the assertion accepts either lower heading variance or a stronger eastward mean. That is weaker than the slice's Verification Walkthrough step 4, which expects lower variance and an eastward bias. Pick one metric, or require both. Name the threshold so a pass is clear.",
+   "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:126-127"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Commit steps are checkbox tasks, and the final commit would contain nothing",
+   "description": "Commits appear as checkbox tasks (1.3, 2.3, 3.3, 4.3, 5.4, 6.3). They should be plain `**Commit**:` lines.\n\nCommits at 1.3\u20135.4 land at sensible working, tested points. Task 6.3 does not. Sections 6.1 and 6.2 only run checks, so after 5.4 the only changes left are checkbox ticks. Task 6.3 would therefore be a commit that only checks boxes, labeled `docs:`.\n\n**Fix:**\n- Turn 1.3\u20135.4 into plain `**Commit**:` lines.\n- Delete task 6.3.",
+   "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:180-182"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Section 6 repeats checks that earlier tasks already make",
+   "description": "Task 6.2 re-checks `isinstance(..., BulkForce)`. Tasks 3.1, 3.2, 4.1 and 4.2 already check it, and those checks run as tests in 6.1. Task 6.1 also repeats the full-suite run from the last step of task 5.\n\n**Fix:** reduce Section 6 to one full-suite run, or fold that run into the last step of task 5 and drop the section.",
+   "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:171-178"
+  },
+  {
+   "i": 6,
+   "severity": "NOTE",
+   "title": "The epsilon value is given as an example and appears twice",
+   "description": "Tasks 3.1 (line 86) and 4.1 (line 117) each say \"epsilon (e.g. 1e-10).\" The project rule is to avoid hard-coded and duplicated constants. Have one step define a single module-level constant in `herding.py` that both forces use. If slice 101's code already defines an equivalent constant, reuse it instead.",
+   "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:86"
+  },
+  {
+   "i": 7,
+   "severity": "NOTE",
+   "title": "Tasks 5.2 and 5.3 could be merged",
+   "description": "The slice says the convergence check \"implicitly tests\" profile differentiation (Verification Walkthrough step 5). The two tasks use the same setup, and 5.3 re-runs 5.2's scenario. Consider one parametrized test that runs both configurations from a shared fixture.",
+   "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:147-162"
+  }
+ ]
+}

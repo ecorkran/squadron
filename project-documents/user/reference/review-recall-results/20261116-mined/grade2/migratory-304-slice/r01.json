@@ -1,0 +1,89 @@
+{
+ "review": "r01",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "FAIL",
+   "title": "step() has two conflicting bodies, and the Implementation Details body skips post_tick when there are no entities",
+   "description": "The Implementation Details `step()` returns at 276-277 before `post_tick()` at 287-288. Line 291 says `post_tick()` \"is called even when there are no entities,\" and line 408 says the early return \"wraps only `engine.tick()`.\" The code beside both claims does the opposite. The Technical Decisions copy (176-190) is a third shape: it guards `tick()` with `count > 0` and has no early return. The early return was copied from 303 (`303:259-260`), where nothing ran after it. Time-varying layers such as trail decay would stop whenever the world is empty, which the design says must not happen.\n\nFix: keep one body (the Technical Decisions shape) and delete the other. Add a zero-entity case to the tick-ordering test listed at line 355 that asserts `post_tick` runs.",
+   "location": "project-documents/user/slices/304-slice.environment-layer-integration.md:272-291"
+  },
+  {
+   "i": 1,
+   "severity": "FAIL",
+   "title": "Environment reaches the behavior engine through force closures, outside the tick contract and the read-only boundary",
+   "description": "`arch:63` says behavior evaluation receives \"environment context,\" and `arch:72` says the engine reads the environment \"through a read-only query interface.\" The design passes nothing environment-related to `engine.tick()` (181-187, 279-285). It gives each environment-aware force the full `Environment` container (202, 216). That container also exposes `pre_tick` and `post_tick` (`500:274-288`), so behavior code gets a mutating handle. The plan says to pass environment context to `engine.tick()` (`plan:27`), and `500:422` says the query method or the object goes to `engine.tick()`. The force constructor at line 207 also makes the behavior package import the environment container.\n\nFix: pass the `query` method, or a narrow protocol with `query` and `bounds`, into the force constructors. The alternative is to pass it into `engine.tick()`, which matches `arch:63` and `500:422` but changes the tick signature owned by 100. Decide before forces are built, because the force signatures are what 101 and later slices code against.",
+   "location": "project-documents/user/slices/304-slice.environment-layer-integration.md:200-216"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Two plan-scope items are deferred without an owner",
+   "description": "(a) `plan:27` assigns grid resolution and layer selection to this slice's YAML config. The design excludes grid resolution (48) and says layer config will be added \"likely\" under `simulation.environment.layers.*` or in 507 (153). `500:320` gives each layer its own cell size, so dropping grid resolution from server config is sound. The plan entry was not updated, though, and layer selection has no owner.\n\n(b) `plan:29` says terrain summary in snapshots is \"deferred to (304).\" The design defers \"environment data in client snapshots\" to \"future work\" (47), and the plan's Future Work list does not contain it. Terrain depends on 501, so deferral may be right, but it needs a named slice.\n\nFix: record both moves in the plan and name an owner for each.",
+   "location": "project-documents/user/slices/304-slice.environment-layer-integration.md:42-48"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Post-tick writes are listed as handled, but nothing produces them and no slice defers them",
+   "description": "`plan:27` assigns \"handle post-tick environment writes (e.g., stigmergic trail deposits)\" to this slice. The design calls `post_tick()` with no arguments (190, 288). Line 196 says `post_tick` applies \"agent-originated writes (trails, threats),\" but nothing collects deposits or mutations from agents, and nothing says where they come from. `500:286-287` defines the `trail_deposits` and `threat_mutations` parameters.\n\nFix: state that 304 calls `post_tick()` with no writes in v1, that the producers arrive with 505 and 506, and that 304 owns only the call site.",
+   "location": "project-documents/user/slices/304-slice.environment-layer-integration.md:193-196"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "The seasonal parameter is a silent 0.0 default that no caller varies",
+   "description": "`500:274-276` requires a seasonal value on every `pre_tick` call, so this slice must supply one each tick. The design gives `step()` a default of `0.0` (176, 272). A caller that omits it gets a fixed season with no error. The project rules forbid silent fallbacks and hard-coded defaults in code. Line 198 calls 0.0 \"mid-season,\" but on the 0-1 cycle in `plan:35` it is the start of the cycle.\n\nFix: remove the default from `step()`. Have the server tick body pass one named placeholder value, defined once in config or as a single constant and documented as \"replaced by 308.\" Correct the \"mid-season\" label.",
+   "location": "project-documents/user/slices/304-slice.environment-layer-integration.md:176"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "An optional Environment lets SimulationManager skip the lifecycle silently, contradicting the design's own rule",
+   "description": "The \"Environment is Always Present\" section says the design avoids `if environment is not None` checks. Yet it keeps `Environment | None` (263) and two such checks in `step()` (177, 189 and 273, 287). Line 220 justifies this with existing tests, but line 407 already accepts updating every `step()` caller for the breaking signature change.\n\nFix: make `environment` a required constructor argument, update the existing SimulationManager tests to pass an empty Environment, and drop both checks. The design then follows its own rule, and no caller can skip the lifecycle silently.",
+   "location": "project-documents/user/slices/304-slice.environment-layer-integration.md:218-220"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "The tick-path NFR is not restated, and the new environment calls are not timed separately",
+   "description": "`arch:78` sets the tick budget at 20-60 Hz, and `arch:90` requires overrun warnings and metrics. `303:38` measures engine tick duration separately from total tick time. This slice adds `pre_tick` and `post_tick` to every tick. The Technical Requirements (353-357) restate no budget and no overhead target, and the design does not say whether environment time is measured. An overrun caused by environment work would look the same as one caused by forces.\n\nFix: restate the budget (one tick = 1 / tick_rate, target range 20-60 Hz) and the overrun requirement in this document. Add an environment-time metric, or name the existing metric that covers it.",
+   "location": "project-documents/user/slices/304-slice.environment-layer-integration.md:353-357"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "Query and lifecycle failures on the tick path have no handling strategy",
+   "description": "`500:270` and `500:333` say `query()` raises `ValueError` for the whole batch if any position is out of bounds. Once forces call `environment.query(state.positions)` inside the tick, one entity that drifts out of bounds aborts the tick. `arch:88` names entities leaving world bounds as a future event source, so v1 may already allow it, and the design does not say. The design also does not say what happens when `pre_tick` or `post_tick` raises. `arch:45` requires error states to have \"defined behavior\" and \"no silent failures.\"\n\nFix: state whether v1 clamps or drops out-of-bounds entities before querying. State the tick-level policy: per the project's exception rule, log at ERROR with `logger.exception` and re-raise. Add a test for each failure path.",
+   "location": "project-documents/user/slices/304-slice.environment-layer-integration.md:200-216"
+  },
+  {
+   "i": 8,
+   "severity": "CONCERN",
+   "title": "Surface area exceeds what this slice uses",
+   "description": "The document runs 411 lines for a 2/5-effort slice (`plan:27`). These items have no caller in this slice, so cut them:\n- The `SimulationManager.environment` property (216, 268-270). `server.py` already holds the `environment` local (303) and can pass that reference to forces. Add the property when a force needs it.\n- The `TerrainResistance` example (204-214). It is marked \"not built here\" and belongs in the 501-506 designs.\n- `EnvironmentQuery.zeros(n)` and `EnvironmentLayer` under \"Interfaces Required\" (59-60). No code in the design uses them.\n- The duplicate `step()` body, which is handled under the first FAIL.\n- The `seasonal_parameter` parameter, if the seasonal finding is accepted.\n\nWhat remains is config, the conversion helper, the constructor and `step()` changes, and the server wiring.",
+   "location": "project-documents/user/slices/304-slice.environment-layer-integration.md:204-216"
+  },
+  {
+   "i": 9,
+   "severity": "NOTE",
+   "title": "The plan's naming and prerequisites differ from the design, and the design does not say it supersedes them",
+   "description": "`plan:27` says to call `environment.update()`. `plan:44` says 304 depends on 500's \"foundation slice (terrain + query interface).\" The design uses `pre_tick`/`post_tick`, which `500:424` identifies as the intended alignment. It lists 500 as grid infrastructure without terrain, and `500:42` puts terrain in 501. The design is right on both points, but it should say it supersedes the plan, and the plan should be updated to match.",
+   "location": "project-documents/user/slices/304-slice.environment-layer-integration.md:50-54"
+  },
+  {
+   "i": 10,
+   "severity": "NOTE",
+   "title": "Frontmatter omits 504, which is the likely consumer of this slice's seasonal path",
+   "description": "`500:7` lists 504-seasonal-interpretation as an interface, and `500:45` gives it seasonal modulation. It is the likely consumer of the seasonal value this slice passes to `pre_tick`. Add 504 to `interfaces`.",
+   "location": "project-documents/user/slices/304-slice.environment-layer-integration.md:7"
+  },
+  {
+   "i": 11,
+   "severity": "NOTE",
+   "title": "The seed walkthrough has no observable, and seed validation accepts bool",
+   "description": "Walkthrough step 3 expects \"Server loads environment config with seed 12345.\" It names no log line, return value, or test, and nothing in this slice reads the seed. Separately, \"seed must be an int\" (249) accepts `true`, because `bool` subclasses `int`.\n\nFix: name a unit test that asserts `EnvironmentConfig.seed == 12345` after loading, or log the effective seed at startup. Reject bools in validation.",
+   "location": "project-documents/user/slices/304-slice.environment-layer-integration.md:375-382"
+  }
+ ]
+}

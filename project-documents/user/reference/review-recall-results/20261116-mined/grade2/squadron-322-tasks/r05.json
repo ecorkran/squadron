@@ -1,0 +1,96 @@
+{
+ "review": "r05",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "T7's numbered precedence order contradicts the floor asymmetry it is meant to implement",
+   "description": "The numbered list puts `n < floor \u2192 INSUFFICIENT_EVIDENCE` first and `TIGHTEN` fourth. In that order a below-floor, low-match cell can never reach `TIGHTEN`. Step 4 and the next bullet then say it must reach `TIGHTEN`, so the task contradicts itself. Someone implementing the list literally gets the regression that T8 exists to catch. Rewrite the list in the order that is actually wanted: (1) `match_rate <= tighten_rate` \u2192 `TIGHTEN`; (2) `n < floor` \u2192 `INSUFFICIENT_EVIDENCE`; (3) unversioned \u2192 `INSUFFICIENT_EVIDENCE`; (4) `match_rate >= graduate_rate` \u2192 `GRADUATE`; (5) `HOLD`. Also state explicitly whether an unversioned cell with a low match rate yields `TIGHTEN`. The design only forbids `GRADUATE` for unversioned cells (slice:186, 271), so `TIGHTEN` looks correct, but the task should say so.",
+   "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:115-121"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "No task produces the runtime-drawn-model limitation statement",
+   "description": "The success criterion (slice:270) requires \"the runtime-drawn-model limitation is stated where the recommendation is produced \u2026 including `--json`\". The design (slice:201) says the note must state that a step drawing its model from a 180 pool cannot track the drawn model. T9 specifies only the \"this template paired with this model / choose together at config time\" wording. T10 and T16 only check that the note is non-empty or printed. Add the runtime-pool sentence to T9's note content, and have T16 assert that the note text, including that sentence, appears in the `--json` output.",
+   "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:147"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "The malformed `judge:` block failure mode is claimed as covered but has no step",
+   "description": "The Failure Modes row (slice:242) requires a malformed judge block to be flagged on the target, with a WARNING naming the template. The Coverage Check says this is \"exercised in T8\", but T8 (lines 131-136) has no malformed-block test. T7 doesn't implement detection, and `ThresholdTarget` (T3) has no field to carry a flag. Either add a flag field (or reuse `current=None` plus a WARNING) and a test in T7/T8, or correct the coverage claim.",
+   "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:287"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "T13's fallback for result discovery cannot meet the non-empty-offers guarantee",
+   "description": "I checked 320's code. The only review-file discovery is `resolve_target` in `src/squadron/metrology/capture.py:93-106`, which globs one `{index}-review.*` under `_REVIEWS_SUBDIR` and reads `reviewType` frontmatter through `_candidates_by_type`. There is no surface that lists all reviews. T13's fallback, \"scope this task to the store-recorded samples only\", cannot work: the store holds only *sampled* results, so it can never yield unsampled ones. That would quietly break the slice's core guarantee (slice:269). Replace the hedge with a concrete step: glob `_REVIEWS_SUBDIR` for all `*-review.*`, reuse `_candidates_by_type` and `derive_judge_config_id`, and exclude any file already referenced by a `SampleVerdict.result_ref`.",
+   "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:201"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Rounding for the residual rate is unspecified and can break the non-empty guarantee",
+   "description": "\"Select a `rate` fraction\" with floor rounding gives zero offers for small pools, for example `rate=0.1` over 3 results. That violates the guarantee \"unsampled results \u2192 non-empty offer set\". T14:219 expects `0.5 \u00d7 4 = 2`, but nothing defines the rounding rule or how selection happens (random vs. deterministic). Specify `max(1, ceil(rate \u00d7 n))` when `rate > 0`, plus a deterministic ordering (for example sorted by path) so the tests are stable. Add a test for `rate \u00d7 n < 1`.",
+   "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:202-206"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "The lapse signal is left for the implementer to invent",
+   "description": "T13 offers two designs (\"return enough information \u2026 or have the CLI re-derive it\"), and T14:217 asserts on \"whatever signal T13 produces\". The lapsed-graduation criterion (slice:272) is a named success criterion, so the contract should be fixed up front. One option: `select_residual_offers` returns a small result model with `offers` plus `lapsed: list[GraduatedConfig]` and `exhausted: list[GraduatedConfig]`. The CLI needs both lists: the lapse line in T15, and the \"no offers due\" line required at slice:229/245, which T15 currently omits.",
+   "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:203"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "Pruned-file handling is tested but never implemented",
+   "description": "T14 tests \"pruned review file \u2192 skipped, counted, WARNING naming the path\" (slice:246), but T13 has no step for it and no field to hold the count. Add the behavior and a count field to T13, ideally on the same result model suggested above.",
+   "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:218"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "The idempotent re-graduate needs a store update path that T11 doesn't provide",
+   "description": "T15:230 requires \"update its evidence snapshot in place \u2026 one record, not two\". T11's `write_graduation` returns a *generated* id. `MetrologyStore` writes files by id (`store.py:100-101`) and has no update or overwrite method. Without a stable id, the second write creates a second file. In T11, either derive the record id deterministically from `(JudgeConfigId, artifact_level)` so `_write_atomic` overwrites it, or add an explicit upsert. Then test it in T12, not only at the CLI layer in T16.",
+   "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:176-177"
+  },
+  {
+   "i": 8,
+   "severity": "CONCERN",
+   "title": "`graduate` doesn't say which `JudgeConfigId` to pick when several share template, model and level",
+   "description": "After a prompt edit, the agreement report can hold several cells with the same `(template, model, level)` but different `template_content_hash` values. \"Filtered to this template/model/level\" is ambiguous here, and choosing the wrong cell would graduate a stale instrument, which is exactly what the version-scoping decision (slice:167-177) forbids. Specify that `graduate` selects the cell whose hash equals the template's *current* `_template_content_hash`, and refuses if no such cell exists.",
+   "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:230"
+  },
+  {
+   "i": 9,
+   "severity": "CONCERN",
+   "title": "Config defaults are undefined, inviting invented magic numbers",
+   "description": "T5's success criterion is \"shows all three keys with descriptions and defaults\", and T6 asserts \"correct \u2026 defaults\". Neither the slice nor the task gives values for `graduate_match_rate`, `tighten_match_rate` or `residual_sample_rate`. A junior AI will make them up, which conflicts with CLAUDE.md's \"do not guess\" rule and its rule against magic defaults. State the default values in T5, or add a `BLOCKED:` line asking the Project Manager for them.",
+   "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:90-95"
+  },
+  {
+   "i": 10,
+   "severity": "CONCERN",
+   "title": "Commit markers follow every task, including untested implementation",
+   "description": "All 17 tasks end in a `**Commit**:` marker. Implementation tasks T1, T3, T5, T7, T9, T11, T13 and T15 each commit before their tests exist, so those commits don't sit at tested points. Merge each pair into one marker after its test task: T1+T2, T3+T4, T5+T6, T7+T8, T9+T10, T11+T12, T13+T14, T15+T16, and T17. That cuts 17 commits to 9, all at green points. The plan would still have 17 tasks, which is acceptable for a 3/5-effort slice; this change is about where commits sit, not about adding work.",
+   "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:39"
+  },
+  {
+   "i": 11,
+   "severity": "NOTE",
+   "title": "Function signatures differ from the design",
+   "description": "The design's `recommend_thresholds(..., current: ThresholdSnapshot)` and `classify_direction(match_rate, n, floor)` (slice:83-84) have become rate parameters plus an internal threshold read. `ThresholdSnapshot` is defined nowhere, so the task's version is more coherent. Consider updating the design so the two documents agree.",
+   "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:145"
+  },
+  {
+   "i": 12,
+   "severity": "NOTE",
+   "title": "Possible circular import between `models.py` and `calibration_models.py`",
+   "description": "T11 makes `MetrologyRecord` in `models.py` hold a `GraduatedConfig` from `calibration_models.py`, which itself imports 320/321 types. If any of those come from `models.py`, the imports become circular. Worth checking during T3/T11; the fix is to define `GraduatedConfig` where the envelope can import it without a cycle.",
+   "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:175"
+  }
+ ]
+}

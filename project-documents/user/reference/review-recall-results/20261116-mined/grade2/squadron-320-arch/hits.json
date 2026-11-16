@@ -1,0 +1,15 @@
+{
+ "case": "squadron-320-arch",
+ "flaws": [
+  {
+   "id": "F1",
+   "text": "Technical Considerations and Related Work say \"140's `fan_out`\" (lines 81, 110), but 140's own slice plan says fan-out was relocated to initiative 180",
+   "hits": {
+    "r01": [
+     1
+    ]
+   }
+  }
+ ],
+ "note": "Only r01 finding 1 names the 140-vs-180 fan_out misattribution. Excluded as borderline: r04 f6 (says 140 is unneeded for fan_out, no mention of 180), r01 f13 (asks which 140 capability), r01 f14 (notes main copy already moved it to 180, but as a revision-mismatch point), and the many findings that quote the fan_out sentence only to object that multi-sample is unbuilt."
+}

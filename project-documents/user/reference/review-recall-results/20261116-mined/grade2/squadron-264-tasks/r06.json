@@ -1,0 +1,75 @@
+{
+ "review": "r06",
+ "findings": [
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "The protocol/transport failure mode has no test",
+   "description": "The design's failure-mode table has a row for \"Protocol/transport error mid-call (`McpError`, closed stream)\". The design also says \"Each row above has a test asserting the observable signal\" (slice lines 146\u2013150).\n\nTask 4.3 implements this path, but Task 5 never exercises it. Task 5.4 lists only timeout, server isError and spawn failure. `test_unknown_tool_name` is unlikely to cover it either: an SDK-built server usually returns an unknown tool as a `CallToolResult` with `isError=True`, not as an `McpError`.\n\n**Fix:** add a `crash` tool to the Task 3 fixture (for example, it calls `os._exit(1)` mid-call). Then add a Task 5 test that asserts it returns `is_error=True` and logs a WARNING through `caplog`.",
+   "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md:154-177"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Two result-mapping rules have no test",
+   "description": "SC2 requires results to be mapped \"per the Result mapping rules\". Task 4.2 implements four rules, but only the isError and empty-result rules are tested. Two are not:\n- Several `TextContent` blocks joined with `\\n`.\n- Non-text blocks \"noted by type in the content, not dropped\".\n\nThe fake server in Task 3.1 only has `echo`, `fail`, `sleep` and `empty`, so neither case can be produced. The non-text rule is the same kind of silent-drop guard the design calls out as the slice-909 lesson.\n\n**Fix:** add one fixture tool that returns two text blocks plus one non-text block (an `ImageContent` or `EmbeddedResource`). Add one Task 5 test asserting the `\\n` join and the type note.",
+   "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md:102-111"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Task 5.2 needs a PID hook that Task 3 does not build",
+   "description": "Task 5.2 checks that the child process is gone \"via the fake server printing it to a temp file at startup, or scan for the fixture's command line\". The Task 3 fixture spec (lines 102\u2013115) does not include writing the PID. That leaves the implementer to change the fixture in the middle of Task 5 or guess between the two approaches.\n\n**Fix:** move the decision into Task 3. For example, the fake server writes `os.getpid()` to the path in an env var such as `FAKE_MCP_PID_FILE` when that variable is set. Then have Task 5.2 check that PID with `os.kill(pid, 0)` raising `ProcessLookupError`. Drop the \"or scan\" alternative.",
+   "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md:167-169"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Task 9.3 marks the slice complete while SC6 is still open",
+   "description": "SC6 requires that \"a dispatch with a tool-capable non-SDK model can call `cf_build_context` and receive assembled context (walkthrough \u00a74)\". No task does this. Task 9.3 says the step \"remains open\" and, in the same item, sets the slice design and task file to `status: complete`. That contradicts the slice's own success criteria.\n\n**Fix:** pick one of these:\n- Leave the slice status as in-progress with a note that SC6 / walkthrough step 4 is outstanding.\n- Add an explicit unchecked item for walkthrough step 4, to be run from a standard terminal.\n- Have the slice design formally move SC6's model-dispatch half to 263's open demo.",
+   "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md:289-292"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Tasks 4.1 and 6.3 give conflicting instructions for the spawn environment",
+   "description": "Task 4.1 tells the bridge to \"Use the SDK's `get_default_environment()` as the spawned process env\" and also says \"callers construct `StdioServerParameters`\". Task 6.3 (line 207) tells the caller to pass `env=get_default_environment()`.\n\nA junior implementer can't tell which side owns the env. If they follow both literally, the logic is duplicated. Also, the mcp SDK already falls back to `get_default_environment()` when `env` is `None`.\n\n**Fix:** state one owner. The simplest option: callers leave `env` unset, the bridge passes the parameters through unchanged, and a comment cites the SDK default. Remove the env bullet from 4.1.",
+   "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md:129-131"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "Tasks 1 and 2 are too granular for two config keys",
+   "description": "Adding two `ConfigKey` entries takes two tasks and two commits. Task 1's commit lands before any test exists. Task 2's tests mostly assert that a default string equals the literal just typed into `keys.py`. No success criterion needs those tests: Task 7.3 already checks that the executor reads both keys through the config manager.\n\n**Fix:** merge Tasks 1 and 2 into one task with one commit. Keep at most one test, the typed `int` read for `cf.mcp_timeout_s`, or drop Task 2 altogether.",
+   "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md:70-96"
+  },
+  {
+   "i": 7,
+   "severity": "NOTE",
+   "title": "The live-test availability gate has no time limit",
+   "description": "The module-level gate \"attempt[s] to launch the configured `cf.mcp_command`\". With the default `npx -y @context-forge/mcp`, a machine with node but slow or no network can stall test collection for a long time. \"(or detect a launchable command)\" is also vague.\n\n**Fix:** have the gate call `call_mcp_tool` (or `list_tools`) under `cf.mcp_timeout_s`, and skip on any error result, including a timeout. Task 8.2's check that content is \"mentioning the project\" is loose too: it should name the field it expects, such as the phase or active slice.",
+   "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md:256-259"
+  },
+  {
+   "i": 8,
+   "severity": "NOTE",
+   "title": "SC3 says \"an executor\"; the tests cover it in two halves",
+   "description": "SC3 reads \"against the fake python MCP server, an executor returns the server's text\". In the tasks, the bridge is tested against the fake server (Task 5), and the executor is tested only with a mocked transport (Task 7.3, which checks pass-through). Together these cover the behaviour, because the executor returns `call_mcp_tool`'s result unchanged. No new task is needed, but the Task 7 criteria could say this composition satisfies SC3.",
+   "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md:228-243"
+  },
+  {
+   "i": 9,
+   "severity": "NOTE",
+   "title": "Task 9.4's merge step differs from current squadron rules",
+   "description": "The worktree's CLAUDE.md allows merging \"when its implementation is done\", so Task 9.4 is consistent with the conventions supplied for this review. The current top-level squadron CLAUDE.md is stricter: it says never to write a merge into a task file and to merge only in Phase 7 after code review. If this task file will be run under current rules, remove 9.4 and the merge wording in the Task 9 success criteria.",
+   "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md:293-295"
+  },
+  {
+   "i": 10,
+   "severity": "NOTE",
+   "title": "Every task commits, including untested implementation",
+   "description": "The file has no `**Commit**:` markers. Instead, each task commits in its success criteria, as the worktree CLAUDE.md requires (\"at least once per task\"). As a result, Task 4 (bridge) is committed with only a manual smoke check, before its Task 5 tests. This is acceptable under the stated convention. Merging Tasks 1 and 2, as recommended above, removes one of these untested commits.",
+   "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md:57-61"
+  }
+ ]
+}

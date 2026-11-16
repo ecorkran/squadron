@@ -1,0 +1,15 @@
+{
+ "case": "migratory-313-tasks",
+ "flaws": [
+  {
+   "id": "F1",
+   "text": "Success Criterion 5 and Task 1.4 require `config_to_yaml` to round-trip the new `policy` field, and the design says \"`StrEnum` subclasses `str` so `ya",
+   "hits": {
+    "r07": [
+     3
+    ]
+   }
+  }
+ ],
+ "note": "Only r07 finding 3 names the defect (asdict + plain yaml.dump emits a python tag, no task fixes config_to_yaml). r01/r02/r08 saw an existing _serialize_for_yaml helper and said no task is missing, and r05/r06 only tightened the round-trip assertion, so none counted."
+}

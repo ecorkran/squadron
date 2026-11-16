@@ -1,0 +1,54 @@
+{
+ "review": "r05",
+ "findings": [
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Commit points are checkbox tasks, not `**Commit**:` markers",
+   "description": "All ten commit points (lines 78, 105, 131, 148, 178, 202, 225, 251, 257, 269) are written as `- [ ] **Task NC: Commit** \u2014 ...` checklist items. The project rule says to commit only at plain `**Commit**:` markers, and that a file with none commits at the end of each top-level task.\n\nThis causes two problems:\n- The agent may not recognize these as markers, and then commits after every task.\n- A checkbox that says \"commit\" can only be checked off after that commit exists. That forces either a commit that only checks a box (which the rule forbids) or a box left unchecked.\n\nWhere the commits fall is fine: each sits after a tested, building point. The fix is formatting only. Replace each item with a plain line such as `**Commit**: feat(core): add adoption.state config key and state helpers`.",
+   "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:78"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "The final commit contains only notes; merge the README commit into it",
+   "description": "- Task 15 sends any defect fix to its own commit (line 266). That leaves Task 15C (`docs: record slice 261 verification walkthrough`) holding nothing except the outcomes recorded in the task file. The rule \"Never make a commit that only checks boxes or only adds notes\" forbids that.\n- Task 14C is a separate commit for a single README table row.\n\nFix: delete Task 14C and commit the README row together with the walkthrough record at 15C, e.g. `docs: document adoption.state and record slice 261 walkthrough`. This removes the notes-only commit and one commit that adds little.",
+   "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:253-269"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Parity test builds two copies at different paths, so the prompts may differ for path reasons alone",
+   "description": "Task 13 builds \"from identical copies\" and asserts the prompt strings are identical. But the two copies sit in different temp directories:\n- D5 says the CI fact reports absolute paths.\n- The prompt may also include the project path or name.\n\nSo the strings can differ even when the code paths behave the same. A junior agent would then debug a failure that isn't real, or weaken the assertion.\n\nCopies are used because the first `persist` build writes `in_progress`, and a second build on the same directory would leave out the state-set notice. Fix: build the same directory twice and reset `adoption.state` to `''` (or restore `.context-forge.toml`) between the two builds. The alternative is to say exactly which path segments get normalized before comparing.",
+   "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:248"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Walkthrough step 1 doesn't say which directory to run main's build from",
+   "description": "\"Build `/tmp/before.md` from `main` (a temporary `git worktree add` of `main`, built there)\" can be read as running `cf build` inside the worktree. That would:\n- assemble the prompt for a different checkout path, which may not be registered and may resolve its worktree differently (`checkoutPath`), so the diff fails for reasons unrelated to the slice;\n- also need `pnpm install` in the worktree, which the step doesn't mention.\n\nFix: in the worktree, run `pnpm install && pnpm -r build`. Then, from this repo's root, run `node <worktree>/packages/cli/dist/index.js build > /tmp/before.md`, and run `cfl build > /tmp/after.md` from the same directory.",
+   "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:262"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Assertions named in Technical Requirements are missing from the unit-test tasks",
+   "description": "- **Renderer, every outcome.** Technical Requirements ask for `renderAdoptionFacts` tests over \"every outcome\". Task 8T (line 174) covers `brownfield`, `adoption-in-progress` and `NOT_EVALUATED`, but not `greenfield`, `already-planned` or `adoption-closed`. Task 8 still requires an exhaustive switch over all of them, so those branches will exist untested. Fix: add an `it.each` over the remaining kinds.\n- **Write failure leaves state unchanged.** Technical Requirements list \"D9's write failure (`AdoptionError`, state unchanged)\". Task 9T (line 199) asserts the error but never re-reads the state. Fix: add a `readAdoptionState(...) === ''` assertion.\n- **`context_build` error result.** The Functional Requirement \"`context_build` returns it as an error\" has no automated test. Fixture 12 stops at the pipeline rejecting, and walkthrough step 4 only exercises `cfl build`. Fix: add one `contextTools.test.ts` case to Task 11 (line 222) where the mocked pipeline throws `AdoptionError` and the result is an error.",
+   "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:174"
+  },
+  {
+   "i": 6,
+   "severity": "NOTE",
+   "title": "Performance target is covered by cap tests, as the design decides",
+   "description": "The slice states a sub-second detection target. It also decides, in D2, that tests \"assert the caps, not timings\". Task 3T asserts both caps (early exit at 2000 lines, `AdoptionError` at `MAX_WALK_ENTRIES`). The context summary says why there's no `tests/load/` task. That follows from the design's decision, so it is not a gap, and no CI gating task is needed.",
+   "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:38"
+  },
+  {
+   "i": 7,
+   "severity": "NOTE",
+   "title": "Task 6 departs from D6's \"reusing `resolveInitiativePlanPath`\", with a stated reason",
+   "description": "Instead of calling `resolveInitiativePlanPath`, Task 6 extracts `INITIATIVE_PLAN_FILE_PATTERN` from it. The reason is that the existing function swallows every `readdir` error, which conflicts with D6's ENOENT-only rule. The context summary (line 36) explains this, the pattern is still defined in one place, and the existing function's behavior doesn't change. Reasonable.",
+   "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:134"
+  }
+ ]
+}

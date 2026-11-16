@@ -1,0 +1,243 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Login and logout bypass the runtime resolver, the install hint and the timeouts",
+      "description": "The Login data flow goes `login.login(mode) \u2192 AsyncCodex(config)` without saying where `config` comes from. Several other parts of the document leave login out:\n- `resolve_codex_runtime()` is said to be shared by \"agent, provider, doctor\" only (line 34, line 98).\n- The install-hint string is referenced by \"agent, provider, doctor, and `model list`\" (line 139). Login is not in that list.\n\nRunning `sq auth login openai-oauth` without the extra would therefore fail with a bare `ImportError` from `login.py`. That breaks the success criterion \"Without the extra, any `openai-oauth` use exits with an error containing the exact install command\" (line 190). Login would also skip the bundled-binary-then-PATH order from D2.\n\nThere are also gaps in the I/O failure handling:\n- **Logout has no time limit.** Line 82 says `sq auth logout` starts the runtime, but D7 (lines 105\u2013109) has no timeout for `logout()`. A hung runtime hangs the command forever.\n- **Login startup has no time limit.** `codex.login_timeout_s` covers only `handle.wait()` (line 108). The runtime start, `initialize` and `login_chatgpt()` calls that come before it are not covered.\n- **Startup failures aren't listed.** The failure-mode list (line 138) doesn't cover the runtime failing to start, or a missing binary, during login or logout.\n\nFix: send `login.py` through `resolve_codex_runtime()` (with `CodexConfig(codex_bin=runtime.path)`, the same as the agent) and add it to the users of the install hint. Put runtime start plus `logout()` under an existing timeout key, or add one. Add a short login/logout failure table that matches the Codex-turn table, plus a walkthrough step for running `sq auth login openai-oauth` without the extra.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:84"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Agent state after a turn timeout or cancellation is undefined",
+      "description": "The design gives three rules that don't fit together:\n- **Line 82:** the lazy `AsyncCodex` client is reused for every message in a `CodexAgent`.\n- **Line 129:** only the transport-closed case says `_codex`/`_thread` are cleared so a dead client is not reused.\n- **Line 128:** on timeout or cancellation, \"shutdown() still runs in `finally`\".\n\nIf the runtime is shut down on timeout, the agent must also clear `_codex`/`_thread`. Otherwise the next message reuses a closed client. If the runtime is not shut down, and the turn interrupt doesn't take because the runtime is hung (the very case the timeout is for), the next message reuses a hung thread. Multi-message agents (daemon `sq task`) will hit this.\n\nFix: state that after a timeout, cancellation, or any `ProviderError` from the runtime, the agent interrupts the turn, shuts down the client and resets `_codex`/`_thread`, so the next message starts a fresh runtime. Add that to the row's test.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:125-129"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Codex `ProviderError`s don't say whether they carry slice 931's telemetry",
+      "description": "Slice 931 (its \"Usage on failure\" section, D12) says a `ProviderError` leaving `handle_message` carries a `RunTelemetry` snapshot, and `format_provider_failure_markdown` reads it. D6 only covers stamping on success. It also says `metadata[\"turns\"]` is used (line 55) but never gives the Codex value: one `thread.run` per message would mean `turns=1`. `telemetry` defaults to `None`, so nothing breaks. The design should still say \"Codex errors carry no telemetry\" or \"carry `turns=1` and usage when known\", so failure artifacts are predictable.",
+      "file_ref": null,
+      "category": "integration",
+      "raw_category": null,
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:102"
+    },
+    {
+      "severity": "NOTE",
+      "title": "D1 conflicts with the open version-bound question",
+      "description": "D1 already writes `openai-codex>=0.159.3,<1`, while line 231 says the upper bound \"is not decided here\". `<1` gives no protection against surface changes between 0.x minor versions. Pick one bound and record it. The real-types test (line 200) is already the drift detector, so `<1` plus that test is a reasonable choice. Leaving it open adds nothing.",
+      "file_ref": null,
+      "category": "under-specification",
+      "raw_category": null,
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:97"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The frontmatter adds a slice 931 dependency that the slice plan doesn't list",
+      "description": "The slice plan entry lists `Dependencies: [128]`. The design also depends on slice 931 (`applies_effort`, `core/usage.py`). The dependency is real and the direction is right, since 129 uses 931's contracts. The slice plan entry should be updated to match.",
+      "file_ref": null,
+      "category": "dependencies",
+      "raw_category": null,
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:6"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Resolving the `OPENAI_API_KEY` fallback goes beyond the slice plan but is justified",
+      "description": "The slice plan doesn't assign this, but it removes a silent-fallback path in a file the slice already edits, and it has a bounded two-outcome plan. One gap: if the \"works\" outcome keeps the key fallback, `account()` may not return a `ChatgptAccount` (line 54 assumes `account.root` is one). `account_summary()` should then return `None` rather than fail on a missing email or plan.",
+      "file_ref": null,
+      "category": "scope",
+      "raw_category": null,
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:232"
+    },
+    {
+      "severity": "PASS",
+      "title": "Fits the architecture's provider and auth model",
+      "description": "The provider still implements `AgentProvider`/`Agent`, registers at import, and resolves its own credentials (architecture \"Provider Implementation Requirements\" 1\u20135). The design directly addresses the architecture's \"Squadron does not attempt to unify authentication\": `InteractiveLogin` is an optional, single-implementer capability that hands everything to the Codex runtime, with no squadron token store. Deferring the architecture-table edit until a second adopter exists is reasonable.",
+      "file_ref": null,
+      "category": "architecture",
+      "raw_category": null,
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:88-89"
+    },
+    {
+      "severity": "PASS",
+      "title": "Capability checks replace string dispatch, and dependencies point the right way",
+      "description": "D3 (`InteractiveLogin` as a separate `runtime_checkable` Protocol) and D9 (`ExtraRequirement`) meet the slice plan's \"a capability on the strategy, not a profile-name check\" and slice 128's ban on string dispatch, without growing `AuthStrategy` (ISP). Dependencies point one way: CLI \u2192 providers, and providers/codex \u2192 SDK. SDK imports are kept to `agent.py`/`login.py` and done inside functions, so the default install stays clean.",
+      "file_ref": null,
+      "category": "architecture",
+      "raw_category": null,
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:99"
+    },
+    {
+      "severity": "PASS",
+      "title": "Size matches the slice plan",
+      "description": "Every mechanism traces back to the slice plan entry:\n- **Part A:** port, extra, effort, usage.\n- **Part B:** error text, doctor row, model-list marker, README.\n- **Part C:** login with `--device-code`, logout, status account details.\n\nThe two new Protocols each have one method or a minimal surface, and their consumers are in this slice. The three timeout keys follow the project rule against magic defaults. Nothing assigned is dropped, and nothing large is added.",
+      "file_ref": null,
+      "category": "proportionality",
+      "raw_category": null,
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md#technical-scope"
+    },
+    {
+      "severity": "PASS",
+      "title": "The Codex-turn failure table and startup cost are covered",
+      "description": "Each turn failure (hang, transport closed mid-turn, busy/rate-limited, auth rejected, failed/interrupted/empty turn) has a named error and a test. D8 closes the empty-response path. The architecture states no latency target for this path. The slice plan's note on SDK startup cost is addressed at line 82: the runtime starts once per agent, the places that start it are bounded, and the startup time is logged.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:116-135"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "Login and logout bypass the runtime resolver, the install hint and the timeouts",
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:84",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "Agent state after a turn timeout or cancellation is undefined",
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:125-129",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "note",
+      "category": "integration",
+      "raw_category": null,
+      "summary": "Codex `ProviderError`s don't say whether they carry slice 931's telemetry",
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:102",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "note",
+      "category": "under-specification",
+      "raw_category": null,
+      "summary": "D1 conflicts with the open version-bound question",
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:97",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "dependencies",
+      "raw_category": null,
+      "summary": "The frontmatter adds a slice 931 dependency that the slice plan doesn't list",
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:6",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "scope",
+      "raw_category": null,
+      "summary": "Resolving the `OPENAI_API_KEY` fallback goes beyond the slice plan but is justified",
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:232",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "pass",
+      "category": "architecture",
+      "raw_category": null,
+      "summary": "Fits the architecture's provider and auth model",
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:88-89",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "pass",
+      "category": "architecture",
+      "raw_category": null,
+      "summary": "Capability checks replace string dispatch, and dependencies point the right way",
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:99",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "pass",
+      "category": "proportionality",
+      "raw_category": null,
+      "summary": "Size matches the slice plan",
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md#technical-scope",
+      "location_verified": null
+    },
+    {
+      "id": "F010",
+      "severity": "pass",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "The Codex-turn failure table and startup cost are covered",
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:116-135",
+      "location_verified": true
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md",
+    "against": "project-documents/user/architecture/100-slices.orchestration-v2.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/squadron-129-design"
+  },
+  "timestamp": "2026-11-16T12:17:36.375740",
+  "model": "claude-opus-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 7,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-opus-5-5",
+  "answering_models": [
+    "claude-opus-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 10,
+    "in_fences": 0,
+    "in_section": 10,
+    "surviving": 10
+  },
+  "effort": "high",
+  "profile": "sdk",
+  "turns": 8,
+  "prompt_tokens": 434148,
+  "cached_tokens": 329276,
+  "cache_write_tokens": 104862,
+  "completion_tokens": 7998,
+  "reasoning_tokens": null,
+  "duration_seconds": 87.08852187497541,
+  "cost_usd": 1.0654216,
+  "cost_basis": "provider"
+}

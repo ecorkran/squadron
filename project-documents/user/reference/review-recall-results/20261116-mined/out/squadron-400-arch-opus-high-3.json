@@ -1,0 +1,242 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "The plan for closed review categories misses where review categories actually come from",
+      "description": "\"Where review categorization happens\" treats review categories as something to change in the review templates. That leaves out three things in the code:\n\n1. **The shared category example is added to every review.** `_STRUCTURED_OUTPUT_INSTRUCTIONS` in `src/squadron/review/review_client.py:73-93` is appended to every non-judge review, and it hard-codes `category: error-handling` twice. That value is not in `AuditCategory`; the closest is `error-handling-observability` (`models.py:142`). This is exactly the hallucination trap the project rules warn about. Unless this block changes, every review prompt will keep suggesting an off-vocabulary value, whatever the individual templates say. The doc names three copies of the vocabulary (enum, audit skill, review templates). This shared block is a fourth place, and the extended sync test has to cover it.\n2. **Other review types already use a different closed vocabulary.** Architecture and design reviews (including the prompt used for this review) require `consistency, completeness, feasibility, technology, abstraction, extension-points, dependencies, antipattern, other`. These describe design quality, not tech debt, and they do not map onto `AuditCategory`. The doc says ingest \"reads review files\" from `project-documents/user/reviews/`, and that directory holds every review type. It never says that only `sq review code` output is in scope, or how the ingester tells the types apart.\n3. **Squadron writes some findings itself.** `review-coverage` (`coverage.py:7`), `merge-step` (`task_gate.py:25`) and `tooling` (`git_utils.py:170`) are categories squadron adds, not code-quality opinions from the model. If ingest runs them through read-side mapping, they end up in `other`. That inflates the `other` share, which 323 treats as evidence that the vocabulary doesn't fit the codebase.\n\nThe doc should name the review types and files in scope, give a rule for excluding squadron-generated findings, and list the shared instruction block as something that must change.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#technical-considerations"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Review-finding records have no defined granularity, deduplication key or re-ingest behavior",
+      "description": "\"An ingest step reads review files into the store as normalized finding records.\" The doc doesn't say:\n\n- whether one record holds one finding or one whole review file;\n- what makes a record unique.\n\nReview files are overwritten when a review is re-run (the `JudgeResultRef` docstring at `models.py:43` notes this for judge results). Running ingest twice, or after a re-review, will create duplicates unless there is a stable key. A candidate is `(project_id, relative_review_path, content_hash)`, which is the pattern `JudgeResultRef` already uses. Rollups that count findings break silently when records are duplicated.\n\nThe 323 precedent avoids the problem: `AuditRun` stores its findings inline and is written whole or not at all. The doc should say whether review ingest copies that model (one record per review file, findings inline, with a content hash) and what a re-ingest does: skip, replace, or add a new version.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#envisioned-state"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The store's scan-everything query model is assumed to scale to per-commit snapshots and per-finding records",
+      "description": "\"Extend the 320 store, don't fork it\" puts snapshots and review findings into `MetrologyStore`. Every `list_*` call in that store globs every `*.json` file, then parses and validates each one with Pydantic, then filters in memory (`store.py:176-189`, `279-304`). The module docstring justifies this as enough \"for the join and aggregation this slice needs\" (320's).\n\nThis component adds:\n\n- one snapshot per commit, per project, with automatic captures at fork and merge;\n- one record per review (or per finding) across all historical reviews;\n- trend reports that join three record types over time.\n\nEach report call would re-parse the whole user-level store, including every other project's records. The non-goal \"No new store\" is fine, but the doc should either confirm that full scans stay acceptable at the expected volume or plan a cheap index, such as a per-project/per-type subdirectory or filename prefix. Either works without a schema migration. \"No schema migration\" should not be read as \"no change to how the store is organised on disk\".",
+      "file_ref": null,
+      "category": "feasibility",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#architectural-principles"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The per-language adapter design is heavier than the metrics need; the adapter boundary should be per tool",
+      "description": "\"Each language is a pluggable adapter,\" and the doc adds a whole slice (\"Additional language adapters\") to prove the contract \"wasn't Python-shaped\". Existing multi-language tools already cover most of the metric set:\n\n- **Lizard** reports cyclomatic complexity and function length for about 20 languages.\n- **jscpd** detects duplication across languages.\n- File line counts need no language knowledge at all.\n\nThe doc itself says \"Tool identity is part of the measurement.\" The natural plug-in unit is therefore the tool, which reports some metrics for some languages, not the language. Only lint, type-error and coverage counts are really per-language, and the doc already treats those as optional or project-configured.\n\nA language-keyed registry also makes one squadron-wide metric, such as complexity across a mixed Python/TS repo, come from different tools per language. That gives exactly the cross-tool, cross-language comparisons the doc then has to label. Recommendation: define the contract per tool and metric, start with Lizard and jscpd plus a Python-specific lint/type adapter, and drop the separate \"additional language adapters\" slice. Non-Python support then arrives with the keystone.",
+      "file_ref": null,
+      "category": "antipattern",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#design-goals"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "\"Limits come from the project\" conflicts with \"without editing config\", and squadron's own limits have nowhere to live",
+      "description": "There are two separate problems:\n\n- **The principles don't fit together.** Lengths are checked only against \"limits the project declares in its own config\", but the design goal says a baseline must work \"without editing the project's config files\". Together, these mean a brownfield baseline never reports violations, only distributions.\n- **Squadron has no config to read.** The doc's own motivation is that squadron's \"~300-line files, ~50-line functions\" are \"checked by nothing\". Those limits exist only as prose in CLAUDE.md (Current State says so). The doc never says which config key or file holds declared limits: `sq config`, `pyproject.toml`, or a `.squadron` file. Without one, the keystone slice can't meet its own motivating case.\n\nThe doc should name where limits are declared and how that is read from a brownfield repo without writing to it. For example, a squadron-side per-project config keyed by `ProjectId` in user-level config would satisfy \"don't edit the project\".",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#architectural-principles"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Measuring a commit other than HEAD without touching the repo is not addressed",
+      "description": "The doc promises three things:\n\n- \"A project can be measured at any commit.\"\n- \"A slice's before and after is the snapshot at its fork point against the snapshot at its merge.\"\n- \"Taking a snapshot doesn't modify the measured repository.\"\n\nSnapshots are on demand by default, and automatic capture is only a possibility. So most fork-point snapshots will have to be taken after the fact, on a commit that isn't checked out. That requires materialising the commit somewhere: a temporary `git worktree`, `git archive` into a temp directory, or a read-only tree walk. Each has consequences:\n\n- **Exclusions:** `.gitignore`d generated files are absent from an archive, so results differ from a working-tree run.\n- **Coverage:** tests can't run without an environment.\n- **Tool behavior:** some tools read the git index.\n\nThe doc also leaves \"refused or recorded with an explicit dirty marker\" open. If dirty snapshots are allowed, two snapshots for the same `(project, commit)` with different dirty state need a key that tells them apart, and the doc should say whether reports may ever use them as a fork-point or merge baseline.",
+      "file_ref": null,
+      "category": "feasibility",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#envisioned-state"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Automatic capture \"at fork and merge\" depends on a pipeline step that may not exist",
+      "description": "\"When snapshots are taken\" proposes \"a pipeline action at fork and merge\". Under the project's own git rules, the merge in Phase 7 is a manual `git checkout {target} && git merge` done by an agent or the Project Manager. It is not a squadron pipeline step, and fix commits go straight to the target with no fork at all.\n\nThe doc lists 100 (Orchestration v2) as a dependency only for CLI registration, not for any new pipeline action. If per-slice before/after relies on automatic capture, either the merge has to move into a pipeline action, which is a process change outside this component, or capture needs a different trigger, such as a git hook or `cf` slice-state transitions. Otherwise per-slice rollup falls back to retroactive snapshots, with the problems described in the previous finding.\n\nThe doc also needs an implementation-level rule for how the attached action reports failure. \"Must never fail the pipeline step\u2026 must be visible as a failure\" needs a defined result shape: the snapshot is recorded as absent with a reason and logged at WARNING.",
+      "file_ref": null,
+      "category": "dependencies",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#technical-considerations"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Read-side mapping of historical reviews is still undecided between two options the doc itself rejects",
+      "description": "The doc gives two options for mapping free-form categories after the fact: a lookup table \"that will miss\" or an LLM call \"that adds noise\". It then requires historical reviews to be \"mapped read-side\" anyway and puts that in the review-normalization slice without picking either.\n\n- **If it's an LLM call:** the ingest becomes a third LLM-derived signal with no noise floor. That conflicts with \"LLM-derived signals\u2026 carry their own noise floor\". It also costs LLM calls, which the baseline-cost section ignores.\n- **If it's a lookup table:** the doc should say that misses go to `OTHER` with `raw_category` kept, matching the 323 behavior, and that mapped findings carry a provenance flag. That flag needs to be a field on the record schema, not something mentioned only in prose.\n\nGiven that `category` is `None` on many existing findings (Current State), the doc should also ask whether historical ingest is worth doing at all, rather than starting the review series at the first review written with closed categories.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#technical-considerations"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Lint and type-error counts under the project's own rules will always be zero for squadron",
+      "description": "Squadron runs ruff and pyright as zero-error merge blockers. Counts taken under \"the project's own configured rules\" will therefore always be 0 at any merged commit, so the \"Python on squadron itself\" proving ground can't show that these metrics carry signal. Only a fixed reference rule set produces a meaningful number for squadron, and the doc doesn't say who owns or versions that rule set.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#technical-considerations"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The frontmatter dependency list leaves out 323 and 177",
+      "description": "`dependencies: [100, 320]`. The design relies directly on 323's `AuditCategory`, its sync test, `AuditRun` and `AuditNoiseFloor`, and on the sibling-payload envelope pattern that 177 and 322 extended. The 420 consumer story (\"score implementation replays\") also implies a join with 177's `ProducerReplay` (`start_sha`/`original_sha`). That join key isn't stated: does a snapshot of a replay's output have a commit SHA in the project's repo? Listing 323 explicitly would make the vocabulary dependency visible to anyone who later changes the audit skill.",
+      "file_ref": null,
+      "category": "dependencies",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md:8"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "The plan for closed review categories misses where review categories actually come from",
+      "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#technical-considerations",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "Review-finding records have no defined granularity, deduplication key or re-ingest behavior",
+      "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#envisioned-state",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "feasibility",
+      "raw_category": null,
+      "summary": "The store's scan-everything query model is assumed to scale to per-commit snapshots and per-finding records",
+      "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#architectural-principles",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "antipattern",
+      "raw_category": null,
+      "summary": "The per-language adapter design is heavier than the metrics need; the adapter boundary should be per tool",
+      "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#design-goals",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "\"Limits come from the project\" conflicts with \"without editing config\", and squadron's own limits have nowhere to live",
+      "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#architectural-principles",
+      "location_verified": null
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "feasibility",
+      "raw_category": null,
+      "summary": "Measuring a commit other than HEAD without touching the repo is not addressed",
+      "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#envisioned-state",
+      "location_verified": null
+    },
+    {
+      "id": "F007",
+      "severity": "concern",
+      "category": "dependencies",
+      "raw_category": null,
+      "summary": "Automatic capture \"at fork and merge\" depends on a pipeline step that may not exist",
+      "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#technical-considerations",
+      "location_verified": null
+    },
+    {
+      "id": "F008",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "Read-side mapping of historical reviews is still undecided between two options the doc itself rejects",
+      "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#technical-considerations",
+      "location_verified": null
+    },
+    {
+      "id": "F009",
+      "severity": "note",
+      "category": "other",
+      "raw_category": null,
+      "summary": "Lint and type-error counts under the project's own rules will always be zero for squadron",
+      "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#technical-considerations",
+      "location_verified": null
+    },
+    {
+      "id": "F010",
+      "severity": "note",
+      "category": "dependencies",
+      "raw_category": null,
+      "summary": "The frontmatter dependency list leaves out 323 and 177",
+      "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md:8",
+      "location_verified": true
+    }
+  ],
+  "template_name": "arch",
+  "input_files": {
+    "input": "project-documents/user/architecture/400-arch.code-quality-measurement.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/squadron-400-arch"
+  },
+  "timestamp": "2026-11-16T13:21:28.267162",
+  "model": "claude-opus-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 9,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-opus-5-5",
+  "answering_models": [
+    "claude-opus-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 10,
+    "in_fences": 0,
+    "in_section": 10,
+    "surviving": 10
+  },
+  "effort": "high",
+  "profile": "sdk",
+  "turns": 10,
+  "prompt_tokens": 541842,
+  "cached_tokens": 453450,
+  "cache_write_tokens": 88378,
+  "completion_tokens": 7927,
+  "reasoning_tokens": null,
+  "duration_seconds": 90.81295958394185,
+  "cost_usd": 0.9570415000000001,
+  "cost_basis": "provider"
+}

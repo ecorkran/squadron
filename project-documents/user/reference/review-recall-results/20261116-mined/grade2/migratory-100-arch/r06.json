@@ -1,0 +1,96 @@
+{
+ "review": "r06",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Engine is called \"stateless\" but its interface includes \"register/remove agents\", so nobody clearly owns agent state",
+   "description": "The Envisioned State section says \"The engine is stateless between ticks \u2014 all state lives in the arrays passed to it\". A few lines later (line 81) the \"narrow interface\" is \"tick the simulation forward, query agent state, register/remove agents\". You can only register agents with something that holds a population between calls, so the engine is not stateless. The world server architecture (300-arch, \"Entity management is centralized in the server\u2026 allocates space in the state arrays\") gives this job to the server's `EntityManager`. Slice 100 adds a third version: an `AgentState` container with add/remove that resizes arrays. That makes three components that each own the arrays to some degree. The document also never says whether `tick()` changes the arrays in place or returns new ones. \"Returns the updated state array\" (step 5) suggests a copy every tick, which conflicts with the GPU-path rule \"no dynamic allocation\". Decide in one place: who owns the buffers, whether `tick` mutates or returns, and who may resize them. Remove \"register/remove agents\" from the engine interface if the server owns the entity lifecycle.",
+   "location": "project-documents/user/architecture/100-arch.behavior-engine.md:70-81"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Neighbor query is described per agent, which conflicts with the vectorization and scale goals",
+   "description": "Design Goals call for \"tens of thousands of agents\u2026 vectorized computation over arrays\u2026 not object-by-object iteration\". The Technical Considerations bullet on the GPU compute path asks for \"no Python-level per-agent branching\". But Envisioned State step 2 says \"For each active agent, queries nearby neighbors\". Neighbor-query cost dominance (line 87) states the query as \"which agents are within radius R of agent A\". The document never says what shape the neighbor query takes, even though it calls this the dominant cost. The slice that followed did what the prose says: `SpatialQuery.query_radius(position, radius)` per agent, plus a per-agent `Force` protocol. At 10K\u201350K agents and 20 Hz, a Python call per agent for both query and force will use up the tick budget before any behavior is added. Slice 105 (spatial hash) only swaps the structure behind this interface, so it cannot fix that overhead. The architecture should require a batched contract: all active agents queried in one call, returning CSR-style neighbor lists or (i, j) pair arrays. It should also specify how per-profile query radii work in a batched query.",
+   "location": "project-documents/user/architecture/100-arch.behavior-engine.md:62-68"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Determinism is a goal but its level and threats are never defined",
+   "description": "\"Tick determinism\" is meant to support replay and later multi-region agreement. The 300-arch logging design depends on it: \"logging only the initial state plus any non-deterministic inputs\u2026 is sufficient\". The document never says which kind of determinism it means: bitwise on the same machine, or bitwise across platforms and backends. Several threats are left unaddressed:\n- **Randomness.** Target selection, jitter and wander need random numbers, and no seeded RNG appears in the tick inputs.\n- **Summation order.** Floating-point sums change when neighbor order changes. A spatial hash returns neighbors in a different order than brute force, so the slice-105 promise of \"identical before and after the swap\" fails unless neighbors are canonically sorted.\n- **Threaded math.** Multithreaded BLAS reductions are not order-stable.\n- **GPU path.** It almost certainly breaks bitwise equality with CPU results. Consumer GPUs also run float64 at roughly 1/32 throughput, which conflicts with the float64 internal precision chosen downstream.\n\nState the determinism level and its scope, add an explicit RNG/seed input to `tick`, and require canonical neighbor ordering.",
+   "location": "project-documents/user/architecture/100-arch.behavior-engine.md#design-goals"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Subset ticking leaves timestep, update order and interpolation unspecified",
+   "description": "The \"Subset-evaluable tick\" principle presents reduced-rate ticking (1/4, 1/16) as the basis for multi-resolution simulation. With one fixed `dt`, an agent evaluated every fourth tick moves a quarter as far as it should. The interface therefore needs a per-agent elapsed time (or per-subset dt) or the caller must scale dt, and the document says neither. The document also does not say whether active agents read neighbors' pre-tick state or already-updated state. Double-buffered, Jacobi-style updates are needed for order-independent, deterministic results. Reading partly updated arrays makes results depend on the order of the subset. 300-arch mentions \"interpolated positions between evaluations\" but does not say whether the engine or the server produces them. Who owns `dt` and the tick-rate decision is also unstated. Integration stability (line 93) treats tick rate as an engine concern, while Scope gives timing to the world server.",
+   "location": "project-documents/user/architecture/100-arch.behavior-engine.md#architectural-principles"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Per-agent state beyond position, velocity and profile has no extension model",
+   "description": "The archetype list needs per-agent attributes that a profile (per-species data) cannot hold:\n- Herding needs leadership or experience per individual.\n- Territorial behavior needs a home-range center per agent.\n- Pack hunting needs a chosen target that persists across ticks.\n- Migration (slice-plan future work) needs energy and fatigue.\n\nData-oriented agent state lists only \"positions, velocities, profile indices\". Together with \"stateless between ticks\" and \"Forces, not decisions\", there is nowhere to keep a hunter's locked target or a territory center. Target selection is a discrete decision, which the \"Forces, not decisions\" principle rules out without naming an alternative. Each archetype slice will improvise its own extra arrays. Define how per-agent attribute arrays are declared and registered, who allocates them (engine or EntityManager), and how they reach the force functions and the serialization boundary.",
+   "location": "project-documents/user/architecture/100-arch.behavior-engine.md:72-79"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Inter-profile interaction model is called a challenge but never designed",
+   "description": "\"Inter-archetype interactions\" admits that \"profile-to-profile interaction rules add a combinatorial dimension\" and then stops. Two of the five archetypes depend on this: predator-prey and pack hunting. It also decides the profile data structure, and so the \"Profile as data\" principle. It is unclear whether interactions are a P\u00d7P matrix of weights, relationships per profile pair, or tags such as `predator_of`. The choice decides whether adding a species really means \"defining a new profile, not writing new simulation logic\". With an N\u00d7N matrix, every new profile touches every existing profile's data. Choose a model (for example, a dense P\u00d7P interaction table indexed by `profile_indices`, which vectorizes cleanly) before slice 103.",
+   "location": "project-documents/user/architecture/100-arch.behavior-engine.md:91"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "Swarm archetype needs agents to write to the environment, but the environment interface is read-only",
+   "description": "Design Goals list swarm intelligence as one of the five archetypes the engine must reproduce, and line 77 says swarm agents respond to \"environmental stigmergy (reinforced paths)\". Stigmergy means agents deposit and reinforce markers. That is a write path, and \"Environment as input surface\" defines the environment as strictly read-only. Separately, the environment query interface is described only by its contents (\"terrain elevation, resource locations, threat zones\u2026\"). It has no signature, and the component providing it does not exist yet (300-arch lists it as a future slice). The slice plan has already deferred swarm to future work, so the design goal and the Anticipated Slices section do not match the plan. Either remove swarm from the v1 goals, or define a deposit channel, such as the tick returning a deposit array that the server applies at commit.",
+   "location": "project-documents/user/architecture/100-arch.behavior-engine.md:47"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "Two force paths (per-agent `Force` and `BulkForce`); the per-agent one should go",
+   "description": "The GPU compute path bullet refers to \"The BulkForce pattern\" as if it were already defined, but this document never introduces it. Slice 100 defines both a per-agent `Force` protocol and a `BulkForce` protocol. The per-agent protocol contradicts the document's own requirements: vectorized hot loop, no per-agent Python branching, GPU compatibility. It is also the slow path that will be tempting to use in each archetype slice. Keeping both doubles the force interface and testing for no benefit. State that forces are bulk only (array in, array out over the active subset) and drop the per-agent protocol. The same bullet's rules (\"no dynamic allocation, no callbacks into Python\") describe a 1M+ entity CPU/GPU tier. They should be stated as a direction, not as constraints on v1 code.",
+   "location": "project-documents/user/architecture/100-arch.behavior-engine.md:99"
+  },
+  {
+   "i": 8,
+   "severity": "CONCERN",
+   "title": "No failure behavior for numerical blow-up, world bounds or invalid input",
+   "description": "This gap runs across the whole document. Integration stability (line 93) admits \"energy drift at high force magnitudes\" but defines nothing for when it happens:\n- NaN or inf in a velocity spreads to every neighbor's cohesion and alignment within a few ticks.\n- No speed or force clamping is specified as an engine responsibility.\n- Agents reaching the world edge have no defined behavior (wrap, reflect, steer, clamp, or report to the server). 300-arch mentions boundary-driven removal only as a future event source.\n- Out-of-range `profile_indices` and empty neighborhoods have no defined result.\n\nUnder the project rule \"fail explicitly, no silent fallbacks\", the architecture should say which of these the engine checks (and raises on) and which the caller must guarantee.",
+   "location": "unverified"
+  },
+  {
+   "i": 9,
+   "severity": "CONCERN",
+   "title": "Spatial dimensionality is never stated",
+   "description": "The document does not say whether the simulation is 2D or 3D. The prototypes split: a 2D canvas and Three.js, which is 3D. The archetype examples include starling murmurations and jellyfish, which are 3D. The environment provides \"terrain elevation\". 300-arch's network estimate uses 12 bytes per position (3\u00d7float32), but slice 100 uses N\u00d72 arrays. Dimensionality decides array shapes, the spatial hash design, force math, serialization layout, and the client protocol. It is the most expensive thing to change later, and the architecture should fix it, or explicitly choose 2.5D (planar motion plus elevation sampled from terrain).",
+   "location": "project-documents/user/architecture/100-arch.behavior-engine.md#technical-considerations"
+  },
+  {
+   "i": 10,
+   "severity": "CONCERN",
+   "title": "Aggregates \"through the same neighbor query interface\" don't fit an index-returning query",
+   "description": "Multi-resolution simulation and aggregation says aggregates \"would be presented through the same neighbor query interface\". A neighbor query returns indices into the agent arrays. An aggregate is not a row in those arrays: it has a radius, a count and a dispersion, and needs different force math, since cohesion toward a dispersed mass is not cohesion toward a point. Making aggregates fit means either fake rows in the agent arrays, which corrupts subset semantics and the counts, or a different return type, which changes the interface every force uses. That is the rearchitecting the extension point was supposed to prevent. Either define a separate \"external influence\" input to `tick` now, or remove the claim and leave aggregation to its future slice with its own interface.",
+   "location": "project-documents/user/architecture/100-arch.behavior-engine.md:97"
+  },
+  {
+   "i": 11,
+   "severity": "CONCERN",
+   "title": "Broken cross-reference: the world server document is not at 200-arch",
+   "description": "Related Work links `200-arch.world-server-foundation.md`, which does not exist. The world server document is `300-arch.worldserver-foundation.md`, and this document's own Scope line (line 21) calls it \"300-arch\". The slice plan (`100-slices.behavior-engine.md`, Notes) copies the same broken link. Readers following the scaling-tier references end up nowhere.",
+   "location": "project-documents/user/architecture/100-arch.behavior-engine.md:122"
+  },
+  {
+   "i": 12,
+   "severity": "NOTE",
+   "title": "Anticipated Slices no longer match the slice plan",
+   "description": "The architecture lists \"Spatial query abstraction\" as its own third slice and \"Aggregation interface support\" as a planned slice. The slice plan instead puts the spatial query interface inside slice 100, moves aggregation (108) to Future Work, and defers swarm. Open questions that slice 100 has already settled are still written as open here: SoA vs AoS, float32 vs float64, and Euler vs semi-implicit Euler. Updating the document (status `in_progress`) to record those decisions would keep later slices from reopening them.",
+   "location": "project-documents/user/architecture/100-arch.behavior-engine.md#anticipated-slices"
+  }
+ ]
+}

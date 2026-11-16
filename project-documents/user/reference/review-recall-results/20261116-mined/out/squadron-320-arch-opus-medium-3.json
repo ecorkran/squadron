@@ -1,0 +1,242 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "\"Read-side over 300's write path\" doesn't hold: the persisted judge record can't support joins, history or judge identity",
+      "description": "The doc says 320 \"reads and annotates that record; it does not modify the judging path ... or the result models' write semantics.\" The Non-Goals add \"No change to the judging path.\" The actual persistence, `src/squadron/review/persistence.py:238` and `:282`, works like this:\n- **Overwrites on every run.** The filename is the fixed `{slice_index}-review.{review_type}.{slice_name}.md`. Each run replaces the last one. The judge-cycle pipeline (review\u2192fix\u2192re-review) keeps only the final iteration. So there is no history to build trends from, and the earlier judge calls a human might want to spot-check are gone.\n- **No result ID.** Technical Considerations requires the human verdict to \"attach unambiguously to the specific persisted judge result.\" Nothing exists to attach to except a filename that gets reused.\n- **No judge-configuration identity.** The markdown frontmatter has `aiModel` and `score`. The model also stores `template_name`. Nothing records a template version, the thresholds that were applied, or (per the comment at `persistence.py:147`) provenance in the markdown. The doc fixes that \"measurements are keyed by judge configuration,\" but the data needed for that key isn't written today.\n\nTo get this layer, 320 has to change the write path: unique per-run result identity, keeping history, and writing template version and model. That contradicts the stated principle and Non-Goal. The doc should admit a write-side prerequisite (in 320, or as a 300 follow-up) and make it part of the keystone slice. It shouldn't call the layer purely read-side.",
+      "file_ref": null,
+      "category": "feasibility",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/320-arch.judge-calibration-quality-metrology.md#architectural-principles"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Dispersion relies on a \"multi-sample option\" that doesn't exist",
+      "description": "\"The execution machinery exists \u2014 300's multi-sample option and 140's `fan_out`.\" But `300-slices` lists Multi-Sample Judging as Future Work item 1, unchecked. Even once built, 300 describes it as running N samples and keeping the median. Unless the individual samples are saved, the per-sample spread that dispersion needs is thrown away at fan-in. The doc's plan to collect dispersion \"opportunistically (when multi-sample ran anyway)\" therefore has no data source. Two fixes are needed:\n- list 300 FW1 as a dependency;\n- require multi-sample to save each sample, not just the median (another write-path change).\n\nThe Current State section says the same thing differently (\"can reduce variance\"), so the doc is inconsistent with itself.",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/320-arch.judge-calibration-quality-metrology.md#technical-considerations"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "What the human actually records is undefined, and verdict-level agreement is circular with threshold calibration",
+      "description": "The doc says \"their verdict is recorded against the judge's result,\" but it never says what the agreement is measured on. The judge's verdict comes from the score via thresholds (`judge.py:33-38`), and calibration then changes those thresholds. If agreement is measured on verdicts:\n- the agreement figure depends on the very thresholds it is supposed to calibrate;\n- every threshold change makes past agreement data invalid.\n\nIf agreement is measured on the score, the human needs a score-comparable scale, which costs more than \"seconds.\" This choice decides the data model and the meaning of the metrics, so it belongs in the architecture, not in slice design. The recommendation is to record the human's call as a verdict independent of thresholds, plus the judge's raw score. Calibration then becomes \"which pass_floor best separates human-PASS from human-FAIL,\" which can be computed again under any threshold.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/320-arch.judge-calibration-quality-metrology.md#envisioned-state"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "\"Cheap, in-the-normal-course\" sampling is biased toward escalations, the opposite of what loosening a gate needs",
+      "description": "The doc admits that a biased sample biases the agreement number, then hands sampling strategy to slice design. But two principles collide here:\n- \"The human is sampled, not resident\" / \"normal course of work\" means the operator mostly sees results that escalated.\n- Deciding to move a judge toward auto-gate requires evidence about the auto-passed results, which the operator never sees by default.\n\nResolving this means deliberately pulling auto-passed results for review: a review queue and a selection rule, which is real work. Since the whole calibration-to-threshold slice depends on it, the architecture should commit to some random sampling of auto-passed results.",
+      "file_ref": null,
+      "category": "feasibility",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/320-arch.judge-calibration-quality-metrology.md#technical-considerations"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Artifact level isn't a field anywhere; how it maps to template and threshold config is implicit",
+      "description": "Everything is computed \"per artifact level,\" but neither the result models nor the persisted files carry an artifact level. 300's thresholds are set per template, with per-step overrides (`resolve_thresholds`). The doc assumes, without saying so:\n- each template covers exactly one artifact level;\n- per-step overrides don't need to be tracked. A result judged under a step override isn't comparable to one judged under the template default, yet the threshold actually used isn't saved.\n\nState how artifact level is derived (for example, template \u2192 level), and require the effective thresholds to be saved with each result.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/320-arch.judge-calibration-quality-metrology.md#design-goals"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Cross-project storage and project enumeration are load-bearing but deferred",
+      "description": "\"Where metrology data lives\" is called a \"leading slice-design decision.\" It is really the architecture of this component. Today persistence is a set of per-repo files under `project-documents/user/reviews`. Aggregating \"across projects\" needs:\n- a store outside any one repo;\n- a way to find which projects exist (\"squadron-managed projects\"). No project registry is named.\n\nPossibly also 280, which hasn't started. The tech-debt harness has the same enumeration gap. Pick the storage locus at the architecture level, or at least the options and the criteria for choosing. Without that, the keystone slice can't be scoped.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/320-arch.judge-calibration-quality-metrology.md#technical-considerations"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Two initiatives bundled; the \"one metrology shape, reporting built once\" claim is speculative",
+      "description": "The judge-calibration data and the tech-debt data differ at every level:\n\n| | Judge calibration | Tech-debt baseline |\n|---|---|---|\n| What is measured | Human verdict paired with one judge result | Normalized audit findings per project run |\n| Unit | Agreement per judge configuration and artifact level | Finding counts per category per project |\n| Dependencies | 300 | 340, plus a change to dispatch prompts |\n\nA shared reporting layer for both is an abstraction with one consumer per shape. It should be cut. Defer the tech-debt baseline and pre-emption slices to their own initiative (or a later phase), or at least drop the shared-reporting-layer goal and let each oracle report in its own simplest way. The pre-emption prompt also changes dispatch templates, which conflicts with the read-side framing. That dependency (dispatch, 100/140) isn't stated.",
+      "file_ref": null,
+      "category": "antipattern",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/320-arch.judge-calibration-quality-metrology.md#envisioned-state"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The pre-emption delta is measured before the audit's own run-to-run noise is",
+      "description": "\"Baseline before intervention\" only asks for a baseline to exist. Technical Considerations admits tech-debt-audit is \"non-deterministic run-to-run.\" With a handful of projects, a before/after delta means nothing unless you first know how much repeated audits of the same code disagree. Make \"repeat audits of the same code to measure the noise floor\" part of the baseline harness. The pre-emption slice should only report a delta bigger than that floor. Otherwise it breaks the doc's own \"Honest statistics at small n\" principle.",
+      "file_ref": null,
+      "category": "feasibility",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/320-arch.judge-calibration-quality-metrology.md#architectural-principles"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Frontmatter dependencies are incomplete",
+      "description": "`dependencies: [100, 140, 300]` leaves out:\n- 340, which provides the tech-debt-audit skill the baseline harness needs;\n- the 300 Future Work 1 item that dispersion relies on.\n\nRelated Work also lists 280 as a possible dependency of the storage decision. Tooling that orders initiatives from this field will get the order wrong.",
+      "file_ref": null,
+      "category": "dependencies",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/320-arch.judge-calibration-quality-metrology.md:8"
+    },
+    {
+      "severity": "NOTE",
+      "title": "\"Minimum-evidence floor\" needs a config home",
+      "description": "The evidence floor below which no loosening is recommended is a comparison value. Under project rules it has to be defined once at the config level. Saying where (alongside the judge threshold config, or in metrology config) avoids a magic number in the report code.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/320-arch.judge-calibration-quality-metrology.md#technical-considerations"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "feasibility",
+      "raw_category": null,
+      "summary": "\"Read-side over 300's write path\" doesn't hold: the persisted judge record can't support joins, history or judge identity",
+      "location": "project-documents/user/architecture/320-arch.judge-calibration-quality-metrology.md#architectural-principles",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "Dispersion relies on a \"multi-sample option\" that doesn't exist",
+      "location": "project-documents/user/architecture/320-arch.judge-calibration-quality-metrology.md#technical-considerations",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "What the human actually records is undefined, and verdict-level agreement is circular with threshold calibration",
+      "location": "project-documents/user/architecture/320-arch.judge-calibration-quality-metrology.md#envisioned-state",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "feasibility",
+      "raw_category": null,
+      "summary": "\"Cheap, in-the-normal-course\" sampling is biased toward escalations, the opposite of what loosening a gate needs",
+      "location": "project-documents/user/architecture/320-arch.judge-calibration-quality-metrology.md#technical-considerations",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "Artifact level isn't a field anywhere; how it maps to template and threshold config is implicit",
+      "location": "project-documents/user/architecture/320-arch.judge-calibration-quality-metrology.md#design-goals",
+      "location_verified": null
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "Cross-project storage and project enumeration are load-bearing but deferred",
+      "location": "project-documents/user/architecture/320-arch.judge-calibration-quality-metrology.md#technical-considerations",
+      "location_verified": null
+    },
+    {
+      "id": "F007",
+      "severity": "concern",
+      "category": "antipattern",
+      "raw_category": null,
+      "summary": "Two initiatives bundled; the \"one metrology shape, reporting built once\" claim is speculative",
+      "location": "project-documents/user/architecture/320-arch.judge-calibration-quality-metrology.md#envisioned-state",
+      "location_verified": null
+    },
+    {
+      "id": "F008",
+      "severity": "concern",
+      "category": "feasibility",
+      "raw_category": null,
+      "summary": "The pre-emption delta is measured before the audit's own run-to-run noise is",
+      "location": "project-documents/user/architecture/320-arch.judge-calibration-quality-metrology.md#architectural-principles",
+      "location_verified": null
+    },
+    {
+      "id": "F009",
+      "severity": "concern",
+      "category": "dependencies",
+      "raw_category": null,
+      "summary": "Frontmatter dependencies are incomplete",
+      "location": "project-documents/user/architecture/320-arch.judge-calibration-quality-metrology.md:8",
+      "location_verified": true
+    },
+    {
+      "id": "F010",
+      "severity": "note",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "\"Minimum-evidence floor\" needs a config home",
+      "location": "project-documents/user/architecture/320-arch.judge-calibration-quality-metrology.md#technical-considerations",
+      "location_verified": null
+    }
+  ],
+  "template_name": "arch",
+  "input_files": {
+    "input": "project-documents/user/architecture/320-arch.judge-calibration-quality-metrology.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/squadron-320-arch"
+  },
+  "timestamp": "2026-11-16T14:02:18.734749",
+  "model": "claude-opus-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 9,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-opus-5-5",
+  "answering_models": [
+    "claude-opus-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 10,
+    "in_fences": 0,
+    "in_section": 10,
+    "surviving": 10
+  },
+  "effort": "medium",
+  "profile": "sdk",
+  "turns": 10,
+  "prompt_tokens": 586079,
+  "cached_tokens": 564597,
+  "cache_write_tokens": 21468,
+  "completion_tokens": 5934,
+  "reasoning_tokens": null,
+  "duration_seconds": 78.8555555420462,
+  "cost_usd": 0.40408790000000006,
+  "cost_basis": "provider"
+}

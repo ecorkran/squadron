@@ -1,0 +1,103 @@
+{
+ "review": "r01",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "FAIL",
+   "title": "Task 9.4 and the Task 9 criteria merge the slice into the target",
+   "description": "Task 9.4 is \"Merge `264-slice.context-forge-mcp-tool-bridge` into the target\", and the Task 9 criteria require \"docs: complete slice 264 (plus the merge commit)\". The squadron CLAUDE.md (Git Rules, Merging) says Phase 6 ends with the work committed on the slice branch and \"never write a merge or push as a task, sub-item, or Success Criteria in a task file.\" The merge belongs to Phase 7, after code review. Remove 9.4 and the merge wording from the Task 9 criteria. Task 9 should end at its committed `docs:` commit.",
+   "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md:293"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Success criterion 6 has no completing task, yet Task 9.3 marks the slice complete",
+   "description": "Design criterion 6 (slice design:229\u2013231) has two parts. The first, a materialized `cf_workflow_status` returning real status, is covered by 9.1 step 2. The second, a tool-capable non-SDK model calling `cf_build_context` and receiving assembled context, exists only as walkthrough \u00a74 (slice design:316\u2013323). Task 9.3 defers it to a standard terminal, says it \"remains open,\" and still sets `status: complete` in the same task. Leave the status open and make the walkthrough step an unchecked item with a `BLOCKED:` line, or ask the Project Manager to amend criterion 6. Do not mark the slice complete with a criterion unmet.",
+   "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md:286"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "The McpError / closed-stream failure mode has no test",
+   "description": "The design's \"Protocol/transport error mid-call\" row (slice design:146) says every row has a test (slice design:149\u2013150). Task 4.3 implements the handler (line 143). Task 5 has no test for it, and 5.4 covers WARNINGs for only the other three rows. The project's failure-mode rule (review-code.md) requires at least one test asserting the signal. The fake server (3.1) has no tool that triggers a transport error. Add one, such as a `crash` tool that exits mid-call, with a test asserting `is_error` and a WARNING. `test_unknown_tool_name` (5.1) may take either the isError or the McpError path, and the breakdown does not say which signal it asserts.",
+   "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md:154"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Result-mapping rules are only partly tested",
+   "description": "Task 4.2 requires joining multiple `TextContent` blocks with `\\n` and noting non-text blocks by type. Nothing tests either. The fake server's tools return one text block (`echo`), zero blocks (`empty`), or `isError` (`fail`). Slice criterion 2 requires these rules (slice design:132\u2013137). Add a fake tool that returns two text blocks plus a non-text block, and assert the joined text and the type note.",
+   "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md:133"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "The timeout test relies on a fixture hook the fixture spec omits, and its time bound is too tight",
+   "description": "Task 5.2 captures the child PID by having the fake server write it \"to a temp file at startup, or scan for the fixture's command line.\" Task 3.1 specifies neither a PID output nor how the path reaches the server. Pick one mechanism and add it to 3.1. Scanning the command line is fragile. The bound \"within ~timeout wall-clock\" also ignores the SIGKILL escalation after 2s that the design describes (slice design:154). State the bound as timeout plus a teardown allowance, or the test may be flaky. Separately, the Task 3 note (line 100) says Task 6 needs the fake server. Task 7 mocks the transport, so only Task 5 does.",
+   "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md:164"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Task 4.3 points at the wrong exception-handling branch",
+   "description": "Task 4.3 says each `except` \"satisfies the CLAUDE.md exception rules.\" CLAUDE.md allows three options: (a) log at ERROR with `logger.exception` and re-raise, (b) handle a specific exception with a comment explaining why swallowing is correct, or (c) a process-boundary handler. The design requires a WARNING and a returned error result, never a raise (slice design:141\u2013149). Option (a) contradicts the design, so a junior could pick it. Name option (b) explicitly: specific exception types, `logger.warning`, and a comment at each `except` explaining why an error result is correct.",
+   "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md:144"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "The contract-test skip rule can hide the drift it guards against",
+   "description": "Task 8.1 says to attempt launch \"(or detect a launchable command)\" and to skip \"on failure.\" The detection method is undefined. Skipping on any failure would also skip when the CF server launches but `initialize`, `list_tools`, or the schema check fails, which is the drift this test exists to catch. Specify that the module skips only when the configured command cannot be spawned, with the reason naming the command, and fails for any error after spawn. Task 8.2's \"returns non-error content mentioning the project\" needs a concrete expected value, such as the project name the walkthrough expects (slice design:305).",
+   "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md:256"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "The branch instructions omit the worktree check",
+   "description": "The branch note says to read `cf config get git.integration_branch` and fork from it. This file lives in a git worktree (`wt/squadron-264-tasks`). The squadron CLAUDE.md (Git Rules, Worktrees) says that in a worktree that `cf worktree list --json` does not list, the value belongs to the primary checkout, and the agent must stop and ask. Following this note literally can fork from the wrong target. Add the worktree check before the branch steps.",
+   "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md:63"
+  },
+  {
+   "i": 8,
+   "severity": "NOTE",
+   "title": "Env ownership is stated twice with different owners",
+   "description": "Task 4.1 says the bridge uses `get_default_environment()` as the spawned environment. Task 6.3 (line 207) passes `env=get_default_environment()` inside `StdioServerParameters`. If the bridge overrides the caller's env, the executor's value is silently ignored. Give ownership to one layer: the executor sets env in its params, and the bridge passes params through unchanged. Remove the bridge bullet.",
+   "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md:129"
+  },
+  {
+   "i": 9,
+   "severity": "NOTE",
+   "title": "The commit gate is undefined for Tasks 3, 4 and 6, and omits task-checker",
+   "description": "The protocol says \"the task's scoped test command passes first.\" Task 3 (smoke by hand), Task 4 (manual smoke and pyright), and Task 6 (import check and pyright) name no test command. Name one per task, or state that the gate for those tasks is \"suite green plus pyright.\" The root CLAUDE.md order is implement, then task-checker, then commit. The protocol omits the task-checker step, so checkbox updates can land after the commit.",
+   "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md:57"
+  },
+  {
+   "i": 10,
+   "severity": "NOTE",
+   "title": "Two tasks are too granular",
+   "description": "Tasks 1 and 2 are each effort 1/5, cover one config change and its tests, and commit separately. Merge them into one task with one commit. Task 5.4 restates caplog assertions that 5.1\u20135.3 already make. Fold them into those tests.",
+   "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md:70"
+  },
+  {
+   "i": 11,
+   "severity": "NOTE",
+   "title": "Unit tests restate CF argument names and patch internals",
+   "description": "Task 6.1 says CF argument names \"appear here and nowhere else,\" and 8.1 says \"do not restate strings.\" Task 7.2 asserts literal dicts such as `{\"developmentPhase\": ...}` and patches `call_mcp_tool` where `cf_tools` looks it up. State in the breakdown whether literal wire-format assertions are allowed in unit tests. Consider having the factory take the transport as a callable. The review-code DIP rule treats monkeypatching internals as a sign of an inverted dependency.",
+   "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md:228"
+  },
+  {
+   "i": 12,
+   "severity": "NOTE",
+   "title": "The declared mcp floor is looser than the version the design relies on",
+   "description": "`pyproject.toml` declares `mcp>=1.0.0`, and `uv.lock` pins 1.26.0. The `cwd` parameter and process-group teardown the design depends on (slice design:152\u2013157) are 1.26-specific. Task 5.2 would catch a regression, but the declared floor should be raised to 1.26.0.",
+   "location": "pyproject.toml:29"
+  },
+  {
+   "i": 13,
+   "severity": "NOTE",
+   "title": "Two design items have no owning task",
+   "description": "The Risks section says the npx cold-start cost is \"documented,\" but no task writes that note. Task 9.3 is the only documentation task, and its CHANGELOG bullet is conditional. Name the location, for example the description of `cf.mcp_command` in Task 1.1. The DEVLOG and CHANGELOG items in 9.3 trace to project process rather than slice criteria, so keep them.",
+   "location": "project-documents/user/slices/264-slice.context-forge-mcp-tool-bridge.md:273"
+  }
+ ]
+}

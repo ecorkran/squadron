@@ -1,0 +1,16 @@
+{
+ "case": "squadron-197-tasks",
+ "flaws": [
+  {
+   "id": "F1",
+   "text": "Design D12 (slice 197 design at `e87b2474^`, lines 413-418 and 398) says: a lock-time `rev-parse --git-dir` failure raises `GitEnvironmentError` and e",
+   "hits": {}
+  },
+  {
+   "id": "F2",
+   "text": "Task 3 requires a test that a failed `set_arch` reports `outputs[\"failure\"] = other` from the branch action, but `set_arch` is a separate `cf-op` step",
+   "hits": {}
+  }
+ ],
+ "note": "All eight reviews contain the same six findings flagging merge steps in the task file (a Phase 7 rule); none mentions lock exit codes, GitEnvironmentError, or the set_arch ordering, so there were no borderline calls."
+}

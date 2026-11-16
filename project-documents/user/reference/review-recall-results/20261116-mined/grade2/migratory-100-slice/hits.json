@@ -1,0 +1,36 @@
+{
+ "case": "migratory-100-slice",
+ "flaws": [
+  {
+   "id": "F1",
+   "text": "Force Protocol: \"The tick loop prefers the bulk variant when available\", and Success Criteria: \"Placeholder forces exercise both the `Force` and `Bulk",
+   "hits": {
+    "r01": [
+     2
+    ],
+    "r02": [
+     2
+    ],
+    "r03": [
+     1
+    ],
+    "r04": [
+     6
+    ],
+    "r05": [
+     1
+    ],
+    "r06": [
+     1
+    ],
+    "r07": [
+     3
+    ],
+    "r08": [
+     2
+    ]
+   }
+  }
+ ],
+ "note": "All hits name the Force/BulkForce prose vs tick(forces: list[BulkForce]) mismatch; r05 i1 and r07 i3 bundle it with other items (three-way force inconsistency; cut Force and accelerations) but still name the defect."
+}

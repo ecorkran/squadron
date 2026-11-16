@@ -1,0 +1,26 @@
+{
+ "case": "migratory-141-slice",
+ "kind": "slice",
+ "flaws": [
+  {
+   "id": "F1",
+   "text": "Workload schema: `world_size: [200.0, 200.0, 200.0]`, `cluster_centers: [[60,60,60],[140,140,140]]`, \"initializes one `AgentState` per workload\". `src/migratory/__init__.py` at `3c5e6c7` has `DIMS = 2` and `AgentState` arrays are N x 2. The checked-in workloads ended up 2D (`[200.0, 200.0]`, `[60.0, 60.0]`). **VALID**: contradicts code. Needs: code."
+  },
+  {
+   "id": "F2",
+   "text": "\"A single registered backend: `numpy` (today's `engine.tick.tick` ...)\" and \"the NumPy backend (the only backend that exists today)\", while Numba is a later one-row addition. At `3c5e6c7` `engine/_jit_config.py` sets `USE_JIT_KERNELS = True` and every force in `flocking.py` and `herding.py` dispatches to `forces_jit` kernels by default, so `tick()` as called by the harness runs the Numba kernels; the design never says the `numpy` runner must turn the flag off, and the implemented `numpy_backend.py` does not touch it. The report's \"numpy\" rows would be Numba timings and the parity \"golden\" hash would come from the JIT path. **VALID**: contradicts code. Needs: code. (Moderate confidence: the design also says a Numba runner would delegate to `forces_jit` \"via the engine's existing JIT-config flag\", which shows awareness of the flag but not the consequence.)"
+  },
+  {
+   "id": "F3",
+   "text": "Workload section: profile names resolve to \"the existing `BehavioralProfile` constructors used in `config/default.yaml`. The harness does not invent new profiles\". `config/default.yaml` has one profile, `default`; `flocker` and `leader` exist nowhere (the implementation's own comment calls `leader` \"a derived profile\"). **VALID** (minor): contradicts repo. Needs: code."
+  },
+  {
+   "id": "F4",
+   "text": "\"Force names resolve to module-level singleton instances in the relevant engine modules (e.g. `flocking.cohesion_force`)\". No such instances exist; forces are classes (`CohesionForce`), and the implementation builds its own registry of instances. **VALID** (minor): contradicts code. Needs: code."
+  },
+  {
+   "id": "F5",
+   "text": "Consumes from Other Slices: \"`engine.spatial.KDTreeQuery`\", while Interfaces Required says `migratory.spatial`; the class is `migratory.spatial.kd_tree.KDTreeQuery`. **VALID** (minor): self-contradiction plus code. Needs: code."
+  }
+ ]
+}

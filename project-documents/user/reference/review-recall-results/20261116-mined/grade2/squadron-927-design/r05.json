@@ -1,0 +1,40 @@
+{
+ "review": "r05",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Imposed CONCERNS is fed into review loops as a finding the dispatcher cannot fix",
+   "description": "D4 justifies capping to CONCERNS only against `CheckpointTrigger.ON_CONCERNS`. It does not address the loop path that slice 910 Part A made live, where the next dispatch round is built from the prior review's findings.\n\n- **What happens:** in a `design/implement \u2192 review until pass` loop, the synthetic `review-coverage` finding becomes the fix prompt. Its remedy is \"raise `review.max_file_size_bytes`, narrow the diff, or use a tool-enabled model\", none of which the implementing agent can do in code.\n- **Consequence:** the diff stays large and the reviewer stays tool-less, so every round re-imposes the cap. The loop spends `max` iterations of dispatch and review before `on_exhaust`, and the agent may try to \"address\" the finding by editing config.\n- **What to add:** state the intended loop behaviour. Either accept exhaustion explicitly, or exclude the synthetic finding from the dispatch fix prompt (by category constant, not by title text). Add one success criterion for a capped review inside a loop body.",
+   "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:127-152"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "D9 equivalence rule is settled for only four of the six provider profiles",
+   "description": "The slice plan requires the design to decide what counts as \"differs\" for dated or routed variants, so that an alias resolving to its own snapshot is not reported as a substitution. D9 decides the dated-suffix case and leaves every other form to a Phase 6 capture.\n\n- **Missing profile:** the capture (D9, walkthrough step 6 at lines 348-353) lists `sdk, openai, openrouter, local`. The slice plan's entry 906 names six profiles; `gemini` appears nowhere in the design, and `openai-oauth` is handled separately by D8/D11.\n- **Uncaptured profiles:** the capture runs only \"for each profile with credentials\", so any profile not exercised ships with the unverified rule.\n- **Why it matters:** a false positive is not just \"one extra key and a WARNING\". D10 makes `requestedModel` presence the gate-facing substitution signal, so every run on an affected profile would report a substitution.\n- **What to add:** name `gemini` in D8/D9 and the walkthrough, with its expected id form or an explicit capture. State what happens for a profile that was not captured, for example listing it as unverified in the DEVLOG.",
+   "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:176-187"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Synthetic finding and header text are specified only for the per-file limit",
+   "description": "D3 folds a diff skipped by `review.max_total_injection_bytes` into `DiffInjection(total, 0)`. The overview calls this the \"second, worse path\", but the artifact cannot name it correctly.\n\n- **Wrong text:** the only synthetic-finding text given names `review.max_file_size_bytes` and tells the operator to raise it. For a skipped diff that is the wrong limit and the wrong remedy.\n- **No cause recorded:** `DiffInjection` carries no cause, and success criterion 2 checks only the counts.\n- **What to add:** specify the wording for the `injected_chars == 0` case, covering both the finding and the `**Diff:**` line, and say how the limit is identified. Deriving it from `injected_chars == 0` is enough if the design says so. Extend criterion 2 to assert the named limit.",
+   "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:123-152"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "\"Any successful tool call\" is weaker than the Value claim and the plan's \"did read files\"",
+   "description": "The Value section promises that a PASS means the model \"either saw the whole diff or read files with its tools\". The slice plan's Part B exempts a run \"where the model did read files\".\n\n- **The gap:** D4's rule is `tool_calls_made - failed_tool_calls > 0`. One successful `Glob` or directory listing on a truncated diff keeps a clean stated PASS. That is the #135 outcome with one trivial call added.\n- **What to do:** if tool telemetry can tell read-type calls from others, count only those. Otherwise narrow the Value claim to what is measured (\"made at least one successful tool call\") and record the proxy as an accepted limitation in D4, so gates do not over-trust it.",
+   "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:27"
+  },
+  {
+   "i": 8,
+   "severity": "NOTE",
+   "title": "Proportionality is acceptable for a two-issue slice; one item is unused",
+   "description": "Thirteen decisions and ten touched components is heavy for a maintenance slice, but each traces to a plan requirement or a regression it prevents, and effort matches the plan's 3/5. The one item with no named consumer is pipeline `metadata[\"requested_model\"]`; cut it unless a step reads it.",
+   "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:76"
+  }
+ ]
+}

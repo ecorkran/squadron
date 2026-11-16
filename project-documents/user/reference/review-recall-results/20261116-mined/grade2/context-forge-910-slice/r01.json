@@ -1,0 +1,33 @@
+{
+ "review": "r01",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Functional success criterion cannot be met as written",
+   "description": "The grep check that defines \"done\" is broken in two ways, so it cannot serve as the \"clear success criteria\" the architecture requires.\n\n- **The line filter does nothing.** The command uses `grep -roE` without `-n`, so output is `file:match` with no line numbers. The filter `grep -v 'introspection/types.ts:[3-6]:'` therefore never matches, and the four `STATUS` definition literals stay in the output. Adding `-n` would still tie the check to hard-coded line positions.\n- **`types.ts` can never return zero.** The criterion demands zero matches in the six swept files. `types.ts` is one of them and keeps the excluded `SliceStatus.status` member `'complete'` (line 49, TD-3).\n\nFix: state the criterion as an exact expected residue (the `STATUS` definition, the `SliceStatus` member, the `frontmatterSchema.ts` sites) and match by content, not line number.",
+   "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md:135"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Site counts are internally inconsistent",
+   "description": "The counts are the scope definition for a mechanical sweep, and they do not reconcile.\n\n- **`types.ts` row (line 35):** it claims 5 sweep sites \"of 8 total; 4 are the `STATUS` definition\", but 8 \u2212 4 = 4. The only named target, the `inferredStatus` union, has 3 literals. The remaining one is presumably the excluded `SliceStatus` `'complete'`.\n- **Total (line 41):** \"~65\" depends on that 5.\n- **Walkthrough (lines 150\u2013151):** it cites \"8 out-of-scope sites\" and then itemises them as 3 + 4 = 7. It also gives `SliceStatus.status` 4 matching sites, though the union at line 49 contains only one matching literal.\n- **Baseline:** \"Before: ~75\" does not equal 65 + 4 + 8.\n\nAn implementer cannot tell a correct sweep from a missed or over-swept site with these numbers. Recount and make the table, total and walkthrough agree.",
+   "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md:29-41"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "No rule for comparison sites whose operand is `SliceStatus.status`",
+   "description": "TD-3 excludes the `SliceStatus.status` union declaration because it is a distinct vocabulary. The design gives no rule for comparison sites (`x.status === 'complete'`) where the left operand is a `SliceStatus.status` value.\n\n- The `WorkflowNavigator.ts` and `ConsistencyChecker.ts` rows count every `=== 'complete'` check without classifying by operand type.\n- The \"no bare literals remain\" criterion would push an implementer to rewrite such sites to `STATUS.Complete`. That compiles, and it creates exactly the conflation TD-3 forbids.\n\nAdd a one-line rule: sweep a site only when the compared or assigned value is typed `NormalizedStatus`. List any `SliceStatus` comparison sites as expected residue.",
+   "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md:49"
+  },
+  {
+   "i": 3,
+   "severity": "NOTE",
+   "title": "\"No public API signature changes\" overlooks the `inferredStatus` retype",
+   "description": "Retyping `TaskFileResult.inferredStatus` to `NormalizedStatus` widens a type. If `TaskFileResult` is exported from core, that is a signature change that could break an exhaustive consumer at compile time. The planned `pnpm -r build` would catch it, so the risk is low, but the claim should be qualified.",
+   "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md:84"
+  }
+ ]
+}

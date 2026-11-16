@@ -1,0 +1,40 @@
+{
+ "review": "r07",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "FAIL",
+   "title": "Collision remediation contradicts the stated delete routing",
+   "description": "Line 89 says delete \"mirrors write\" and removes a personal key from the personal file, with `migrate-personal` as \"the one exception that touches the *other* project file\". Line 146 and walkthrough step 9 (line 259) then tell the user to run `cf config unset git.integration_branch --project` to clear the stale shared-file copy.\n\nUnder the stated routing, that command does the opposite of what the design says:\n- It deletes the developer's personal value, which is the one they want to keep.\n- It leaves the stale shared copy in place, which then becomes the resolved value through the read fallback.\n- `cf check` still warns, so step 9 cannot pass as written.\n\nBecause the key is `git.integration_branch`, the effect is a silent change of fork and merge target. The design also leaves no CLI path at all to remove a differing personal key from the shared file. Define one before task breakdown: for example, have `migrate-personal` drop the stale shared copy when a personal value exists, or give it an explicit flag to do so. Then correct lines 146 and 259.",
+   "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:89"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "No core API specified for reading or removing personal keys in the shared file",
+   "description": "The new `ConsistencyChecker` rule and `migrate-personal` both need to inspect, and for migration delete from, the shared file for personal-scope keys. The public `ConfigManager` API is declared unchanged (lines 49, 181) and by design routes personal keys away from the shared file. The TOML helpers are described as living inside `ConfigManager.ts` (line 93).\n\nSo the design does not say how the CLI command or the checker reach the shared file. The options are a new core method, exported helpers, or duplicated TOML access in two packages, and the last conflicts with the design's own \"routing lives inside `ConfigManager`\" decision. Name the core entry point, such as a method that lists misplaced personal keys and one that moves them, and add it to the API Contracts section.",
+   "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:142-144"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Existing projects never get the `.gitignore` entry",
+   "description": "The ignore line is added only by `cf init`, and the success criterion (line 216) covers only \"a fresh project\". The migration story targets projects initialised before this slice. In those, the first `cf config set git.integration_branch \u2026 --project` or `migrate-personal` creates `.context-forge.local.toml` as an untracked, un-ignored file. A routine `git add .` then commits it, which is the leak the slice plan says must never happen.\n\nThe design should state how an already-initialised project gets the entry. The lightest options are to ensure the line when the personal file is first written, or to extend the new `cf check` rule to flag an un-ignored personal file.\n\nSeparately, the \"substring\" check on line 159 would treat `# .context-forge.local.toml` or `!.context-forge.local.toml` as already covered. Specify a trimmed whole-line match.",
+   "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:157-159"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Migration ignores that the shared file is committed and team-wide",
+   "description": "`migrate-personal` deletes the key from `.context-forge.toml`, a committed file, and writes it to a per-checkout file. Once one developer commits that deletion, every other developer and worktree that relied on the committed value falls through to user or default. The `cf check` warning also disappears for them, because the key is no longer in the shared file.\n\nThat is the \"silently drop that value out from under the user\" outcome the Migration Plan (line 138) says must not happen, and the Risk Assessment (line 264) does not cover it. The design should state the intended team sequence, or at least have the command's output say that the shared-file change affects all checkouts once committed.",
+   "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:144"
+  },
+  {
+   "i": 4,
+   "severity": "NOTE",
+   "title": "Migration command carries handling for cases the slice does not have",
+   "description": "The registry has exactly one personal key. Per-key failure isolation with \"continue past a single key's failure\" and per-key `failed: <error>` summary lines can be cut. Fail-fast with write-then-delete ordering already gives the recoverable state. The read rule in Data Flow step 2 (line 79) also reduces to \"then check the shared file\" and can be stated that way.",
+   "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:149"
+  }
+ ]
+}

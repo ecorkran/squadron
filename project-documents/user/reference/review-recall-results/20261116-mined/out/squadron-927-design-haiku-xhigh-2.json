@@ -1,0 +1,315 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Recovery turn is treated as existing; slice 924 is an undeclared dependency",
+      "description": "Lines 105 and 380 require `TurnCapture` to fold \"across the #92 recovery turn\" and the cap to run \"after the #92 recovery turn.\" In the architecture entry, slice 924 is unchecked (`900-slices.maintenance-and-refactoring.md:414`), and its Part A describes the repair turn as unbuilt (\"What remains is the recovery path,\" line 414). This design's Prerequisites say \"None\" (line 53), and its frontmatter has `dependencies: []`. Slice 924 also adds repair-turn disclosure to the Run Digest and `--output json` and a value to the `verdictSource` contract (924 line 416). Those are the surfaces this slice extends, and neither entry names the other. Either declare the ordering and assign ownership of the shared edits, or drop the \"recovery turn\" references and state that the cap runs after the final turn of whatever loop exists.",
+      "file_ref": null,
+      "category": "dependencies",
+      "raw_category": null,
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:105"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Synthetic finding has no location; the 904 contract requires an explicit token",
+      "description": "The synthetic finding block has no `location:` line, and line 152 says it has none \"because it cites no file.\" Slice 904 requires every finding to carry `location:`, with `unverified` as the explicit no-file token (`900-slices.maintenance-and-refactoring.md:74-76`). It also treats a missing location as a defect that soft-fails to `unverified` with a WARNING. Slice 917 Part D skips `UNVERIFIED_LOCATION` (line 249), so `unverified` yields the same `location_verified: None` the design wants. This finding is written outside the parser, so it would be the one finding in the artifact that violates the contract. Write `location: unverified` and say so in D4.",
+      "file_ref": null,
+      "category": "contract",
+      "raw_category": null,
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:139-152"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "An unreported model keeps the requested id in the frontmatter that gates read",
+      "description": "D11 keeps `result.model` as the requested id when a provider reports nothing (Codex), and puts the signal only in the Run Digest. The Value section (line 28) says the artifact must not name \"a model that never ran,\" and this case does exactly that in `aiModel:`. Nothing in frontmatter separates it from a reported id. Slice 919 Part B closed the same gap for verdicts, where a derived value was indistinguishable from a stated one. CLAUDE.md also prohibits silent fallback values. The design rejects `unknown` because it would fragment metrology pooling, which is a valid reason. It should still add an explicit frontmatter signal (for example, an additive `modelReported: false` emitted only when nothing was reported) and keep `aiModel` for identity, or record why the fallback is acceptable.",
+      "file_ref": null,
+      "category": "specification",
+      "raw_category": null,
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:198-202"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`failed_tool_calls` None fails open, and `or 0` contradicts the design's own rule",
+      "description": "D4 defines successful calls as `(tool_calls_made or 0) - (failed_tool_calls or 0)`. Line 135 defines `tool_calls_made is None` as zero, but nothing covers `failed_tool_calls is None`. With three tool calls and an unreported failure count, the formula yields three successful calls and skips the cap. Line 216 forbids this pattern (\"`is None` checks, never `or 0`, for counts\"), and this gate is meant to fail closed. Specify each None case as an explicit branch: `tool_calls_made is None` means zero (no tools offered), and `failed_tool_calls is None` with `tool_calls_made > 0` means the cap applies.",
+      "file_ref": null,
+      "category": "specification",
+      "raw_category": null,
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:131"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "New frontmatter keys have no recorded context-forge coordination",
+      "description": "The plan's risk note says this slice adds frontmatter fields that context-forge gates read (`900-slices.maintenance-and-refactoring.md:444`). Slice 919's open decision says a frontmatter key addition needs a context-forge coordination step (line 353). D5 records a grep for `verdictSource` readers (line 156). Nothing is recorded for `diffTruncated` or `requestedModel`. Line 273 nonetheless calls every change \"additive\" and lists the gates as consumers. The changed verdict on truncated runs (`verdict: CONCERNS`, `verdictSource: imposed`) also changes what the gate sees. Record the same reader check for both new keys, state whether context-forge must change to consume them, and make that coordination a success criterion, or state that it is not needed.",
+      "file_ref": null,
+      "category": "integration",
+      "raw_category": null,
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:273"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Metrology identity shift is decided in the design but not carried as a criterion",
+      "description": "D10 accepts that OpenAI-direct judges will change metrology identity once (`gpt-5` to `gpt-5-2025-08-07`), and calls this correct. Metrology keys judge identity on `aiModel` (line 29). The plan entry does not mention metrology, and no success criterion (lines 284\u2013309) checks it. History recorded under the old id will not join the new identity, and no note or migration is planned. Add a criterion or a DEVLOG requirement for the identity change, and state whether existing pools need a bridge.",
+      "file_ref": null,
+      "category": "integration",
+      "raw_category": null,
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:196"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The verification of the top-risk mitigation misses a profile and under-specifies its command",
+      "description": "D9 and the risk section rely on Phase 6 capturing real ids \"per configured profile (sdk, openai, openrouter, local)\" (line 185). The architecture's provider matrix lists six profiles, including `gemini` (`900-slices.maintenance-and-refactoring.md:96`). The design gives no reason for omitting gemini, and the design does not describe its id normalization. Walkthrough step 6 (lines 348\u2013353) says \"for each profile\" but shows only `sq review slice 927 --model sonnet -v`, with no profile selection, no per-profile model id, and no `--output json` capture, even though those ids are the input to D9's test cases. \"Matching what the provider reported\" is not a checkable expectation. Add gemini or state why it is excluded, and give the per-profile command, the JSON keys to capture, and where they are recorded.",
+      "file_ref": null,
+      "category": "coverage",
+      "raw_category": null,
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:185"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Metadata key names are string literals shared across providers and review",
+      "description": "Line 217 says metadata keys are string literals, matching existing stamps. The new `answering_models` key is written by two providers and read by `TurnCapture` (lines 71 and 83\u201385). That read is a lookup, and CLAUDE.md requires a value used in lookups to be defined once. The convention leaves an implicit provider-to-review contract with no single definition, which is the hidden-dependency pattern. Define the key once in a module both sides import. Migrating existing keys can be a separate change.",
+      "file_ref": null,
+      "category": "conventions",
+      "raw_category": null,
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:217"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Any successful tool call defeats the cap, whatever it read",
+      "description": "Line 131 passes on any successful tool call, so a single read of an unrelated file leaves an unread truncated tail with a normal PASS. The Value bullet says a PASS \"means the model either saw the whole diff or read files with its tools.\" That is accurate as written, but a gate will likely read it as \"the tail was read.\" The plan's wording permits this rule. State the limit in the Value bullet or record it as an accepted gap.",
+      "file_ref": null,
+      "category": "scope",
+      "raw_category": null,
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:27"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Snapshot rule reports four-digit OpenAI snapshot ids as substitutions",
+      "description": "The regex accepts `\\d{8}` and `\\d{4}-\\d{2}-\\d{2}`. Older OpenAI snapshots use a four-digit suffix (for example `gpt-4-0613`), which the rule reports as a substitution. The \"exact rather than wider\" policy accepts this, and Phase 6 covers only default aliases (line 185), so non-default ids will not be checked. Acceptable as policy, but add a test case for the shape or record it as accepted.",
+      "file_ref": null,
+      "category": "specification",
+      "raw_category": null,
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:181"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The D6 rendering change reaches artifacts beyond the capped case",
+      "description": "D6 makes the not-parsed notice render whenever `fallback_used` is set, after any findings. That changes every degraded parse that produced findings, not only the capped PASS that motivated it. Success criterion 7 covers only the capped case. Add a criterion for the non-capped case, or state that the change is intended beyond Part B.",
+      "file_ref": null,
+      "category": "scope",
+      "raw_category": null,
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:162"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The SDK version floor the design depends on is not stated",
+      "description": "Prerequisites cite \"slice 920's claude-agent-sdk 0.2.152 pin.\" Slice 920 set a floor, not a ceiling (`900-slices.maintenance-and-refactoring.md:384`). The SDK stamp depends on `AssistantMessage.model`, which exists only from some SDK version onward. State the minimum version this slice needs and confirm the floor enforces it. Otherwise an environment below the floor fails at field access or falls into the D11 \"not reported\" path, and the design does not say which.",
+      "file_ref": null,
+      "category": "dependencies",
+      "raw_category": null,
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:53"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Candidate cut for proportionality",
+      "description": "Most of the design follows from the plan's Parts A\u2013C. The clear duplicate is the JSON key `model_substituted`, which equals `requested_model is not None`. Drop it, or keep it with a stated reason.",
+      "file_ref": null,
+      "category": "proportionality",
+      "raw_category": null,
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:193"
+    },
+    {
+      "severity": "PASS",
+      "title": "Parts A\u2013C and the deferrals match the plan entry",
+      "description": "Part A (truncation in frontmatter, header, and JSON on both paths), Part B (cap PASS to CONCERNS without failing the run, observable in the artifact), and Part C (record the answering model, `requestedModel` on substitution, WARNING) are all present. The exclusions match the plan (max-size defaults, #114), and the ordering and `--stat` work is deferred under the plan's conditional. The design reads streamed `chunk.model` where the plan says `response.model` (D8). That is a more specific form of the same source and should be noted in the plan.",
+      "file_ref": null,
+      "category": "scope",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/900-slices.maintenance-and-refactoring.md:440-446"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "dependencies",
+      "raw_category": null,
+      "summary": "Recovery turn is treated as existing; slice 924 is an undeclared dependency",
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:105",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "contract",
+      "raw_category": null,
+      "summary": "Synthetic finding has no location; the 904 contract requires an explicit token",
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:139-152",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "specification",
+      "raw_category": null,
+      "summary": "An unreported model keeps the requested id in the frontmatter that gates read",
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:198-202",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "specification",
+      "raw_category": null,
+      "summary": "`failed_tool_calls` None fails open, and `or 0` contradicts the design's own rule",
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:131",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "integration",
+      "raw_category": null,
+      "summary": "New frontmatter keys have no recorded context-forge coordination",
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:273",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "integration",
+      "raw_category": null,
+      "summary": "Metrology identity shift is decided in the design but not carried as a criterion",
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:196",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "concern",
+      "category": "coverage",
+      "raw_category": null,
+      "summary": "The verification of the top-risk mitigation misses a profile and under-specifies its command",
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:185",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "concern",
+      "category": "conventions",
+      "raw_category": null,
+      "summary": "Metadata key names are string literals shared across providers and review",
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:217",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "note",
+      "category": "scope",
+      "raw_category": null,
+      "summary": "Any successful tool call defeats the cap, whatever it read",
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:27",
+      "location_verified": true
+    },
+    {
+      "id": "F010",
+      "severity": "note",
+      "category": "specification",
+      "raw_category": null,
+      "summary": "Snapshot rule reports four-digit OpenAI snapshot ids as substitutions",
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:181",
+      "location_verified": true
+    },
+    {
+      "id": "F011",
+      "severity": "note",
+      "category": "scope",
+      "raw_category": null,
+      "summary": "The D6 rendering change reaches artifacts beyond the capped case",
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:162",
+      "location_verified": true
+    },
+    {
+      "id": "F012",
+      "severity": "note",
+      "category": "dependencies",
+      "raw_category": null,
+      "summary": "The SDK version floor the design depends on is not stated",
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:53",
+      "location_verified": true
+    },
+    {
+      "id": "F013",
+      "severity": "note",
+      "category": "proportionality",
+      "raw_category": null,
+      "summary": "Candidate cut for proportionality",
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:193",
+      "location_verified": true
+    },
+    {
+      "id": "F014",
+      "severity": "pass",
+      "category": "scope",
+      "raw_category": null,
+      "summary": "Parts A\u2013C and the deferrals match the plan entry",
+      "location": "project-documents/user/architecture/900-slices.maintenance-and-refactoring.md:440-446",
+      "location_verified": true
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md",
+    "against": "project-documents/user/architecture/900-slices.maintenance-and-refactoring.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/squadron-927-design"
+  },
+  "timestamp": "2026-11-16T12:35:44.363741",
+  "model": "claude-haiku-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 8,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 1,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-haiku-5-5",
+  "answering_models": [
+    "claude-haiku-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 14,
+    "in_fences": 0,
+    "in_section": 14,
+    "surviving": 14
+  },
+  "effort": "xhigh",
+  "profile": "sdk",
+  "turns": 9,
+  "prompt_tokens": 595408,
+  "cached_tokens": 441286,
+  "cache_write_tokens": 154110,
+  "completion_tokens": 52704,
+  "reasoning_tokens": null,
+  "duration_seconds": 232.77482129191048,
+  "cost_usd": 0.23151366,
+  "cost_basis": "provider"
+}

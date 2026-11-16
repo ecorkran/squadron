@@ -1,0 +1,189 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Functional success criterion cannot be met as written",
+      "description": "The grep check that defines \"done\" is broken in two ways, so it cannot serve as the \"clear success criteria\" the architecture requires.\n\n- **The line filter does nothing.** The command uses `grep -roE` without `-n`, so output is `file:match` with no line numbers. The filter `grep -v 'introspection/types.ts:[3-6]:'` therefore never matches, and the four `STATUS` definition literals stay in the output. Adding `-n` would still tie the check to hard-coded line positions.\n- **`types.ts` can never return zero.** The criterion demands zero matches in the six swept files. `types.ts` is one of them and keeps the excluded `SliceStatus.status` member `'complete'` (line 49, TD-3).\n\nFix: state the criterion as an exact expected residue (the `STATUS` definition, the `SliceStatus` member, the `frontmatterSchema.ts` sites) and match by content, not line number.",
+      "file_ref": null,
+      "category": "verification",
+      "raw_category": null,
+      "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md:135"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Site counts are internally inconsistent",
+      "description": "The counts are the scope definition for a mechanical sweep, and they do not reconcile.\n\n- **`types.ts` row (line 35):** it claims 5 sweep sites \"of 8 total; 4 are the `STATUS` definition\", but 8 \u2212 4 = 4. The only named target, the `inferredStatus` union, has 3 literals. The remaining one is presumably the excluded `SliceStatus` `'complete'`.\n- **Total (line 41):** \"~65\" depends on that 5.\n- **Walkthrough (lines 150\u2013151):** it cites \"8 out-of-scope sites\" and then itemises them as 3 + 4 = 7. It also gives `SliceStatus.status` 4 matching sites, though the union at line 49 contains only one matching literal.\n- **Baseline:** \"Before: ~75\" does not equal 65 + 4 + 8.\n\nAn implementer cannot tell a correct sweep from a missed or over-swept site with these numbers. Recount and make the table, total and walkthrough agree.",
+      "file_ref": null,
+      "category": "under-specification",
+      "raw_category": null,
+      "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md:29-41"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "No rule for comparison sites whose operand is `SliceStatus.status`",
+      "description": "TD-3 excludes the `SliceStatus.status` union declaration because it is a distinct vocabulary. The design gives no rule for comparison sites (`x.status === 'complete'`) where the left operand is a `SliceStatus.status` value.\n\n- The `WorkflowNavigator.ts` and `ConsistencyChecker.ts` rows count every `=== 'complete'` check without classifying by operand type.\n- The \"no bare literals remain\" criterion would push an implementer to rewrite such sites to `STATUS.Complete`. That compiles, and it creates exactly the conflation TD-3 forbids.\n\nAdd a one-line rule: sweep a site only when the compared or assigned value is typed `NormalizedStatus`. List any `SliceStatus` comparison sites as expected residue.",
+      "file_ref": null,
+      "category": "under-specification",
+      "raw_category": null,
+      "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md:49"
+    },
+    {
+      "severity": "NOTE",
+      "title": "\"No public API signature changes\" overlooks the `inferredStatus` retype",
+      "description": "Retyping `TaskFileResult.inferredStatus` to `NormalizedStatus` widens a type. If `TaskFileResult` is exported from core, that is a signature change that could break an exhaustive consumer at compile time. The planned `pnpm -r build` would catch it, so the risk is low, but the claim should be qualified.",
+      "file_ref": null,
+      "category": "integration",
+      "raw_category": null,
+      "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md:84"
+    },
+    {
+      "severity": "PASS",
+      "title": "Alignment with architecture scope and principles",
+      "description": "- **Scope:** the slice matches the architecture's \"Hard-coded values \u2192 configuration or constants\" and \"Pattern consolidation\" items.\n- **Theme:** it is a single-themed slice.\n- **Tests:** \"No behavior changes without tests\" is met by the existing suite, with a stated baseline of core 931/934, cli 428/432 and mcp 184/184.",
+      "file_ref": null,
+      "category": "alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md#overview"
+    },
+    {
+      "severity": "PASS",
+      "title": "Scope matches the slice plan entry; exclusions are justified",
+      "description": "- **Plan coverage:** the design covers every file the plan entry for 910 names.\n- **`ProjectModelBuilder.ts`:** it correctly explains why this file has no sweep site (`'unknown'` is not a `STATUS` value).\n- **`STATUS` definition:** the plan's \"introduce `STATUS`\" step was already delivered by slice 241 (TD-6), consistent with the plan's own note.\n- **Exclusions:** leaving out `frontmatterSchema.ts`, `STATUS_MAP` keys and the `ConsistencyChecker.ts` split keeps the slice mechanical.\n- **Retype:** the `inferredStatus` change (TD-1) is a small in-theme addition, not scope creep.",
+      "file_ref": null,
+      "category": "scope",
+      "raw_category": null,
+      "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md#technical-scope"
+    },
+    {
+      "severity": "PASS",
+      "title": "Dependencies, proportionality, failure modes and NFRs",
+      "description": "- **Dependencies:** the only dependency is the completed slice 241, and its direction is correct (consume `STATUS` from `types.ts`).\n- **Proportionality:** no new components, abstractions or configuration; the weight fits the work.\n- **Failure modes:** the slice adds no I/O paths or message types, so there is nothing to enumerate.\n- **NFRs:** the parent architecture states none.",
+      "file_ref": null,
+      "category": "dependencies",
+      "raw_category": null,
+      "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md#dependencies"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "verification",
+      "raw_category": null,
+      "summary": "Functional success criterion cannot be met as written",
+      "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md:135",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "under-specification",
+      "raw_category": null,
+      "summary": "Site counts are internally inconsistent",
+      "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md:29-41",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "under-specification",
+      "raw_category": null,
+      "summary": "No rule for comparison sites whose operand is `SliceStatus.status`",
+      "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md:49",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "note",
+      "category": "integration",
+      "raw_category": null,
+      "summary": "\"No public API signature changes\" overlooks the `inferredStatus` retype",
+      "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md:84",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "pass",
+      "category": "alignment",
+      "raw_category": null,
+      "summary": "Alignment with architecture scope and principles",
+      "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md#overview",
+      "location_verified": null
+    },
+    {
+      "id": "F006",
+      "severity": "pass",
+      "category": "scope",
+      "raw_category": null,
+      "summary": "Scope matches the slice plan entry; exclusions are justified",
+      "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md#technical-scope",
+      "location_verified": null
+    },
+    {
+      "id": "F007",
+      "severity": "pass",
+      "category": "dependencies",
+      "raw_category": null,
+      "summary": "Dependencies, proportionality, failure modes and NFRs",
+      "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md#dependencies",
+      "location_verified": null
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md",
+    "against": "project-documents/user/architecture/900-arch.maintenance-and-refactoring.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/context-forge-910-slice"
+  },
+  "timestamp": "2026-11-16T13:14:08.655230",
+  "model": "claude-fable-5-2",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 5,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-fable-5-2",
+  "answering_models": [
+    "claude-fable-5-2"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 7,
+    "in_fences": 0,
+    "in_section": 7,
+    "surviving": 7
+  },
+  "effort": "medium",
+  "profile": "sdk",
+  "turns": 6,
+  "prompt_tokens": 197685,
+  "cached_tokens": 99637,
+  "cache_write_tokens": 98042,
+  "completion_tokens": 4123,
+  "reasoning_tokens": null,
+  "duration_seconds": 40.902835541870445,
+  "cost_usd": 1.7540255,
+  "cost_basis": "provider"
+}

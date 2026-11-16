@@ -1,0 +1,103 @@
+{
+ "review": "r08",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "FAIL",
+   "title": "Agent-state ownership on the GPU path is undefined; spawn/despawn overwrites GPU state",
+   "description": "`SimulationManager.step()` runs the GPU driver and returns its `TickResult`, but nothing writes that result back to `entity_manager.state`. After the first GPU tick the CPU arrays hold setup-time values. `sync_from_entity_manager()` (lines 89\u201390, 179) re-uploads those arrays whenever the count changes, which resets every surviving agent's position and velocity to its pre-GPU value. The doc also does not say whether `_environment.pre_tick()` (line 173) reads or writes agent state. If it does, it sees the same stale copy.\n\nCapacity is a second gap. Fields are sized from `entity_manager.count` (line 143). A spawn raises the count past that size, and 145 (State Layout) says fields are allocated once and reallocating them recompiles.\n\nRequired: declare the GPU fields authoritative during GPU ticks. Define spawn/despawn as download, mutate host arrays, re-upload, or reserve a `max_agents` capacity in `ComputeConfig` and state it. State what `pre_tick` may touch. Test 6 (line 314) asserts only \"does not raise\"; it should assert that surviving agents keep their pre-spawn GPU positions.",
+   "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:171-199"
+  },
+  {
+   "i": 1,
+   "severity": "FAIL",
+   "title": "`_select_arch()` never detects a GPU; the default config exits on Linux hosts without CUDA",
+   "description": "On Linux the function returns `qd.cuda`, and on Darwin it returns `qd.metal`, without checking that a device exists. The warn-and-fallback branch (lines 108\u2013114) runs only for other platform names. A Linux host without an NVIDIA GPU therefore reaches `qd.init(arch=qd.cuda)`. The doc's own Open Note (line 382) says a `qd.init()` failure exits the server.\n\nThis contradicts A7 (line 336: such a host \"starts successfully\" and falls back with a WARNING), line 117 (\"No crash\"), and the plan entry (\"if neither is detected it warns and falls back\"). It also means every existing config without a `compute:` block switches to the GPU path on upgrade, and Linux hosts without CUDA stop starting.\n\nA logged fallback is not silent under CLAUDE.md, so the warning is acceptable. The defect is the detection. Probe for a usable device without calling `qd.init()`. A \"try CUDA, catch, init CPU\" sequence is not an option, because `qd.init()` is process-global (line 382). Add a subprocess-isolated test that asserts the WARNING and the selected arch on a host with no GPU. A7 also uses \"cpu\" for two different paths, `backend: cpu` (the NumPy tick) and `arch=cpu` (the fused tick on `qd.cpu`). Name them distinctly.",
+   "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:98-115"
+  },
+  {
+   "i": 2,
+   "severity": "FAIL",
+   "title": "Bounds sync-back drops velocity changes",
+   "description": "`apply_bounds_policy(positions, velocities, \u2026)` (lines 185\u2013191) takes both arrays, and slice 140 (Approach) says it writes both in place. The sync-back carries only positions: `notify_positions_modified(positions)` (line 221), `upload_positions(positions)` (line 227), and the next-tick upload (lines 280\u2013283).\n\nFor REFLECT and SOFT, the velocity the host broadcasts is never written to the GPU field. The next tick integrates the pre-bounce velocity, the host clamps the position again, and the client sees state that diverges from the engine. Line 209 calls these policies \"rare\" with no evidence. A4 (line 330) checks only that positions are finite and in bounds, so this defect would pass it.\n\nFix: sync positions and velocities for every non-OPEN policy. Add a test that after one REFLECT tick the GPU-side velocity equals the host-side velocity.",
+   "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:203-227"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "`migratory.gpu` depends on server types; the bench edit contradicts \"bench unchanged\"",
+   "description": "`GpuAgentState` moves to `migratory.gpu` (line 294), a package the bench harness also imports. `setup_from_server()` takes `EntityManager` and `WorldBoundsConfig` (lines 132\u2013136), both `migratory_server` types. The move was meant to remove a production\u2192bench import (Open Note, line 383), but it creates a substrate\u2192server import. 140-arch (Design Goals) makes the tick return type the only shared interface and forbids implicit coupling.\n\nFix: give the substrate class primitive inputs (state arrays, leadership, world size, dt, subdivision factor, profile table). Keep the `EntityManager` adapter in `gpu_driver.py`, which is server code.\n\nSeparately, line 296 edits `quadrants_fused_backend.py`, but line 301 says the bench backends \"are not changed,\" and A5 (line 332) requires bench tests to pass \"without modification.\" Either allow the one-line import edit and reword line 301 and A5, or keep a re-export at the old path so the bench file is untouched.",
+   "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:129-139"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Export path: factory name, f64 claim, and per-tick transfers do not match slices 140 and 145",
+   "description": "Three mismatches:\n- **Factory name.** The doc returns `TickResult.from_quadrants_fields(...)` (lines 123, 274). Slice 140 reserves `from_taichi_fields` for option (a), the copy-to-host path this doc uses (140, The construction strategies). 140-arch says 145 implements option (b) under `from_quadrants_fields`, but 145 itself uses option (a) via `TickResult.from_numpy_state` (145, Dependencies). Pick one name. Add slice 140 to `dependencies`, since the frontmatter (lines 12\u201313) lists only 145. Align 140-arch and 145.\n- **dtype.** Line 150 says \"Quadrants upcasts on download,\" so exports return f64. Neither 140 nor 145 says this, and 145 calls `px.to_numpy()` on f32 fields. Verify it, or write an explicit host-side `astype(np.float64)` and state its per-tick cost.\n- **Transfers.** Lines 122 and 273 download positions, velocities, and profile indices every tick. The plan's 145 entry allows \"a single position download for the renderer,\" and 145 (State Layout) limits velocity download to bench snapshots. The production wire does send velocities every tick (140-arch, Current State: 6 \u00d7 f32 per agent), so that download stays. Profile indices change only on spawn/despawn. Downloading them each tick adds about 200 KB per tick at N=50k, on top of the roughly 1.2 MB D\u2192H budget in 140-arch (Technical Considerations). Export profile indices at sync time, and add a per-tick transfer budget to the doc.",
+   "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:119-123"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Metal default rests on a conflicting architecture statement; A2 cannot fail",
+   "description": "A2 (line 326) is the only Metal acceptance criterion. It requires that the viewer \"renders smooth motion,\" with no TPS, frame-time, or parity threshold.\n\nThe macOS default (lines 33, 324) follows 140-arch, which calls Metal \"fully supported and tested\" for the fused path and says 146 ships it as default. But 140-arch is dated 2026-04-27. The plan's slice 142 substrate-direction note (2026-05-03) says Metal is \"demoted to best-effort,\" and the plan's 145 entry says \"Metal not targeted.\" 145 (Overview) says Metal viability is measured after CUDA passes its gates.\n\nAsk the PM which decision governs. If Metal stays the default, give A2 a measurable floor: TPS at N=1000, plus the 145 A5 statistical check run through `SimulationManager`. If Metal is best-effort, the macOS default should be `cpu`.",
+   "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:326"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "`subdivision_factor` is wired but its effect and two dependencies are unstated",
+   "description": "The factor is validated (line 62), passed to `setup_from_server()` (line 138), and then nothing uses it. Slice 149 defines it as `cell_size = query_radius / S`. Smaller cells mean 145's 3\u00d73 neighbourhood scan (145, Core Design, step 2) no longer covers the query radius, so the scan must widen, and the doc should say so. The plan keeps `subdivision_factor` in 146's scope, so define it rather than cut it.\n\nTwo dependencies are missing from the frontmatter, which lists only 145. Slice 149 defines the factor. Slice 148 is what 145 (Verification step 7) says closes the Tier 2 gap, since 145 measured 37.9 TPS at N=50k before 148. The plan marks both complete, so record them. State which default ships: line 53 says 1, and Open Note line 386 recommends 3.",
+   "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:138-147"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "Failure modes are not enumerated for the new I/O paths",
+   "description": "Failure handling covers only `qd.init()` failure and a mid-session GPU exception. The doc calls the latter fatal (line 382) and does not say whether it is logged.\n\nNot covered:\n- `from_numpy` failures in `upload_positions` and `sync_from_entity_manager`.\n- `to_numpy` failures in the per-tick export.\n- A kernel or device hang. There is no timeout, no heartbeat, and no statement of what the tick loop does.\n\nFor each path, name the handling and the signal: ERROR via `logger.exception` then exit at the process boundary, or WARNING. Add a test asserting each signal. The A7 WARNING (line 336) has no test (lines 309\u2013316).",
+   "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:380-382"
+  },
+  {
+   "i": 8,
+   "severity": "CONCERN",
+   "title": "Testing section contradicts the process-global init note and leaves criteria untested",
+   "description": "- The Open Note (line 382) says a second `qd.init()` in one process is undefined behaviour and GPU tests must be subprocess-isolated. Tests 5\u20138 (lines 313\u2013316) share one file, and each calls `setup()` or `finalize()`, which calls `qd.reset()` (line 93). None mention isolation.\n- A3 (line 328, same shape and dtype as CPU) has no test. Test 5 checks only count and finiteness.\n- A4 (line 330) requires all four policies over 100 ticks. Test 7 (line 315) is one WRAP step.\n- 140-arch (Design Goals) says regression testing against the existing force implementations is \"mandatory at each tier transition.\" This slice makes `quadrants` the default, which changes production neighbour selection (first-k vs k-nearest, 145 A5). The Testing section has no parity check through `SimulationManager`.\n\nAdd a subprocess harness for all GPU tests. Add A3, A4 (all policies, 100 ticks), and a production-path parity check using 145 A5's metrics.",
+   "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:307-316"
+  },
+  {
+   "i": 9,
+   "severity": "CONCERN",
+   "title": "Verification walkthrough contradicts the default",
+   "description": "Lines 360\u2013362 say that removing the `compute:` block, or setting `backend: cpu`, selects the CPU tick. But the default is `quadrants` (lines 61, 324, and the plan), and the server only skips the driver when the backend is not `quadrants` (line 235). A verifier who removes the block gets the GPU path and fails the step.\n\nStep 5 (line 351) asks to confirm the restored CPU run is \"visually identical,\" without naming a baseline. 145 says first-k selection differs from CPU k-nearest, so GPU and CPU runs will not match. Rewrite the CPU step to use `backend: cpu` only, and compare against a pre-change baseline.",
+   "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:358-362"
+  },
+  {
+   "i": 10,
+   "severity": "CONCERN",
+   "title": "No TPS-miss behaviour for the live loop",
+   "description": "Plan 140 (Notes, Open Questions) lists a \"TPS-miss degradation model\" (time dilation under fixed dt, frame drops) as \"to be specified during slice (145) design.\" 145 does not specify it. This slice is the first to put the GPU tick in the live loop, and `dt = 1 / tick_rate` is fixed (line 241). The tick-loop flow (lines 267\u2013278) does not say what happens when a tick overruns its budget. Specify it here, or name the slice that owns it and state how the server behaves until then.",
+   "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:267-278"
+  },
+  {
+   "i": 11,
+   "severity": "CONCERN",
+   "title": "Proportionality: two mechanisms and one section can be cut",
+   "description": "- **Deferred sync-back.** `notify_positions_modified` stores the array and sets `_positions_dirty`, and the upload waits for the next `step()` (lines 213, 280\u2013283). Uploading inside `notify_positions_modified` moves the same bytes with no flag. The stored reference also breaks slice 140's lifetime rule: \"Consumers MUST NOT retain references across tick boundaries\" (140, `TickResult` docstring, lines 103\u2013104). Fold this into the F3 fix.\n- **`count_changed_since_last_tick()`** (lines 201, 297). The driver can cache its last count in `sync_from_entity_manager()`. That removes an EntityManager change and a `SimulationManager` branch.\n- **Data Flow** (lines 256\u2013284) restates the phases in lines 119\u2013125 and 170\u2013199. Cut it or link to one copy.\n\nKeep `arch` (used by the log line at line 244) and the idempotent `finalize()`.",
+   "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:213"
+  },
+  {
+   "i": 12,
+   "severity": "CONCERN",
+   "title": "Comparison values and defaults are scattered across config, server, and driver",
+   "description": "CLAUDE.md requires each comparison value to be defined once.\n- `\"quadrants\"` and `\"cpu\"` appear as the dataclass default (line 61), the validation set (line 65), the server comparison (line 235), and the test list (lines 309\u2013310).\n- The range `[1, 8]` appears in lines 62, 65, and 312.\n- Platform and arch strings `\"Darwin\"`, `\"Linux\"`, `\"metal\"`, `\"cuda\"`, `\"cpu\"` appear in lines 104\u2013107 and 224.\n- `backend: str` (line 61) should be an enum.\n- The default `subdivision_factor = 1` is stated in the dataclass (line 62), the yaml (line 53), and the Open Note (line 386).\n\nDefine a `ComputeBackend` enum, one range constant, one platform-to-arch map, and one default in `config.py`.",
+   "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:61-65"
+  },
+  {
+   "i": 13,
+   "severity": "CONCERN",
+   "title": "Force set and environment hooks on the GPU path are unspecified",
+   "description": "The GPU branch of `step()` does not pass `self._forces`. The fused kernel's force set is hard-wired (\"all 7 current forces,\" 145 Overview). `setup()` takes `profiles` but not the forces list that `_build_forces()` builds (line 231). The plan's 144 entry lists six BulkForce implementations, while 145 says seven. 140-arch (Overview) cites \"terrain-aware movement\" as current behaviour.\n\nThe doc does not say whether the configured force list must match the kernel, whether terrain behaviour exists on the GPU path, or whether `pre_tick`/`post_tick` affect agents. If the default switches to `quadrants` and a configured force or terrain effect is absent, behaviour changes silently. Add a startup check that the configured forces match the kernel's set, failing on mismatch. State what the GPU path does with terrain and environment hooks.",
+   "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:170-183"
+  }
+ ]
+}

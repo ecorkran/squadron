@@ -1,0 +1,41 @@
+{
+ "case": "migratory-140-arch",
+ "flaws": [
+  {
+   "id": "F1",
+   "text": "Current State: \"The wire protocol is currently uncompressed JSON over WebSocket ... 84 KB/tick (24 bytes x 3,500 agents)\", and Tier 2: \"Binary WebSock",
+   "hits": {
+    "r01": [
+     0
+    ],
+    "r02": [
+     1
+    ],
+    "r03": [
+     4
+    ],
+    "r04": [
+     1
+    ],
+    "r05": [
+     10
+    ],
+    "r06": [
+     10
+    ],
+    "r07": [
+     2
+    ],
+    "r08": [
+     1
+    ]
+   }
+  },
+  {
+   "id": "F2",
+   "text": "Related Work says `100-arch.behavior-engine.md` \"Defines the `SpatialQuery` protocol, `BulkForce` interface, CSR edge representation, and profile-driv",
+   "hits": {}
+  }
+ ],
+ "note": "F1: all eight reviews flag the JSON-vs-binary/24-byte inconsistency (r05:10 and r06:10 notice 24 B is a binary size and that JSON is stated, without citing the code). F2: no finding says 100-arch lacks SpatialQuery/CSR/BulkForce; findings about the interfaces being host-NumPy contracts are a different defect, so no hits."
+}

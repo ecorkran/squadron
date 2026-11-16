@@ -1,0 +1,89 @@
+{
+ "review": "r06",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "FAIL",
+   "title": "The neighbor-query and force interfaces need per-agent Python loops, which contradicts the slice's own vectorization requirement",
+   "description": "- **What the design specifies:**\n  - The data flow (line 88) and the `SpatialQuery` protocol (lines 165-170) only offer `query_radius(position, radius)`. It handles one position per call, and the radius comes from each agent's own profile.\n  - `BulkForce` (lines 141-148) consumes `neighbor_lists: list[NDArray[np.intp]]`, which is a jagged list of arrays, one per agent. It also takes `profiles: list[BehavioralProfile]` and has no array form for profile parameters.\n  - So every tick needs one Python call per active agent to build neighbor lists. Each force would then walk the list in Python, and so would the per-agent `max_speed` clamp (line 90).\n- **Why this cannot stand:**\n  - It makes the slice's Technical Requirement at line 247 impossible to meet: \"No Python-level per-agent loops in the hot path\".\n  - It goes against the architecture's goal that \"the hot loop must be structured for vectorized computation over arrays of agent state, not object-by-object iteration\" (arch:33).\n  - It also goes against the GPU-compatibility constraint \"no Python-level per-agent branching, no dynamic allocation\" (arch:99).\n  - Slices 101-105 are bound to these protocols, and slice 105 must swap the index in \"behind the existing query interface\". That makes this the moment to get the shape right.\n- **Fix:**\n  - Add a batch query, e.g. `query_neighbors(indices, radii) -> (offsets, neighbor_indices)`, returning flat arrays in CSR (offsets plus indices) form.\n  - Have `BulkForce` take that structure plus per-agent profile parameter arrays, gathered once per tick via `profile_indices`.\n  - A per-position `query_radius` can stay as a test helper.",
+   "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:88"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Two force protocols, but `tick()` accepts only one, and the \"both paths\" criterion has no way to run",
+   "description": "- The `tick` signature takes `forces: list[BulkForce]` (line 185).\n- Line 152 says \"the tick loop prefers the bulk variant when available\", which implies it also accepts `Force`. It doesn't.\n- Line 248 requires placeholder forces to \"exercise both the `Force` and `BulkForce` protocol paths\", but nothing in the pipeline uses `Force`.\n- This is an abstraction nothing consumes, and it invites later slices to write per-agent forces that can't be vectorized.\n- **Fix:** drop `Force` from this slice, along with the line 248 criterion and the \"prefers bulk\" wording. If per-agent reference forces are wanted for testing, define them as test-only helpers that are not registered with `tick()`.",
+   "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:152"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "The brute-force spatial design doesn't hold together and is heavier than needed",
+   "description": "- Line 173 says `build()` \"computes all pairwise distances\", but `query_radius` takes an arbitrary *position*, not an agent index.\n- A precomputed N\u00d7N matrix can't answer a query for an arbitrary position, so the query still costs O(n) and the matrix does nothing.\n- The matrix also costs O(n\u00b2) memory: about 800 MB of float64 at 10K agents, which is the low end of the architecture's target (arch:33).\n- **Fix:** have `build()` keep a reference to the positions array, and do one vectorized distance pass per query (or per batch, if the FAIL finding above is fixed).",
+   "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:173"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "The architecture's scale NFR is not restated",
+   "description": "- The architecture sets a target on the tick hot path: \"tens of thousands of agents at full behavioral fidelity on a single CPU process\" within a fixed tick budget (arch:33, arch:93).\n- This slice owns that path, but only says \"the hundreds-of-agents scale this slice targets\" (line 173).\n- **Fix:** restate the architecture target. Then state explicitly that this slice targets hundreds of agents, that slice 105 is responsible for reaching tens of thousands, and that this slice's job is to keep the interfaces vectorizable so 105 can get there.",
+   "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:173"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "The doc says both \"returns state\" and \"mutates in place\"",
+   "description": "- Scope (line 39) says the tick will \"return updated state\". The architecture likewise describes \"feed in state, get back state\" (arch:68-70).\n- The signature, however, returns `None` and mutates in place (lines 187, 191).\n- In-place mutation is a defensible performance choice. But the doc needs to state one contract, and say why it differs from the architecture's wording, so consumers like the world server and replay know whether they must copy state before ticking.",
+   "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:39"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Agent removal doesn't say whether other agents' indices stay stable",
+   "description": "- \"Add/remove operations that resize arrays\" doesn't say how removal works.\n- Swap-with-last and shift-down change other agents' indices in different ways.\n- Callers hold indices across ticks: the caller-supplied `active_indices` (arch:49), and the world server's mapping from its entities to engine indices.\n- Removal is part of the engine's narrow interface (arch:81), so the index-remapping contract must be defined here.\n- **Fix:** specify the removal strategy and what callers get back, e.g. a mapping from old indices to new ones.",
+   "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:98"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "`active_indices` input validation is not specified",
+   "description": "- Integration uses `state.velocities[active_indices] += ...`.\n- With duplicate indices, NumPy applies the `+=` only once, silently.\n- Out-of-range values, a non-integer dtype, an empty array, or a `profile_indices` value with no matching profile are not addressed either.\n- The project's \"fail explicitly\" principle and the subset contract (arch:49) mean the boundary must say which of these inputs are rejected, and how.\n- **Fix:** validate at the start of `tick()`: 1-D integer array, unique values, all within range. Raise an error otherwise. Add matching unit tests.",
+   "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:215"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "The claim that later slices won't change `tick()` has no extension point behind it",
+   "description": "- Line 225 promises \"Behavioral slices add forces; they don't modify the tick loop\".\n- But `AgentState` holds fixed fields, and `BehavioralProfile` is shared by every agent with that profile.\n- Slice 104 needs a home-range center *per agent*, and slice 103 target selection needs per-agent target state. Neither has a place to live.\n- The architecture's \"Environment as input surface\" principle (arch:47) and its envisioned tick inputs (arch:64) include environmental context. Neither the tick signature nor the force signatures have room for it, and the Excluded list doesn't mention environment.\n- **Fix:** either define how per-agent attributes are added (e.g. a named auxiliary-array registry on `AgentState`) and leave a reserved spot for an environment argument, or soften the line 225 claim and list environment input as excluded.",
+   "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:225"
+  },
+  {
+   "i": 8,
+   "severity": "CONCERN",
+   "title": "`AgentState.create` is underspecified, which weakens the determinism and motion checks",
+   "description": "- `AgentState.create(n=100, profiles=[profile])` doesn't say how initial positions and velocities are set. They could be zeros, random with a seed, or random without one.\n- It also doesn't say how profile indices are assigned when there are several profiles.\n- Step 3's determinism check could be trivial (everything zeros) or flaky (random without a seed).\n- Step 4 needs agents \"at the origin\", but `create` has no positions parameter.\n- Step 5 says to \"verify agent 0's neighbor query can still find agent 50\", but `tick()` exposes no neighbor output. The check needs a force whose result depends on the inactive neighbor.\n- **Fix:** specify `create`'s parameters, including explicit positions or a seed, and make the walkthrough steps concrete.",
+   "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:274-290"
+  },
+  {
+   "i": 9,
+   "severity": "NOTE",
+   "title": "The `accelerations` array is never used",
+   "description": "The data flow applies force directly to velocity (`velocity += force * dt`), and nothing reads or writes `accelerations`. Either remove it or define it as the per-tick force accumulator.",
+   "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:96"
+  },
+  {
+   "i": 10,
+   "severity": "NOTE",
+   "title": "The velocity clamp method and section formatting",
+   "description": "- `clamp(velocity_new, max_speed)` should state that it scales the velocity vector's *magnitude* down to `max_speed`. Clamping each component separately would let diagonal speed exceed `max_speed`.\n- Lines 205-215 are indented four spaces, so the \"Integration: Semi-Implicit Euler\" heading and its text render as a code block instead of a section.",
+   "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:205-215"
+  },
+  {
+   "i": 11,
+   "severity": "NOTE",
+   "title": "Who owns the float32 conversion is reassigned without saying so",
+   "description": "The architecture says the engine \"should define its internal precision and provide an efficient conversion path at the serialization boundary\" (arch:95). The slice defines the precision, which is correct, but hands the conversion to the world server. Deferring it is fine, since the slice plan doesn't assign it to slice 100. Recording it as deferred engine work, rather than as the world server's job, would keep ownership consistent with the architecture.",
+   "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:100"
+  }
+ ]
+}

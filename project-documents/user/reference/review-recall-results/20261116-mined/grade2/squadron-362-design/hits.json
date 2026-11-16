@@ -1,0 +1,33 @@
+{
+ "case": "squadron-362-design",
+ "flaws": [
+  {
+   "id": "F1",
+   "text": "Dependency section: \"Function- and class-level edge endpoints are resolved to their owning file's layer rather than dropped\", while Success Criterion ",
+   "hits": {
+    "r01": [
+     1
+    ],
+    "r02": [
+     0
+    ],
+    "r03": [
+     1
+    ],
+    "r04": [
+     0
+    ],
+    "r05": [
+     0
+    ],
+    "r06": [
+     1
+    ],
+    "r07": [
+     0
+    ]
+   }
+  }
+ ],
+ "note": "No borderline calls; all seven hits name the endpoint-resolution vs Success Criterion 9 contradiction. r08 only covers the file-level selector."
+}

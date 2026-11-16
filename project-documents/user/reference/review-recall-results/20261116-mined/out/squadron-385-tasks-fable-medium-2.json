@@ -1,0 +1,261 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "PASS",
+      "title": "Success criteria are covered and tasks trace back to the design",
+      "description": "All eleven functional and seven technical criteria map to tasks:\n- **Body and inputs:** slice-branch body (Tasks 7, 8, 9, 11), unplanned path (11.2, 16.2), ancestor-review exclusion (8.2).\n- **Refusals:** base refusal and selection (5), push preconditions (6), presence check (12, 13.2), identity refusal (13.2).\n- **Title, dry run, live:** title (10a), dry-run equality (13.2), live creation (16.2).\n- **Technical:** timeout matrix (14), provider failure (10.2), single write (13.2), import boundary (15.1), checkbox parser (2), gate (16.1), docstring correction and test (15.2).\n\nThere is no scope creep; Task 4's extraction is D6's. The slice restates no NFR, so no load test or CI task is required.",
+      "file_ref": null,
+      "category": "coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md"
+    },
+    {
+      "severity": "PASS",
+      "title": "Sequencing, test-with pattern and proportionality",
+      "description": "The order follows the design's implementation order with no circular dependencies. Each implementation task is followed directly by its test task. Task 14 is test-only but covers Task 13's command. The absence of `**Commit**:` markers is acceptable. Seventeen tasks for seven new modules, two helpers, a command and a live walkthrough is proportionate.",
+      "file_ref": null,
+      "category": "sequencing",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Real-file parser test asserts a condition the named fixture cannot meet",
+      "description": "Task 2.2 reads `384-tasks.post-findings-to-the-pr.md` (or this file) and asserts both groups are non-empty. The 384 file has 166 checkboxes and zero unchecked, so the assertion fails on first run. Switching to this file only delays it: Task 16.4 marks every item `[x]` at close, which turns the test red when the slice completes.\n\nAssert only that the parsed total equals the file's checkbox count and that `checked` is non-empty. Otherwise copy a frozen snapshot of a real task file into `tests/pr/fixtures/` so the real format is kept but live state is not.",
+      "file_ref": null,
+      "category": "testing",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:67"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Detached-HEAD refusal has no nameable exception type and no command-level handling",
+      "description": "Task 3.1 says `current_branch` raises and should \"match `github_cli._branch_for`'s existing behavior\". That behaviour is raising `TargetUnresolvableError`, which lives in `src/squadron/codehost/errors.py:95`. `git_utils.py` is under `review/`, and `tests/codehost/test_import_boundaries.py:27` forbids `review/` importing `squadron.codehost`. A junior following the task literally breaks the boundary test.\n\nThe task must name the exception: a git_utils-local type alongside `DiffSpecError`, or move the helper into `pr/`. Task 13.1 must also say how the command maps it to exit 1 before any host call, and Task 13.2 has no detached-HEAD case. D2 requires that this refuses \"before either check\".",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "src/squadron/review/git_utils.py"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "No task supplies `local_sha`",
+      "description": "`check_head_pushed` takes `local_sha`, but neither Task 3 nor Task 13.1 says where it comes from. `git_utils.py` has only a private `_resolve_rev` (line 339) and no public head-sha helper. The \"behind\" criterion depends on this value. Add a `head_sha(cwd)` helper to Task 3.1 and 3.2, or name the call in Task 13.1.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:138"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Empty commit range is declared impossible but nothing enforces it",
+      "description": "Task 7.1 says an empty `base..head` range \"is impossible here\". Task 3.2 tests that `commits_in_range` returns `[]`, and the state is reachable: a pushed branch with no commits beyond base passes both checks in Task 6.\n\nDownstream code assumes commits exist. \"What changed\" has no no-input line, and D4a's title fallback indexes \"the first commit's subject \u2014 always present\". The result is an `IndexError` or a model call spent before the host's 422. That violates the slice's rule that every refusal decidable without a model happens before the model call. Add an explicit refusal in Task 7.1 or 13.1 and a case in 7.2 or 13.2 asserting the composer is never called.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:158"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Task 11 does not specify how prose is requested or what the prompt contains",
+      "description": "The design's scope lists \"the section contract, the prompt, and the presence-and-filled check\". D4 says squadron \"requests prose per section\" and the body \"is not one model response parsed into sections\". Task 11.1 specifies neither. It does not say whether there is one composer call per section with input or a single call that is split. It does not make the prompt a deliverable: what facts each section's request carries.\n\nTask 11.2 also lacks two assertions the design requires:\n- The composer is not called for a section carrying its no-input line.\n- The prompt contains only `PrFacts` content.\n\nA junior cannot complete this without choosing the architecture themselves. State the call shape and add the two assertions.",
+      "file_ref": null,
+      "category": "task-clarity",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:257-270"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Command-level error wiring sits in test tasks, not in Task 13.1",
+      "description": "Task 13.1 never says to wrap host calls in `except CodeHostError` \u2192 `render_code_host_error` \u2192 `typer.Exit(1)`. That requirement appears only as the last bullet of test Task 14.1.\n\nTask 10.1 says a composer failure \"become[s] a non-zero exit\", but does not say whether `pr/body.py` raises `typer.Exit` or a typed error the command maps. The first would put CLI concerns in the package D6 keeps Typer-free. Task 10.2 asserts \"creates nothing\" at composer-unit level, where no host exists to observe.\n\nThree changes fix this:\n- Move both wiring statements into Task 13.1.\n- Add a composer-failure case to Task 13.2: exit 1, zero writes.\n- Extend the dry-run equality case to cover the title and to assert the printed base source. The success criteria name both; Task 13.2 names only the body.",
+      "file_ref": null,
+      "category": "task-scoping",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:296-311"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`resolve_locator` signature drops a value its other caller needs",
+      "description": "Task 4.1 fixes the return type as `tuple[CodeHost, RepositoryLocator]`. `resolve_and_fetch_pull_request` passes `parsed` from `parse_target` to both `select_remote` and `host.resolve_pull_request(locator, parsed, ...)`. With the dictated signature the caller must parse the target twice, which duplicates logic. Return `parsed` as well, or leave the signature to the implementer.",
+      "file_ref": null,
+      "category": "task-clarity",
+      "raw_category": null,
+      "location": "src/squadron/cli/commands/pr.py:53-56"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Design inconsistencies the tasks inherit",
+      "description": "- The functional criterion says a sha-mismatched branch fails \"with the same command\". D2 and Task 6 specify different commands (`git push -u` and `git push`), and Task 6.2 asserts they differ. The tasks follow D2; the criterion's wording should be corrected.\n- The Design Review Response for F009 says the title comes from the design's frontmatter, while D4a says the H1. Task 10a correctly follows D4a.\n- The component table shows `check_head_pushed` returning \"refusal or HeadState\"; Task 6.1 returns `None`.",
+      "file_ref": null,
+      "category": "design-consistency",
+      "raw_category": null,
+      "location": "project-documents/user/slices/385-slice.create-a-pr-with-a-good-message.md:545-546"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Minor cross-references and file size",
+      "description": "- Task 1 says it is \"needed by Task 9\" and Task 2 says \"Tasks 9 and 10\". The actual first consumer of both is Task 7.1.\n- `pr/body.py` receives the composer, title resolution, section contract and presence check from Tasks 10, 10a, 11 and 12. `tests/pr/test_body.py` receives four test groups. Both are likely to pass the ~300-line guideline. Splitting off `pr/title.py` and `pr/check.py` would be cheap to plan now.",
+      "file_ref": null,
+      "category": "task-clarity",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:37"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "pass",
+      "category": "coverage",
+      "raw_category": null,
+      "summary": "Success criteria are covered and tasks trace back to the design",
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "pass",
+      "category": "sequencing",
+      "raw_category": null,
+      "summary": "Sequencing, test-with pattern and proportionality",
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "testing",
+      "raw_category": null,
+      "summary": "Real-file parser test asserts a condition the named fixture cannot meet",
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:67",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "Detached-HEAD refusal has no nameable exception type and no command-level handling",
+      "location": "src/squadron/review/git_utils.py",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "No task supplies `local_sha`",
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:138",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "Empty commit range is declared impossible but nothing enforces it",
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:158",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "concern",
+      "category": "task-clarity",
+      "raw_category": null,
+      "summary": "Task 11 does not specify how prose is requested or what the prompt contains",
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:257-270",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "concern",
+      "category": "task-scoping",
+      "raw_category": null,
+      "summary": "Command-level error wiring sits in test tasks, not in Task 13.1",
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:296-311",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "concern",
+      "category": "task-clarity",
+      "raw_category": null,
+      "summary": "`resolve_locator` signature drops a value its other caller needs",
+      "location": "src/squadron/cli/commands/pr.py:53-56",
+      "location_verified": true
+    },
+    {
+      "id": "F010",
+      "severity": "note",
+      "category": "design-consistency",
+      "raw_category": null,
+      "summary": "Design inconsistencies the tasks inherit",
+      "location": "project-documents/user/slices/385-slice.create-a-pr-with-a-good-message.md:545-546",
+      "location_verified": true
+    },
+    {
+      "id": "F011",
+      "severity": "note",
+      "category": "task-clarity",
+      "raw_category": null,
+      "summary": "Minor cross-references and file size",
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:37",
+      "location_verified": true
+    }
+  ],
+  "template_name": "tasks",
+  "input_files": {
+    "input": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md",
+    "against": "project-documents/user/slices/385-slice.create-a-pr-with-a-good-message.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/squadron-385-tasks"
+  },
+  "timestamp": "2026-11-16T12:11:53.905718",
+  "model": "claude-fable-5-2",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 11,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-fable-5-2",
+  "answering_models": [
+    "claude-fable-5-2"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 11,
+    "in_fences": 0,
+    "in_section": 11,
+    "surviving": 11
+  },
+  "effort": "medium",
+  "profile": "sdk",
+  "turns": 12,
+  "prompt_tokens": 366243,
+  "cached_tokens": 234098,
+  "cache_write_tokens": 132135,
+  "completion_tokens": 9466,
+  "reasoning_tokens": null,
+  "duration_seconds": 93.95282116602175,
+  "cost_usd": 2.540297,
+  "cost_basis": "provider"
+}

@@ -1,0 +1,68 @@
+{
+ "review": "r04",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "What the Copilot backend reads from is ambiguous, which may hide a dependency on the Claude target",
+   "description": "The file layout annotates every output as \"from `.claude/rules/typescript.md`\" and \"from `.claude/skills/commit.md`\". That suggests the Copilot backend reads Claude's generated output. But line 114 only says \"compile alwaysApply rules \u2192 \u2026\" and never names the input. If the input is `.claude/`, then `cf setup-ide copilot` silently depends on `cf setup-ide claude` having run first. The plan's main user (someone who left Claude) would get empty `.github/instructions/` and `.github/prompts/` output. That would break the plan criterion \"`cf init --ide copilot` runs end-to-end on a fresh directory\". It also conflicts with the plan's one-way model (\"source-of-truth \u2192 compiled target\"). The design should state that the input is the guide's own rule and skill sources, the same input the claude backend reads. It should also fix the layout annotations to match.",
+   "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:36-49"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Translation from skill to prompt file is not specified",
+   "description": "The plan lists the prompt-file frontmatter fields (`name`, `description`, `argument-hint`, `agent`, `model`, `tools`). The design specifies the `paths` \u2192 `applyTo` mapping in detail (lines 71-83) but says nothing about skill frontmatter. It does not say which skill fields map to which prompt fields, what happens to fields with no equivalent, or how prompt files are named. It also does not say how the backend sorts rules into alwaysApply and scoped: is it the presence of `paths`, or an explicit `alwaysApply` key? This is the guide-side work the plan rates as the main source of medium risk. It needs a mapping table, as `applyTo` already has.",
+   "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:113-114"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "The managed-marker safety check covers only 2 of the 4 output locations",
+   "description": "Step 4 (lines 98-100) and `isManagedCopilotFiles` (line 109) check only `.github/copilot-instructions.md` and `AGENTS.md`. Repos that already use Copilot often have hand-written `.github/instructions/*.instructions.md` and `.github/prompts/*.prompt.md`. A generated file with the same name, such as `commit.prompt.md`, would overwrite one of those with no prompt and no backup. The plan requires \"first-run warns before overwriting unmanaged user content\". The design should either check the marker on every file the script will write into those directories, or say why those directories are out of scope.\n\nThe design also leaves the marker's position open for files with YAML frontmatter (`*.instructions.md`, `*.prompt.md`). The marker must go after the closing `---` and still fall within the first 20 lines the check reads.",
+   "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:63-65"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Two names for the marker helper, and the marker logic is copied instead of shared",
+   "description": "Line 29 specifies `isManagedCopilot(filePath)`. Line 109 specifies `isManagedCopilotFiles(projectPath)`. Line 65 says the `isManagedClaudeMd` pattern \"is replicated\". The marker check works on any file path and has nothing Claude-specific in it. Generalize it into a single `isManagedFile(filePath)`. Then add a list of guarded paths for each target, and have the claude and copilot branches iterate over their own list. That avoids a second copy of the prompt-and-backup block. It also gives the \"add a new target\" recipe on line 23 something concrete to extend, instead of another `else if` branch.",
+   "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:29"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Failure modes for the prompt and the script step are not listed",
+   "description": "The sequence leaves these cases open:\n- **Declined prompt:** what happens when the user declines? Does step 6 propagation still run? In the claude flow, a declined prompt returns normally, and the caller then propagates.\n- **Two unmanaged files:** is there one prompt covering both, or one prompt each? Can the user accept one and decline the other?\n- **Existing `.bak`:** what happens when a `.bak` already exists?\n- **Old guides script:** what happens when the installed script has no `copilot` case? The Risks section (line 133) assumes the CLI shows \"a clear error\". But the CLI only reports the exit code, so the clarity depends entirely on how the old script handles an unknown argument, which this slice cannot control.\n\nEach case needs a stated handling and an observable message. For the last case, one option is to check whether the script supports the target before running it, or to declare a minimum guide version.",
+   "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:93-103"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Version coupling with the guides submodule has no defined resolution in `cf init`",
+   "description": "The Risks section calls submodule sync \"the highest-risk coupling\" but gives no mitigation. `cf init` skips guide installation when `project-documents/ai-project-guide/` already exists (detection matrix, slice 202). So `cf init --ide copilot` on a repo with older guides will fail at the script step and print only a code. The design should name the mitigation. Options include a minimum guide version check, a \"run `cf guides update`\" hint when the target is missing, or a release order of guides first and CLI second.",
+   "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:131-133"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "Tests cover only the CLI shell and skip the translation logic the plan requires",
+   "description": "The plan's success criteria include \"Path\u2192applyTo translation correctly converts Claude frontmatter to Copilot frontmatter\" and generation of all four outputs. Every listed test exercises `setup-ide.ts`. None covers the guide-script backend: splitting `paths` into a comma-separated `applyTo`, defaulting to `**`, routing alwaysApply rules into `copilot-instructions.md`, translating skills to prompts, or placing the marker. The project's parsing rules require fixtures in the real production format. Add guide-side tests that run the backend against real rule and skill files.",
+   "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:121-129"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "Scope the plan assigns to this slice is missing: the custom-agents mapping and the tool-guide reference",
+   "description": "For `.claude/agents/*.md`, the plan says \"document mapping, implement if backend is stable\". Line 54 says \"document the mapping but defer\", yet the design contains no such mapping. The plan's success criteria also require the tool guide (`project-documents/user/tool-guides/copilot-vscode/setup-ide.md`) to be \"referenced in slice design\", and the design never references it. Add a short mapping note for agents and cite the tool guide as the source for the VS Code behavior claims (ordering caveat, `applyTo` syntax, prompt-file fields).",
+   "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:54"
+  },
+  {
+   "i": 8,
+   "severity": "NOTE",
+   "title": "Propagation copies files without recursing and never removes stale files",
+   "description": "The design reuses the claude propagation pattern: flat file copy, overwrite, no deletion. That is fine if the backend only writes flat files into `.github/instructions/` and `.github/prompts/`. State that constraint, because VS Code searches `.github/instructions/` recursively and a later nested layout would silently fail to propagate. A rule or skill deleted in the root also stays behind in worktrees. That matches the claude behavior and is acceptable here, but it is worth one sentence.",
+   "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:89"
+  }
+ ]
+}

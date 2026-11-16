@@ -1,0 +1,61 @@
+{
+ "review": "r08",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "The two `step()` code samples disagree, and one skips `post_tick` when there are no entities",
+   "description": "The Technical Decisions sample (lines 176-191) only wraps `tick(...)` in `if self._entity_manager.count > 0`, so `post_tick()` always runs. The Implementation Details sample (lines 276-277) returns early with `if self._entity_manager.count == 0: return` before reaching `post_tick()`. With no entities, that version skips `post_tick` entirely. The note directly below it (line 291) and Special Considerations (line 408) both say `post_tick` must run when there are no entities. The second sample is the one an implementer is most likely to copy, and it breaks the slice's own requirement. Change lines 272-289 to use the guard form from lines 176-191. Add a test with zero entities that checks `post_tick` is still called.",
+   "location": "project-documents/user/slices/304-slice.environment-layer-integration.md:272-291"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "The doc says the environment is \"always present\", but the design keeps `Environment | None` and its None checks",
+   "description": "The section says the server always creates an environment \"to avoid `if environment is not None:` checks\". The `SimulationManager` design then adds an `Environment | None = None` parameter, two `is not None` checks in `step()`, and an `environment` property that returns `Environment | None`. Every future force constructor in `server.py` would have to narrow that type. The reason given is backward compatibility with existing tests, but that doesn't hold: the slice already breaks every `step()` call site by adding the required `tick_number` (line 407), so all those tests get edited anyway. An empty `Environment(bounds, layers={})` costs nothing to build in a test. Make `environment` a required `Environment` parameter, and remove the None checks and the Optional return type.",
+   "location": "project-documents/user/slices/304-slice.environment-layer-integration.md:218-220"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Scope the slice plan assigns to 304 is deferred, but the plan entry isn't updated",
+   "description": "Slice plan item 5 (`300-slices.worldserver-foundation.md:27`) gives 304 these jobs:\n- config for \"seed, grid resolution, layer selection\";\n- \"Pass environment context to `SimulationManager` and `engine.tick()`\";\n- \"Handle post-tick environment writes (e.g., stigmergic trail deposits)\".\n\nThe slice ships only `seed`, which it says nothing uses yet (line 149). It replaces passing the environment to `engine.tick()` with constructor injection into forces (lines 200-216). It calls `post_tick()` with no arguments and has no way to collect `trail_deposits` or `threat_mutations` from the engine. Each of these choices is reasonable on its own merits: no layers exist yet, and constructor injection keeps the `BulkForce` protocol unchanged. But the work hasn't been reassigned. No 501-507 slice is named as owner of the post-tick write-collection path, and the plan still describes `engine.tick()` receiving environment context. Either update the slice plan entry to match this design and name the slice that will collect and route the `post_tick` arguments (probably 506/505), or keep that work in 304.",
+   "location": "project-documents/user/slices/304-slice.environment-layer-integration.md#excluded"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Terrain-in-snapshots was handed to 304 by 305, and 304 hands it to no one",
+   "description": "Slice plan item 6 says \"Terrain summary in snapshots deferred to (304) Environment Layer Integration.\" This slice excludes \"Environment data in client snapshots/broadcasts \u2014 deferred to future work\" without naming an owner, so the commitment is now held by no slice. Name the slice that will own it (for example 306, or a 50x slice once terrain exists), or add it to the slice plan's Future Work.",
+   "location": "project-documents/user/slices/304-slice.environment-layer-integration.md:47"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "The tick-budget NFR isn't restated, though the slice adds work to every tick",
+   "description": "The parent architecture (`300-arch.worldserver-foundation.md:78,90,94`) sets the tick budget at the 20-60 Hz target rates, warns on overrun, and gives 10K-50K entities on one CPU as the initial operating range. This slice puts `pre_tick` and `post_tick` into every tick but doesn't restate that budget or say that environment lifecycle time counts against it. The empty environment adds almost nothing. But this slice is the host that layers 501-507 plug into without further server changes, so it is where the budget should be written down. Restate the target (the tick must fit in 1/`tick_rate` at 20-60 Hz for the configured entity count) and note that existing tick metrics already cover environment time.",
+   "location": "project-documents/user/slices/304-slice.environment-layer-integration.md#success-criteria"
+  },
+  {
+   "i": 5,
+   "severity": "NOTE",
+   "title": "Seasonal parameter: an unused state field, a hard-coded default, and a wrong comment",
+   "description": "There are three small problems:\n- State Management lists a `_seasonal_parameter: float` field, but `step()` takes the value as an argument and never reads that field. Remove the field.\n- The `0.0` default is hard-coded in the `step()` signature, which goes against the project rule against magic defaults. Since 308 will pass the value explicitly, it is simpler to have the tick body pass a named constant and make the parameter required.\n- Line 198 calls 0.0 \"mid-season\". On the 0-1 cycle the architecture defines, 0.0 is the start of the cycle.",
+   "location": "project-documents/user/slices/304-slice.environment-layer-integration.md:117-119"
+  },
+  {
+   "i": 6,
+   "severity": "NOTE",
+   "title": "Exceptions from `pre_tick` reaching the tick loop are not addressed",
+   "description": "`Environment.pre_tick` raises `ValueError` for out-of-range seasonal values (500 slice, line 280), and future layers may raise too. This slice adds no new I/O paths, but it doesn't say what happens when one of these exceptions reaches the tick loop: does the server shut down, or log and continue? The \"Explicit lifecycle \u2014 no silent failures\" principle (`300-arch:45`) suggests one sentence should say it propagates and stops the server.",
+   "location": "project-documents/user/slices/304-slice.environment-layer-integration.md:171-198"
+  },
+  {
+   "i": 7,
+   "severity": "NOTE",
+   "title": "Seed validation should reject `bool`, and walkthrough step 2 doesn't test what it claims",
+   "description": "- In Python, `isinstance(True, int)` is true, so `seed: true` would pass the \"must be an int\" check (line 249). The check should rule out `bool` explicitly.\n- Walkthrough step 2 runs `config/default.yaml` to show that the environment section is optional, but this slice adds that section to `default.yaml` (line 80). Use a separate fixture config that leaves the section out.",
+   "location": "project-documents/user/slices/304-slice.environment-layer-integration.md:368-373"
+  }
+ ]
+}

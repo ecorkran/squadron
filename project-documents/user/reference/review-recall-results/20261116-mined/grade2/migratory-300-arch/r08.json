@@ -1,0 +1,96 @@
+{
+ "review": "r08",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "The doc claims work that the initiative plan gives to initiatives 320, 500 and 620",
+   "description": "The initiative plan (`001-initiative-plan.migratory.md:46-67`) gives three areas to other initiatives:\n- Logging & Replay to **320**.\n- Terrain, biomes, resources and seasonal cycles to **500**.\n- Multi-resolution simulation and GPU offload to **620**.\n\nThis doc still lists \"Environment layer foundation \u2014 Terrain generation, resource placement\", \"Seasonal and temporal systems\" and \"Logging and replay\" as its own slices. The Envisioned State section also describes the environment layer and seasonal advancement as server-owned. The slice plan (`300-slices...md:27,35`) has already fixed this: it says terrain, biomes and seasonal logic are \"owned by initiative 500\", and it narrows 304 and 308 to orchestration only. So the architecture now disagrees with both its parent plan and its child plan.\n\nThe Scope paragraph should say plainly that the server **hosts and orchestrates** the environment, and **does not build it**. Environment generation and seasonal semantics should move out of this doc. The doc should also either justify why replay lives in 307 instead of 320, or hand it to 320.",
+   "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md#anticipated-slices"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "The scaling section is far larger than the foundation needs, and its one constraint can't be tested",
+   "description": "\"Entity scaling and multi-resolution simulation\" is the longest part of the document. It covers:\n- 4M+ multi-GPU setups\n- astrophysics and wargaming precedents\n- predictive partition rebalancing\n- strategies for merging two 500K-entity murmurations\n\nAll of this belongs to initiative 620. The slice plan defers it as well (`300-slices...md:47`, Future Work 1, 2 and 5). The only thing this section asks of the foundation is that entity management and the tick loop must \"not preclude these approaches\". No reviewer can check that, because the doc never says what it means for the entity layer (see the next finding).\n\n**Cut:** the tier table above 500K, the group-encounter strategies and the multi-GPU path. Point to 620 instead. **Keep:** one paragraph listing the concrete invariants the foundation has to honour.",
+   "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md#technical-considerations"
+  },
+  {
+   "i": 2,
+   "severity": "FAIL",
+   "title": "The doc requires entity management to support aggregation and variable-rate ticking, but never designs it",
+   "description": "Line 112 calls this \"the key architectural decision now\": the entity management layer must \"support aggregation and variable-rate ticking from the start\". Yet the Envisioned State says only that the server \"assigns entity IDs, allocates space in the state arrays, and removes entities\". These questions, which carry the weight of the design, are left open:\n- **IDs vs array slots:** are entity IDs stable while array indices change? Removing an entity from a dense SoA array means either swap-remove (indices move) or tombstones (holes plus a free list). Each choice affects the engine's subset index arrays, client deltas and log records differently.\n- **Rate tiers:** where is each entity's tier or tick phase stored, and who builds the per-tick active subset that 100-arch's \"Subset-evaluable tick\" expects? The six-step tick cycle (lines 61-66) passes \"current entity state\" with no subset at all, so it doesn't match the engine interface.\n- **Aggregates:** where do aggregate entities live (same arrays, or a separate table)? 100-arch line 97 says the server must present aggregates \"through the same neighbor query interface\". Nothing here covers that.\n\nWithout these decisions, slice 302 (already marked complete) has no checkable criterion for \"does not preclude aggregation\".",
+   "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md#envisioned-state"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Running the tick synchronously contradicts the doc's own statements about I/O and slow clients",
+   "description": "Line 78 says to \"run the tick synchronously, then yield to the async event loop for I/O between ticks\". In Python 3.12 asyncio, that means the event loop is frozen for the whole tick. WebSocket accepts, keepalive ping/pong and frame flushing all stop. Once ticks approach the budget (20 tps gives 50 ms), I/O only gets the leftover time, and the `websockets` library's keepalive can time out healthy clients.\n\nStep 5 (\"Push the committed state to connected clients\") is also inside the tick. If it awaits `send()` per client, one slow client stalls the tick, which line 82 says must not happen. Line 82 then leaves the strategy open as \"buffering, dropping frames, or disconnecting \u2026 all strategies to consider\".\n\nThis is a load-bearing decision. It should be made here: a per-client single-slot \"latest frame wins\" buffer, drained by a separate task per client, with the tick only enqueuing frames and never awaiting.",
+   "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md#technical-considerations"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "The thread-offload upgrade path breaks the \"tick as transaction\" guarantee",
+   "description": "The upgrade path is to offload the tick to a thread because \"NumPy releases the GIL\". Two problems:\n1. **Partial GIL release.** NumPy only releases the GIL inside some C loops. Python-level orchestration, small-array operations and any per-profile Python dispatch still hold it. Python 3.12 has no free-threaded build, so the speed-up is uncertain.\n2. **Consistency.** Once the tick runs in another thread, the event-loop thread will serialize snapshots for newly connected clients while the tick is changing the arrays. That breaks \"Between ticks, the world is consistent and queryable.\"\n\nThe doc should require double-buffered state, or an immutable committed snapshot that I/O reads from, as the invariant that keeps the upgrade path open. It should also say whether the engine returns new arrays or mutates in place. 100-arch says \"Returns the updated state array\" but doesn't specify which.",
+   "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md#architectural-principles"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "There is no failure policy for an exception in the middle of a tick",
+   "description": "\"Tick as transaction\" and \"No silent failures, no undefined states\" are stated as principles, but nothing says what happens in these cases:\n- The behavior engine raises an exception, or produces NaN/inf positions.\n- The environment update fails.\n- A log write fails, for example because the disk is full.\n\nIf the engine mutates state in place, a failure partway through leaves the canonical state half-updated. That isn't a transaction. The doc should say whether a failed tick is rolled back, retried or treated as fatal, and whether NaN checks run at commit. Under the project's fail-explicitly rule, the likely answer is: validate at commit and stop the process on error, with the log flushed. Whatever the answer, it should be written down.",
+   "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md#architectural-principles"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "\"Persist state on shutdown\" is stated but not designed, and the slice plan defers it",
+   "description": "\"Explicit lifecycle\" says the server knows how to \"persist state on shutdown\", and the concept calls the world \"persistent\". But no section defines the persistence format, where it is stored, or how a restart resumes. The slice plan moves \"State Persistence and World Save/Load\" to Future Work (`300-slices...md:53`).\n\nThe doc should either drop persistence from the v1 lifecycle principle or design it. As written, slice 300 (\"exits cleanly on signal\") can't tell what \"graceful\" requires.",
+   "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md#architectural-principles"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "The \"nothing flows back from clients\" principle conflicts with planned spatial culling, and the protocol has no message envelope",
+   "description": "\"State flows outward\" means nothing comes from clients in v1. But per-client spatial culling (line 108, slice 309) needs each client to \"declare a viewport or region of interest\". That is a client-to-server message.\n\nThe doc also says the protocol \"should not preclude adding [commands] later\", yet line 80 defines only a frame of tick number, entity count and layout descriptor. There is no message-type field and no protocol version, so even the culling message has no defined way to travel.\n\nWhat to fix:\n- Separate *simulation-state* inputs (still forbidden) from *subscription/view* inputs (allowed).\n- Require a typed, versioned envelope from the first protocol slice.",
+   "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md#architectural-principles"
+  },
+  {
+   "i": 8,
+   "severity": "CONCERN",
+   "title": "Replay determinism depends on things the doc never pins down",
+   "description": "Line 90 suggests that logging only the initial state plus non-deterministic inputs is enough, because the tick is deterministic. The doc doesn't address what that depends on:\n- **RNG seeding:** how spawn positions, disaggregation and environment generation are seeded.\n- **Floating-point reproducibility:** NumPy and BLAS reductions aren't bit-identical across versions, platforms or thread counts, and float32 vs float64 adds another variable.\n- **Wall-clock time:** \"Record tick number and timestamp\" (step 1) uses wall-clock time. If any subsystem reads it, for example a seasonal \"time scale\", determinism breaks.\n\nThe doc should state that simulation time comes only from the tick count, require one seeded RNG owned by the server, and accept that replay holds only on the same build and platform. Otherwise the events-only log format can't be relied on.",
+   "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md#technical-considerations"
+  },
+  {
+   "i": 9,
+   "severity": "CONCERN",
+   "title": "One source for lifecycle events is never named, and the engine interface contradicts it",
+   "description": "Step 4 applies \"entity lifecycle events (spawning, removal, profile changes) queued during the tick\". In v1 there are no client commands, so the doc never says who queues these events: the engine (for predation kills), the environment, or the server's own population rules. The ordering also has a gap. Events queued by the engine in step 3 are applied in step 4, but the doc doesn't say whether a removed entity's step-3 output is still committed first.\n\nSeparately, 100-arch line 81 gives the engine a \"register/remove agents\" interface. This doc says \"it does not manage the entity lifecycle itself\". One of the two documents has to change.",
+   "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md#envisioned-state"
+  },
+  {
+   "i": 10,
+   "severity": "NOTE",
+   "title": "Wrong cross-references",
+   "description": "- `dependsOn: [001-concept.migratory, \u2026]` and the Related Work link point to `../project-guides/001-concept.migratory.md`. The concept file is actually `000-concept.migratory.md`; `001` is the initiative plan.\n- The reverse link from 100-arch (line 122) points to `200-arch.world-server-foundation.md`, which doesn't exist. This doc is `300-arch.worldserver-foundation.md`.",
+   "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md#related-work"
+  },
+  {
+   "i": 11,
+   "severity": "NOTE",
+   "title": "\"Logging\" covers two different things",
+   "description": "\"Logging infrastructure\" in the Scope section, \"Write to the event log\" in step 5, and the replay log on line 74 are all called \"logging\". Operational logging (Python `logging`, diagnostics) and the simulation event/snapshot log (a data product with replay guarantees) fail differently and have different owners. Calling them two separate components would stop slice 300's \"structured logging setup\" from being mistaken for the replay log.",
+   "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md#scope"
+  },
+  {
+   "i": 12,
+   "severity": "NOTE",
+   "title": "Config format, validator and float precision are still open",
+   "description": "\"YAML or similar\" is still open, and no validation approach is named (such as a pydantic or dataclass schema). The slice plan has already chosen YAML. The doc should record that choice, and also name the internal float precision used at the serialization boundary. The memory figure (500K \u2248 24 MB, i.e. 48 bytes per entity) implies float64 position plus velocity. The egress figure (12 bytes per entity) implies float32 position only. That conversion should be stated, not left for the reader to infer.",
+   "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md#technical-considerations"
+  }
+ ]
+}

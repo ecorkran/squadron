@@ -1,0 +1,61 @@
+{
+ "review": "r06",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "The real-file checkbox test will fail once the slice closes",
+   "description": "Task 2.2 reads the live task file from `project-documents/user/tasks/` and asserts that **both groups are non-empty**. Task 16.4 (line 371) then marks every item `[x]`. At that point the unchecked group is empty and the test fails on the integration branch, after the 16.1 gate has already passed. The test also changes behaviour every time task-checker edits the file. The hedge \"this file once it exists, or 384 until then\" is out of date too, because this file now exists. Fix: copy a snapshot of a real task file into a test fixture and assert against that. If the test must read the live file, assert only that checked plus unchecked equals the file's checkbox count. The slice's technical criterion (line 565\u2013566, \"a test fixture using this slice's own task file\") is met by a snapshot.",
+   "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:67"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "The provider-failure test can't check \"creates nothing\", and the design puts the exit code in the command",
+   "description": "Task 10.1 says a provider exception \"become[s] a non-zero exit\". Task 10.2 asserts it \"exits non-zero, logs at ERROR, and creates nothing\", but that test lives in `tests/pr/test_body.py`, where there is no host and no CLI. That causes three problems:\n- **Nothing to observe:** a test at that level can't see host writes, so \"creates nothing\" can't be checked there.\n- **Layering:** making `pr/body.py` raise `typer.Exit` couples the `pr/` package to Typer. D6 says the command holds \"orchestration, printing, and exit codes\".\n- **Handler never runs in command tests:** Task 13.2 fakes the whole composer, so the command tests never exercise the boundary handler.\n\nFix: the composer logs with `logger.exception` and raises a typed composition error. The `create` command turns that error into exit 1. Add a 13.2 case that uses the real composer over a fake provider that raises, and assert zero write calls. This is the technical criterion at slice line 562.",
+   "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:221-227"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Task 13.2 skips parts of three success criteria",
+   "description": "- **Printed source:** the criterion \"that branch is the base and the printed source says so\" (slice line 543\u2013544) is not checked anywhere. Task 5.2 tests the selection, and 13.1 prints it, but no test checks what goes to stderr. Add a 13.2 case for the integration-branch source.\n- **Dry-run equality:** the criterion covers **title and body** (slice line 552), but 13.2 compares only the body. The slice's Testing section (line 672\u2013673) also asks for a structural check that the value is bound once and passed to both paths, not a comparison of two strings composed separately. 13.2 says neither.\n- **Identity refusal:** the criterion requires the refusal to \"name the reason\" (slice line 553\u2013554). 13.2 checks only exit 1 and no write.",
+   "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:309-310"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Task 5.1's `cf`-unavailable bullet contradicts itself, and a dropped integration branch is never logged",
+   "description": "The bold lead says \"**Do not degrade an unreachable `cf` to a default base**\". The very next sentence says an unavailable `cf` \"proceeds to the host default\". The design means \"don't hard-code `main` the way `resolve_diff_base` does\", but a junior implementer could reasonably build either behaviour. Reword it to say what actually happens: an unavailable `cf` means the key is treated as unset, and the base comes from `default_branch`, never a constant.\n\nThis path can also silently retarget a PR away from a configured integration branch, which is the case D1 calls wrong. Under the failure-mode-observability rule, it should log a WARNING. Add that to 5.1, and have 5.2 assert the WARNING is emitted.",
+   "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:122"
+  },
+  {
+   "i": 4,
+   "severity": "NOTE",
+   "title": "Two git calls have no task assigned to them",
+   "description": "- **Local head sha:** `check_head_pushed` takes `local_sha`, but no task says how it is read. Task 3 adds no `rev-parse HEAD` helper, and 13.1 doesn't mention it. Add it to Task 3 or to 13.1.\n- **Range membership:** Task 8.1 (line 179) calls `git rev-list <base>..<head>` without saying how. It should reuse the sha list from Task 3's `commits_in_range`, which already returns newest-first. That one list gives both membership and the \"newest in range\" ordering, through the same timed `run_git`.\n- **Unspecified outcome:** the 6.2 case \"`ls-remote` returning no matching ref\" doesn't say what should happen. It should refuse with the missing-branch fix.",
+   "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:138-147"
+  },
+  {
+   "i": 5,
+   "severity": "NOTE",
+   "title": "The slice's success criterion says \"same command\", but D2 and Task 6 say different commands",
+   "description": "The criterion says a sha mismatch \"fails the same way with the same command\". D2 gives `git push -u` for a missing branch and `git push` for a branch that is behind. Task 6.2 correctly follows D2 (\"the two refusals name different commands\"). The slice criterion's wording should be corrected; the tasks need no change.",
+   "location": "project-documents/user/slices/385-slice.create-a-pr-with-a-good-message.md:545-546"
+  },
+  {
+   "i": 6,
+   "severity": "NOTE",
+   "title": "Some \"needed by\" cross-references are wrong",
+   "description": "Task 1 says it is \"needed by Task 9\", but `parse_slice_branch` is used by Task 7 (7.1) and Task 10a. Task 2 (line 55) says \"Needed by Tasks 9 and 10\", but `parse_task_items` is used only by Task 7. The actual order is still correct.",
+   "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:37"
+  },
+  {
+   "i": 7,
+   "severity": "NOTE",
+   "title": "Task 16.4's close-out steps conflict with the root project rules",
+   "description": "- **Marking skipped items done:** \"Mark any dropped or skipped item above `[x]`\" records unfinished work as done. The squadron root rules say to check off only verified items.\n- **Merge as a task:** the merge sub-item is allowed by this worktree's CLAUDE.md, but the squadron root CLAUDE.md forbids writing a merge as a task item. Which rule applies depends on which CLAUDE.md governs this checkout.",
+   "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:371-373"
+  }
+ ]
+}

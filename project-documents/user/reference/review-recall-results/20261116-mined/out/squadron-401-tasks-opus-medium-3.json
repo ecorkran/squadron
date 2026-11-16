@@ -1,0 +1,207 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Task 14 makes a tokenizer `MemoryError` a per-file skip, which contradicts D3 and Task 11",
+      "description": "Task 14 lists `MemoryError` among the TypeScript token errors. Under Task 10 those errors send the file to `unparsed_files`. But D3, the failure-mode table and Task 10 all say a `MemoryError` during the pass makes `duplicated_lines` `tool_failed`. Task 11 tests that too (\"a tokenizer that raises `MemoryError` gives `tool_failed`\"). Which path runs depends on the order of the `except` clauses, so whoever implements it has to guess. The two languages also disagree: Task 12's Python token errors leave `MemoryError` out. 400 does pass `(TypeScriptParseError, MemoryError)` as parse errors (`src/squadron/metrology/snapshot/typescript_length.py:151`), which is probably where this was copied from. Fix: take `MemoryError` out of Task 14's token errors and say that `measure_duplication` handles `MemoryError` itself, ahead of `token_errors`.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:160"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Task 13's \"function length is unaffected\" can't hold for the inputs it names",
+      "description": "An unterminated triple-quoted string and bad indentation are both `SyntaxError`s for `ast.parse`. Those files are already in function length's `unparsed_files` through `_PARSE_ERRORS` (`src/squadron/metrology/snapshot/python_adapter.py:81`). A junior agent reading \"function length is unaffected\" will likely assert that the file's functions are present, and that test can never pass. Restate it: function length's result for the repo is identical to 400's (the file is unparsed there for its own `ast` error), and the duplication pass changes nothing about it.",
+      "file_ref": null,
+      "category": "testing",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:154"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Task 5 doesn't say the complexity walk must be iterative, and the TypeScript parse errors don't include `RecursionError`",
+      "description": "The failure-mode table says a `RecursionError` in a complexity walk is \"already one of the adapter's parse errors\". That's true for Python (`_PARSE_ERRORS`). For TypeScript the parse errors are only `(TypeScriptParseError, MemoryError)`. 400's `_extract_functions` uses an explicit `pending` stack (`src/squadron/metrology/snapshot/typescript_length.py:125-138`), so it never recurses. If Task 5's walk is written recursively, as a \"doesn't descend into nested functions\" walk naturally is, deeply nested TypeScript will raise an unhandled `RecursionError` and crash the adapter. Fix: Task 5 should require an explicit-stack walk, like `_extract_functions`. Task 9's `RecursionError` case currently names Python only and should do the same.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:74"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Task 9's `RecursionError` test doesn't assert the WARNING",
+      "description": "The Technical Requirements say \"Failure-mode tests assert both the signal and the outcome for each row of the failure-mode table.\" Task 9 checks the outcome (the file is in `unparsed_files`) for both the parse-error and `RecursionError` cases, but not the WARNING per file. Every other row's test names its signal. Add the WARNING assertion here.",
+      "file_ref": null,
+      "category": "testing",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:111"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`tool_support.tool_failed` requires a `command` argument that Tasks 10 and 23 don't define",
+      "description": "`tool_failed(..., *, command: str, ...)` is keyword-only and required. The duplication pass and the coverage reader run no external command, so the implementer will make up a value. A sentence in each task saying what to pass (for example the report path for coverage, or a fixed description for duplication) avoids two different made-up values. Also, `tool_failed` logs a WARNING per call. So a coverage failure logs once in `read_coverage` (Task 21) and once for each of the two metrics. That's harmless, but Task 24's \"with a WARNING\" assertion should allow more than one.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "src/squadron/metrology/snapshot/tool_support.py:42-54"
+    },
+    {
+      "severity": "PASS",
+      "title": "Every success criterion is covered by a task",
+      "description": "| Criterion | Tasks |\n|---|---|\n| SC1 | 8, 12, 14 (tested in 9, 13, 15) |\n| SC2 | 9 |\n| SC3 | 4, 6 |\n| SC4 | 11, 15 |\n| SC5 | 22 |\n| SC6 | 20, 24 |\n| SC7 | 20, 24 |\n| SC8 | 20, 24 |\n| SC9 | 17 |\n| SC10 | 11 |\n| SC11 | 26 |\n| SC12 | 7 |\n| Technical: real Cobertura fixtures | 18 |\n| Contract freeze | 30 |\n| Docs and CHANGELOG | 28 |\n\nEvery task traces back to a criterion or decision, so there's no scope creep.",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/slices/401-slice.complexity-duplication-and-coverage.md:260-291"
+    },
+    {
+      "severity": "PASS",
+      "title": "Sequencing, test-with pattern and commit markers are sound",
+      "description": "- Each implementation task (3, 5, 8, 10, 12, 14, 16, 19, 21, 23, 25) is followed straight away by its test task, and the commit sits after the test.\n- Task 7's refactor commit is backed by 400's existing length tests.\n- Dependencies run forward: Task 7's read helper comes before Task 10, Task 18's fixtures before Task 19, and Task 16's parser before Task 21.\n- Task 2's explicit metric set stops `take_snapshot` from raising on the new enum members. The test helpers iterate `SnapshotMetric` generically, so \"suite passes unchanged\" holds.",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md"
+    },
+    {
+      "severity": "PASS",
+      "title": "The task list is proportionate, and no load test is needed",
+      "description": "30 tasks fits a slice with four metrics across two languages plus a config key and a reader. No task is oversized: the duplication pass, at Effort 4, is a single cohesive module. The slice restates no NFR, so a load test or CI-gating task isn't required. The walkthrough's edits to `.squadron.toml` and the `coverage.xml` it writes are safe, because both files are gitignored (`.gitignore:56`, `.gitignore:174`).",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "Task 14 makes a tokenizer `MemoryError` a per-file skip, which contradicts D3 and Task 11",
+      "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:160",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "testing",
+      "raw_category": null,
+      "summary": "Task 13's \"function length is unaffected\" can't hold for the inputs it names",
+      "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:154",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "Task 5 doesn't say the complexity walk must be iterative, and the TypeScript parse errors don't include `RecursionError`",
+      "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:74",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "testing",
+      "raw_category": null,
+      "summary": "Task 9's `RecursionError` test doesn't assert the WARNING",
+      "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:111",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "`tool_support.tool_failed` requires a `command` argument that Tasks 10 and 23 don't define",
+      "location": "src/squadron/metrology/snapshot/tool_support.py:42-54",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "pass",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "Every success criterion is covered by a task",
+      "location": "project-documents/user/slices/401-slice.complexity-duplication-and-coverage.md:260-291",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "pass",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "Sequencing, test-with pattern and commit markers are sound",
+      "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md",
+      "location_verified": null
+    },
+    {
+      "id": "F008",
+      "severity": "pass",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "The task list is proportionate, and no load test is needed",
+      "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md",
+      "location_verified": null
+    }
+  ],
+  "template_name": "tasks",
+  "input_files": {
+    "input": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md",
+    "against": "project-documents/user/slices/401-slice.complexity-duplication-and-coverage.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/squadron-401-tasks"
+  },
+  "timestamp": "2026-11-16T14:01:14.336141",
+  "model": "claude-opus-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 9,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-opus-5-5",
+  "answering_models": [
+    "claude-opus-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 8,
+    "in_fences": 0,
+    "in_section": 8,
+    "surviving": 8
+  },
+  "effort": "medium",
+  "profile": "sdk",
+  "turns": 10,
+  "prompt_tokens": 587258,
+  "cached_tokens": 572241,
+  "cache_write_tokens": 15005,
+  "completion_tokens": 8314,
+  "reasoning_tokens": null,
+  "duration_seconds": 103.32673979108222,
+  "cost_usd": 0.4015501,
+  "cost_basis": "provider"
+}

@@ -1,0 +1,54 @@
+{
+ "review": "r08",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "A git failure during range resolution shows up as an ordinary unresolved reason and exit 0",
+   "description": "The failure-mode row at line 164 says that when a reflog read or merge search returns `None`, the resolver treats it as \"this path can't answer\", tries the next path, and emits an INFO line. In the data flow (lines 111\u2013121), a `None` from the `git log --merges --first-parent` search therefore drops into the fast-forward path. That path ends in `NO_LANDING`, `LANDED_ELSEWHERE` or `REFLOG_UNAVAILABLE`. No `RangeUnresolvedReason` member means \"git failed or timed out\".\n\nAs a result, a 30 s `run_git` timeout on a long history:\n- is shown as, for example, `unresolved: no_landing` at INFO level;\n- lets `slice-ranges` exit 0. Line 275 says it \"exits 0 when every slice either resolved or was unresolved for a stated reason\" but also \"exits 1 on a git or store error\". These two statements contradict each other for this case.\n\nThis conflicts with the project's failure-mode rule (failures must be observable at WARNING or above) and with Fail Fast. It also undermines the slice plan's risk statement that \"the persistence has to be right the first time\": a user who sees `no_landing` has no reason to retry before the reflog expires.\n\n**Fix:** Keep \"git returned a result with no matches\" separate from \"git returned `None`\". A `None` should either raise (ERROR, exit 1, per line 275) or produce a separate reason such as `GIT_UNAVAILABLE`, logged at WARNING and never treated as final. Add a `caplog` test for it next to the ones listed at line 349.",
+   "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:164"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "The planned check for the editable-install risk cannot detect it",
+   "description": "The risk at line 375 is that pyright, run with `--pythonpath <live>/.venv/bin/python`, resolves `import squadron` through the editable install to the live `src` instead of the exported tree. Line 380 says \"the in-place-equals-export test (criterion 5) catches a mismatch at HEAD\". It can't. At HEAD the exported `src` and the live `src` are byte-identical, so the type counts match whichever tree pyright reads. Criterion 5 (line 336) and the D5 test (line 216) pass whether or not the risk is real.\n\nThe other mitigation is walkthrough step 4 (line 366), a manual run with no expected type-error value. And \"If they differ, type counts \u2026 become absent\" describes a decision for later, not a mechanism the design specifies.\n\nThe risk matters because D6 (line 220) presents type counts at an export as trustworthy whenever the lockfile matches. If the risk is real, every slice report on squadron itself would show the live tree's type errors as both before and after.\n\n**Fix:** Add an automated test that can tell the two trees apart. For example: in a throwaway repo with a `src` layout and an editable self-install, commit a type error, fix it at HEAD, export the older commit, and assert that the error is counted. Make the result decide D6: if the test fails, type counts at an export are always absent with an `environment_unresolved` reason that names this cause.",
+   "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:375-380"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Reports don't say how they handle landings on different target branches in one project record",
+   "description": "The `slice_ranges` record is keyed on `ProjectId`, so worktrees and clones of the same remote share it (line 176). Resolution, though, depends on each checkout's `git.integration_branch`. D2 (line 194) explicitly expects a slice that landed on a worktree branch to be resolved \"in a checkout whose target is that branch\", and the merge at line 122 adds that landing to the same per-slice list. Each `SliceLanding` records its `target_ref` (line 184), but none of the consumers say what to do with a landing whose `target_ref` differs from the current target:\n\n- **`report slice`:** the header at line 281 (\"2 landings on main\") assumes a single target.\n- **D9 attribution (line 243):** \"listed under a slice only when that slice has a resolved landing\" doesn't say whether a landing on another target counts.\n- **`report history` (line 298):** it places a slice's reviews on the row of the landing's `after_sha` in the current target's first-parent history, and leaves out commits that aren't on that line. For a landing on another target, its reviews end up either on no row or uncounted. The closing project-level line only covers slices with *no* resolved landing.\n\nBecause landings are append-only, this situation is guaranteed once a worktree is used (squadron already has `squadron-brownfield`).\n\n**Fix:** State one rule and test it. For example: reports show only landings whose `target_ref` equals the current target and list the rest by name (\"1 landing on squadron-brownfield not shown\"). Reviews for a slice with no landing on the current target go into the project-level line in `report history`.",
+   "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md#d2--merge-commits-are-searched-on-the-targets-first-parent-line-with-no-fallback-to-main"
+  },
+  {
+   "i": 3,
+   "severity": "NOTE",
+   "title": "A lost `slice_ranges` write is silent",
+   "description": "The design states that concurrent writes aren't supported and gives the signal as \"None\". A lost fast-forward landing can be permanent if the reflog expires before the next run. This is an accepted, documented limitation shared with 400, so it isn't a CONCERN. A cheap improvement: just before `write_slice_ranges`, read the record again and merge the new landings into it. That narrows the race window without adding locking.",
+   "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:166"
+  },
+  {
+   "i": 4,
+   "severity": "NOTE",
+   "title": "Reading limits and exclusions from the live checkout is a deliberate, documented deviation",
+   "description": "Architecture line 90 says that measuring an exported commit \"reads that commit's config\". D5 does this for rule-set configs (`pyproject.toml`, `ruff.toml`, `eslint.config.*` come from `repo_root`). Limits and exclusions, however, come from the live checkout. The reasons are given: squadron's `.squadron.toml` is gitignored, and both boundaries are measured under the same settings. The cost is acknowledged at line 377. Each record states the settings it used, so comparability stays honest. No change needed.",
+   "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:214"
+  },
+  {
+   "i": 5,
+   "severity": "NOTE",
+   "title": "Report modules are described as having \"no git\", but the slice report needs a commit-existence check",
+   "description": "Line 99 says the report assembly modules do \"no git\". The slice-report flow (line 146) and the failure table (line 165), however, have the report check `git cat-file -e` before calling `ensure_snapshot`. Say which injected collaborator does this check (the resolver or `ensure_snapshot`), so the fake used in report tests (line 352) covers it.",
+   "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:99"
+  },
+  {
+   "i": 6,
+   "severity": "NOTE",
+   "title": "Fresh-clone durability holds on the same machine only",
+   "description": "The slice plan requires that a range \"still resolves after reflog expiry or in a fresh clone\". Merge-commit landings meet this anywhere because they come from topology. Fast-forward landings survive only in the user-level store on the machine that recorded them. Line 176 states this correctly, and given the architecture's local-store design it is the right reading. Criterion 2 (line 333) could say \"on the same machine\" to make it explicit.",
+   "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:176"
+  }
+ ]
+}

@@ -1,0 +1,96 @@
+{
+ "review": "r07",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "FAIL",
+   "title": "Running the review inside the PR's checkout lets the PR author control the reviewer",
+   "description": "The \"Isolated checkout for tool-enabled reviews\" principle runs the review in a scratch worktree of the PR's head. The doc treats PR title, body and threads as untrusted (\"Prompt inputs from the PR\"). It never says the same about the files in the PR's tree. In the current code, several things load from the review's `cwd`, so in a scratch worktree they all come from files the PR author wrote:\n- `review_client.py:408-418` adds `CLAUDE.md` / `.claude/CLAUDE.md` from `inputs[\"cwd\"]` to the prompt as \"project conventions\".\n- `rules.py:25` picks up rules from `{cwd}/rules/` and then `{cwd}/.claude/rules/`.\n- `review_client.py:336-340` reads `review.max_file_size_bytes` and `review.max_total_injection_bytes` through `get_config(..., cwd=...)`.\n- `data/templates/code.yaml:56` sets `setting_sources: [project]`. The SDK provider passes that through (`providers/sdk/provider.py:78`), so the agent loads `.claude/settings.json` from the PR's tree. That file can define hooks, which are shell commands.\n\nSo a PR can rewrite the reviewer's conventions, tell it to approve, raise the injection limits, and in the worst case run commands on the operator's machine during `sq review pr`. That breaks the doc's own promise to \"never surprise the operator\". The doc needs to state the rule directly: conventions, rules, config and setting sources come from the operator's trusted base (or squadron's defaults), never from the PR head. The worktree is only a tool-read jail. For PR reviews, `setting_sources` must be overridden to exclude `project`.",
+   "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#architectural-principles"
+  },
+  {
+   "i": 1,
+   "severity": "FAIL",
+   "title": "Slice order: `sq review pr` and posting ship before the persistence they need",
+   "description": "The slice list puts `sq review pr` second, with \"full parity with the existing review flags\". That parity includes saving. PR-keyed persistence comes third and is held until 916 and 917 land. So slice 2 can either not save, or save using the fabricated `SliceInfo` pattern the doc explicitly rules out (\"is not extended to PRs\"). Posting (slice 4) renders \"the saved review\", so it also depends on slice 3.\n\nEither move persistence before `sq review pr`, or define slice 2 as display-only with a stated limitation. Also, \"land on `main`\" conflicts with the project's integration-branch rule. It should say \"land on the target\".",
+   "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#anticipated-slices"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "The base ref is never fetched, so merge-base can be wrong",
+   "description": "\"Fetching without checkout\" and \"Base semantics\" only fetch the PR head into a namespaced ref. The merge-base is then taken against whatever local copy of the base exists. In enterprise repos that squadron never planned, local `origin/<base>` is often stale or missing. A stale base adds already-merged commits to the diff, and then neither the parser's diff-membership check (slice 904) nor \"matches what the host displays\" holds. The adapter should fetch the base too, or use the host's `baseRefOid` and fetch that commit.\n\nSeparately, the code's `normalize_diff_spec` (`git_utils.py:390`) produces `<ref>...HEAD`. Reusing it as-is for a PR would diff against the operator's HEAD, not the PR head. The doc should say the range is `base...<namespaced-head-ref>`, built explicitly, and not \"the same semantics `--diff` uses\".",
+   "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#technical-considerations"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "`reviewedSha` is stamped from the operator's HEAD, not the PR head",
+   "description": "The doc says \"the head sha recorded in the artifact is what was reviewed\". But `save_review_result` stamps `reviewed_sha=resolve_reviewed_sha(\".\")` (`persistence.py:515`), which is HEAD of the process directory, i.e. the operator's checkout. Unless the persistence slice explicitly routes the PR record's `head_sha` through, every PR artifact and posted comment will name the wrong commit. `sq review resolve`, which diffs from `reviewedSha`, would then compare against the wrong base. The persistence contract should say where `reviewedSha` comes from for each target type.",
+   "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#technical-considerations"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "\"Archiving, digest, and integrity apply unchanged\" is not true for the out-of-repo location",
+   "description": "`REVIEWS_DIR` is a fixed path relative to the project (`persistence.py:23`). The comment there notes the resolve path finds reviews through that same constant. The code also builds filenames as `{index}-review.{type}.{name}` (`persistence.py:438,497`) and puts `slice:` and `# Review: \u2026 \u2014 slice {index}` in frontmatter and heading. A \"configured squadron data directory\" needs those to take a location parameter, and needs a config key that doesn't exist yet. So the claim that these apply unchanged understates the work.\n\nThe PR-keyed filename is also never defined. It must include host, owner and repo, not just the number: one data directory shared by many repos will otherwise collide on `pr-123`. It must also stay compatible with Context Forge's scan, which expects an index prefix.",
+   "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#envisioned-state"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "`sq pr create` doesn't say whether it pushes, or what it targets outside a `cf` project",
+   "description": "Creating a PR needs the branch on the remote, and `gh pr create` offers to push it. The project rules treat push as a Project Manager-level action. The doc doesn't say whether `sq pr create` pushes, refuses when the branch isn't pushed, or hands off to `gh`'s prompt. That is a write the operator may not expect, which conflicts with \"never surprise the operator\".\n\nBase selection is only defined for squadron projects (read `cf config get git.integration_branch`). It isn't defined for the unplanned repos this initiative targets (no `cf`; is it the host's default branch?). It also skips the per-worktree `integration_branch` case and the rule that an unregistered worktree must stop.",
+   "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#technical-considerations"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "\"Latest saved review\" usually won't exist, and may be out of date",
+   "description": "Before a PR exists, there is no PR-keyed review. On a non-slice branch, `sq review code --diff` warns that the result can't be saved (Current State). So for exactly the enterprise case the doc is motivated by, `sq pr create` has no review to use. The doc also doesn't define how \"latest\" is chosen (by slice index? by file time across slices?). Nor does it require checking the review's `reviewedSha` against the branch HEAD. A review from three commits ago would be cited as \"review provenance\", which breaks the traceability goal. The doc should either make an out-of-date review an explicit, labeled state or refuse to cite it.",
+   "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#envisioned-state"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "Posting doesn't cover comment size limits, degraded reviews or the exact match rule",
+   "description": "\"Posting idempotency and attribution\" leaves out four things:\n- **Size limit.** GitHub caps a comment body at 65,536 characters. A degraded review includes the full raw response (`persistence.py:314-318`) and can easily go over. Neither truncation nor a refusal is specified.\n- **Degraded reviews.** Nothing says whether an UNKNOWN or fallback review may be posted. Posting one publishes \"not a clean review\" text under the operator's name.\n- **Match rule.** \"Updates or supersedes\" is left as a choice. The match rule for finding the prior comment (marker + operator login + same host/repo, with paginated listing) isn't stated. Without the login condition, squadron finds a teammate's squadron comment and gets a 403 on edit.\n- **Moved head.** It isn't said whether a moved head is detected at post time (re-query the head) or only at review time.",
+   "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#technical-considerations"
+  },
+  {
+   "i": 8,
+   "severity": "CONCERN",
+   "title": "Two \"base moved\" behaviours contradict each other",
+   "description": "\"Failure modes are enumerated\" lists \"base moved since resolution\" as a named error with a non-zero exit. \"Base semantics\" says the base \"routinely moves\" and that merge-base handles it, while a moved head is reported in the posted comment. One reads as a failure, the other as normal. The doc should decide which: is a moved base a failure, or only a moved head, and is a moved head a refusal or an annotation?",
+   "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#architectural-principles"
+  },
+  {
+   "i": 9,
+   "severity": "CONCERN",
+   "title": "Too much scope for v1",
+   "description": "Three mechanisms add cost without serving the three core capabilities:\n- **Unresolved review threads as prompt input.** `gh pr view --json` doesn't expose whether a thread is resolved. That needs a GraphQL `reviewThreads` query, with pagination, through `gh api graphql`. It adds a second transport shape to the adapter and more untrusted text to inject.\n- **A \"stable section structure that \u2026 `sq review pr` itself can parse.\"** This creates a parser and a format contract that nothing in this initiative uses. It also has the reviewer trusting claims written in an untrusted PR body.\n- **The `/sq:pr` transport.** Its parity is already guaranteed by \"The CLI is the contract\".\n\nCut thread ingestion and the body parse contract from v1 (title and body are enough intent), and fold the slash-command work into the slices that add each command. That removes most of slice 6 and the GraphQL part of slice 1.",
+   "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#anticipated-slices"
+  },
+  {
+   "i": 10,
+   "severity": "CONCERN",
+   "title": "What happens when the description model call fails is not stated",
+   "description": "\"Description composition\" combines exact, deterministic sections with a one-shot model call. It doesn't say:\n- what happens when the model call fails or returns malformed sections: abort, or create the PR with only the deterministic parts (which would be a silent fallback, against project rules)?\n- where the prompt lives (the template registry, or a new mechanism?).\n- how the \"assert nothing no input supports\" rule from Initiative 360 is enforced or checked, rather than just stated as a goal.",
+   "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#technical-considerations"
+  },
+  {
+   "i": 11,
+   "severity": "NOTE",
+   "title": "Many blocking `gh` subprocess calls per run",
+   "description": "\"`gh` as the transport\" accepts a process boundary per call. One `sq review pr --post` makes about 5\u20137 `gh` calls (resolve, fetch, metadata, threads, identity, list comments, post/patch). If the adapter is synchronous and is called from inside the async review path (`run_review_with_profile`), it blocks the event loop. Under the project's Python rules that must run in an executor or as an async subprocess. The adapter protocol should say whether it is sync or async.",
+   "location": "unverified"
+  },
+  {
+   "i": 12,
+   "severity": "NOTE",
+   "title": "Cross-repo targets in the grammar are undefined",
+   "description": "\"Target grammar\" accepts `owner/repo#n` and full URLs, which can name a repository other than the local one. Resolution only fails on \"no host remote\" or \"more than one\". What happens when the target repo matches none of the local remotes (fetch from a URL? refuse?) is undefined. That affects what the namespaced-ref fetch does.",
+   "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#technical-considerations"
+  }
+ ]
+}

@@ -1,0 +1,82 @@
+{
+ "review": "r07",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Breakdown assumes greenfield work, but the tree already has it",
+   "description": "Task 2.1 says to create `src/migratory_server/bounds_enforcement.py`, and Task 2.3 says to create `tests/test_bounds_enforcement.py`. Both exist in this worktree, and the module already implements `apply_bounds_policy`, `_apply_wrap`, and `_apply_reflect`. `BoundsPolicy` already has `SOFT = \"soft\"` (`src/migratory_server/config.py:23`), so Task 1.1 (\"three variants\") and criterion 1 no longer describe the code. Slice 314 adds `SOFT` (`project-documents/user/slices/314-slice.repulsor-framework.md:42`), and slice 313 defers it (lines 73\u201379). Both frontmatters say `status: complete` (task line 9, slice line 10) while every box is unchecked and Task 5.3 is the step that sets that status. Fix: state the starting commit, mark each \"create\" task as \"verify or adjust\" where the file exists, and say how `SOFT` is handled.",
+   "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:102"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "SimulationManager falls back to the entity manager's bounds when `world_bounds` is omitted",
+   "description": "Task 3.1 (line 186) and slice line 272 both require `world_bounds` as a required keyword argument. The tree declares `world_bounds: WorldBoundsConfig | None = None` and substitutes `entity_manager.world_bounds` when it is `None`. That is the silent fallback CLAUDE.md prohibits. It also makes Task 3.5's call-site updates unnecessary, which the breakdown does not reflect. Fix: make the parameter required and remove the fallback, or write into the breakdown why the fallback is intended.",
+   "location": "src/migratory_server/simulation.py:64-74"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "WRAP can return exactly `width`, which breaks the half-open range the task claims",
+   "description": "Task 2.2 (line 134) says `np.mod` yields values in `[0, width)`. At the float boundary that is false. A tiny negative overshoot such as -1e-15 gives `100.0` for `% 100.0` under Python float modulo, and numpy's `np.mod` follows the same rule. Criterion 7 requires `[0, width)`. The integration assertion (task line 229) would catch this only if an agent happened to land there, which is unlikely in 50 steps. Fix: add a tiny-negative-overshoot case to Task 2.3, and map any value that rounds to `width` back to `0`.",
+   "location": "src/migratory_server/bounds_enforcement.py:59-60"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Config round-trip rests on an unverified claim, and the test asserts less than criterion 5",
+   "description": "Slice lines 225\u2013227 say `yaml.dump` will write the enum as a plain string automatically. `config_to_yaml` calls `dataclasses.asdict` and then plain `yaml.dump`. My understanding of PyYAML is that the full Dumper handles a `str`-subclass enum member through its `object` fallback. That emits a `!!python/object/apply` tag rather than `policy: wrap`. If I am right, Task 1.4's round-trip test fails, and the breakdown has no step to fix it. Criterion 5 also requires reloading to produce an equal `ServerConfig`, but Task 1.4 (line 88) asserts only the policy field. Fix: add a step that emits `policy.value` explicitly. Have the round-trip test compare the whole config and check that the emitted text contains `policy: wrap`.",
+   "location": "src/migratory_server/config.py:679-681"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Commit markers are checkboxes, and five of them are standalone tasks",
+   "description": "The commit points are written as `- [ ] **Commit:** ...` at lines 96, 179, 249, 286, and 325. Each is also its own \"Task X.5/X.6: Commit\" heading. The marker should be a plain `**Commit**:` line. As a checkbox it cannot be ticked in the commit it gates, which conflicts with the \"implement, task-check, then commit\" order. The placement is sound. Each marker follows a tested section, and no commit lands on a broken suite. Fix: turn the five commit tasks into plain `**Commit**:` lines at the end of sections 1\u20135.",
+   "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:96"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Overweight test list and duplicated steps",
+   "description": "The breakdown has 23 tasks and about 30 tests for a slice rated Effort 2/5. The bounds-enforcement file alone lists 18 tests. Redundant items:\n- The single-overshoot cases (lines 155, 156, 159) are covered by the large-overshoot and both-axes cases.\n- The top and bottom reflect cases (lines 166\u2013167) should be one parametrized case with left and right.\n- The parametrized dispatch test (line 171) repeats the per-policy tests.\n- `test_reflect_policy_flips_velocities_at_edges` (line 231) repeats criterion 9 at the unit level.\n- Task 3.5 (full suite) duplicates Task 5.1.\n- Task 5.2 steps 1\u20138 (lines 299\u2013306) restate the slice's Verification Walkthrough (slice lines 394\u2013477). Reference it instead.\n- Tasks 4.1 and 4.2 can merge.\n- Lines 131\u2013132 and 136\u2013139 dictate the `np.mod(..., out=...)` call and per-axis mask code. Criterion 7 requires vectorized, in-place, no Python loops, not these forms.\nCutting the redundant cases brings the bounds tests from about 18 to about 10 and removes about 5 tasks.",
+   "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:150-171"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "Integration-test inputs depend on an engine timestep the task never states",
+   "description": "`test_reflect_policy_flips_velocities_at_edges` places an agent at x=99 with vx=10 and expects one step to cross x=100. That needs 99 + 10\u00b7dt > 100, so dt > 0.1. The OPEN drift assertion (line 228) has the same dependency on \"50 steps\". The task does not give dt, and neither does the slice. Fix: tell the implementer to read dt from the simulation config and size the velocity or step count from it.",
+   "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:231"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "Task 5.2 contradicts criterion 12 and needs a viewer no agent can check",
+   "description": "Step 8 leaves the final `config/test.yaml` policy to the implementer (\"whichever policy you want to keep\"). Criterion 12 (slice lines 387\u2013388) and Task 4.2 (line 272) require `wrap`. Steps 6\u20137 also edit a committed config, and only this step restores it. Steps 5\u20137 need a person watching the viewer, and the task gives no pass condition an agent can check. Fix: make step 8 \"restore `config/test.yaml` to `wrap`; `git diff config/test.yaml` must be empty\". Name who performs steps 5\u20137.",
+   "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:306"
+  },
+  {
+   "i": 8,
+   "severity": "NOTE",
+   "title": "Frontmatter omits slice 309, which the slice names as a prerequisite",
+   "description": "The slice's cross-slice notes say 309 \"must be complete (it is)\" (slice lines 335\u2013336), and Task 3.5 cites 309. The task frontmatter lists only 302 and 303. The slice's own frontmatter (line 6) has the same omission. Add 309, or state why it is not a dependency.",
+   "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:6"
+  },
+  {
+   "i": 9,
+   "severity": "NOTE",
+   "title": "The default OPEN value is written in two places",
+   "description": "Task 1.2 sets `policy: BoundsPolicy = BoundsPolicy.OPEN` (line 62). Task 1.3 resolves a missing key to `BoundsPolicy.OPEN` again (line 71). Criterion 4 makes the missing-key default a requirement, so it is not a silent fallback. CLAUDE.md still says a default value should be defined once. The tree repeats the same pattern (`config.py:52` and `config.py:199-200`). Fix: have the loader pass the dataclass default, or name one constant.",
+   "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:71"
+  },
+  {
+   "i": 10,
+   "severity": "NOTE",
+   "title": "No load-test task; the slice's performance claim is rationale, not a requirement",
+   "description": "The slice says the OPEN path costs \"negligible\" time. It states no threshold and no NFR, so no `tests/load/` task is required. If the Project Manager treats that claim as an NFR, a load test and CI gate would need to be added.",
+   "location": "project-documents/user/slices/313-slice.world-bounds-policy.md:277-279"
+  }
+ ]
+}

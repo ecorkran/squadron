@@ -1,0 +1,75 @@
+{
+ "review": "r02",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "FAIL",
+   "title": "Bounds sync-back uploads positions only; REFLECT and SOFT change velocities too",
+   "description": "`apply_bounds_policy()` is called with both `positions` and `velocities` (lines 186-191). Slice 140's contract says bounds enforcement \"mutates positions/velocities in place\" (`140-slice.tick-return-type-contract.md:130-139`). REFLECT changes velocity by definition, and SOFT acts through velocity. Yet the sync-back only ever sends positions (`notify_positions_modified(positions)`, `upload_positions()`). On the GPU path, a reflected agent keeps its outward velocity in GPU state, so it pushes out of bounds and gets re-reflected every tick. Its motion no longer matches the CPU path.\n\nThe planned tests cannot catch this. `apply_bounds_policy` re-clamps the downloaded arrays every tick, so test 7 (line 315: \"positions remain within `[0, world_width]` on the following tick\") and A4 (line 330: \"finite, in-bounds\") pass even with no sync-back at all.\n\nFix:\n- Sync back velocities as well as positions for every non-OPEN policy, e.g. `notify_state_modified(positions, velocities)` plus an `upload_velocities()`.\n- Replace test 7 with a check of the mechanism itself: after a wrap or reflect, the GPU state read back before the next kernel launch should equal the CPU-corrected arrays. Better still, compare against the CPU path over a few ticks for REFLECT.",
+   "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:203-227"
+  },
+  {
+   "i": 1,
+   "severity": "FAIL",
+   "title": "GPU path leaves `EntityManager.state` stale, but spawn/despawn re-uploads from it",
+   "description": "On the CPU path, `TickResult` is a view into `entity_manager.state`, so that state stays current. On the GPU path, the result comes from `export_positions()`/`export_velocities()` (lines 122-123), which are freshly downloaded arrays. Nothing in the design writes them back into `entity_manager.state`. When the count changes, `sync_from_entity_manager()` (lines 89-90, 178-179) re-uploads that stale CPU state, and every existing agent jumps back to its setup-time position.\n\nAnything else that reads `entity_manager.state` is affected the same way. That includes the environment `pre_tick`/`post_tick` hooks and the spawn/despawn logic itself.\n\nRelated gaps the design leaves open:\n- **Field size:** Quadrants fields are sized at allocation (lines 142-148: `n` from `entity_manager.count`). The design never says whether a count increase reallocates `GpuAgentState` and the spatial-hash buffers, or whether they are allocated at a maximum capacity.\n- **Empty start:** `setup()` runs at server startup (lines 231-244), possibly before any agents spawn, i.e. N=0. The behaviour for that case is not specified.\n- **Ordering:** if a spawn and a dirty-positions flag both happen on the same tick, the design does not say which upload wins.\n\nFix: name one owner for agent state on the GPU path. Either copy the downloaded arrays back into `entity_manager.state` each tick (the cost is the same order as the download), or have spawn/despawn act on GPU-side state. Then specify the allocation and capacity strategy.",
+   "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:168-201"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Arch fallback works by platform name, so the default config crashes on Linux without CUDA",
+   "description": "Scope (line 33) and A7 (line 336) promise that a host \"with no Metal and no CUDA starts successfully with `backend: quadrants`\". But `_select_arch()` returns `qd.cuda` for any Linux host, without checking that CUDA is present. Open Notes (line 382) then says that if `qd.init()` raises because the \"CUDA driver [is] absent\", the server exits.\n\nSo with the default config, a CPU-only Linux box crashes. That includes CI runners and the slice 147 \"Linux, no Metal\" host. The warning text \"No supported GPU detected\" (line 109) is also inaccurate, because no detection happens.\n\nFix: actually detect the arch, by trying `qd.init(arch=\u2026)` and falling back to `qd.cpu` with the WARNING on failure. Or narrow A7 and the scope line to what the code really guarantees.",
+   "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:98-117"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "\"CPU default\" walkthrough contradicts the stated default",
+   "description": "Step 1 says \"Remove the `compute:` block entirely (or set `backend: cpu`)\", and step 2 expects \"No GPU initialization should appear in logs.\" But the default is `quadrants` (lines 33, 61, 309, 324), so removing the block turns GPU initialization on. Fix: delete the \"remove the block\" option and retitle the section, e.g. \"Explicit CPU backend\".",
+   "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:358-362"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "`TickResult.from_quadrants_fields` is not in the slice 140 contract or in Files Changed",
+   "description": "The tick-return contract names the Quadrants factory `from_taichi_fields` (`140-slice.tick-return-type-contract.md:162-164`). Slice 145 says the fused tick uses `from_numpy_state` (`145-slice\u2026:330-332`). This slice calls `TickResult.from_quadrants_fields(...)` (lines 123, 274), but the Files Changed table (lines 286-299) has no change to the `TickResult` module.\n\nFix: say which existing factory is used, or add the new factory under the reserved contract name and list the file.",
+   "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:123"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Production code still depends on the bench package for the fused kernels",
+   "description": "Moving `GpuAgentState` to `migratory.gpu` is meant to \"eliminate the production\u2192bench import dependency\" (line 383). But `GpuSimulationDriver.step()` also calls `build_spatial_hash` and `fused_force_integrate_kernel` (lines 119-122). Slice 145 tests those under `tests/bench/`, and this slice does not move them. If they stay under `bench/backends`, `migratory_server` imports from bench anyway.\n\nThe document also contradicts itself on bench changes:\n- Line 296 updates the import in `quadrants_fused_backend.py`.\n- Line 301 says that file is \"**not changed**\".\n- Line 40 puts \"any changes to the bench harness\" out of scope.\n\nFix: move the kernels together with the state, or state the remaining dependency explicitly. Then make the three statements agree.",
+   "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:286-301"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "Per-tick transfer exceeds slice 145's budget, and the Tier 2 gate does not fix the bounds policy",
+   "description": "The plan defines slice 145 as \"no per-tick host\u2194device crossings except a single position download\". This slice downloads positions, velocities and profile indices every tick (line 122). For non-OPEN policies it also adds a position upload (line 207), and the FAIL finding above means velocities must be uploaded too.\n\n`profile_indices` only changes on spawn/despawn, so it could be cached on the host. The transfer estimate on line 384 (~200 KB at N=50k) also undercounts: one 2-D f32 array at 50k agents is about 400 KB.\n\nThe A6 gate (\u226560 TPS at N=50k) does not say which bounds policy it runs under. It could pass under OPEN while the production policy pays the extra round-trip. Fix: pin the gate to the production default bounds policy, and drop the per-tick `profile_indices` download.",
+   "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:318-320"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "`count_changed_since_last_tick()` misses equal-count churn and puts tick state in EntityManager",
+   "description": "Comparing counts does not detect a spawn and a despawn of the same size within one tick. Agent state changes but the count does not, so the GPU state is never re-synced. The helper also makes `EntityManager` remember \"the previous `step()` call\", which is a query with side effects tied to `SimulationManager`'s tick cadence.\n\nFix: give `EntityManager` a mutation generation counter that spawn/despawn increments. The driver records the last generation it uploaded.",
+   "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:201"
+  },
+  {
+   "i": 8,
+   "severity": "CONCERN",
+   "title": "No failure handling for a GPU error or hang during a tick",
+   "description": "The design covers `qd.init()` failure (exit at startup), and says a GPU failure after startup is \"fatal to the process\". But it does not say how the server reaches that point:\n- **Kernel or `qd.sync()` exception:** the design does not say whether the tick loop re-raises and exits, or catches, logs and continues. If it continues, it would log the same error every tick.\n- **Hang:** if `qd.sync()` hangs (driver hang, GPU watchdog reset), nothing bounds it. If `step()` runs on the event loop, the WebSocket server freezes silently.\n\nFix: state that exceptions in `step()` are logged at ERROR and terminate the process. Name how a hang becomes visible, e.g. a tick-duration watchdog that logs at WARNING, or an explicit statement that hangs are out of scope with the reason.",
+   "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:382"
+  },
+  {
+   "i": 9,
+   "severity": "NOTE",
+   "title": "Test section contradicts itself",
+   "description": "\"All tests are CPU-only\" conflicts with \"tests run on Metal\u2026 on CUDA they run on CUDA\". \"No mock of the GPU\" conflicts with test 6, which asserts that `sync_from_entity_manager()` \"is called\" and so needs a spy. The `arch` property is documented as returning `\"cuda\"` or `\"metal\"` on line 252 but includes `\"cpu\"` on line 224.",
+   "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:307-314"
+  }
+ ]
+}

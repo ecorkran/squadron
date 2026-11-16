@@ -1,0 +1,19 @@
+{
+ "review": "r06",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "D9 mitigation skips the `gemini` profile, the one most likely to report false substitutions",
+   "description": "Plan Part C (slice plan line 443) says design \"must decide what counts as 'differs' for providers that return a dated or routed variant of the requested id \u2026 so an alias resolving to its own snapshot is not reported as a substitution.\"\n\nD9 chooses an exact rule and relies on Phase 6 to catch false positives: it will capture \"one review per configured profile (sdk, openai, openrouter, local)\". The same four profiles appear in Verification Walkthrough step 6 (lines 348\u2013353) and in the Mitigation Strategies (line 363). `gemini` is missing from all three, but it is a registered profile (`ProviderType.GEMINI`, with `[aliases.gemini]` in `data/models.toml`). Slice 906 also lists it in the six-profile matrix.\n\nGemini is the profile most likely to break the exact rule. Its default aliases use preview and variant ids such as `gemini-3.1-pro-preview-customtools` and `gemini-3-flash-preview`. If its OpenAI-compatible endpoint reports a shortened, prefixed or base form of the id, every gemini review will write `requestedModel:` and log a WARNING. It would also take on a new metrology judge identity. That is the risk the design names at line 359, on a profile it never checks.\n\nFix: add `gemini` to the D9 capture list, walkthrough step 6, and the mitigation. Better, derive the list from the registered profiles rather than writing it out by hand, so a new profile can't be skipped again.",
+   "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:185"
+  },
+  {
+   "i": 1,
+   "severity": "NOTE",
+   "title": "\"Not reported\" doesn't separate Codex from a stamping regression",
+   "description": "D11 treats an empty `answering_models` the same way for every provider: a Run Digest line and no WARNING. For Codex that is right. For the SDK and OpenAI-compatible providers, D8 says they always report, so an empty list there means the stamping broke. The artifact would still state the gap, so this isn't a silent fallback. But the case is never logged and no test asserts it.\n\nA cheap fix: log a WARNING only when a provider that is supposed to report returns nothing. Not required by the slice plan.",
+   "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md#d11--not-reported-keep-the-requested-id-say-so-in-the-artifact"
+  }
+ ]
+}

@@ -1,0 +1,33 @@
+{
+ "case": "squadron-401-tasks",
+ "flaws": [
+  {
+   "id": "F1",
+   "text": "Design Success Criterion 10 says that when `DUPLICATION_MAX_TOKENS` is passed, `duplicated_lines` is `tool_failed` \"and its other metrics are unchange",
+   "hits": {
+    "r01": [
+     3
+    ],
+    "r02": [
+     5
+    ],
+    "r03": [
+     4
+    ],
+    "r04": [
+     5
+    ],
+    "r05": [
+     3
+    ],
+    "r06": [
+     4
+    ],
+    "r08": [
+     3
+    ]
+   }
+  }
+ ],
+ "note": "r02 finding 5 is a bundled finding but names the SC10 other-metrics gap explicitly, so counted. r07 has no finding on this flaw."
+}

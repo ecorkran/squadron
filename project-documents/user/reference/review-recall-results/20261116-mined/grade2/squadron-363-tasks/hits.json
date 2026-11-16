@@ -1,0 +1,126 @@
+{
+ "case": "squadron-363-tasks",
+ "flaws": [
+  {
+   "id": "F1",
+   "text": "SC4: dropped topics (why-now, audience evolution, methodology preference) \"appear nowhere in the document, neither as content nor as gap markers\". Tas",
+   "hits": {
+    "r01": [
+     1
+    ],
+    "r02": [
+     2
+    ],
+    "r03": [
+     1
+    ],
+    "r04": [
+     0
+    ],
+    "r05": [
+     4
+    ],
+    "r06": [
+     0
+    ],
+    "r07": [
+     0
+    ],
+    "r08": [
+     0
+    ]
+   }
+  },
+  {
+   "id": "F2",
+   "text": "SC7: with the guide \"absent, unreadable, or missing the expected section title\" the flow stops loudly (and names the setup step when the guide tree is",
+   "hits": {
+    "r01": [
+     6
+    ],
+    "r02": [
+     5
+    ],
+    "r03": [
+     3
+    ],
+    "r04": [
+     1
+    ],
+    "r05": [
+     5
+    ],
+    "r06": [
+     2
+    ],
+    "r07": [
+     4
+    ],
+    "r08": [
+     4
+    ]
+   }
+  },
+  {
+   "id": "F3",
+   "text": "SC8: \"mechanical refillability for augment\". Task 6.2 authors it; Task 8.4 checks default stop, the dated subheading and byte identity of populated se",
+   "hits": {
+    "r01": [
+     1
+    ],
+    "r02": [
+     5
+    ],
+    "r03": [
+     4
+    ],
+    "r04": [
+     2
+    ],
+    "r05": [
+     6
+    ],
+    "r06": [
+     3
+    ],
+    "r07": [
+     5
+    ],
+    "r08": [
+     4
+    ]
+   }
+  },
+  {
+   "id": "F4",
+   "text": "SC10: \"every `[INFERRED]` sentence satisfies the checkable rule\". Task 8.1 checks only that the provenance inferred-claims line exists; no task audits",
+   "hits": {
+    "r01": [
+     1
+    ],
+    "r02": [
+     5
+    ],
+    "r03": [
+     5
+    ],
+    "r04": [
+     0
+    ],
+    "r05": [
+     4
+    ],
+    "r06": [
+     1
+    ],
+    "r07": [
+     0
+    ],
+    "r08": [
+     0
+    ]
+   }
+  }
+ ],
+ "note": "r01 idx6 and r02 idx5 are bundled low-severity lists that still name the SC7/SC8/SC10 gaps specifically, counted as hits. r04 idx1 covers SC7 but also other stops; counted."
+}

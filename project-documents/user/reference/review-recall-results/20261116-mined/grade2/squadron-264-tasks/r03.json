@@ -1,0 +1,61 @@
+{
+ "review": "r03",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Success criterion 6 (live non-SDK model demo) is left open while the slice is marked complete",
+   "description": "Success criterion 6 has two parts: a materialized `cf_workflow_status` executor returns real status, and a dispatch with a tool-capable non-SDK model calls `cf_build_context` (walkthrough \u00a74). Tasks 8.2 and 9.1 cover the first part. Task 9.3 says the second part \"remains open\" but still marks the task file and slice design `status: complete`. That marks the slice complete while one of its stated criteria is unmet. Either add a task item for the \u00a74 run that is written `BLOCKED:` with the reason (the `sq run` CLAUDECODE guard) and left unchecked, or don't set `status: complete` until it has run. Saying it in prose is not enough.",
+   "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md:289-292"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "The protocol/transport error row of the failure-mode table has no test",
+   "description": "The slice design says \"Each row above has a test asserting the observable signal.\" Task 4.3 implements the `McpError` / closed-stream path. Task 5.4 lists WARNING assertions for only three paths: timeout, server isError and spawn failure. `test_unknown_tool_name` (5.1) asserts an error result but no WARNING, and it is unclear whether that call even goes down the `McpError` path. Add one test that forces a transport error, for example a fake-server tool that exits mid-call or a `crash` tool. It should assert both `is_error=True` and the `caplog` WARNING.",
+   "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md:173-176"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "The non-text-block mapping rule is implemented but never tested",
+   "description": "Success criterion 2 requires results to map \"per the Result mapping rules\", and one of those rules is that non-text blocks are noted by type in the content, not dropped. Task 4.2 implements it. However, the Task 3 fake server only has `echo`, `fail`, `sleep` and `empty`, so no tool returns a non-text block (an `ImageContent`, for example) or several text blocks. As a result, neither the type note nor the `\\n` join is tested. Add one `mixed` tool to the fake server and one test in Task 5.1. Don't add separate tests per rule.",
+   "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md:102-111"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "It commits after every task, including at untested points, and the commit steps are checkboxes",
+   "description": "The commit protocol commits at the end of all nine tasks, so there is a commit after every task. Two of those commits hold code that has no tests yet:\n- Task 4 commits `mcp_bridge.py` (line 152) before Task 5 tests it.\n- Task 6 commits `cf_tools.py` (line 220) before Task 7 tests it.\n\nTask 1 likewise commits config keys before Task 2 tests them. Each commit step is also a `[ ]` checkbox inside the success criteria rather than a plain `**Commit**:` line. Replace them with plain `**Commit**:` markers at three tested points:\n- after Task 2, or after Task 5 if the tasks are merged as suggested below\n- after Task 7\n- after Task 9",
+   "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md:57-61"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Two tasks are too small to stand alone for a slice of effort 2/5",
+   "description": "- **Tasks 1 and 2:** Task 1 adds two config keys and Task 2 tests their defaults. Each is effort 1/5, and the work is a few lines. Merge them into one task.\n- **Task 3:** the fake server exists only to support Task 5. Make it the first sub-item of Task 5, or of Task 4 as the smoke peer.\n\nThese merges take the file from nine tasks to seven with no loss of coverage. The rest of the step detail fits the design.",
+   "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md:70-120"
+  },
+  {
+   "i": 5,
+   "severity": "NOTE",
+   "title": "Who sets `env=get_default_environment()` is stated two ways",
+   "description": "Task 4.1 says the bridge uses `get_default_environment()` as the spawn env, and in the same item says callers build `StdioServerParameters`. Task 6.3 (lines 205-207) has the caller pass `env=get_default_environment()`. A junior implementer may apply it in both places, or in neither. Pick one owner. The caller in Task 6.3 matches \"the bridge does not read config\" and keeps the bridge generic.",
+   "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md:129-131"
+  },
+  {
+   "i": 6,
+   "severity": "NOTE",
+   "title": "Success criterion 3's \"an executor\" round-trip is tested only at the bridge level",
+   "description": "Success criterion 3 says \"an executor returns the server's text\" against the fake server. Task 5 round-trips `call_mcp_tool` directly, and Task 7 mocks the transport, so no single test runs a `cf_*` executor against a real stdio peer. Together, Tasks 5 and 7.3 cover what that test would prove. The Task 8.2 live round-trip covers the real path wherever CF is available. This is acceptable as written; the note is only to make the reading of the criterion explicit.",
+   "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md:156-163"
+  },
+  {
+   "i": 7,
+   "severity": "NOTE",
+   "title": "Task 9.4 merges the branch as part of implementation",
+   "description": "The worktree's CLAUDE.md allows a merge \"when its implementation is done\", so this task follows it. The parent squadron CLAUDE.md is stricter: merging happens only in Phase 7, after code review passes, and must never be written as a task. If the parent rules govern this slice, delete 9.4 and change the Task 9 success criteria to \"committed on the slice branch\".",
+   "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md:293-295"
+  }
+ ]
+}

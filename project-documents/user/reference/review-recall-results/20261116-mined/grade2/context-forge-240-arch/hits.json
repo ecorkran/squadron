@@ -1,0 +1,117 @@
+{
+ "case": "context-forge-240-arch",
+ "flaws": [
+  {
+   "id": "F1",
+   "text": "Related Work says 180 \"Established worktree-scoped config resolution\" and that `workflow.review_*` should resolve at worktree scope \"using the resolut",
+   "hits": {
+    "r03": [
+     13
+    ],
+    "r04": [
+     8
+    ],
+    "r06": [
+     9
+    ],
+    "r07": [
+     13
+    ]
+   }
+  },
+  {
+   "id": "F2",
+   "text": "Renumbering of the `getNext()` cascade is assigned to two different slices: Anticipated Slices bullet 1 (discovery and config keys) \"Includes renumber",
+   "hits": {
+    "r02": [
+     11
+    ],
+    "r05": [
+     11
+    ],
+    "r06": [
+     12
+    ],
+    "r07": [
+     12
+    ]
+   }
+  },
+  {
+   "id": "F3",
+   "text": "The `review_unknown_as` value set is inconsistent: the config block gives `\"fail\"`; Technical Considerations uses `review_unknown_as = \"concern\"` (sin",
+   "hits": {
+    "r01": [
+     5
+    ],
+    "r02": [
+     9
+    ],
+    "r03": [
+     3
+    ],
+    "r04": [
+     4
+    ],
+    "r05": [
+     2
+    ],
+    "r06": [
+     6
+    ],
+    "r07": [
+     6
+    ],
+    "r08": [
+     3
+    ]
+   }
+  },
+  {
+   "id": "F4",
+   "text": "\"V1 implements only the four slice-level transitions\", but the four configured gates are `pre-slice-plan` (initiative-level, stated deferred in the sa",
+   "hits": {
+    "r01": [
+     0
+    ],
+    "r02": [
+     1
+    ],
+    "r04": [
+     2
+    ],
+    "r05": [
+     0
+    ],
+    "r06": [
+     1
+    ],
+    "r07": [
+     1
+    ],
+    "r08": [
+     0
+    ]
+   }
+  },
+  {
+   "id": "F5",
+   "text": "Technical Considerations: \"`getNext()` uses integer comments (Priority 1-7)\" and renumbering is needed \"to avoid fractional priorities\". `WorkflowNavi",
+   "hits": {
+    "r04": [
+     12
+    ],
+    "r05": [
+     11
+    ],
+    "r06": [
+     12
+    ],
+    "r07": [
+     12
+    ]
+   }
+  }
+ ],
+ "note": "F1: r07-13 counted though it only partly challenges the 180 citation (names ConfigManager lacks a worktree layer); r01-11 and r08-6 excluded since they accept the claim. F2: r02-11 is a borderline hit (says renumbering belongs in the gate slice, not slice 1). F4: r03-0 excluded because it does not mention the four-vs-three count."
+}

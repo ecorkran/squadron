@@ -1,0 +1,117 @@
+{
+ "review": "r05",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "FAIL",
+   "title": "The tick return type contract is called \"the central architectural decision\" but is never made, and two of its three options break the stated boundary",
+   "description": "The Overview says this document \"defines the shared boundary \u2014 the tick return type contract.\" Technical Considerations then lists options (a), (b) and (c) and ends with \"The architecture should support all three behind an abstraction, with the choice made per-platform.\" That is not a contract. It postpones the one decision this document exists to make.\n\n- Option (b) returns Quadrants fields. The document itself says this \"leaks the compute substrate into the server.\" That breaks the Design Goal \"the world server should not need to know whether forces are computed by NumPy or Quadrants.\"\n- Option (c) uses DLPack, which needs every consumer to support it, including the world server's serializer, delta encoder and culler. So \"behind an abstraction\" doesn't actually hide anything. The server still has to branch on what kind of buffer it got.\n- Building and testing three return paths when only one is needed per tier is over-engineering, and it violates the project rule \"Always resist adding complexity.\"\n\nWhat to do: pick (a), returning host NumPy arrays, for Tiers 1\u20133. State what would have to happen before revisiting it, for example a measured PCIe copy cost above X ms at 250k on CUDA. Cut \"support all three.\"",
+   "location": "project-documents/user/architecture/140-arch.simulation-scaling.md#technical-considerations"
+  },
+  {
+   "i": 1,
+   "severity": "FAIL",
+   "title": "The \"same interfaces\" claim conflicts with keeping data on the GPU. `SpatialQuery` and `BulkForce` would have to change",
+   "description": "The Design Goals say \"The Quadrants substrate operates behind the existing `SpatialQuery` and `BulkForce` interfaces,\" and Related Work says the 100-arch interfaces are optimized \"but [this initiative] does not change\" them. Those interfaces are NumPy array-in/array-out: spatial query produces CSR arrays, and each `BulkForce` takes and returns arrays.\n\nIf a Quadrants spatial hash sits behind the unchanged `SpatialQuery`, its CSR output has to be copied to host NumPy, then copied back to the device for the Quadrants force kernels, then copied again for integration. That is several transfers per tick. It defeats the Tier 2 claim that \"all forces, spatial queries, and integration run as compiled GPU kernels.\"\n\nThe incremental slice order makes this worse. \"Quadrants spatial kernel\" ships before \"Quadrants force kernels,\" so the mixed CPU/GPU pipeline is exactly what runs in the meantime. Keeping state resident on the GPU needs one of two things: device-resident field types in the interfaces, or a separate coarse-grained \"GPU pipeline\" backend that replaces the whole tick. Either one changes 100-arch. The document has to choose, and it has to stop saying the interfaces are unchanged.",
+   "location": "project-documents/user/architecture/140-arch.simulation-scaling.md#design-goals"
+  },
+  {
+   "i": 2,
+   "severity": "FAIL",
+   "title": "Metal has no float64, so the \"verifiable against NumPy\" fidelity goal has no workable definition",
+   "description": "The Design Goals require that \"Every optimization must produce outputs verifiable against the current NumPy implementation,\" and that Metal be a first-class backend. Metal compute has no float64 support. 100-arch (State serialization boundary) says \"float64 may be preferred for simulation precision.\"\n\nA Quadrants Metal port therefore has to run in f32, while the NumPy and Numba references may run in f64. Flocking dynamics are chaotic, so f32 and f64 trajectories will diverge within a few dozen ticks no matter how correct the port is.\n\nThe document doesn't define what \"verifiable\" means:\n\n- per-tick force-vector tolerance on a frozen state, or\n- statistical behavior metrics (polarization, cluster count, nearest-neighbor distribution).\n\nWithout that definition the regression requirement at each tier transition can't be enforced. The internal precision decision for the GPU tiers also needs to be stated explicitly.",
+   "location": "project-documents/user/architecture/140-arch.simulation-scaling.md#design-goals"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "GPU and parallel kernels break the replay determinism that 300-arch depends on",
+   "description": "\"Staggered neighbor updates and determinism\" says \"Determinism within a given stagger configuration should still hold.\" That ignores two sources of nondeterminism the plan introduces:\n\n- **GPU spatial hash:** the parallel radix sort plus gather produces neighbor lists in nondeterministic order.\n- **Float accumulation:** atomic float adds in Quadrants kernels, and `prange` reductions if Numba runs with `parallel=True`, sum in a different order each run.\n\n300-arch (Logging, and \"Logging format and replay fidelity\") relies on a deterministic tick so it can log only the initial state plus nondeterministic inputs. Once the GPU tiers land, replay either needs full-state snapshot logging or deterministic kernels (stable sort, fixed-order segmented reduction over CSR). The document has to pick one. Otherwise replay will silently break.",
+   "location": "project-documents/user/architecture/140-arch.simulation-scaling.md#technical-considerations"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Delta compression conflicts with 300-arch's backpressure drops, and the compression figure is wrong",
+   "description": "\"Delta compression and state representation\" says \"The client reconstructs by accumulating deltas onto its last-known positions.\" 300-arch (Client connection lifecycle) handles slow clients with \"per-client send queues with backpressure-driven drops.\" Dropping one delta frame corrupts that client's state permanently, because every later delta is applied to the wrong base. Nothing in the design notices or repairs this.\n\nMissing pieces:\n\n- **Keyframes and resync:** periodic full keyframes, or sequence numbers with a resync request.\n- **Per-client baseline:** the server must compute deltas against each client's *last acknowledged quantized* state, not the previous true position. Otherwise quantization error builds up without bound.\n- **Stream-rate interaction:** with sim at 60 Hz and stream at 30 Hz, a delta covers two ticks, which narrows the int16 range further.\n\nThe numbers are also wrong. \"~32\u00d7 compression over float32 positions\" is incorrect: int16 against float32 is 2\u00d7 per component. The int16 range at 1/1024 units per LSB is \u00b132 units per frame, and the document never checks that against maximum agent speed times the stream interval.",
+   "location": "project-documents/user/architecture/140-arch.simulation-scaling.md#technical-considerations"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Frustum culling and delta compression interact, but the culling design leaves that out",
+   "description": "Once culling is on, each client gets a different, changing subset of agents. That means:\n\n- an agent entering the view needs a full position, not a delta;\n- an agent leaving the view needs an explicit removal;\n- delta baselines must be tracked per client and per agent.\n\nThis is a stateful per-client replication system, not \"layered on top of whatever the engine produces,\" as Envisioned State describes it.\n\nThe cost isn't covered either. At 1M agents, culling for each client on each stream frame inside the Python world server is a full O(N) pass on the CPU. With multiple clients, that pass is repeated once per client. The same applies to the per-agent delta encoding. The document doesn't say where culling runs:\n\n- **On the CPU in the world server:** it needs a cost budget.\n- **On the GPU:** it moves into the engine and crosses the boundary that \"The wire is a separate problem\" is meant to keep.",
+   "location": "project-documents/user/architecture/140-arch.simulation-scaling.md#technical-considerations"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "Numba kernels that hold the GIL will stall the asyncio loop under 300-arch's executor model",
+   "description": "300-arch (Asyncio execution model) runs `sim.step` on a single-worker `ThreadPoolExecutor`. It only gets real I/O concurrency because \"NumPy releases the GIL.\" Numba `@njit` functions keep the GIL unless they are compiled with `nogil=True`. Slice 118 (Numba Force JIT) replaces GIL-releasing NumPy calls with Numba kernels. Without `nogil=True`, a 3+ ms force pass blocks the event loop, which brings back the slice-315 SNAPSHOT/TERRAIN send stalls.\n\nFirst-call JIT compilation also causes a stall of several seconds on the first tick, unless `cache=True` is set or the kernels are compiled ahead of time at startup.\n\nNeither point is in the document. Both should be constraints on slice 118. A similar unaddressed constraint applies to Quadrants: process-global runtime initialization, and kernel launches from the `sim` worker thread instead of the main thread.",
+   "location": "project-documents/user/architecture/140-arch.simulation-scaling.md#anticipated-slices"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "300-arch's process-separation inflection point and multi-resolution plan are ignored",
+   "description": "300-arch says that when the thread-pool model binds, \"the answer is a separate simulation process with shared-memory IPC,\" and calls that an initiative. 100-arch (Multi-resolution simulation and aggregation) says that \"beyond the tens-of-thousands range, not all entities need full behavioral evaluation every tick.\" It requires the tick to accept partial subsets and heterogeneous aggregate neighbors.\n\nDocument 140 scales to 2M fully simulated agents and mentions neither. Both have direct consequences:\n\n- **Process separation:** shared-memory IPC is effectively a fourth option for the tick return type contract, and the most likely one at Tier 3 and above.\n- **Partial subsets:** the GPU spatial hash, staggered neighbor caching, and \"full tick on GPU\" pipeline must all handle evaluating a subset while the whole population stays queryable.\n\nThe document should either say these are compatible and how, or say it supersedes them.",
+   "location": "project-documents/user/architecture/140-arch.simulation-scaling.md#envisioned-state"
+  },
+  {
+   "i": 8,
+   "severity": "CONCERN",
+   "title": "Staggered neighbor caching ignores entity lifecycle and index stability",
+   "description": "Slice 119 caches neighbor lists across ticks. 300-arch (Entity lifecycle events) allows `EntityManager.spawn()` and `remove()` at step 4 of every tick. Any removal or array compaction leaves cached CSR indices pointing at the wrong agents, and newly spawned agents have no neighbors until their stagger phase comes around.\n\nThe document doesn't say whether lifecycle events force a full refresh, patch the cache, or are blocked. It also doesn't address stale neighbors under fast relative motion. Separation forces computed from a neighbor list up to k ticks old allow agents to pass through each other at high closing speeds. The refresh period needs a stated bound tied to maximum speed and query radius.",
+   "location": "project-documents/user/architecture/140-arch.simulation-scaling.md#technical-considerations"
+  },
+  {
+   "i": 9,
+   "severity": "CONCERN",
+   "title": "Moving from cKDTree KNN to a GPU radius hash changes behavior, which conflicts with the fidelity goal",
+   "description": "The current backend is `cKDTree.query k=13`, a fixed-k nearest-neighbor query. The GPU spatial hash described is a cell-gather, which naturally returns a variable number of neighbors within a radius. The two neighbor sets differ: in dense regions KNN caps at 13, while radius-gather returns everything nearby. That changes force magnitudes and emergent behavior.\n\nTo keep k=13 semantics on the GPU, the kernel has to do a per-agent top-k selection over the gathered candidates. That is the branch-heavy work the section says GPUs handle badly. The document should state which semantics the GPU tier keeps, and accept the behavioral change if it switches to radius-based neighbors.",
+   "location": "project-documents/user/architecture/140-arch.simulation-scaling.md#technical-considerations"
+  },
+  {
+   "i": 10,
+   "severity": "CONCERN",
+   "title": "The wire protocol baseline contradicts 300-arch and its own arithmetic",
+   "description": "Current State says \"The wire protocol is currently uncompressed JSON over WebSocket\u2026 approximately 84 KB/tick (24 bytes \u00d7 3,500 agents).\" Twenty-four bytes per agent is six raw float32 values, a binary layout. JSON text for six floats per agent is several times larger.\n\n300-arch (State representation and serialization) already specifies raw float buffers with a message-type-byte framing protocol. Tier 2's \"Binary WebSocket replaces JSON\" is therefore either already done or based on a wrong baseline. All the bandwidth projections for Tiers 2 and 3 depend on this baseline, so the real current format has to be confirmed.",
+   "location": "project-documents/user/architecture/140-arch.simulation-scaling.md#current-state"
+  },
+  {
+   "i": 11,
+   "severity": "CONCERN",
+   "title": "Tiers 4\u20135 bring in components with no owner, no slices, and a scope conflict",
+   "description": "Tier 4 offers a \"server-side render path (Vulkan framebuffer \u2192 H.264 stream),\" and Tier 5 depends on it. Scope explicitly excludes \"viewer/client rendering optimization\" and \"network hardware decisions.\" Anticipated Slices has nothing for server rendering, video encoding, or the dedicated transport, and none of the three initiatives (100, 300, 140) owns them.\n\nA server-side renderer would also need the world server, or a new process, to own a GPU render context next to the compute context. That is a large architectural change, but it appears here as one clause. There is also no budget estimate showing that 2M agents at 60 TPS on CUDA is reachable.\n\nWhat to do: cut Tiers 4 and 5 from this architecture to a \"future direction\" note. Commit only to Tiers 1\u20133, which the slices actually cover.",
+   "location": "project-documents/user/architecture/140-arch.simulation-scaling.md#envisioned-state"
+  },
+  {
+   "i": 12,
+   "severity": "CONCERN",
+   "title": "Biome terrain shading is out of scope but is scheduled anyway",
+   "description": "Scope excludes \"viewer/client rendering optimization.\" \"Biome terrain shading is viewer-only\" then says it \"should ship before or alongside the 50k milestone.\" No slice is listed and no initiative owns it. It belongs in the viewer initiative's plan. Remove it here, or move it to Related Work as a dependency of the demo milestone.",
+   "location": "project-documents/user/architecture/140-arch.simulation-scaling.md#technical-considerations"
+  },
+  {
+   "i": 13,
+   "severity": "NOTE",
+   "title": "Slice order contradicts the \"algorithmic wins before constant-factor wins\" principle",
+   "description": "Architectural Principles say \"Staggered neighbor updates (algorithmic) before Numba JIT (constant-factor).\" The slices are numbered 118 for Numba Force JIT and 119 for Staggered Neighbor Updates, and Tier 1 lists Numba first. Either renumber the slices or drop the principle.",
+   "location": "project-documents/user/architecture/140-arch.simulation-scaling.md#anticipated-slices"
+  },
+  {
+   "i": 14,
+   "severity": "NOTE",
+   "title": "The current-state budget doesn't add up to the measured tick rate",
+   "description": "The per-phase budget comes from a synthetic N=2492 bench, totalling about 9.4 ms, roughly 106 TPS. The headline figure is a live 57 TPS at N=3,500, about 17.5 ms. The gap is never broken down into N-scaling versus non-engine costs such as state commit, serialization and executor hops. If server-side overhead is a large share, Tier 1's 10k target may be limited by the world server rather than the engine, and \"The bottleneck moves\" would point at a component this initiative doesn't plan to optimize.",
+   "location": "project-documents/user/architecture/140-arch.simulation-scaling.md#current-state"
+  },
+  {
+   "i": 15,
+   "severity": "NOTE",
+   "title": "Unified-memory \"nearly free\" claim about `to_numpy()` is unverified",
+   "description": "\"On Apple Silicon unified memory, option (a) may be nearly free (no actual copy, just cache flush).\" Taichi-family `field.to_numpy()` allocates a new host array and copies into it, plus a device sync. Unified memory makes the copy cheaper, but it still happens. At 50k \u00d7 6 \u00d7 4 bytes that's small, but the claim should go to the \"Quadrants substrate evaluation\" slice as a measurement, not be assumed here.",
+   "location": "project-documents/user/architecture/140-arch.simulation-scaling.md#technical-considerations"
+  }
+ ]
+}

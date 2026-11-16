@@ -1,0 +1,54 @@
+{
+ "review": "r04",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Commit markers are checkbox items in standalone \"Commit\" tasks",
+   "description": "Tasks 1.5, 2.4, 3.6, 4.3 and 5.5 are separate tasks that only commit, and each one writes the marker as a checklist item (`- [ ] **Commit:** ...`). Commit markers must be plain lines, never checkboxes. Remove the five \"Commit\" tasks. Put a plain `**Commit**: <message>` line after the last task in each section (1.4, 2.3, 3.5, 4.2, 5.4), and drop the `git add` sub-items. The section ends are the right places to commit; only the format is wrong.",
+   "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:93-96"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Section 4 commits changed shipped configs without running tests",
+   "description": "Tasks 4.1 and 4.2 switch `config/default.yaml` and `config/test.yaml` to `policy: wrap` and only check that they load with a one-line `python -c`. Task 4.3 then commits. At least two tests read the real shipped config:\n- `tests/test_config.py:45` loads `config/default.yaml`.\n- `tests/test_main.py:70` starts the server with it.\n\nSo the commit is not a tested point. The full test run only happens later, in Task 5.1. Add a `pytest tests/test_config.py tests/test_main.py` step (or a full `pytest`) to Section 4 before its commit marker. Then Task 5.1 duplicates Task 5.2 step 2 and can be dropped.",
+   "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:251-286"
+  },
+  {
+   "i": 2,
+   "severity": "NOTE",
+   "title": "Task 1.1 adds an import that already exists",
+   "description": "`from enum import StrEnum` is already imported at line 7, and `_serialize_for_yaml` uses it. Task 1.1's step \"Add `from enum import StrEnum` to imports\" should say \"confirm it is imported\" instead. Otherwise a junior agent may add a duplicate import.",
+   "location": "src/migratory_server/config.py:7"
+  },
+  {
+   "i": 4,
+   "severity": "NOTE",
+   "title": "Wrap with float `np.mod` can land exactly on `width`",
+   "description": "For very small negative values, float `np.mod(-1e-17, 100.0)` returns `100.0`. That breaks the half-open `[0, width)` rule in SC7, and it could make the strict `x < width` check in Task 3.4's `test_wrap_policy_keeps_all_positions_inside` fail now and then. Optionally, add to Task 2.2 a step that maps any result equal to `width`/`height` back to 0, plus one unit test for it. No success criterion is unmet with today's test inputs, so this is a note.",
+   "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:130-134"
+  },
+  {
+   "i": 5,
+   "severity": "NOTE",
+   "title": "Unit test list is slightly heavier than needed",
+   "description": "Task 2.3 lists about 19 tests for an effort-2/5 slice. Three can be merged or cut:\n- `test_open_is_noop_positions` and `test_open_is_noop_velocities` can be one test.\n- The parametrized \"dispatches and does not raise\" test adds nothing over the per-policy tests.\n- `test_reflect_policy_flips_velocities_at_edges` in Task 3.4 repeats `test_reflect_clamps_right_edge`.\n\nThe rest maps directly to SC6\u2013SC9.",
+   "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:145-174"
+  },
+  {
+   "i": 8,
+   "severity": "NOTE",
+   "title": "No load test task",
+   "description": "The slice states no NFR. \"Zero overhead\" for `OPEN` is a design property, and Task 3.4's mock test checks it. This project's `.claude/rules/python.md` has no load-test-tier rule, so I am not asking for a `tests/load/` task. Another `python.md` outside this project, two folders up under `squadron/.claude/rules/`, does require load tests on simulation paths; it would apply only if this project adopts that rule set.",
+   "location": "unverified"
+  },
+  {
+   "i": 9,
+   "severity": "NOTE",
+   "title": "Frontmatter says complete while every box is unchecked",
+   "description": "`status: complete` disagrees with the checklist, where no box is ticked. Set it to `not-started` (or whatever status the project uses before implementation) until Task 5.3 sets it.",
+   "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:9"
+  }
+ ]
+}

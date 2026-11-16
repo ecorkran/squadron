@@ -1,0 +1,279 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Timeouts do not cover runtime start, login start, or logout",
+      "description": "Line 82 says the startup hang \"is already bounded by `codex.turn_timeout_s`\". D7 (line 107) and the failure table (line 125) apply that timeout to `thread.run` only. `AsyncCodex.__aenter__` (spawn and `initialize`) and `thread_start` run before it, so a hang there on the review path has no bound and no table row. Three more paths are unbounded:\n- Login start (`login_chatgpt()` / `login_chatgpt_device_code()`). `codex.login_timeout_s` covers only `handle.wait()`.\n- `sq auth logout`, which spawns a runtime (line 82) but has no timeout in D7.\n- Ctrl-C mid-login. D7 (line 111) says the handle is cancelled, but no row asserts an observable signal.\n\nFix: wrap start, `thread_start` and `thread.run` in the single `asyncio.timeout(codex.turn_timeout_s)`. Put logout and login start under `codex.account_timeout_s`. Add a row for each with its WARNING or `ProviderError` signal. The key count stays the same.",
+      "file_ref": null,
+      "category": "failure-modes",
+      "raw_category": null,
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:82"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Empty-response case bypasses the slice 931 empty-turn contract",
+      "description": "D8 raises a plain `ProviderError` when a completed turn has no text. The review pipeline catches `EmptyFinalTurnError` specifically on the first turn: it folds the empty turn's telemetry into the capture and allows one recovery turn (slice 931 D7; contract at 931 lines 152 and 362). A plain `ProviderError` skips all of that and is reported as an ordinary failure. Either raise `EmptyFinalTurnError` so Codex joins the OpenAI handling, or state in D8 that Codex opts out of the recovery turn and why.",
+      "file_ref": null,
+      "category": "integration",
+      "raw_category": null,
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:114"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "API-key fallback contradicts the profile's exclusion and the HLD auth table",
+      "description": "Line 42 excludes API-key use from `openai-oauth` (\"API-key users keep the `openai` profile\"). Line 232 keeps the `OPENAI_API_KEY` fallback in `OAuthFileStrategy` if the probe \"works\". That would let `openai-oauth` report \"authenticated\" from an API key, the same variable the HLD assigns to the OpenAI provider (`100-arch.orchestration-v2.md`, Authentication Patterns, OpenAI row). Walkthrough step 6 (line 217) has to unset the key to avoid this. Line 232 calls the key-only case a silent-fallback path, yet keeps it in the \"works\" branch. Decide now rather than by probe: remove the key fallback from `OAuthFileStrategy` (`is_valid`, `active_source`, `get_credentials`, `setup_hint`) whatever the runtime does. The probe then only documents runtime behavior.",
+      "file_ref": null,
+      "category": "auth-model",
+      "raw_category": null,
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:232"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Doctor row reaches into the Codex provider module, contradicting D9",
+      "description": "D9 says the doctor row \"goes through the same two abstractions rather than around them\" and that the hint \"has one source\". But the row's detail comes from calling `resolve_codex_runtime()` directly (lines 112 and 172). The CLI doctor check therefore depends on a Codex-specific module function, against the project's \"program to interfaces\" rule. Line 139 also says the hint is defined \"once in `runtime.py`\", while line 112 says it comes from `missing_extra_hint()`. Fix: have `ExtraRequirement` return a typed status (installed, version, runtime source) so doctor consumes only the Protocol. Or narrow D9 to call doctor a Codex-specific diagnostic and drop the \"two abstractions\" claim.",
+      "file_ref": null,
+      "category": "dependency-direction",
+      "raw_category": null,
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:112"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Overweight prose and a CLI surface the plan does not ask for",
+      "description": "Cut candidates:\n- Overview (15-28) and Value (23-28) restate the plan entry. Keep one short paragraph.\n- \"Relationship to the architecture's auth model\" (88-90) restates the HLD. Keep one sentence that points to it.\n- \"Provides to Other Slices\" (178-181) names reuse that no planned slice consumes. The frontmatter (line 7) already says so. Delete the bullets.\n- `--timeout SECONDS` on `sq auth login` (lines 108, 149). The plan doesn't ask for it, and `codex.login_timeout_s` already covers the case. Cut it unless the PM wants the flag.\n\nKeep the `InteractiveLogin` and `ExtraRequirement` Protocols, since each has a CLI consumer.",
+      "file_ref": null,
+      "category": "proportionality",
+      "raw_category": null,
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:15-28"
+    },
+    {
+      "severity": "NOTE",
+      "title": "D8 turn-status checks and empty-response rejection are not in the plan entry",
+      "description": "Plan line 79 assigns effort, usage, and the `Sandbox`/`ApprovalMode` enums. It does not assign the turn-status checks or the rejection of empty responses. Both change current behavior: the `final_response or \"\"` fallback becomes an error. The change is defensible, but record it in the plan entry or commit it as a fix under the fix rules.",
+      "file_ref": null,
+      "category": "scope",
+      "raw_category": null,
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:114"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Slice 931 is satisfied but missing from the parent plan",
+      "description": "The frontmatter (line 6) and Prerequisites (line 50) list slice 931. The plan entry (`project-documents/user/architecture/100-slices.orchestration-v2.md:79`) says `Dependencies: [128]`. 931 is `status: complete`, and the `core/usage.py` types and `applies_effort` that the design uses are in place, so nothing is blocked. Add 931 to the plan entry so the plan matches the design.",
+      "file_ref": null,
+      "category": "dependencies",
+      "raw_category": null,
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:6"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Failure-path telemetry is not stated for Codex errors",
+      "description": "Slice 931 requires any `ProviderError` leaving an agent to carry a `RunTelemetry` snapshot in `telemetry`. The failure table raises `ProviderError` for timeouts, transport closures and failed turns but does not say what telemetry they carry. Codex runs one turn per message, so the likely value is \"no completed turns\" and should be stated in one sentence in Patterns and Conventions, so the failure artifact doesn't guess.",
+      "file_ref": null,
+      "category": "integration",
+      "raw_category": null,
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:120-135"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Authentication Patterns table has no openai-oauth row",
+      "description": "Line 89 says the architecture text \"stays accurate\". The generic sentence is accurate, and the design adds no unification. But the table has no row for `openai-oauth`, and its OpenAI row describes only the API-key path. The gap predates this slice, but this slice adds the file-based login path, so add the row in the docs step rather than leave the table stale.",
+      "file_ref": null,
+      "category": "documentation",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/100-arch.orchestration-v2.md#authentication-patterns"
+    },
+    {
+      "severity": "PASS",
+      "title": "Auth model matches the HLD's provider-owned credentials",
+      "description": "The HLD states \"Squadron does not attempt to unify authentication. Each provider's credential resolution is self-contained.\" The design keeps `~/.codex/auth.json` as the only store (line 41), adds no squadron token store, and adds `InteractiveLogin` as an optional capability that only the Codex strategy implements. That is consistent with the HLD.",
+      "file_ref": null,
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:88-90"
+    },
+    {
+      "severity": "PASS",
+      "title": "Module boundaries and provider registration follow the provider contract",
+      "description": "The provider still registers at import time, as the HLD requires (Provider Implementation Requirements, item 3), so `get_provider` can raise the install hint. SDK imports are confined to function scope, so the module graph imports without the extra. `create_agent`, `validate_credentials`, doctor and `model list` never spawn a runtime (line 82). The runtime is reused per `CodexAgent`, which matches the HLD's instance-reuse constraint.",
+      "file_ref": null,
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:74-82"
+    },
+    {
+      "severity": "PASS",
+      "title": "Plan scope for slice 129 is fully covered",
+      "description": "Part A (port, bundled-then-PATH resolution, `codex` extra, effort, usage), Part B (missing-extra error, doctor row, model-list marker, README) and Part C (browser and device-code login, status email and plan, logout, other profiles unchanged) all appear in the design. Nothing from the plan entry is dropped.",
+      "file_ref": null,
+      "category": "scope",
+      "raw_category": null,
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:32-38"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "failure-modes",
+      "raw_category": null,
+      "summary": "Timeouts do not cover runtime start, login start, or logout",
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:82",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "integration",
+      "raw_category": null,
+      "summary": "Empty-response case bypasses the slice 931 empty-turn contract",
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:114",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "auth-model",
+      "raw_category": null,
+      "summary": "API-key fallback contradicts the profile's exclusion and the HLD auth table",
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:232",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "dependency-direction",
+      "raw_category": null,
+      "summary": "Doctor row reaches into the Codex provider module, contradicting D9",
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:112",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "proportionality",
+      "raw_category": null,
+      "summary": "Overweight prose and a CLI surface the plan does not ask for",
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:15-28",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "scope",
+      "raw_category": null,
+      "summary": "D8 turn-status checks and empty-response rejection are not in the plan entry",
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:114",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "note",
+      "category": "dependencies",
+      "raw_category": null,
+      "summary": "Slice 931 is satisfied but missing from the parent plan",
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:6",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "note",
+      "category": "integration",
+      "raw_category": null,
+      "summary": "Failure-path telemetry is not stated for Codex errors",
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:120-135",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "note",
+      "category": "documentation",
+      "raw_category": null,
+      "summary": "Authentication Patterns table has no openai-oauth row",
+      "location": "project-documents/user/architecture/100-arch.orchestration-v2.md#authentication-patterns",
+      "location_verified": null
+    },
+    {
+      "id": "F010",
+      "severity": "pass",
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "summary": "Auth model matches the HLD's provider-owned credentials",
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:88-90",
+      "location_verified": true
+    },
+    {
+      "id": "F011",
+      "severity": "pass",
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "summary": "Module boundaries and provider registration follow the provider contract",
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:74-82",
+      "location_verified": true
+    },
+    {
+      "id": "F012",
+      "severity": "pass",
+      "category": "scope",
+      "raw_category": null,
+      "summary": "Plan scope for slice 129 is fully covered",
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:32-38",
+      "location_verified": true
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md",
+    "against": "project-documents/user/architecture/100-slices.orchestration-v2.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/squadron-129-design"
+  },
+  "timestamp": "2026-11-16T13:31:45.918951",
+  "model": "claude-haiku-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 14,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-haiku-5-5",
+  "answering_models": [
+    "claude-haiku-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 12,
+    "in_fences": 0,
+    "in_section": 12,
+    "surviving": 12
+  },
+  "effort": "xhigh",
+  "profile": "sdk",
+  "turns": 15,
+  "prompt_tokens": 1028118,
+  "cached_tokens": 867003,
+  "cache_write_tokens": 161097,
+  "completion_tokens": 44167,
+  "reasoning_tokens": null,
+  "duration_seconds": 194.15808787499554,
+  "cost_usd": 0.20651430999999998,
+  "cost_basis": "provider"
+}

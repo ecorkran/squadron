@@ -1,0 +1,117 @@
+{
+ "review": "r05",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "FAIL",
+   "title": "Density signal is read after the neighbor cap rewrites the counts",
+   "description": "Line 116 says the signal is the pre-cap `filtered_counts`, and Non-Risks (line 409) says the cap cannot perturb selection. But the tick pseudocode records `filtered_counts` at step 8, after the cap. Slice 112's tick integration (step 6) assigns `filtered_flat, filtered_counts = apply_neighbor_cap(...)`, reusing the same names. So once a profile sets `max_neighbors`, the dispatcher reads capped counts. Perf journal Entry 5 says the signal must be raw density.\n\nThe verification config uses `max_neighbors=1` (line 376). The capped mean is at most 1, which is below `t \u2212 h = 8`. The dispatcher would move to grid on the first tick and never return, so the expected flip and brute-dominated steady state in step 5 cannot occur.\n\nFix: capture the pre-cap count in a separately named variable before the cap runs, record that value, and add a test where the cap bites that asserts the recorded mean is pre-cap.",
+   "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:158-159"
+  },
+  {
+   "i": 1,
+   "severity": "FAIL",
+   "title": "Dispatcher's cross-tick state breaks the stateless-tick and determinism contract",
+   "description": "The parent architecture requires that \"given the same state and inputs, a tick produces the same outputs\" (`100-arch.behavior-engine.md` line 34) and that \"the engine is stateless between ticks \u2014 all state lives in the arrays passed to it, including the spatial index\" (line 73). This design keeps `_mean_neighbors` and the selected backend as scalar attributes that `record_density` writes at the end of each tick. The doc does not acknowledge this. Two consequences follow:\n\n- Same positions with different dispatch history select different backends on that tick. Brute's rows come out in ascending index order (`np.nonzero`, slice 110). Grid's rows come out in cell order (slice 105). Force reductions are floating-point sums, and slice 111 accepts results \"within floating-point tolerance\", so the bits differ. Slice 112 (line 145) asserts force sums are order-independent. That is false for floating-point addition.\n- Replay from a snapshot resets the dispatcher to `initial_backend` and drops `_mean_neighbors`, so replay is not bit-exact.\n\nHysteresis needs cross-tick state, so the design cannot be fully stateless. It can make that state affect speed only. Options:\n\n- **(a, recommended):** canonicalize each row to ascending neighbor index in the wrapper, right after the batch query and before self-exclusion and the cap. Brute already produces this order, so only grid ticks pay. Measure that sort cost and state that dispatcher state is performance-only.\n- **(b):** carry the dispatch state as an explicit value passed in and returned alongside `AgentState`, and serialize it.\n\nOption (a) also resolves the parity issue in the next finding.",
+   "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:108-112"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Bit-exact parity criterion cannot pass as specified",
+   "description": "Implementation Note 5 requires \"bit-exact position equality against brute-force-only\" over a run that includes grid ticks. The Testing Strategy (line 431) and slice 105 say grid neighbor order may differ and that sets should be compared. Both cannot hold, because a different order changes float sums. Option (a) above makes the check valid. Otherwise, compare with a stated tolerance.\n\nRelated errors:\n\n- Verification step 1 (line 352) says the suite runs \"in brute-initial mode.\" With `t=10, h=2`, any fixture whose mean neighbor count is below 8 switches to grid after its first tick, so most of the suite will not run on brute.\n- Step 1 also says any divergence \"indicates a dispatcher correctness bug.\" Ordering-induced ULP differences are not dispatcher bugs.\n- Step 2 (line 359) cites \"documented determinism caveats in the hash grid.\" Slice 105 documents only the ordering difference.",
+   "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:421"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Default threshold rationale contradicts its own arithmetic",
+   "description": "Line 210 computes about 132 expected neighbors for uniform N=3100 on 300\u00d7300 with radius 35. That value is above the threshold, so it selects brute. Line 211 then says uniform spread \"can drop below 10.\" At uniform density, the expected count is fixed by N, world size and radius, so it cannot drop below 10 without the density changing.\n\nPerf journal Entry 4 measured the uniform case as a 3.3\u00d7 grid win, and the Entry 4 addendum shows grid ahead in the spread phase. By the doc's own numbers, the default selects brute in the regime where grid wins. The same arithmetic gives about 380 grid candidates per agent at uniform N=3100 (3\u00d73 cells of side 35), which does not yield a threshold of 10.\n\nFix: replace the worked example with measured `mean_neighbors` per phase, and run the threshold sweep before adaptive becomes the default.",
+   "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:210-211"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Signal is undefined for subset evaluation and empty evaluation sets",
+   "description": "- **Subset evaluation:** the architecture requires that spatial queries work when only a subset is evaluated, with variable-rate ticking (`100-arch` lines 52 and 100). The design records one sample per tick from whatever `eval_indices` were passed. Under variable-rate ticking, hysteresis would compare means over different subsets. The doc must state whether the signal is computed over the full population, and what happens when more than one call occurs per tick.\n- **Empty evaluation:** `float(counts.sum()) / len(counts)` with zero active agents raises `ZeroDivisionError` inside the tick. The doc's own test list includes \"empty\" (lines 366 and 431). Specify the behavior explicitly (for example, hold the current backend and log it) and test it.",
+   "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:116"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "The `hasattr` guard can silently disable adaptation",
+   "description": "If the wrapper lacks `record_density` (renamed, or a different spatial object is passed), the guard returns False. The tick skips recording with no error or log, and the dispatcher stays on its initial backend for the whole run. That violates the project's no-silent-fallback rule.\n\nThe tick also branches on a concrete capability, which conflicts with the architecture's requirement that internal backend choice stay hidden behind interfaces (`100-arch` line 38).\n\nFix: inject an optional density observer explicitly. Server wiring sets it to `None` for grid and brute, and the tick calls it when set. Remove the `hasattr` test (line 344) and the guard test (line 437).",
+   "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:158-162"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "Dispatcher is coupled to concrete backends, and the \"pluggable\" claim does not hold",
+   "description": "The constructor types its parameters as `HashGridQuery` and `BruteForceQuery` (lines 85\u201386), and the switching rule is a fixed two-state machine (lines 129\u2013134). This breaks the program-to-interfaces rule and the dependency-inversion review rule.\n\nProvides (line 313) says future backends \"slot into AdaptiveSpatial alongside grid and brute with no protocol change.\" A third backend would require a new switching rule and constructor parameter, which means editing the existing class. The design rejects exactly that kind of change for the tick loop at lines 262\u2013264.\n\nFix: type the parameters as `SpatialQuery`, and drop the \"pluggable alongside\" claim, since no third backend is in scope.",
+   "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:82-90"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "Config surface and dispatcher disagree on defaults and on `initial_backend`",
+   "description": "- `AdaptiveSpatial` defaults `hysteresis_band` to 0.0 (line 88) and `initial_backend` to `\"brute\"` (line 89). `SpatialConfig` defaults hysteresis to 2.0 (line 175). Line 136 says defaults live in the config layer. One value has two defaults, and the project rule forbids magic defaults in code.\n- Backend names are string literals in config validation, the constructor default, and the wiring (lines 173, 200, 236\u2013238). Define them once as an enum.\n- Naming drifts across layers: `grid_threshold_mean_neighbors` (config), `threshold_mean_neighbors` (class), and `threshold=` / `hysteresis=` (wiring, line 238).\n- `initial_backend` is presented as an operator knob (lines 142, 301, 400), but `SpatialConfig` has no such field and validation does not cover it. Wiring hardcodes `\"brute\"`. Either expose it as a validated config field, or remove the parameter and hardwire brute with a comment.",
+   "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:171-176"
+  },
+  {
+   "i": 8,
+   "severity": "CONCERN",
+   "title": "Config validation leaves silent failure paths",
+   "description": "- Unknown keys under `spatial:` (for example, `hysteresis_bnd`) are not rejected, so the default silently applies. Specify rejection of unknown keys.\n- Field types are not validated (a string or null for a float field).\n- `hysteresis_band >= grid_threshold_mean_neighbors` makes the grid branch unreachable. Brute-to-grid requires `m < t \u2212 h \u2264 0`, which cannot hold for `m \u2265 0`, so the dispatcher stays on brute with no error. Add the rule `hysteresis_band < grid_threshold_mean_neighbors`.",
+   "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:198-202"
+  },
+  {
+   "i": 9,
+   "severity": "CONCERN",
+   "title": "Dependencies omit deferred slice 105 and slice 112",
+   "description": "The frontmatter and the plan's entry for (113) (`100-slices.behavior-engine.md` line 49) list 100, 110 and 111. The body depends on slice 105's `HashGridQuery` (lines 66, 71\u201373), which the plan marks as deferred (plan lines 34\u201335). It also depends on slice 112's `apply_neighbor_cap` ordering (lines 322, 409), which is the cause of the first FAIL.\n\nAdd 105 and 112 to the dependency list in both places. State that this slice is the re-attempt that slice 105's outcome names, so the plan status matches.",
+   "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:6"
+  },
+  {
+   "i": 10,
+   "severity": "CONCERN",
+   "title": "Scale NFR is not restated; targets stop at N\u22482500",
+   "description": "The parent architecture requires \"tens of thousands of agents at full behavioral fidelity on a single CPU process\" (`100-arch` line 36) and a tick that fits its budget (line 96). This slice touches that path but restates neither. Its targets are relative to brute-only (average TPS at or above baseline), and the sweep stops at N=2500.\n\nSlice 110's Risk Assessment puts the dense brute matrix at about 800 MB at N=10K. The clustered regime still selects brute, so the dispatcher does not remove that ceiling.\n\nFix: restate the NFR with a concrete target (N and TPS, or a per-tick budget). State what the brute branch does at that N, for example a size limit or deferral to a KD-tree slice.",
+   "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:368-380"
+  },
+  {
+   "i": 11,
+   "severity": "CONCERN",
+   "title": "Switching and flip-flop are not observable",
+   "description": "Step 5 reads a `grid_selected` count from \"the dispatcher's log output\" (line 377), but neither scope nor architecture specifies logging or a counter. The flip-flop risk (line 398) relies on an operator widening the band, yet nothing emits the signal that would show it is needed. The project's failure-mode rule requires each failure mode to be observable at WARNING or above, or as a metric.\n\nSpecify per-backend tick counters, one INFO line per switch, and a WARNING when switches exceed a rate threshold.",
+   "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:377"
+  },
+  {
+   "i": 12,
+   "severity": "CONCERN",
+   "title": "Verification mechanics are not reproducible",
+   "description": "- Step 2 pins the backend with `MIGRATORY_SPATIAL_BACKEND`, an environment variable that is not in the config surface (lines 171\u2013176). The doc calls the mechanism an implementation detail, while Implementation Note 5 (line 432) says a parametrized fixture is sufficient. Pick one and specify it.\n- The threshold sweep (lines 368\u2013369) uses `/tmp/bench_adaptive.py`, \"constructed during implementation\" and not committed, yet the default rationale depends on its output. Line 213 refers to \"the benchmarking harness,\" a different and unnamed artifact. Name one committed script.",
+   "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:354-369"
+  },
+  {
+   "i": 13,
+   "severity": "CONCERN",
+   "title": "Proportionality: duplicated and restated material",
+   "description": "For a two-state switch with three config fields, the doc runs about 440 lines. Specific cuts:\n\n- The tick pseudocode appears twice (149\u2013160 and 242\u2013252) with different content. Keep one.\n- The density and hysteresis rationale is restated at 118\u2013127, 268\u2013278, 280\u2013284 and 395\u2013404. Keep the Technical Decisions copy.\n- \"Consumes from Slice 105\" (71\u201373) repeats Interfaces Required (66).\n- Orthogonality to 112 appears at 27, 322 and 409. Keep one.\n- The Provides items at 313 and 315 are speculative hooks for future slices. Drop them.\n- Remove the `hasattr` tests once the observer injection is adopted, and drop `initial_backend` unless it is exposed.",
+   "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:149-160"
+  },
+  {
+   "i": 14,
+   "severity": "NOTE",
+   "title": "`record_density` cost is not O(1)",
+   "description": "`counts.sum()` is an O(n_active) NumPy reduction, not a BLAS reduction. The cost is small, but the stated complexity and the \"already in cache\" claim should be corrected or measured.",
+   "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:340"
+  },
+  {
+   "i": 15,
+   "severity": "NOTE",
+   "title": "Inherited protocol omits squared distances required by the architecture's minimal contract",
+   "description": "The parent architecture's minimal contract is \"indices and squared distances\" (`100-arch` line 48). The slice 110 protocol returns indices only, and this slice inherits that gap without comment. This is not a defect in this slice, but it should be tracked.",
+   "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:65"
+  }
+ ]
+}

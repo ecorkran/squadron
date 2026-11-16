@@ -1,0 +1,207 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Two `step()` listings contradict each other on `post_tick` when entity count is zero",
+      "description": "The Technical Decisions listing (lines 176-190) wraps only `engine.tick()` in the entity-count guard, so `post_tick()` always runs. The Implementation Details listing (lines 276-277) keeps `if self._entity_manager.count == 0: return` before `post_tick()`, so it is skipped. The note directly beneath (line 291) and Special Considerations (line 408) both say `post_tick()` must run with zero entities. An implementer copying the Implementation Details listing builds the behavior the document says is wrong. Remove the second listing or make it match the first.",
+      "file_ref": null,
+      "category": "internal-consistency",
+      "raw_category": null,
+      "location": "project-documents/user/slices/304-slice.environment-layer-integration.md:272-291"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Post-tick write path assigned by the slice plan is not delivered",
+      "description": "The slice plan entry for 304 assigns \"Handle post-tick environment writes (e.g., stigmergic trail deposits)\". Slice 500 defines the contract as `environment.post_tick(trail_deposits, threat_mutations)`, called by the world server. This design calls `post_tick()` with no arguments, and `step()` has no way to collect or receive deposits or mutations.\n\n- **Claim not met:** slices 505/506 (listed in `interfaces`) will have to change `SimulationManager.step()`, which contradicts \"when layers arrive they plug in without server changes\" (line 19).\n- **Wrong rationale:** the design justifies the zero-entity `post_tick()` call with \"trail decay and other time-varying layer updates\" (lines 291, 408). Under the 500 contract, time-varying state advances in `pre_tick`, and `post_tick` only applies agent-originated writes.\n\nEither state how deposits and mutations reach `post_tick` (even if the source is `None` today), or explicitly defer the write path and name the slice that owns it.",
+      "file_ref": null,
+      "category": "integration",
+      "raw_category": null,
+      "location": "project-documents/user/slices/304-slice.environment-layer-integration.md#simulationmanager-as-simulation-orchestrator"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Layer plug-in mechanism is misdescribed; adding layers requires server changes",
+      "description": "The design says \"The server creates the environment; layers register themselves.\" Slice 500 composes layers at construction (`Environment(bounds, layers)`) and defines no registration API. The server code here hard-codes `layers={}` (line 303). Each of 501-506 must therefore edit `server.py` or introduce a factory, so the central value claim (\"plug in without server changes\", line 19) does not hold as designed.\n\nEither define the construction seam now (for example a single `build_environment(config, bounds)` function that layer slices extend), or drop the claim and state that layer slices modify the server's construction site.",
+      "file_ref": null,
+      "category": "integration",
+      "raw_category": null,
+      "location": "project-documents/user/slices/304-slice.environment-layer-integration.md:329"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Slice plan scope dropped without a named owner",
+      "description": "The slice plan assigns three items that this design excludes:\n\n- **Grid resolution and layer selection config:** the plan entry lists \"seed, grid resolution, layer selection\" in YAML; only `seed` is delivered. The rationale (no layers exist yet) is reasonable, but ownership is left as \"likely under `simulation.environment.layers.*` or \u2026 slice 507\" (line 153).\n- **Terrain summary in snapshots:** the 305 plan entry says this is \"deferred to (304) Environment Layer Integration\". This design defers it again to unnamed \"future work\" (line 47), so it now has no owner.\n- **Environment context to `engine.tick()`:** the plan says \"Pass environment context to `SimulationManager` and `engine.tick()`\". The design substitutes constructor injection into forces. That is a sound choice (no `BulkForce` protocol change), but it is a deviation and should be recorded as one.\n\nThe 500 slice plan also notes that 507 \"must be stable before world server slice 304 integrates\", and this design proceeds without it. Name the receiving slice for each deferred item, or update the slice plan entry.",
+      "file_ref": null,
+      "category": "scope",
+      "raw_category": null,
+      "location": "project-documents/user/slices/304-slice.environment-layer-integration.md#excluded"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Unused configuration and state; `seed` default is a silent magic fallback",
+      "description": "Several mechanisms have no consumer in this slice:\n\n- **`EnvironmentConfig.seed`:** loaded and validated but never passed anywhere. `Environment(bounds=world_bounds, layers={})` takes no seed, and no path from config to layers is defined, so \"layer slices have it available\" is not actually wired.\n- **`seed` default of 42:** applied silently when the key or section is omitted. This conflicts with the project rule \"Never use silent fallback values\" and with the architecture's \"failures should be explicit and immediate\" for configuration. For a reproducibility seed, a hidden default is the wrong behavior. Make `seed` required once something consumes it, or cut it from this slice.\n- **`_seasonal_parameter` on `SimulationManager`** (line 119): listed as state, but `step()` takes the value as a parameter and never reads the field. Cut it.\n- **`environment` property on `SimulationManager`** (lines 268-270): `server.py` already holds the `environment` local when it constructs forces. Nothing uses the property yet, so it can be deferred.\n- **`Environment | None`** (line 220): the section \"Environment is Always Present\" says its purpose is avoiding `if environment is not None` checks, then keeps the optional type and two such checks in `step()` for test convenience. Make the parameter required and update the test fixtures (the `step(tick_number)` change already touches them), or drop the \"always present\" claim.",
+      "file_ref": null,
+      "category": "proportionality",
+      "raw_category": null,
+      "location": "project-documents/user/slices/304-slice.environment-layer-integration.md:149-151"
+    },
+    {
+      "severity": "PASS",
+      "title": "Tick-cycle ordering and layer responsibilities align with the architecture",
+      "description": "The order `pre_tick` \u2192 `engine.tick` \u2192 `post_tick` \u2192 broadcast matches the architecture's step 2 (environment update) before step 3 (behavior evaluation), and the tick-as-transaction principle. The server stays an orchestrator: it owns configuration, lifecycle and tick ordering, while `migratory.environment` owns data structures. The dependency direction (`migratory_server` \u2192 `migratory.environment`) is correct. The `pre_tick(tick_number, seasonal_parameter)` signature matches slice 500, and passing `seasonal_parameter` through `step()` gives 308 a clean seam.",
+      "file_ref": null,
+      "category": "alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/304-slice.environment-layer-integration.md#data-flow"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Exception behavior of environment calls inside the tick body is unstated",
+      "description": "No new I/O path or message type is introduced, so failure-mode enumeration is not strictly required. However, slice 500 specifies that `pre_tick` raises `ValueError` for a seasonal parameter outside [0, 1]. One sentence saying such exceptions propagate out of `step()` to the tick loop's existing handling would close the gap before 308 supplies real values.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/304-slice.environment-layer-integration.md#simulationmanager-as-simulation-orchestrator"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Minor inaccuracies",
+      "description": "- **Frontmatter `interfaces`** omits 504 and 507, which slice 500 lists as environment consumers and which this design references.\n- **Line 113** says `WorldBounds` is \"shared with entity manager\", but the entity manager uses `WorldBoundsConfig`; the two are bridged by `build_world_bounds()`, not shared.\n- **Verification step 2** runs `config/default.yaml` to test the omitted-section case, while Development Approach step 1 adds the section to that same file.",
+      "file_ref": null,
+      "category": "documentation",
+      "raw_category": null,
+      "location": "project-documents/user/slices/304-slice.environment-layer-integration.md"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "internal-consistency",
+      "raw_category": null,
+      "summary": "Two `step()` listings contradict each other on `post_tick` when entity count is zero",
+      "location": "project-documents/user/slices/304-slice.environment-layer-integration.md:272-291",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "integration",
+      "raw_category": null,
+      "summary": "Post-tick write path assigned by the slice plan is not delivered",
+      "location": "project-documents/user/slices/304-slice.environment-layer-integration.md#simulationmanager-as-simulation-orchestrator",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "integration",
+      "raw_category": null,
+      "summary": "Layer plug-in mechanism is misdescribed; adding layers requires server changes",
+      "location": "project-documents/user/slices/304-slice.environment-layer-integration.md:329",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "scope",
+      "raw_category": null,
+      "summary": "Slice plan scope dropped without a named owner",
+      "location": "project-documents/user/slices/304-slice.environment-layer-integration.md#excluded",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "proportionality",
+      "raw_category": null,
+      "summary": "Unused configuration and state; `seed` default is a silent magic fallback",
+      "location": "project-documents/user/slices/304-slice.environment-layer-integration.md:149-151",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "pass",
+      "category": "alignment",
+      "raw_category": null,
+      "summary": "Tick-cycle ordering and layer responsibilities align with the architecture",
+      "location": "project-documents/user/slices/304-slice.environment-layer-integration.md#data-flow",
+      "location_verified": null
+    },
+    {
+      "id": "F007",
+      "severity": "note",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "Exception behavior of environment calls inside the tick body is unstated",
+      "location": "project-documents/user/slices/304-slice.environment-layer-integration.md#simulationmanager-as-simulation-orchestrator",
+      "location_verified": null
+    },
+    {
+      "id": "F008",
+      "severity": "note",
+      "category": "documentation",
+      "raw_category": null,
+      "summary": "Minor inaccuracies",
+      "location": "project-documents/user/slices/304-slice.environment-layer-integration.md",
+      "location_verified": null
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/304-slice.environment-layer-integration.md",
+    "against": "project-documents/user/architecture/300-slices.worldserver-foundation.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/migratory-304-slice"
+  },
+  "timestamp": "2026-11-16T13:17:20.584968",
+  "model": "claude-fable-5-2",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 7,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-fable-5-2",
+  "answering_models": [
+    "claude-fable-5-2"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 8,
+    "in_fences": 0,
+    "in_section": 8,
+    "surviving": 8
+  },
+  "effort": "medium",
+  "profile": "sdk",
+  "turns": 8,
+  "prompt_tokens": 294169,
+  "cached_tokens": 193345,
+  "cache_write_tokens": 100816,
+  "completion_tokens": 5063,
+  "reasoning_tokens": null,
+  "duration_seconds": 49.7409161250107,
+  "cost_usd": 1.8547960000000001,
+  "cost_basis": "provider"
+}

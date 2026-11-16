@@ -1,0 +1,68 @@
+{
+ "review": "r05",
+ "findings": [
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Commits at Tasks 4 and 6 leave the monorepo unbuildable",
+   "description": "Task 3 limits the rename sweep to `packages/core/src`. The design's sweep list (slice line 171) also includes `guideTools.ts:47,93,101` and `guides.ts:119`.\n\nOnce `GuideMethod` drops `'manual'`, the MCP `guide_install` zod enum `['submodule','clone','manual']` is no longer assignable to `manager.install()`. The CLI hides the same mismatch only because of an `as GuideMethod` cast. The commits at Task 4 (`refactor(core): rename\u2026`) and Task 6 therefore land while `pnpm -r build` fails in mcp-server. Task 4 also runs only the core suite, but the design says to \"run the full suite after step 1\".\n\nFix: move the type-only CLI/MCP enum and cast changes into Task 3, or move the Task 4/6 commits to after Task 8. Also make Task 4's success criterion `pnpm -r typecheck && pnpm -r test`.",
+   "location": "project-documents/user/tasks/925-tasks.guide-install-robustness.md:83-100"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Commit markers are embedded in checkbox items instead of `**Commit**:` lines",
+   "description": "Every commit point is written inside a checkbox, for example `- [ ] Success criteria: \u2026 Commit: \\`refactor(core): \u2026\\``. They should be plain `**Commit**: \u2026` lines. Tooling or agents that look for `**Commit**:` will treat the file as having no markers and fall back to \"commit at the end of each top-level task\". That would commit after Task 1 (core typecheck deliberately broken), Task 10 and Task 20.\n\nFix: move each commit message onto its own plain `**Commit**:` line after the task it closes. This applies to lines 100, 128, 154, 205, 225, 247, 277, 313, 334, 343, 374, 390 and 413.",
+   "location": "project-documents/user/tasks/925-tasks.guide-install-robustness.md:99-100"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Tasks 15 and 17 disagree on whether auto-init is time-bounded, and no test checks it",
+   "description": "Task 15's first bullet says `init(operationPath)` always runs with `{ timeoutMs: GUIDE_INIT_TIMEOUT_MS }`. Its second bullet says the timeout is \"an `init()` option\", so that `sync()` stays unbounded. Task 17 then calls `SubmoduleStrategy.init(operationPath)` with no option. Following Tasks 15b and 17 literally gives an auto-init path with no timeout, which defeats D10 and the fix for review finding F004.\n\nTasks 16 and 18 test init's behaviour but never check that the timeout reaches `gitExec` on the `ensureCheckout()` path. Task 14 only tests `gitExec` on its own.\n\nFix: give `init` a single signature, `init(operationPath, opts?: { timeoutMs?: number })`. Have Task 17 pass `GUIDE_INIT_TIMEOUT_MS` explicitly. Add one assertion to Task 18 (a spy on `gitExec`, or a mocked `execFile` that reports `killed: true`) showing that `ensureCheckout()` produces the timed-out error with the remediation text.",
+   "location": "project-documents/user/tasks/925-tasks.guide-install-robustness.md:227-262"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Task 11 throws inside `detect()`; the design throws in `ensureCheckout()`",
+   "description": "The design's data flow (slice lines 103\u2013110) throws on `'error'` inside `ensureCheckout()`. D1 says only that `detect()` records the state. Task 11 throws from `detect()` itself, which affects every caller:\n- `cf guides info` and `guide_status` would fail instead of showing state. The design says `cf guides info` must stay a safe read-only way to inspect.\n- `install()` and `setup-ide` would fail at their already-installed check.\n- `GuideDetector.test.ts` mocks the filesystem (line 49 of the task file). Existing submodule-detection cases would now run real `git submodule status` against a fake tree, get `'error'`, and throw. No task updates those tests.\n\nFix: either keep `detect()` non-throwing (record `checkout: null` or another explicit marker on error) and throw in `ensureCheckout()` as designed, or keep Task 11's approach and add steps to update the mocked detector tests and decide what `guides info` shows when git fails.",
+   "location": "project-documents/user/tasks/925-tasks.guide-install-robustness.md:188-195"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Config-path alias warning is underspecified and untested",
+   "description": "Success criterion 6 (slice line 193) requires a config value of `manual` to install as tarball \"with the same warning\". The tasks fall short in three ways:\n- Task 5 leaves the return shape open (\"Choose one return shape\u2026 use it for both the CLI flag and the config path\"). That is confusing, because Task 7 normalizes the flag at the CLI before `install()` ever sees it. The task needs to say how the alias reaches `guidesInstallAction`, for example a `deprecatedAlias` field on `InstallResult`.\n- Task 7 adds an MCP notice only for the `manual` *parameter*. D5 also requires a notice when the alias comes from config and `guide_install` is called without `strategy`.\n- Task 8 tests only `--strategy manual`. No CLI or MCP test covers the config-file warning, and Task 6 checks only that core reports the alias.\n\nFix: fix the return shape in Task 5, add the MCP config-path notice to Task 7, and add one config-file case each to the CLI and MCP tests in Task 8.",
+   "location": "project-documents/user/tasks/925-tasks.guide-install-robustness.md:110-154"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "The real-git fixture will hit git's `file://` transport restriction",
+   "description": "Task 9 builds a host repo whose submodule points at a local bare repo. Since git 2.38.1 (CVE-2022-39253), `protocol.file.allow` defaults to `user`. So `git submodule add` and `git submodule update --init` from a local path fail with \"transport 'file' not allowed\".\n\nTasks 16, 18 and 21 run the production `gitExec` / `init()` code against this fixture, so they will fail the same way. The production code must not add `-c protocol.file.allow=always`. A junior implementer is likely to get stuck here, or to \"fix\" it in production code.\n\nFix: tell Task 9 to set `protocol.file.allow=always` through the test environment only, using `GIT_CONFIG_COUNT`/`GIT_CONFIG_KEY_0`/`GIT_CONFIG_VALUE_0`, or by pointing `GIT_CONFIG_GLOBAL` at a temp file. Also confirm that `gitExec`'s non-interactive env passes those variables through.",
+   "location": "project-documents/user/tasks/925-tasks.guide-install-robustness.md:158-174"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "The design's call-site grep is not applied to `packages/mcp-server/src`",
+   "description": "D3 (slice line 123) requires grepping for `createContextPipeline`, `resolvePromptFilePath` and `GUIDE_RELATIVE_PATH` in **both** `packages/cli/src` and `packages/mcp-server/src`, and covering every hit. Task 20 runs the grep for the CLI only, and adds `PROMPT_FILE_RELATIVE_PATH`, which the design missed. Task 22 hard-codes two MCP line locations and runs no grep. Any other MCP tool that reads guide content would skip auto-init.\n\nFix: add the same four-pattern grep to Task 22 for `packages/mcp-server/src`, and list the sites it covers in the commit body.",
+   "location": "project-documents/user/tasks/925-tasks.guide-install-robustness.md:315-325"
+  },
+  {
+   "i": 8,
+   "severity": "NOTE",
+   "title": "Splits that leave the build broken could be merged",
+   "description": "Task 1 deliberately ends with core failing typecheck until Task 3 is done. Task 10 adds a required `GuideInfo.checkout` field that does not compile until Task 11 (line 186). Merging 1 with 3, and 10 with 11, would make every task end in a compiling state and remove two small tasks. Task 10's new required field may also break CLI and MCP test mocks that build `GuideInfo` objects. A short step to update those mocks would help.",
+   "location": "project-documents/user/tasks/925-tasks.guide-install-robustness.md:58-94"
+  },
+  {
+   "i": 9,
+   "severity": "NOTE",
+   "title": "Where `operationPath` is resolved is unclear, and may duplicate `getGuideContext()`",
+   "description": "Task 17 says the core `ensureCheckout()` must resolve `operationPath` the way the CLI's `getGuideContext()` does. Task 19 says `ensureGuideReady` should build `GuideManager` \"the same way `getGuideContext()` does\". Both point toward copying CLI logic. The task should say that `ensureGuideReady` reuses or extracts the CLI's existing context resolution, and that `GuideManager` receives the resolved paths rather than resolving them again in core.",
+   "location": "project-documents/user/tasks/925-tasks.guide-install-robustness.md:264-289"
+  }
+ ]
+}

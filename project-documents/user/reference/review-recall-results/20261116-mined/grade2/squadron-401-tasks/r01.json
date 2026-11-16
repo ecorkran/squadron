@@ -1,0 +1,47 @@
+{
+ "review": "r01",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Task 2 says the suite passes unchanged, but an existing test will fail",
+   "description": "Task 2 replaces `PythonAdapter.metrics = frozenset(SnapshotMetric)` (`src/squadron/metrology/snapshot/python_adapter.py:105`) with the four metrics from slice 400. Its success line is \"the full `tests/metrology/` suite passes unchanged\" (task file line 45). But `test_adapter_declares_its_metrics_and_pb2_conventions` asserts `adapter.metrics == set(SnapshotMetric)`. Once the new enum members exist, that assertion fails. It only becomes true again at Task 25, when all eight metrics are declared.\n\nTasks 7 and 8 also allow 400's length tests to be \"edited only for the rename\", so an implementer has no permitted way to make Task 2 pass. **Fix:** have Task 2 change that assertion to the explicit set it declares, or the same constant. Have Tasks 8, 12 and 25 update it as each metric is added. Reword Task 2's success line so this edit is allowed.",
+   "location": "tests/metrology/snapshot/test_python_length.py:60"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Task 21 leaves out failures from the result type it describes",
+   "description": "Task 21 says \"The result is either a reading or an absence (reason, detail)\". But the same task has stat `OSError` returning \"a failure naming the path\" (line 215). Task 19 has every parse problem return a failure (line 198). Task 23 depends on a third case: \"a failure becomes both `tool_failed`\" (line 233).\n\nA junior implementer following line 218 literally would collapse failures into absences. That would lose the `tool_failed` outcome that Success Criterion 8 and the failure-mode table require. **Fix:** say the result is one of three: reading, absence (reason, detail) or failure (detail). Name the type or union once, in Task 19 or Task 21.",
+   "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:218"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Commit markers are written as checkboxes",
+   "description": "Every `Commit:` line is a `- [ ] Commit: \u2026` checklist item: lines 46, 68, 88, 97, 115, 142, 156, 171, 183, 191, 208, 229, 246, 262, 271, 276, 283 and 290. Commit markers must be plain `**Commit**:` lines, never checkboxes. As written, a task-checker could tick a commit off as work done, or a commit could end up containing only check-offs, which the project's commit rules forbid.\n\nWhere the markers sit is fine: each follows a tested, working point, not every task and not only the end. Only the format needs changing. Line 290 (\"Commit any remaining changes\") should also be a plain marker or be removed.",
+   "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:46"
+  },
+  {
+   "i": 3,
+   "severity": "NOTE",
+   "title": "The duplication ceiling test doesn't check that other metrics are unchanged",
+   "description": "Success Criterion 10 says the language gets `tool_failed` \"and its other metrics are unchanged\". Task 11 tests the ceiling only on `measure_duplication` in isolation, with a test tokenizer, so no task checks the adapter-level half of the criterion. One assertion added to Task 13 would cover it: lower `DUPLICATION_MAX_TOKENS` through `PythonAdapter` and check that `function_length` and `cyclomatic_complexity` are present.",
+   "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:138"
+  },
+  {
+   "i": 4,
+   "severity": "NOTE",
+   "title": "The RecursionError test doesn't assert the WARNING",
+   "description": "The Technical Requirements say failure-mode tests must assert \"both the signal and the outcome\" for each row of the table. Task 9 checks the outcome for the parse-error and `RecursionError` cases (the file is in `unparsed_files`), but not the WARNING per file. Add a `caplog` assertion.",
+   "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:111"
+  },
+  {
+   "i": 5,
+   "severity": "NOTE",
+   "title": "Some small task pairs could be merged",
+   "description": "Thirty tasks is a lot, but it fits a slice with four metrics, two languages and three new modules, and each test task traces to a criterion or a failure-mode row. A few implementation/test pairs are small enough to be one task each:\n- 16 and 17 (config key and preflight)\n- 25 and 26 (adapter wiring and snapshot tests)\n\nThis is optional.",
+   "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:173-183"
+  }
+ ]
+}

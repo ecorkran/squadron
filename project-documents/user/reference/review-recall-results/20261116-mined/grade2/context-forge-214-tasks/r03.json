@@ -1,0 +1,33 @@
+{
+ "review": "r03",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Commit markers are checkbox tasks, not plain `**Commit**:` lines",
+   "description": "Tasks 2C, 3C, 4C, 5C and 6C are written as `- [ ] **Task NC: Commit** \u2014 ...` (lines 71, 94, 117, 126, 134). The project rule is that implementation commits happen only at `**Commit**:` markers, and those markers are plain lines, never checkboxes. Other task files in the repo use the plain form, for example `169-tasks.multi-project-ux-polish.md` and `171-tasks.project-schema.md`. The checkbox form causes two problems:\n- An implementer or task-checker looking for `**Commit**:` won't find any markers. They will then fall back to \"commit at the end of each top-level task\", which commits after Tasks 2, 3 and 4 before their tests exist.\n- A commit item can only be ticked after the commit is made. That tick then needs its own commit, which the rules forbid: \"Never make a commit that only checks boxes.\"\n\nThe marker positions are right: each one sits after a tested point (implementation plus its T-task), and the conditional ones after Tasks 5 and 6 are sensible. Fix: turn each into a plain line, e.g. `**Commit**: feat(core): add slice design heading validator`.",
+   "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md:71"
+  },
+  {
+   "i": 1,
+   "severity": "NOTE",
+   "title": "No test for the unreadable-file preflight or the wrapped `fs` error",
+   "description": "The success criterion lists an unreadable file as an exit-2 case. Task 3 implements both the readability check (line 77) and the wrapping of unexpected `fs` errors (line 79), but neither 3T nor 4T tests them:\n- 3T covers a missing file and a directory.\n- 4T covers no arguments, a nonexistent path, a valid file before a missing one, and a missing template.\n\nThe criterion explicitly requires a test only for the valid-then-missing run, which is covered. A `chmod 000` test is unreliable when CI runs as root, so leaving this out is defensible. If it's added, a case in 3T that skips when running as root would be enough.",
+   "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md:91"
+  },
+  {
+   "i": 2,
+   "severity": "NOTE",
+   "title": "Task 5C's commit type may not match its contents",
+   "description": "Task 5 says that any unexplained parity `DIFF` is a bug to fix in code, with a new test. Task 5C's message is fixed as `docs: record slice 214 parity sweep results`. If code changes there, a `docs:` commit mislabels them. Suggested wording: \"use `fix:` if source changed, otherwise `docs:`\".",
+   "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md:122-126"
+  },
+  {
+   "i": 3,
+   "severity": "NOTE",
+   "title": "Task 0 stops for the Project Manager when an integration branch is set",
+   "description": "The Git rules already say what to do when `git.integration_branch` is set: fork from that branch. No rule requires the stop, so the step should just create the branch from the target it read, instead of hard-coding `main`.",
+   "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md:37-38"
+  }
+ ]
+}

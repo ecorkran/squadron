@@ -1,0 +1,54 @@
+{
+ "review": "r03",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Technical requirement \"no nested Python loops\" has no task step, and the LeadershipForce step hints at a loop",
+   "description": "The slice's Technical Requirements (slice line 395) say: \"Both forces are vectorized within each agent's neighborhood \u2014 no nested Python loops.\" No task mentions this. Task 4.1 writes the core formula as `sum(velocity[i] * leadership[i]) / sum(leadership)`. A junior implementer could reasonably code that as an inner `for i in neighbors` loop, which is exactly the nested loop the slice forbids.\n\nFix: add a step to 4.1 that uses numpy indexing over the neighbor array. For example, `w = state.leadership[nbrs]; weighted = (state.velocities[nbrs] * w[:, None]).sum(axis=0) / w.sum()`. Then add \"no per-neighbor Python loop\" to 4.1's Verify line. Task 3.1 has no neighbor dimension, so it already meets the requirement with its per-agent loop.",
+   "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:113-119"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "The convergence assertion can pass at tick 0, so it doesn't show convergence toward the leaders' heading",
+   "description": "The slice's functional criterion (slice lines 389\u2013391) says the herd's mean heading \"converges toward the leaders' initial heading\". Task 5.2 only asserts that the final mean heading \"has positive x-component\". At setup, 5 of 50 agents already move east at `[4.0, 0.0]` and the other 45 have random velocities, so the mean x-component is likely positive before any tick runs. The test would pass even if LeadershipForce did nothing.\n\nFix: make the assertion compare against the initial state, or set a threshold. Options:\n- The final eastward alignment (mean of cos(heading)) must be clearly greater than the initial value.\n- The final value must exceed a fixed threshold.\n- Exclude the leaders from the initial random draw so the baseline mean is near zero.",
+   "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:147-154"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "The profile-differentiation test uses \"or\" where the slice walkthrough requires both conditions",
+   "description": "Verification walkthrough step 4 (slice lines 474\u2013476) says the herding run \"should show lower heading variance \u2026 **and** eastward bias\", and the flocking-only run \"should show no directional preference\". Task 5.3 asserts \"herding heading variance < flocking heading variance, **or** herding mean eastward component > flocking mean eastward component\". Either condition alone can pass by chance on a single seed. The task also calls this \"statistically measurable\", but one seeded run is not a statistical test.\n\nFix: assert both conditions, as the walkthrough states. Also either drop the word \"statistically\" or run a small number of seeds.",
+   "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:160-161"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Commit markers are checkbox tasks, and the final commit only checks boxes",
+   "description": "Commit points must be plain `**Commit**:` lines, never checkbox items. This file makes each commit a numbered checkbox task: 1.3 (lines 48\u201349), 2.3 (73\u201374), 3.3 (103\u2013104), 4.3 (134\u2013135), 5.4 (164\u2013165) and 6.3 (180\u2013182). The five section commits sit at sensible working, tested points that match slice line 523. The fix is the format: replace each with a plain line such as `**Commit**: feat: add per-agent leadership array to AgentState`.\n\nTask 6.3 (\"Git add any remaining changes \u2026 `docs: complete slice 102`\") does no real work. Its commit would only hold check-offs. Remove it and let section 5's commit be the last one.",
+   "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:48-49"
+  },
+  {
+   "i": 4,
+   "severity": "NOTE",
+   "title": "Unit tests check direction only, but the slice asks for exact output on hand-built inputs",
+   "description": "The slice criterion is \"Each force produces the correct output for hand-constructed inputs\" (slice line 384).\n- **Known-geometry test in 4.2:** it only checks that the force \"biases toward agent 1's heading\". The exact value is easy to compute: `(0.1\u00b7[0,1] + 0.9\u00b7[1,0]) / 1.0 \u2212 [0,0] = [0.9, 0.1]` with `leadership_weight=1.0`. Assert it with `np.testing.assert_allclose`.\n- **Uniform-leadership test:** it says the result \"should be similar to plain velocity averaging\". \"Similar\" can't be asserted. With equal weights the result is exactly `(mean(neighbor_v) \u2212 v) \u00b7 w`, so assert that.",
+   "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:126-127"
+  },
+  {
+   "i": 5,
+   "severity": "NOTE",
+   "title": "Redundant protocol checks and a vague smoke test",
+   "description": "- **Repeated conformance checks:** `isinstance(..., BulkForce)` is checked four times, in 3.1 and 3.2 (MomentumForce) and in 4.1 and 4.2 (LeadershipForce). Task 6.2 (lines 176\u2013178) checks both again, so it can be deleted.\n- **Task 5.1:** it has no assertion beyond \"runs without error\". Its step \"set some agents to high leadership \u2026 to confirm forces interact correctly\" has no measurable outcome. Task 5.2 already runs `tick()` with all five forces, so 5.1 adds little. Either fold it into 5.2 or reduce it to a plain no-exception smoke test with no leadership-setup step.\n- **Task 6.1:** the step \"No warnings about missing fields or deprecated patterns\" (line 174) can't be checked. Drop it, or name the specific warning filter.",
+   "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:141-145"
+  },
+  {
+   "i": 6,
+   "severity": "NOTE",
+   "title": "Epsilon is an inline example value, not a shared constant",
+   "description": "Tasks 3.1 (line 86) and 4.1 (line 117) each give \"epsilon (e.g. 1e-10)\" inline. The project rule says \"Avoid hard-coded constants and duplicated values.\" Tell the implementer to define one module-level constant in `herding.py` and use it in both forces, so the value isn't duplicated.",
+   "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:86"
+  }
+ ]
+}

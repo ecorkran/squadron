@@ -1,0 +1,68 @@
+{
+ "review": "r08",
+ "findings": [
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "The commits after Task 4 and Task 6 leave the MCP package failing typecheck",
+   "description": "`guide_install` declares `z.enum(['submodule', 'clone', 'manual'])` and passes `strategy` straight to `manager.install(strategy, source)` at line 116. Once Task 1 narrows `GuideMethod` to `'submodule' | 'clone' | 'tarball'`, `'manual'` can no longer be assigned to the parameter, so `@context-forge/mcp-server` stops typechecking. Task 7 is the first task that fixes it.\n\nThe commits at Task 4 (`refactor(core): rename\u2026`) and Task 6 (`fix(core): \u2026drop silent catches`) only check core (`pnpm --filter @context-forge/core test`). Both therefore commit a workspace that does not build.\n\nFix: move the MCP enum/normalize change and the CLI `as GuideMethod` cast removal into Task 3 (or just before the Task 4 commit). Change the Task 4 success criterion to `pnpm -r typecheck` so the commit happens at a working point.",
+   "location": "packages/mcp-server/src/tools/guideTools.ts:100-116"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Commit markers are inside checkbox items, so commits will default to once per task, including after the non-compiling Task 1",
+   "description": "Every commit is written as \"Commit: `\u2026`\" inside a `- [ ] Success criteria:` checkbox. There are no plain `**Commit**:` lines. Under the project rule, a file with no markers commits \"at the end of each top-level task.\" That means a commit after Task 1, whose own success criterion says core typecheck *fails* until Task 3, and after Tasks 3, 5, 9, 10, 13, 15 and so on.\n\nFix: pull each commit out into a plain `**Commit**: \\`\u2026\\`` line after the relevant task (4, 6, 8, 12, 14, 16, 18, 21, 23, 24, 27, 29, 31, 32). Alternatively, merge Task 1 into Task 3 so no task ends with code that doesn't compile.",
+   "location": "project-documents/user/tasks/925-tasks.guide-install-robustness.md:99-100"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Task 15 is ambiguous about where the timeout is applied, and no test checks that auto-init is time-bounded",
+   "description": "Task 15 contradicts itself:\n- It says `init()` \"runs \u2026 with `{ timeoutMs: GUIDE_INIT_TIMEOUT_MS }`\".\n- It also says to \"pass the timeout as an `init()` option so `sync()` and `update()` keep unbounded behavior.\"\n\nTask 17 then calls `SubmoduleStrategy.init(operationPath)` with no option. A junior implementer could reasonably make the timeout opt-in, which leaves the auto-init path unbounded. That breaks D10 and leaves F004 (the hang case) unresolved. Tasks 16 and 18 don't check which timeout reaches `gitExec`, and Task 14 only tests `gitExec` on its own.\n\nFix: state one signature, e.g. `init(path, opts: { timeoutMs?: number })`, with `ensureCheckout()` passing `GUIDE_INIT_TIMEOUT_MS` and `sync()` passing nothing. Add one assertion to Task 18 that the `ensureCheckout()` \u2192 `init()` path calls `gitExec` with `timeoutMs === GUIDE_INIT_TIMEOUT_MS`, and one to Task 16 that `sync()` passes no timeout.",
+   "location": "project-documents/user/tasks/925-tasks.guide-install-robustness.md:227-238"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Task 11 makes `detect()` throw, which differs from the design and changes behavior for every caller",
+   "description": "The design's Data Flow puts `'error' \u2192 throw` inside `ensureCheckout()`. D3 also requires `cf guides info` to stay a read-only status command a user \"can always inspect first.\" Task 11 puts the throw inside `GuideDetector.detect()` instead.\n\n`detect()` is also called by `cf guides info`, `guide_status`, `setup-ide`, install and update. With this change, a submodule install in an environment where git is missing or the directory isn't a repo would stop the status commands from working at all, rather than reporting the problem. Task 12 also has no test for the `'error'` branch.\n\nFix: either set `checkout` to the error state (or `null`) in `detect()` and throw only in `ensureCheckout()` as the design specifies, or record that this decision was made deliberately. In either case, add a test for the `'error'` branch.",
+   "location": "project-documents/user/tasks/925-tasks.guide-install-robustness.md:188-195"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "The Task 9 fixture will fail on current git unless file-protocol submodules are allowed, and the test pattern it points to doesn't exist",
+   "description": "Task 9 builds a host repo that adds a local bare repo as a submodule. It then runs `git submodule update --init`, both in the fixture and through `SubmoduleStrategy.init()` \u2192 `gitExec`. Since git 2.38.1, `protocol.file.allow` defaults to `user`, so local-path submodule clones fail with \"transport 'file' not allowed.\" The fixture and every test using the `cloned()` state (Tasks 12, 16, 18, 21, 23, 24) would fail.\n\nSeparately, the Context Summary says `SubmoduleStrategy.test.ts` is \"the place to look for an existing real-git temp-repo pattern.\" That file is mocked (\"calls submodule add, git add, and git commit\"), so there is no such pattern to extend.\n\nFix: tell Task 9 to configure `protocol.file.allow=always` in a way that also reaches the child processes `gitExec` starts, e.g. `GIT_CONFIG_COUNT`/`GIT_CONFIG_KEY_0`/`GIT_CONFIG_VALUE_0` in the test environment or a temp `GIT_CONFIG_GLOBAL`. Correct the Context Summary to say no real-git helper exists yet.",
+   "location": "packages/core/tests/guides/strategies/SubmoduleStrategy.test.ts:72"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "No CLI test for the deprecation warning when `manual` comes from config",
+   "description": "The success criterion says a project with `guide.git_strategy: manual` \"installs as tarball with the same warning.\" Task 6 checks that core reports the alias, and Task 7 prints the warning in `guidesInstallAction()`. But Task 8 only tests the `--strategy manual` flag path, so nothing checks that the config path actually prints the warning to stderr.\n\nFix: add one case to Task 8: config contains `manual`, then `cf guides install` writes the deprecation line to stderr and `guides info --json` reports `tarball`.",
+   "location": "project-documents/user/tasks/925-tasks.guide-install-robustness.md:146-154"
+  },
+  {
+   "i": 7,
+   "severity": "NOTE",
+   "title": "Task 26 calls `normalizeGuideMethod(opts.strategy)` without saying what happens when the flag is omitted",
+   "description": "If `--strategy` isn't given, `opts.strategy` is `undefined`. Normalizing it unconditionally would throw, or fail typecheck, and break plain `cf init`. Say that normalization runs only when the flag is present and that otherwise the config/default path in `guidesInstallAction` is used. Also add a `cf init` case without `--strategy` to Task 27.\n\nThe alias-warning text is now produced at three CLI sites: the install flag, install via config, and init. A small shared helper next to `GUIDE_STRATEGIES` would keep that text in one place.",
+   "location": "project-documents/user/tasks/925-tasks.guide-install-robustness.md:357-364"
+  },
+  {
+   "i": 8,
+   "severity": "NOTE",
+   "title": "Some grep and mock-based checks are weaker than they look",
+   "description": "- Task 7's `grep -rn \"manual\"` (unquoted) also matches words like \"manually\" in comments, so it can fail when nothing is wrong. Use `\"'manual'\"` or a word-boundary pattern.\n- Task 27 checks that \"no `.gitmodules` is created\" while also checking that `guidesInstallAction` was called. If that action is mocked, the `.gitmodules` check proves nothing. Make it either a real tarball install or a check of the arguments only.\n- Task 6(c) mocks `ConfigManager.get()` to throw. One test using a real malformed config file would confirm that `get()` actually throws in that case, which is what the \"malformed shared config\" criterion depends on.",
+   "location": "project-documents/user/tasks/925-tasks.guide-install-robustness.md:143-144"
+  },
+  {
+   "i": 9,
+   "severity": "NOTE",
+   "title": "A few tasks are small enough to merge",
+   "description": "32 tasks is reasonable for three issues spread across core, CLI and MCP. A few merges would cut overhead and remove broken intermediate states:\n- Task 1 into Task 3 (removes the non-compiling Task 1 state).\n- Task 10 into Task 11 (Task 10's own success criterion depends on Task 11).\n- Task 28 into Task 29.",
+   "location": "project-documents/user/tasks/925-tasks.guide-install-robustness.md:176-195"
+  }
+ ]
+}

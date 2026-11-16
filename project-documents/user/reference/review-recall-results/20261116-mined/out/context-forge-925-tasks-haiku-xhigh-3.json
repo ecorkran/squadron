@@ -1,0 +1,387 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "Task 13 relies on a `/timed out/i` pattern that does not exist",
+      "description": "Task 13 says the timeout message will match \"the existing `/timed out/i` pattern\", and design D10 (line 135) makes the same claim. `packages/core/src/guides/gitExec.ts:20-30` has no such pattern. The only timeout-like entries are `/connection timed out/i` and `/etimedout/i`. A message such as \"git ... timed out after 60 seconds\" matches none of them, so `withNetworkErrorHint` appends nothing, and Task 14's criterion (rejection contains `GUIDE_OFFLINE_REMEDIATION`) fails. Fix: add `/timed out/i` to `NETWORK_ERROR_PATTERNS` as an explicit step in Task 13, or make the timeout message contain \"connection timed out\". Then have Task 14 assert the remediation text.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/925-tasks.guide-install-robustness.md:213-214"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Task 17 appends the remediation a second time on `init()` failure",
+      "description": "Task 17 says that on `init()` failure the caller rethrows \"with `GUIDE_OFFLINE_REMEDIATION` appended\". But `gitExec` already appends it to every rejection whose text matches a network pattern (`gitExec.ts:42-50`, applied at line 67). Task 13 routes the timeout through the same path. A network failure would therefore carry the remediation twice. Fix: remove the caller-side append, and have Task 18 assert that the text appears exactly once.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/925-tasks.guide-install-robustness.md:262-263"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Task 15 gives contradictory timeout behavior for `sync()` and `init()`",
+      "description": "The first bullet says `init()` always runs with `{ timeoutMs: GUIDE_INIT_TIMEOUT_MS }`. The second says `sync()` calls `init()` \"without the timeout\" by passing \"the timeout as an `init()` option\". Both cannot hold, and the signature is never given. Task 17 calls `init(operationPath)` with no option, which makes the bound the default and so bounds `sync()` too, against D10. Fix: state the signature, e.g. `init(operationPath, opts?: { timeoutMs?: number })`. `ensureCheckout()` passes `GUIDE_INIT_TIMEOUT_MS`, and `sync()` passes nothing.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/925-tasks.guide-install-robustness.md:227-235"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The submodule fixture will likely hit git's file-transport restriction",
+      "description": "Task 9 builds a host repo that adds a local bare repo as a submodule, and `initialized()` runs `git submodule update --init` against that local path. Since git 2.38.1 (CVE-2022-39253), submodule operations refuse the `file` transport by default. The likely error is \"transport 'file' not allowed\". Tasks 12, 16, 18, 21 and 23 all depend on this fixture. Fix: state that the fixture passes `-c protocol.file.allow=always` on submodule commands. That setting is test-only, since production guide URLs are https. The Task 9 smoke test should be the first thing run.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/925-tasks.guide-install-robustness.md:158-167"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The rename sweep leaves a test and two user-facing messages without an owner",
+      "description": "Adding `tarball` to the `ConfigKeys` enum (Task 3) changes the message asserted at `configTools.test.ts:199`. Task 4 owns only the core tests, and Task 8 owns only the guideTools tests. So nothing updates this test until Task 32's `pnpm -r test`. Separately, `CloneStrategy.ts:34` and `SubmoduleStrategy.ts:39` carry `\"manual\"` in user-facing error text. Task 3's grep matches only single-quoted `'manual'`, so it passes while that text still says \"manual\". Fix: add `configTools.test.ts` to Task 4, and list the two messages in Task 3 with a grep that matches both quote styles.",
+      "file_ref": null,
+      "category": "coverage",
+      "raw_category": null,
+      "location": "packages/mcp-server/tests/configTools.test.ts:199"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "No test asserts the config-sourced deprecation warning reaches the CLI",
+      "description": "Functional criterion 6 requires `guide.git_strategy: manual` in config to install as tarball \"with the same warning\", through the CLI. Task 6(b) covers the core return value, and Task 7 adds the print. Task 8's CLI test covers only the `--strategy manual` flag path. Functional criterion 5 also names the text line `Method: tarball`, but Task 8 asserts only `guides info --json`. Fix: add one CLI case with a config file set to `manual` that asserts stderr, and assert the text `Method:` line.",
+      "file_ref": null,
+      "category": "coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/925-tasks.guide-install-robustness.md:146-152"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The `'error'` branch of detection has no test",
+      "description": "Task 11 makes `detect()` throw when `checkSyncStatus()` returns `'error'`, which D1 and D7 require. Task 12 tests the three states and tarball. Task 18 tests one case per `ensureCheckout()` branch, and Task 17's branch list (lines 253-259) omits `'error'`. The design's failure-mode rule requires each new failure path to be observable and tested. Fix: add `'error'` to Task 17's branch list, and add one test to Task 12 and one to Task 18 that mock `checkSyncStatus` to return `'error'` and assert rejection.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/925-tasks.guide-install-robustness.md:188-192"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The file has no `**Commit**:` markers, and the commit points are inconsistent",
+      "description": "Commit messages appear as inline \"Commit:\" text inside success-criteria checkboxes on 13 tasks (lines 100, 128, 154, 205, 225, 247, 277, 313, 334, 343, 374, 390, 413). The other tasks have none. With no markers, the cadence rule commits at the end of every top-level task. That would commit Tasks 1\u20133 with typecheck errors. Task 32 also writes verification output into the DEVLOG after Task 31's commit (lines 419-420, 413), which leaves a notes-only commit. Fix: replace the inline lines with `**Commit**:` markers at green points, such as after Tasks 4, 8, 12, 16, 18, 21, 24, 27, 29, and 32. Move the DEVLOG recording before the Task 31 commit, or into the final commit.",
+      "file_ref": null,
+      "category": "sequencing",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/925-tasks.guide-install-robustness.md:100"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Part 1 leaves the build red, and the design's full-suite checkpoint is dropped",
+      "description": "Task 1's success criterion is that typecheck \"reports errors\". The errors are fixed only in Task 3, so Tasks 1 and 3 form one rename unit. Task 4 then runs only `pnpm --filter @context-forge/core test` (lines 96-100). The design's Implementation Notes (design line 256) say to \"Run the full suite after step 1 before proceeding \u2014 it is the widest change.\" Nothing runs the CLI or MCP suites until Task 32. Fix: merge Tasks 1, 3 and 4 into one task that ends with typecheck green and the affected packages' tests passing. Task 2 remains a test task after it.",
+      "file_ref": null,
+      "category": "sequencing",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/925-tasks.guide-install-robustness.md:71-73"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Task 20's explicit list omits a guide reader",
+      "description": "Task 20 names `build.ts`, `prompt.ts` and `setup-ide.ts`. But `PROMPT_FILE_RELATIVE_PATH` resolves inside the guide (`packages/core/src/services/constants.ts:7-8`, `project-documents/ai-project-guide/project-guides/prompt.ai-project.system.md`). `phaseShorthand.ts:22` reads it under `projectPath` with no guide check. Task 20's grep step would find it, but the explicit list and the \"list covered call sites in the commit body\" requirement would not. Fix: add `phaseShorthand.ts` to the list, or say the list is the grep result.",
+      "file_ref": null,
+      "category": "coverage",
+      "raw_category": null,
+      "location": "packages/cli/src/utils/phaseShorthand.ts:22"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Shared helpers are named but not specified",
+      "description": "Task 19 says `ensureGuideReady` builds `GuideManager` \"the same way `getGuideContext()` does\", and Task 17 says operationPath must match `getGuideContext()`. That function is module-private (`guides.ts:23`) and CLI-only: it uses `FileProjectStore`, `resolveProjectWorktree` and `UserError`. Task 22's MCP path needs the same operationPath, names no source, and never says whether to use `workingCopy.projectPath`, which `contextTools.ts` already has. Separately, the alias deprecation line is printed from four sites (Task 7 flag path, Task 7 config path, Task 7 MCP `notices`, Task 26 init), with no shared helper, which breaks the do-not-duplicate rule. Fix: name where operationPath resolution lives (move `getGuideContext` into the utility Task 19 creates, and state the MCP value to pass). Add one `deprecatedAliasMessage(alias)` used by all four sites.",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "packages/cli/src/commands/guides.ts:23"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The CHANGELOG heading pre-decides a minor version",
+      "description": "Task 31 writes the CHANGELOG under \"Unreleased (0.14.0)\". The Release Versioning rule reserves minor for a new user-facing feature or significant AI capability, and it must be proposed to the PM with a reason before files change. The rule lists new flags and config keys as patch-level. `cf init --strategy` is a new flag, auto-init is a fix, and the rename is a refinement. Fix: write the entry under \"Unreleased\" with no version number, and raise the 0.14.0 proposal with the PM as one line.",
+      "file_ref": null,
+      "category": "scope",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/925-tasks.guide-install-robustness.md:407"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Task 14 offers two test approaches",
+      "description": "\"Run a git command against a listener that never answers, or mock `execFile`\" leaves the choice to the implementer. A mock proves only that `timeout` and `killSignal` reach `execFile`. Pick the mock for the unit test, and add a real-timeout test only if it can run reliably in CI.",
+      "file_ref": null,
+      "category": "test-design",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/925-tasks.guide-install-robustness.md:219-223"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Task 5 leaves the return shape open for Tasks 7 and 26 to consume",
+      "description": "Task 5 says \"choose one return shape\". Task 7 and Task 26 then depend on whichever shape is chosen. Name the shape in Task 5, for example the design's `{ method, deprecatedAlias?: string }`.",
+      "file_ref": null,
+      "category": "clarity",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/925-tasks.guide-install-robustness.md:110-114"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Task 23 leaves the `notices` empty-versus-absent choice open",
+      "description": "\"Pick one and assert it\" is allowed, but Task 22 says to append only when `action !== 'none'`, which implies the key is absent. Say so in Task 23 to avoid two implementations.",
+      "file_ref": null,
+      "category": "clarity",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/925-tasks.guide-install-robustness.md:329-330"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Proportionality is acceptable",
+      "description": "Thirty-two tasks in one 427-line file for a three-part slice with about ten decisions is in proportion, and no file split is needed. No load test is required: the design restates no NFR (F006). The `~line` hints will go stale, so treat them as search hints only.",
+      "file_ref": null,
+      "category": "task-sizing",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/925-tasks.guide-install-robustness.md"
+    },
+    {
+      "severity": "PASS",
+      "title": "Success criteria and design checks map to tasks",
+      "description": "Functional criteria 1\u20134 and 7\u201310 map to Tasks 5\u20137, 10\u201311, 17\u201327 and 28\u201330. Criterion 5 is covered except for the text-output gap noted above. Technical criteria map to Tasks 2, 9, 12, 18, 27, 29 and 32. Walkthrough steps 1\u20135 map to Task 32. The `catch {}` and literal-grep criteria map to Tasks 3, 5, 17 and 32.",
+      "file_ref": null,
+      "category": "coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/925-tasks.guide-install-robustness.md"
+    },
+    {
+      "severity": "PASS",
+      "title": "Test-with pattern and dependency ordering are correct",
+      "description": "Tests follow their implementation: Task 2 after 1, Task 4 after 3, Task 6 after 5, Task 8 after 7, Task 12 after 10\u201311, Task 14 after 13, Task 16 after 15, Task 18 after 17, Task 21 after 19\u201320, Task 23 after 22, Task 27 after 26, and Task 29 after 28. Every task depends only on earlier tasks, so there are no cycles. The only ordering problem is the Part 1 red state noted above.",
+      "file_ref": null,
+      "category": "sequencing",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/925-tasks.guide-install-robustness.md"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Task 13 relies on a `/timed out/i` pattern that does not exist",
+      "location": "project-documents/user/tasks/925-tasks.guide-install-robustness.md:213-214",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Task 17 appends the remediation a second time on `init()` failure",
+      "location": "project-documents/user/tasks/925-tasks.guide-install-robustness.md:262-263",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Task 15 gives contradictory timeout behavior for `sync()` and `init()`",
+      "location": "project-documents/user/tasks/925-tasks.guide-install-robustness.md:227-235",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "The submodule fixture will likely hit git's file-transport restriction",
+      "location": "project-documents/user/tasks/925-tasks.guide-install-robustness.md:158-167",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "coverage",
+      "raw_category": null,
+      "summary": "The rename sweep leaves a test and two user-facing messages without an owner",
+      "location": "packages/mcp-server/tests/configTools.test.ts:199",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "coverage",
+      "raw_category": null,
+      "summary": "No test asserts the config-sourced deprecation warning reaches the CLI",
+      "location": "project-documents/user/tasks/925-tasks.guide-install-robustness.md:146-152",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "The `'error'` branch of detection has no test",
+      "location": "project-documents/user/tasks/925-tasks.guide-install-robustness.md:188-192",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "concern",
+      "category": "sequencing",
+      "raw_category": null,
+      "summary": "The file has no `**Commit**:` markers, and the commit points are inconsistent",
+      "location": "project-documents/user/tasks/925-tasks.guide-install-robustness.md:100",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "concern",
+      "category": "sequencing",
+      "raw_category": null,
+      "summary": "Part 1 leaves the build red, and the design's full-suite checkpoint is dropped",
+      "location": "project-documents/user/tasks/925-tasks.guide-install-robustness.md:71-73",
+      "location_verified": true
+    },
+    {
+      "id": "F010",
+      "severity": "concern",
+      "category": "coverage",
+      "raw_category": null,
+      "summary": "Task 20's explicit list omits a guide reader",
+      "location": "packages/cli/src/utils/phaseShorthand.ts:22",
+      "location_verified": true
+    },
+    {
+      "id": "F011",
+      "severity": "concern",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "Shared helpers are named but not specified",
+      "location": "packages/cli/src/commands/guides.ts:23",
+      "location_verified": true
+    },
+    {
+      "id": "F012",
+      "severity": "concern",
+      "category": "scope",
+      "raw_category": null,
+      "summary": "The CHANGELOG heading pre-decides a minor version",
+      "location": "project-documents/user/tasks/925-tasks.guide-install-robustness.md:407",
+      "location_verified": true
+    },
+    {
+      "id": "F013",
+      "severity": "note",
+      "category": "test-design",
+      "raw_category": null,
+      "summary": "Task 14 offers two test approaches",
+      "location": "project-documents/user/tasks/925-tasks.guide-install-robustness.md:219-223",
+      "location_verified": true
+    },
+    {
+      "id": "F014",
+      "severity": "note",
+      "category": "clarity",
+      "raw_category": null,
+      "summary": "Task 5 leaves the return shape open for Tasks 7 and 26 to consume",
+      "location": "project-documents/user/tasks/925-tasks.guide-install-robustness.md:110-114",
+      "location_verified": true
+    },
+    {
+      "id": "F015",
+      "severity": "note",
+      "category": "clarity",
+      "raw_category": null,
+      "summary": "Task 23 leaves the `notices` empty-versus-absent choice open",
+      "location": "project-documents/user/tasks/925-tasks.guide-install-robustness.md:329-330",
+      "location_verified": true
+    },
+    {
+      "id": "F016",
+      "severity": "note",
+      "category": "task-sizing",
+      "raw_category": null,
+      "summary": "Proportionality is acceptable",
+      "location": "project-documents/user/tasks/925-tasks.guide-install-robustness.md",
+      "location_verified": null
+    },
+    {
+      "id": "F017",
+      "severity": "pass",
+      "category": "coverage",
+      "raw_category": null,
+      "summary": "Success criteria and design checks map to tasks",
+      "location": "project-documents/user/tasks/925-tasks.guide-install-robustness.md",
+      "location_verified": null
+    },
+    {
+      "id": "F018",
+      "severity": "pass",
+      "category": "sequencing",
+      "raw_category": null,
+      "summary": "Test-with pattern and dependency ordering are correct",
+      "location": "project-documents/user/tasks/925-tasks.guide-install-robustness.md",
+      "location_verified": null
+    }
+  ],
+  "template_name": "tasks",
+  "input_files": {
+    "input": "project-documents/user/tasks/925-tasks.guide-install-robustness.md",
+    "against": "project-documents/user/slices/925-slice.guide-install-robustness.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/context-forge-925-tasks"
+  },
+  "timestamp": "2026-11-16T13:51:01.767008",
+  "model": "claude-haiku-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 9,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-haiku-5-5",
+  "answering_models": [
+    "claude-haiku-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 18,
+    "in_fences": 0,
+    "in_section": 18,
+    "surviving": 18
+  },
+  "effort": "xhigh",
+  "profile": "sdk",
+  "turns": 10,
+  "prompt_tokens": 666806,
+  "cached_tokens": 528033,
+  "cache_write_tokens": 138761,
+  "completion_tokens": 56889,
+  "reasoning_tokens": null,
+  "duration_seconds": 244.68930225004442,
+  "cost_usd": 0.17895513000000002,
+  "cost_basis": "provider"
+}

@@ -1,0 +1,441 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "PASS",
+      "title": "Scope covers every mutation path the parent entry names",
+      "description": "The slice covers the config block, the GPU driver, bounds sync-back, spawn/despawn re-upload, and the CPU fallback. These match the parent's 146 entry. The defects below are in how these paths are designed, not in what the slice covers.",
+      "file_ref": null,
+      "category": "alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:24-34"
+    },
+    {
+      "severity": "PASS",
+      "title": "Tier 2 NFR is restated with a specific target",
+      "description": "A6 restates the parent's Tier 2 target of at least 60 TPS at N=50k. The gating issues are covered in a later finding.",
+      "file_ref": null,
+      "category": "nfr",
+      "raw_category": null,
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:334"
+    },
+    {
+      "severity": "FAIL",
+      "title": "Spawn/despawn re-upload overwrites live agents with stale CPU state",
+      "description": "`setup_from_server` seeds the GPU from `entity_manager.state` (line 148). After that, the GPU path returns positions only through `TickResult` (lines 123, 274). Nothing writes GPU positions or velocities back to `entity_manager.state`, and the dispatch has no write-back. The CPU integrator updates the state arrays in place, so only the CPU path keeps that state current. As written, `sync_from_entity_manager()` re-uploads setup-time positions and velocities for every agent, so each spawn or despawn snaps the flock back. Test 6 (line 314) only checks that the next tick does not raise, so it would not catch this. Fix: decide whether the GPU is the source of truth for existing agents (CPU supplies only new agents), or add a GPU-to-CPU write-back and state its cost. Test 6 should assert that surviving agents keep their pre-sync positions.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:172-183"
+    },
+    {
+      "severity": "FAIL",
+      "title": "Reflect velocity updates are not synced back to the GPU",
+      "description": "The host-side reflect branch of `apply_bounds_policy` flips the outward velocity component as well as clamping the position. The sync-back at line 213 uploads positions only, and `upload_positions` (line 227) takes positions only. The GPU keeps the outward velocity, integrates it on the next tick, and the agent is re-clamped every tick. Test 7 (line 315) covers only WRAP, and A4 (line 330) checks only finiteness and in-bounds position, so neither would catch this. Fix: sync velocities too, and add a REFLECT test that asserts the velocity sign on the following tick.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:213"
+    },
+    {
+      "severity": "FAIL",
+      "title": "Soft bounds have no wall mechanism on the GPU path",
+      "description": "On the host, SOFT is a no-op inside `apply_bounds_policy`. The wall effect is a `WorldBoundsRepulsor` force that the force builder appends only when the policy is SOFT. The slice's `setup()` takes no force configuration (lines 78\u201385), and 145's per-profile parameter table (145 lines 123\u2013126) has no wall term. 145 does not say whether its \"seven forces\" include the repulsor. So a SOFT run on the GPU path has no wall force, and A4 cannot pass for that policy. The SOFT sync-back at line 209 is also a wasted transfer, since the host call does nothing. Fix: either specify how the GPU path gets wall repulsion (a kernel term plus setup parameters), or reject SOFT with the GPU backend at config parse time until it exists.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:209"
+    },
+    {
+      "severity": "FAIL",
+      "title": "The A7 fallback cannot trigger as specified",
+      "description": "`_select_arch()` decides only from the OS name: Darwin returns Metal, Linux returns CUDA. The fallback branch runs only on other platforms. The doc says the fallback applies \"if neither is detected\" (line 33), and A7 says a host with no Metal and no CUDA starts successfully. On a Linux host without an NVIDIA GPU, or a Mac where Metal init fails, `qd.init` raises. Open Note line 382 says that failure is fatal. So the fallback never runs for the case it was written for, and A7 cannot pass. The fix needs a real probe, but a probe that calls `qd.init` again in the same process hits the undefined second-init case in line 382. The probe must avoid that, and the PM should decide whether the explicit-warning fallback is acceptable under the no-silent-fallback principle.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:336"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "GPU driver is coupled to a concrete class and adds a second server-engine channel",
+      "description": "The parent says the tick return type contract is \"the only shared interface\" and the server \"must not depend on which backend produced the data\" (parent line 85). The slice types `SimulationManager`'s parameter as `GpuSimulationDriver | None` (line 162) and adds three GPU-specific calls the server makes on the tick path: `sync_from_entity_manager`, `notify_positions_modified`, and `count_changed_since_last_tick`. The driver also sits in the server package and owns the Quadrants lifecycle (line 72). The parent's 146 entry does ask for this shape, so the conflict needs a PM decision. Options: a `TickEngine` protocol whose step returns `TickResult`, with the GPU engine living in the engine package and owning its own bounds sync; or a documented exception to the parent's principle.",
+      "file_ref": null,
+      "category": "architecture",
+      "raw_category": null,
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:162"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Spawn/despawn field capacity is unspecified and conflicts with 145",
+      "description": "`setup_from_server` sizes the fields from `entity_manager.count` (line 143). Spawns raise the count past N, and despawns lower it. 145 says fields are allocated once and \"we do not resize mid-run\" (145 lines 89\u201391), and a shape change recompiles the kernel (145 lines 481\u2013485). The slice does not choose between fixed capacity with an active count and reallocation with recompilation. As written, a spawn past N fails inside `from_numpy` at runtime. Fix: choose one, and for fixed capacity state the maximum agent count and where it is validated.",
+      "file_ref": null,
+      "category": "design",
+      "raw_category": null,
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:143"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "GPU path ignores the force and spatial configuration without mapping or rejecting it",
+      "description": "The CPU path uses `self._forces` (built by `_build_forces()`, line 231) and `self._spatial` (lines 182\u2013183). The GPU `setup()` takes neither. 145's kernel hard-codes its force set, so a config that changes forces, query radius, cell size, or max neighbors is silently ignored on the GPU path. The parent says the spatial backend is config-selectable behind `SpatialQuery` (parent line 83), and 145 says the fused kernel bypasses `SpatialQuery` by design (145 lines 454\u2013457). The slice does not say how `spatial` config combines with `compute.backend`, for example `compute: quadrants` with `spatial: kdtree`. Fix: define the valid combinations and reject the rest at parse time.",
+      "file_ref": null,
+      "category": "interface",
+      "raw_category": null,
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:78-85"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The production-to-bench dependency is not removed, and logic is duplicated",
+      "description": "The Open Note says moving `GpuAgentState` \"eliminates the production\u2192bench import dependency.\" It does not. The spatial-hash and fused kernels, the bench backend's `tick_once`, and `_select_arch` all stay in bench code. The Files Changed table moves only the state class (line 294) and says the bench backends are unchanged (line 301). So `gpu_driver.py` either imports from bench, or copies the logic. Copying duplicates the three-phase sequence (lines 119\u2013123) and `_select_arch` (line 98, \"updated from the bench backend version\"). The copies would also diverge, since bench raises and production falls back. Fix: move the kernels, the phase sequence, and `_select_arch` into `migratory/gpu/`, and have bench import them.",
+      "file_ref": null,
+      "category": "dependency",
+      "raw_category": null,
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:383"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The dtype contract depends on an unverified substrate behavior and has no test",
+      "description": "Line 150 says `export_positions()` returns f64 because \"Quadrants upcasts on download,\" and that `from_numpy` converts f64 to f32 on upload. 145 uses f32 fields and exports through `to_numpy()` (145 line 139), and does not say it upcasts. A `to_numpy()` on an f32 field returns f32 unless something converts it. If the export returns f32, A3's dtype contract breaks for downstream consumers. Fix: convert explicitly at the driver boundary, and add a test asserting dtype and shape match the CPU path (A3 has no test; test 5 checks only count and finiteness).",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:150"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Failure modes are not enumerated for the new I/O paths",
+      "description": "Only `qd.init` failure at startup is enumerated. Missing: a kernel or sync that hangs (no timeout is stated); device-to-host failure in the export calls; host-to-device failure in the upload calls; and an exception raised inside `step()` while the server runs it in an executor. The doc says a mid-session failure is \"fatal to the process\" but does not say what is logged, or what clients see. The review rules require each mode to be observable (WARNING or above, or a metric) and to have a test asserting the signal. None of the eight unit tests does. Fix: add one row per failure mode with its signal and its test.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:382"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Several acceptance criteria have no test, and A5 conflicts with the module move",
+      "description": "A1 (invalid values rejected before the port binds) is covered only by the manual walkthrough, not a test. A3 (dtype and shape) has no test. A4 says all four bounds policies, but only WRAP is tested (test 7, line 315). A7 has no test. A5 says all existing bench tests pass without modification, yet two bench test modules reference the fused-state and backend module paths this slice moves or edits, and the Files Changed table lists no test changes (lines 294\u2013301). Either A5 fails or the table is incomplete.",
+      "file_ref": null,
+      "category": "testing",
+      "raw_category": null,
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:305-336"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Thread model and publication of shared state are not stated",
+      "description": "The server runs `sim.step` in an executor thread, so `gpu_driver.step()` runs off the event loop. The slice adds shared mutable state: `_positions_dirty`, `_pending_positions` (a reference to a view of the result array), and `EntityManager.count`, which is read in `step()` and changed by spawn/despawn. The Python rules require the publication mechanism for any state shared across threads, and the slice states none. It also does not say which thread calls `qd.init` and which launches kernels, or whether Quadrants supports launches from a non-initial thread (unverified). Fix: state the thread model and the ordering guarantee (spawn/despawn run only between awaited ticks), and remove the pending-buffer aliasing with the immediate-upload change below.",
+      "file_ref": null,
+      "category": "concurrency",
+      "raw_category": null,
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:213"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The Tier 2 gate is under-specified and not CI-gated",
+      "description": "The gate runs 100 ticks at 50k without stating `subdivision_factor`, bounds policy, or warmup. Open Note line 386 says S=3 is the validated setting at this density, and the default is S=1, so the result depends on a value the doc does not set. First-launch kernel compilation can fall inside a 100-tick window (about 1.7 s at 60 TPS) and distort the measurement. The test is CUDA-only and a manual pre-ship gate. The Python rules require load tests on simulation paths to be CI-gated. Fix: specify S, bounds policy, and excluded warmup ticks, and name the CI runner that gates the test.",
+      "file_ref": null,
+      "category": "testing",
+      "raw_category": null,
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:320"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The parent's TPS-miss open question is unanswered and this slice exposes it",
+      "description": "The parent assigns the TPS-miss degradation model to \"slice (145) design.\" 145 does not address it. 146 is the first point where the live server runs at `tick_rate` with real clients. The slice does not say what happens when a GPU tick exceeds `1/tick_rate`: time dilation under fixed dt, dropped frames, or entity reduction. Either specify the behavior here, or record an explicit deferral with a named owner.",
+      "file_ref": null,
+      "category": "scope",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/140-slices.simulation-scaling.md:95"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Environment hooks can change state the GPU path never sees",
+      "description": "`SimulationManager.step()` calls `environment.pre_tick(...)` and `post_tick()` around the GPU path. The slice does not say whether these hooks read or write agent state or profile parameters. 145 uploads the profile table once and says it \"does not change between ticks unless setup() is called again\" (145 lines 284\u2013285). The seasonal parameter passed to `pre_tick` suggests the hook may change profiles. If it does, the GPU path ignores the change without error. Fix: state that the hooks are read-only with respect to agent state, or add a sync path.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:172"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Proportionality: cut the dirty-flag protocol and duplicated sections",
+      "description": "Three cuts:\n1. Replace the deferred sync (`notify_positions_modified`, `_positions_dirty`, `_pending_positions`, and a flush at the start of the next `step()`) with an immediate `upload_positions()` after bounds enforcement. The transfer count is the same, one upload per non-OPEN tick. The flag and pending view, and the aliasing risk noted above, go away.\n2. Delete the repeated interface block (lines 215\u2013225), which restates the class block (75\u201394) and the notify method.\n3. The Data Flow section (256\u2013284) restates the dispatch block (168\u2013199) and the per-tick steps (119\u2013123). Keep one.\nAlso, `setup_from_server` (132\u2013148) repeats the field extraction in `setup(workload)`. Factor the shared fields into one helper that both call.",
+      "file_ref": null,
+      "category": "proportionality",
+      "raw_category": null,
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:213"
+    },
+    {
+      "severity": "NOTE",
+      "title": "\"Server call site unchanged\" contradicts the file table",
+      "description": "Line 29 says `server.py` is unchanged, but the Files Changed table (line 293) and Server Startup (lines 231\u2013254) change it. The `step()` call site is unchanged; construction and shutdown change. Reword line 29 to say so.",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:29"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Parent's f32/f64 statement is stale against 145",
+      "description": "The parent's note under the 143 entry says 145's integrated tick \"uses f64 throughout on CUDA.\" 145 says f32 throughout (145 line 50), and 146 follows 145. The parent note is the outlier. The PM should reconcile the parent.",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/140-slices.simulation-scaling.md:36"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The Metal golden path follows the parent's 146 entry but conflicts with its substrate note",
+      "description": "The parent's 146 entry says quadrants uses Metal on macOS, and A2 makes Metal the golden demo. The parent's substrate note (line 32) demotes Metal to best-effort. 145 says the same kernel runs on Metal with parity measured there, so the path exists. The PM should decide whether Metal is a gate or best-effort.",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:326"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "pass",
+      "category": "alignment",
+      "raw_category": null,
+      "summary": "Scope covers every mutation path the parent entry names",
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:24-34",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "pass",
+      "category": "nfr",
+      "raw_category": null,
+      "summary": "Tier 2 NFR is restated with a specific target",
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:334",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Spawn/despawn re-upload overwrites live agents with stale CPU state",
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:172-183",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Reflect velocity updates are not synced back to the GPU",
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:213",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Soft bounds have no wall mechanism on the GPU path",
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:209",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "The A7 fallback cannot trigger as specified",
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:336",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "concern",
+      "category": "architecture",
+      "raw_category": null,
+      "summary": "GPU driver is coupled to a concrete class and adds a second server-engine channel",
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:162",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "concern",
+      "category": "design",
+      "raw_category": null,
+      "summary": "Spawn/despawn field capacity is unspecified and conflicts with 145",
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:143",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "concern",
+      "category": "interface",
+      "raw_category": null,
+      "summary": "GPU path ignores the force and spatial configuration without mapping or rejecting it",
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:78-85",
+      "location_verified": true
+    },
+    {
+      "id": "F010",
+      "severity": "concern",
+      "category": "dependency",
+      "raw_category": null,
+      "summary": "The production-to-bench dependency is not removed, and logic is duplicated",
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:383",
+      "location_verified": true
+    },
+    {
+      "id": "F011",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "The dtype contract depends on an unverified substrate behavior and has no test",
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:150",
+      "location_verified": true
+    },
+    {
+      "id": "F012",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "Failure modes are not enumerated for the new I/O paths",
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:382",
+      "location_verified": true
+    },
+    {
+      "id": "F013",
+      "severity": "concern",
+      "category": "testing",
+      "raw_category": null,
+      "summary": "Several acceptance criteria have no test, and A5 conflicts with the module move",
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:305-336",
+      "location_verified": true
+    },
+    {
+      "id": "F014",
+      "severity": "concern",
+      "category": "concurrency",
+      "raw_category": null,
+      "summary": "Thread model and publication of shared state are not stated",
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:213",
+      "location_verified": true
+    },
+    {
+      "id": "F015",
+      "severity": "concern",
+      "category": "testing",
+      "raw_category": null,
+      "summary": "The Tier 2 gate is under-specified and not CI-gated",
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:320",
+      "location_verified": true
+    },
+    {
+      "id": "F016",
+      "severity": "concern",
+      "category": "scope",
+      "raw_category": null,
+      "summary": "The parent's TPS-miss open question is unanswered and this slice exposes it",
+      "location": "project-documents/user/architecture/140-slices.simulation-scaling.md:95",
+      "location_verified": true
+    },
+    {
+      "id": "F017",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Environment hooks can change state the GPU path never sees",
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:172",
+      "location_verified": true
+    },
+    {
+      "id": "F018",
+      "severity": "concern",
+      "category": "proportionality",
+      "raw_category": null,
+      "summary": "Proportionality: cut the dirty-flag protocol and duplicated sections",
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:213",
+      "location_verified": true
+    },
+    {
+      "id": "F019",
+      "severity": "note",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "\"Server call site unchanged\" contradicts the file table",
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:29",
+      "location_verified": true
+    },
+    {
+      "id": "F020",
+      "severity": "note",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "Parent's f32/f64 statement is stale against 145",
+      "location": "project-documents/user/architecture/140-slices.simulation-scaling.md:36",
+      "location_verified": true
+    },
+    {
+      "id": "F021",
+      "severity": "note",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "The Metal golden path follows the parent's 146 entry but conflicts with its substrate note",
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:326",
+      "location_verified": true
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md",
+    "against": "project-documents/user/architecture/140-slices.simulation-scaling.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/migratory-146-slice"
+  },
+  "timestamp": "2026-11-16T13:57:38.025203",
+  "model": "claude-haiku-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 10,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-haiku-5-5",
+  "answering_models": [
+    "claude-haiku-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 21,
+    "in_fences": 0,
+    "in_section": 21,
+    "surviving": 21
+  },
+  "effort": "xhigh",
+  "profile": "sdk",
+  "turns": 11,
+  "prompt_tokens": 826580,
+  "cached_tokens": 660247,
+  "cache_write_tokens": 166319,
+  "completion_tokens": 61570,
+  "reasoning_tokens": null,
+  "duration_seconds": 273.1360779160168,
+  "cost_usd": 0.21987241000000002,
+  "cost_basis": "provider"
+}

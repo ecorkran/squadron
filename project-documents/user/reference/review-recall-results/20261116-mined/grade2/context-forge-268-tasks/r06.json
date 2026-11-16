@@ -1,0 +1,33 @@
+{
+ "review": "r06",
+ "findings": [
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Commit points are checkbox items, not plain `**Commit**:` lines",
+   "description": "Every commit point is a checkbox: `- [ ] **2.3 Commit**` at line 79, and `- [ ] Commit: \u2026` at lines 101, 134, 148, 155, 163, 169, 186 and 206. Commit markers must be plain `**Commit**:` lines, never checkboxes. Checkboxes cause two problems:\n- **The commit falls back to a default.** The project's commit rule says to commit at the file's `**Commit**:` markers, which this file does not contain. The implementer would then fall back to committing once per top-level task, which is not the cadence planned here.\n- **It forces a check-off-only commit.** A commit checkbox can only be checked after the commit exists. That leaves a later change that only ticks a box, which project rules forbid.\n\nThe placement itself is good: each commit sits at a working, tested point. The fix is only the format:\n- Turn each commit item into a plain `**Commit**: \\`\u2026\\`` line.\n- Drop the standalone 2.3 and 3.2a tasks and put their success checks in the task before them.",
+   "location": "project-documents/user/tasks/268-tasks.pure-cf-build.md:79"
+  },
+  {
+   "i": 3,
+   "severity": "NOTE",
+   "title": "Golden output may depend on the user-level `git.integration_branch`",
+   "description": "`ContextIntegrator` adds `integrationBranch`/`targetBranch` to the build context through `ConfigManager(checkoutPath).get('git.integration_branch')`. The golden fixtures have no `.context-forge.toml`, so that lookup falls through to the user-level config (`ConfigManager.ts:159`). If a developer's user config sets the key, the golden file records that machine's value, and the test then fails in CI or for another developer.\n\nStep 2.2 says to replace machine-specific values, but runs the test twice on the same machine, so this would not be caught. Suggested fix: name this input in 2.2, and either inject a fixed integration-branch resolver or confirm the test's temp `CONTEXT_FORGE_DATA_DIR` isolates user config.",
+   "location": "packages/core/src/services/ContextIntegrator.ts:169"
+  },
+  {
+   "i": 4,
+   "severity": "NOTE",
+   "title": "The parity check compares a pipeline call standing in for the CLI, not `build.ts`",
+   "description": "In 5.1, the \"CLI path\" is a direct pipeline-plus-integrator call inside an mcp-server test, not `cli/src/commands/build.ts`. D5 allows this, and walkthrough step 1 in 6.3 runs the real CLI by hand, so the criterion is still met. A short comment in the test saying what \"CLI path\" stands for would stop a later reader from over-trusting it.",
+   "location": "project-documents/user/tasks/268-tasks.pure-cf-build.md:179-182"
+  },
+  {
+   "i": 5,
+   "severity": "NOTE",
+   "title": "Some verification steps go beyond what the success criteria need",
+   "description": "These are not worth reworking for a slice of effort 2/5:\n- The temporary-mutation check in 5.1 (add a `writeFileSync`, see the test fail, revert) is extra.\n- Splitting 3.1 and 3.2 into a separate render-removal commit (3.2a) is finer-grained than needed.\n\nAt about 16 tasks and 9 commits, the file is on the heavy side but each task traces to the design.",
+   "location": "project-documents/user/tasks/268-tasks.pure-cf-build.md:185"
+  }
+ ]
+}

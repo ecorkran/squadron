@@ -1,0 +1,47 @@
+{
+ "review": "r08",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "`unset --project` remediation contradicts the delete routing rule",
+   "description": "Line 89 says delete \"mirrors write\", so deleting a personal key at project scope targets `.context-forge.local.toml`. The collision rule (line 146) and walkthrough step 9 (line 259) then tell the user to run `cf config unset git.integration_branch --project` to clear the stale copy in the shared file.\n\nUnder the stated routing, that command does the opposite of what the design intends:\n- **Collision case:** it deletes the developer's personal value (the one the collision rule exists to protect) and leaves the stale shared copy, which then wins through the read fallback.\n- **Walkthrough step 9:** the step cannot pass as written, because `cf check` will still report the finding.\n- **Pre-migration case:** the key is only in the shared file, so `unset --project` is a silent no-op and the value keeps resolving.\n\nThe design needs to define delete semantics for a personal key that is present in the shared file. Two options that fit the existing shape:\n- Delete removes the key from both project files.\n- `migrate-personal` gains an explicit way to drop the stale shared copy.",
+   "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:89"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Gitignore coverage only reaches projects created after this slice",
+   "description": "The ignore line is written only by `cf init`. Projects that already exist, which includes every project in the migration case, never get it.\n\nIn those projects, `cf config set git.integration_branch \u2026 --project` or `cf config migrate-personal` creates an un-ignored `.context-forge.local.toml`. The next `git add .` commits it. That leaves the plan's \"must never be committed\" requirement unmet, and the Overview's claim that `cf init` and `cf check` \"keep personal settings out of git\" does not hold there.\n\n`cf check` has no finding for \"personal file exists but is not ignored\". The design should close this path with one of:\n- Reuse the same ensure-ignored helper from `migrate-personal`.\n- Add a `cf check` warning for an un-ignored personal file.\n\nSeparately, the \"substring\" check would treat `!.context-forge.local.toml` or a commented-out line as already covered. Specify a whole-line match on trimmed lines.",
+   "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:159"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "No owner specified for raw per-file access needed by the checker and migrate command",
+   "description": "The design fixes `ConfigManager`'s public API as unchanged and says callers never choose a file. Two new consumers need exactly what that API hides:\n- The `ConsistencyChecker` rule must enumerate personal keys physically present in the shared file.\n- `migrate-personal`, placed in the CLI's `config.ts`, must write to one specific file and delete from the other.\n\nThe design does not say where that logic lives. The design names the TOML helpers as living in `ConfigManager.ts` (line 93). As written, the implementer must either export those internals to the CLI and introspection, or duplicate file handling in two places. Both break the \"routing lives inside `ConfigManager`\" decision at lines 128-132.\n\nName a single core-level owner (for example, a find-misplaced operation and a migrate operation in the config module) that both the checker and the CLI call. The Component Structure listing should reflect it.",
+   "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:142-144"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Migration story omits the effect on teammates once the migration is committed",
+   "description": "The plan requires a defined compat story for projects that already committed personal keys. The design covers the developer who runs the migration, but not the rest of the team.\n\n`migrate-personal` edits the tracked `.context-forge.toml`. When that deletion is committed and pulled, every other developer's `git.integration_branch` falls through to user/default with no warning. The `cf check` finding has also disappeared for them, because the key is no longer in the shared file.\n\nFor this key, the fall-through changes the fork and merge target to `main`. That is the outcome the integration-branch setting exists to prevent. The Risk Assessment (line 264) says there is \"no functional regression\", which holds only for a single checkout.\n\nState the intended team procedure (each developer migrates or sets their own value before the shared-file deletion lands) and surface it in the command's output or the finding text.",
+   "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:138-146"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Test requirements omit behaviours the design defines",
+   "description": "The listed `migrate-personal` tests are \"happy path + no-op path\" only. The design specifies more behaviour that has no required test:\n- **Collision branches:** skip when the personal value differs; delete the shared copy when the values are identical.\n- **Per-key failure:** continue past a failed key and report `failed: <error>`.\n- **`cf init` gitignore:** the create, append and already-present branches.\n\nWithout the failure-path test, the enumerated failure mode has no asserted observable signal. The exit status of `migrate-personal` when a key fails is also unspecified; define it as non-zero so the failure is not silent to scripts.",
+   "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:222"
+  },
+  {
+   "i": 8,
+   "severity": "NOTE",
+   "title": "Frontmatter dependency differs from the plan entry",
+   "description": "The frontmatter lists `dependencies: [914]`, while the plan entry says \"Dependencies: none\". 914 is complete, so this has no practical effect. Align one of the two for consistency.",
+   "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:6"
+  }
+ ]
+}

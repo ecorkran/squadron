@@ -1,0 +1,75 @@
+{
+ "review": "r03",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Bit-exact parity claim contradicts the grid's documented neighbor-order difference",
+   "description": "Implementation step 5 requires \"bit-exact position equality against brute-force-only over N ticks\" with a mocked density sequence that runs both backends. But the same doc says \"order within a row may differ for grid, so compare as sets\" (line 431), and step 2 hedges with \"modulo documented determinism caveats in the hash grid\" (line 359). Slice 105 says the same: order within a row may differ, only the sets are identical. The CSR forces from slice 111 sum each row with `np.add.reduceat`, and floating-point summation depends on order. So positions computed after a grid tick will not be bit-identical to brute-force. Ties in the `argpartition` step of slice 112's cap can also pick different neighbors when the input order differs. That makes line 335 (whole suite passes under `grid` and `adaptive`) and line 421 fail as written. Either canonicalize row order in the grid (sort each row, which needs a change the slice currently excludes), or restate parity as tolerance-based / set-based and name which existing exact-equality tests are exempt under the grid.",
+   "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:421"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "The selected backend is hidden state that replay doesn't capture (architecture's tick-determinism principle)",
+   "description": "The architecture (`100-arch.behavior-engine.md:34`) requires \"Given the same state and inputs, a tick produces the same outputs\" to support replay and distributed agreement. Because of hysteresis, the backend chosen for tick k depends on the whole density history, not just the agent state at tick k. Combined with the floating-point difference above, a replay or restore from a mid-run snapshot starts on `initial_backend=\"brute\"`. It can then produce different trajectories from the original run, which may have been on grid at that point. The doc should say whether the dispatcher's selected backend is part of the simulation state (snapshotted and restored), or argue why the difference is acceptable. It currently does neither.",
+   "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md#density-signal-and-switching-logic"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "`initial_backend` is promised as configurable but never exposed in config",
+   "description": "Line 37 lists initial backend as a tunable. Line 301 says \"Make it configurable (`initial_backend: \"brute\"` by default) so an operator running a scattered-start scenario can choose grid-first\". The risk at line 400 talks about \"If an operator sets `initial_backend: grid`\". Yet `SpatialConfig` has no `initial_backend` field, and `_build_spatial` hard-codes `initial_backend=\"brute\"` (line 238). Either add the field with validation, or remove the operator-facing claims. Cutting it is the lighter option, since the slice plan entry doesn't require it.",
+   "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:166-176"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Backend names are magic strings and the dispatcher repeats config defaults",
+   "description": "`\"adaptive\" | \"grid\" | \"brute\"` appears as raw strings in `SpatialConfig.backend` (line 173), the validation set (line 200), the `_build_spatial` dispatch (lines 236-238), and the `AdaptiveSpatial.initial_backend: str` parameter. Project rules require comparison values to be defined once, as an enum or constant. The `AdaptiveSpatial` constructor also has its own defaults (`hysteresis_band = 0.0`, `initial_backend = \"brute\"`) that differ from the config default (`2.0`). Line 136 says defaults belong in the config layer. Define a `SpatialBackend` enum used by config, validation and the wrapper, and make the wrapper's parameters required.",
+   "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:83-90"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "The `hasattr` hook disables adaptation silently if it breaks",
+   "description": "`if hasattr(spatial, \"record_density\")` matches a method by its name as a string. If the method is renamed, or `AdaptiveSpatial` is wrapped by another decorator, the guard quietly evaluates false. The dispatcher then stays on `initial_backend` forever with no error or log. Project rules forbid silent fallbacks. A small `@runtime_checkable` `DensityObserver` protocol checked with `isinstance` gives a type-checked contract at the same per-tick cost. It also keeps `SpatialQuery` unchanged, which was the reason line 164 gave for rejecting the protocol-default alternative. Separately, line 147 calls the dispatcher \"transparent to `tick.py`\", but the slice does add a `tick.py` dependency on a dispatcher concern. That should be stated plainly.",
+   "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:158-164"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "The empty active set and subset evaluation are not covered by the density signal",
+   "description": "The signal is `counts.sum() / n_active` (line 25: `float(counts.sum()) / len(counts)`). When the active subset is empty, which is a supported case (slice 105 tests \"empty eval\" and \"empty population\", and the architecture's subset-evaluable tick lets the world server pass any subset), this raises `ZeroDivisionError`, or gives NaN on the NumPy path. NaN fails both comparisons, so the backend freezes without any signal. The doc should say what happens with zero active agents: skip the update and keep the current backend, and log it at DEBUG/WARNING. It should also add that case to the unit tests at line 430.",
+   "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:116"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "Verification depends on dispatcher logs and counters the design never defines",
+   "description": "Walkthrough step 5 checks \"the `grid_selected` count in the dispatcher's log output\" and \"`brute_selected` dominates\", and step 4 records \"the ratio of ticks served by grid vs. brute\". No section specifies logging, counters, or a way to read the current backend. Backend switches are the slice's main runtime behavior and should be observable. Specify one INFO log per switch (old \u2192 new, `m`, `t`, `h`, tick) and a read-only `selected_backend` property or counters for the harness. Otherwise steps 4\u20135 can't be carried out as written.",
+   "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:377-379"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "Dependencies leave out slices 105 and 112, which the design consumes",
+   "description": "The frontmatter lists `[100, 110, 111]`, but the body \"Consumes from Slice 105\" (lines 71-73, 319). Slice 105's status in the slice plan is *deferred*, not complete. The body also defines the signal as pre-cap `filtered_counts` relative to slice 112's `apply_neighbor_cap` (lines 27, 116, 322). The slice plan entry has the same omission. Add 105 (the code it activates) and 112 (the pipeline position it depends on) as dependencies, so a deferred upstream slice doesn't become a hidden prerequisite.",
+   "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:6"
+  },
+  {
+   "i": 8,
+   "severity": "NOTE",
+   "title": "The default-threshold rationale contradicts itself",
+   "description": "Line 210 calculates about 132 mean neighbors for agents \"uniform\" across the 300\u00d7300 world and concludes brute wins. Line 211 then says that in the expansion phase, where agents are \"spread uniformly across the whole world\", the mean drops below 10. Those are the same distribution. Low density in expansion probably comes from agents spreading past `world_bounds` under soft bounds, or from a larger effective area. Say that, and confirm how `HashGridQuery` bins agents outside `world_bounds`, because that decides grid cost in exactly the regime this slice targets. Also, brute-force cost is given as `n_active \u00d7 n` at line 120 but `n\u00b2 / 2` at line 278. Pick one.",
+   "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:208-213"
+  },
+  {
+   "i": 9,
+   "severity": "NOTE",
+   "title": "Overclaim and an unneeded risk can be trimmed",
+   "description": "\"Cache warmth on switch\" says the grid \"has never been built\" after a brute\u2192grid switch. But `HashGridQuery.build()` runs its counting sort on every grid tick anyway, so a switch tick costs the same as any other grid tick and can't cause a spike. That paragraph and the build-both-backends idea can go. Line 313 says future backends \"slot into `AdaptiveSpatial` \u2026 with no protocol change\", but the wrapper is hard-wired to two named backends and one scalar threshold, so a third backend would need a redesign. Tone that claim down.",
+   "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:439"
+  }
+ ]
+}

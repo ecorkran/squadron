@@ -1,0 +1,103 @@
+{
+ "review": "r05",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "FAIL",
+   "title": "Retroactive marker lets new unreviewed work bypass the review gate",
+   "description": "The section says the marker \"can't be used to bypass the gate\" because \"real new work always produces those files.\" That is a norm, not a check. The shipped rules in `packages/core/src/introspection/retroactiveRules.ts:80-84` only inspect entries that are already marked retroactive: no design or task file, box checked, indexed before the lowest new-work index. Nothing stops new work from carrying the marker. A new slice with the marker, its box ticked, and no design passes all three rules. `lowestNewWorkIndex` skips retroactive entries (line 70), so the marked entry can itself be the lowest new-work index. The gate then skips it at every boundary except `preSlicePlan` (`reviewGate.ts:376`), and the navigator treats it as complete (`WorkflowNavigator.ts:781`). The missing-artifact rule deliberately does not flag a plan entry without a design (`ConsistencyChecker.ts:479-482`, \"normal pre-work state\"), so no finding is raised anywhere. The parser accepts the marker from any plan text (`slicePlanParser.ts:23`), so \"set only by the adoption flow\" is a convention, not a check. The section also says the marker \"is never the PM-only review exemption,\" but the gate's effect is an exemption that no PM approves; the distinction exists only in the wording. The text also says \"counts as complete\" without the code's `isChecked` condition.\n\nFix: bind retroactive entries to adoption output a checker can verify, such as a provenance block that only adoption writes, with retroactive entries rejected outside it. Add a test where a new unreviewed entry carries the marker and must produce an error.",
+   "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md#baseline-artifacts"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "\"Already planned\" is derived from any artifact, so interrupted adoption can't resume and false greenfield is permanent",
+   "description": "Rule 2 classes a repo as already planned when any initiative plan, architecture doc or slice plan exists, and the outcome is re-derived on every call. Adoption step 5 writes the derived architecture before the existing-state slice plan. After that write, a re-run of `sq onboard` stops at step 2 (\"adoption doesn't apply\"), and `cf next` navigates the repo as planned. Nothing records that adoption was interrupted, and the retroactive entries never get written. The original \"a re-run resumes from whatever artifacts exist\" behavior was removed by the amendment with no replacement.\n\nThe same rule makes a false greenfield permanent. A brownfield repo that gets Phase 0 output and then an initiative plan is classed as planned and never adopts. The document also doesn't say whether squadron's comprehension doc counts as a planning artifact. If its docType is `architecture`, step 3 alone flips the outcome. The \"additive and reversible\" principle has no reversal path: undoing adoption means deleting files by hand, and deleting only some leaves the repo in whatever class the rest implies.\n\nFix: define adoption completion from files. `existingStatePlan.ts:22` already finds a plan with retroactive entries, which is the natural signal. State the resume and reversal behavior for the classifier.",
+   "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md#detection-a-read-only-report-amended-20261025"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "The opt-out overrides planned state, and its storage and clearing are unspecified",
+   "description": "Rule 1 says an opted-out project \"is greenfield,\" and it is checked before \"already planned.\" A project with a dozen slices that is opted out therefore gets the greenfield outcome, which Design Goal 1 defines as setup followed by the concept conversation. Slice 270 says greenfield and planned navigation are unchanged, and both can't hold for a repo with artifacts. The document doesn't say whether the greenfield outcome changes `cf next` for such a repo.\n\nIt also doesn't say where the opt-out is stored. It is the only stored value. If it is config, it is per checkout, as `git.integration_branch` is, so a worktree would not inherit it. No command or step clears it, so \"can opt out\" is a one-way door.\n\nFix: the opt-out should affect only the brownfield-or-greenfield decision and never override already-planned. State its storage and the command that clears it.",
+   "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md#detection-a-read-only-report-amended-20261025"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Adoption can proceed without the comprehension doc, recreating the CF-only path",
+   "description": "Step 4 fetches the adoption prompt \"with the comprehension doc's path filled in.\" Step 3 is squadron's graph build and comprehension doc, and the document doesn't say what happens if that step fails or does not run. Slice 271's success criterion says the prompt \"says plainly when it doesn't\" exist, so the prompt runs and the adoption completes without squadron's output. That is the CF-only path the document rules out: \"adoption requires squadron. There is no CF-only fallback for now,\" and \"Squadron is the only supported adoption path.\" The project rule is to fail explicitly rather than fall back.\n\nFix: state that `sq onboard` stops before step 4 when the comprehension doc is missing, and have the prompt-delivery primitive return an explicit error in that case. If a graph-less path is intended, remove the \"no CF-only fallback\" claim.",
+   "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md#adoption-flow-under-sq-onboard-amended-20261025"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "cf reads squadron's output and finds its doc by pattern, against the stated boundary; the report is unversioned",
+   "description": "The principles say \"cf never \u2026 parses squadron output.\" Row (b) says cf finds squadron's comprehension doc \"by filename and `docType` (plus squadron 361's provenance block).\" Reading a provenance block is parsing squadron output. Discovery is also undefined. The filename is `{n}-analysis.codebase-comprehension.md`, with squadron's index. If a re-run leaves two matching files, the document doesn't say which wins, and \"passes nothing\" is undefined when two match.\n\nThe replacement contract, the detection report JSON plus prompt delivery, has no version field. The old probe was locked at `probe_version` 1 so that changes would be detected, and nothing replaces that.\n\nFix: squadron calls cf's primitives, so `sq onboard` can pass the comprehension path as an argument. That removes discovery and provenance parsing from cf. Add a `contract_version` to the report and prompt-delivery output.",
+   "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md#responsibility-split-with-squadron-pm-approved-20261020-amended-20261025"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "The guide prompt is pinned to the superseded contract, and the release sequence leaves a broken window",
+   "description": "Dependencies pin ai-project-guide at v0.22.2 or later for any cf release that selects the brownfield prompt. That prompt branches on raw probe facts (\"the prompt's raw-probe branching goes away\") and reads `surfaces.<s>.concept` (v0.22.1). The amended design removes the probe from cf, so the pinned prompt expects inputs cf will no longer send.\n\nThe guide-side change is slice 272, which comes after 268\u2013271. Slice 268's risk note says \"the guide's current brownfield prompt tells agents to run `cf build`.\" A cf release between 268 and 272 therefore ships a pinned prompt that expects removed inputs and tells agents to run a command that no longer adopts. The amended input contract was never agreed with ai-project-guide; the 20261020 agreement covers the superseded contract.\n\nFix: agree the new prompt input contract with the guide before 268 ships, and tie `MIN_GUIDE_VERSION` to that guide release rather than to 272.",
+   "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md#dependencies"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "Artifact writers are named inconsistently, and the concept has two possible writers",
+   "description": "Row (c) says \"CF writes the architecture doc,\" and row (d) assigns the slice plan and marker to CF. The same document says the report and `cf build` write nothing, and that cf \"orchestrates nothing.\" The real writer is an agent following a cf-delivered prompt.\n\nThe Concept row says \"Exactly one writer per run,\" but on the squadron path squadron 363 writes the concept (Current State; the prompt \"detects 363's provenance block\"). Step 5 says \"the agent drafts the concept.\" The document doesn't say which writer runs when squadron is present. This matters for the marker, whose only safeguard is \"set only by the adoption flow,\" which means whichever writer the table names.\n\nFix: name the actual writer for each artifact (agent under a named prompt, squadron 363, or cf code) and make the concept-writer selection explicit.",
+   "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md#responsibility-split-with-squadron-pm-approved-20261020-amended-20261025"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "Detection runs after cf init has already written the files it reads",
+   "description": "Step 1 runs `cf init`, and step 2 runs detection. Current State says `cf init` creates `project-documents/` and writes managed blocks into CLAUDE.md and AGENTS.md. Detection's report includes docs and rule files. After step 1, every registered repo has rule files and a `project-documents/` folder, so those signals reflect cf's own writes, not the repo's. The document doesn't say whether detection reads before registration or excludes cf-created files.\n\nThe same step merges guide rules into the project's own files without noticing conflicts (Current State: `cf init` \"appends guide rules without noticing when they contradict the project's own\"). That contradicts the principle \"surface conflicts, never merge them silently.\" The document doesn't say whether the later reconciliation work covers this in-scope step.\n\nFix: run detection before any write, or enumerate the signals that exclude files cf created.",
+   "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md#adoption-flow-under-sq-onboard-amended-20261025"
+  },
+  {
+   "i": 8,
+   "severity": "CONCERN",
+   "title": "The review gate already has two exemption mechanisms, and the document proposes a third without reconciling them",
+   "description": "Current State says an existing-state plan \"would trip [the review gate] on every entry,\" and the retroactive marker is proposed to prevent that. The shipped gate already has two mechanisms the document doesn't mention:\n- `workflow.review_gate_effective_date` (`ConfigKeys.ts:178-182`: \"Grandfathers \u2026 work completed before the gate existed\"; read at `reviewGate.ts:159`).\n- The `codeReview: none` exemption (240 arch line 75; `cf check --set-review-none`).\n\nThe \"PM-only review exemption\" that the document refers to is not defined in this document. The date cutoff compares an artifact's `dateCreated`, which may not cover plan entries that have no design. That could justify a new marker, but the document has to say so. Otherwise the gate has three exemption axes with overlapping purposes and no precedence rule.\n\nFix: add a paragraph explaining why the cutoff does not cover adoption entries, and state how the marker, `codeReview: none` and the cutoff interact.",
+   "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md#current-state"
+  },
+  {
+   "i": 9,
+   "severity": "CONCERN",
+   "title": "Detection's cost, scoping and thresholds are undefined on a path that runs on every `cf next`",
+   "description": "Detection is \"derived from the files every time and never stored.\" The report includes source volume (counted until a threshold), commit history, docs, ADRs, CI and rule files. Per the principles and slice 271, it is shared by `cf init`, `cf next` and the state command. `cf next` runs on every invocation.\n\nThe document gives no time budget. It doesn't say whether the walk is async, and a synchronous walk inside an MCP handler would block the server. It doesn't say how history is measured. The monorepo rule scopes detection to the folder, but `git log` is repo-wide unless it is path-scoped. The shallow-clone signal is not named. Thresholds are \"set in slice design,\" yet slice 261 has shipped and the document doesn't record the values in use.\n\nFix: name the git commands and their scope, the async model, and a cache keyed on HEAD or a measured budget. Record the thresholds in the document.",
+   "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md#technical-considerations"
+  },
+  {
+   "i": 10,
+   "severity": "CONCERN",
+   "title": "Status, Current State and superseded contracts disagree with the slice plan",
+   "description": "Frontmatter says `status: in_progress`, and the slice plan marks 260\u2013267 `[x]`, including conventions reconciliation (266) and docs/ADR mapping (267). The \"Later in the initiative\" section describes both in future tense (\"The PM resolves each one\"; \"Nothing is moved\"), and Scope calls them \"last.\"\n\nCurrent State describes pre-initiative code as current: \"Three hand-written copies\" (260 is complete), and `cf next` \"treats sparse planning state as a fresh project\" (264 changed that). Technical Considerations keeps the full superseded probe contract and the original guide prompt contract \"for history.\" A reader can't tell which contract is live. An implementer working from slice 262's \"locked\" probe contract would build a removed feature.\n\nFix: move superseded contracts and the pre-260 baseline to an appendix or ADR. Label Current State as the baseline, and align status and the \"later\" section with the slice plan.",
+   "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md#anticipated-slices"
+  },
+  {
+   "i": 11,
+   "severity": "CONCERN",
+   "title": "Two surfaces for one report, and two non-core sub-initiatives kept in scope",
+   "description": "Detection is \"exposed as one CLI command and one MCP tool,\" and the success criteria require CLI and MCP parity (263: \"CLI and MCP produce identical builds\"; 271: \"return matching JSON\"). Nothing in the design requires MCP for the report, and `sq onboard` is a CLI consumer. Keep one surface, and add the other only when a consumer needs it.\n\nConventions reconciliation (a new persisted resolution format, a semantic comparison the slice plan rates High risk, coupling with #123, and a guide-side reconciliation prompt) and docs/ADR mapping are described as \"not needed for the core goal\" in Anticipated Slices, yet both stay in this initiative's scope. The core goal needs only detection, the prompt primitive, the retroactive marker and navigation. Move the two items to their own architecture documents. The slice plan marks both complete, so this cut also requires a decision about what was built outside the design. The Future Work list adds MCP tools for `rules inventory` and `rules resolve`; those belong outside this initiative too.",
+   "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md#anticipated-slices"
+  },
+  {
+   "i": 12,
+   "severity": "CONCERN",
+   "title": "The derived architecture has no verification, and \"derived\" has no effect",
+   "description": "The derived architecture is \"an ordinary architecture document, marked as derived. Downstream phases consume it like any other.\" Nothing defines what \"derived\" changes. Slice 263 has the provenance mark it as derived, but no check verifies its claims against the code. Later slice designs build on it, so a wrong component boundary propagates into every later slice. \"Never fabricate intent\" is enforced only by prompt wording.\n\nA deterministic check would help: each named component cites repo paths, and the checker confirms they exist. The document already accepts out-of-tree references for mapped docs, so the checker's path handling is already in scope.\n\nFix: define what \"derived\" changes for downstream builds, and add the path-existence check to the baseline slice's success criteria.",
+   "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md#baseline-artifacts"
+  },
+  {
+   "i": 13,
+   "severity": "NOTE",
+   "title": "The cited review file is not in this tree, so \"all findings addressed\" can't be verified",
+   "description": "Related Work cites `../reviews/260-review.arch.brownfield-adoption.md` (CONCERNS, 11 findings) and says all are addressed in this revision. A glob for `**/*260-review*` in this worktree returned nothing, and the slice plan says \"No re-review has been run.\" I could not verify the claim. The link may be broken or may point to a file in another tree.",
+   "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md#related-work"
+  }
+ ]
+}

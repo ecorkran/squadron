@@ -1,0 +1,82 @@
+{
+ "review": "r06",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "FAIL",
+   "title": "Coalescing premise doesn't hold with an original-order outer loop",
+   "description": "The slice's performance case rests on warp-level coalescing: \"neighbor reads \u2026 coalesce across warp threads\" (line 21). The coherent reads are tagged \"COALESCED\" at lines 285\u2013289 and 306\u2013307.\n\nThe chosen design keeps the outer loop as `for i in range(n)` in **original spawn order** (lines 123, 322). Adjacent threads in a warp are therefore agents in unrelated cells. Each one walks a different `[start, end)` range of `kk`. In any one iteration, the 32 lanes read 32 scattered addresses. Coherent storage gives each thread sequential access across its own iterations, which helps cache-line reuse. It does not give coalescing across the lanes of a warp. In Hoetzlein 2014, coalescing comes from assigning threads in **sorted** order, so that neighboring lanes share cells. That is the alternative this design rejected at lines 165.\n\nThe reason given for rejecting it is that writebacks would become a scatter. That trade is inverted: N scattered writes per tick cost far less than ~1400\u00b7N scattered reads. The document's own Future Work also contradicts the rationale. Line 461 says \"Currently writebacks scatter to `_px[i]`\", while line 331 says writebacks are \"already coalesced\". The heap-eviction \"COALESCED\" claim (lines 169, 306) has the same problem.\n\n**Fix:** walk the outer loop in coherent order (`i_c`), read self-data from the coherent fields, and write back through the permutation. Then rerun the cost argument. As written, the load-bearing gate (criterion 4) is likely to fail for a reason the design doesn't anticipate.",
+   "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md#inverse-permutation-field-for-self-exclusion"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "`_coherent_to_original` duplicates `_sorted_agent_ids`",
+   "description": "The reindex kernel sets `orig = _sorted_agent_ids[kk]` and then writes `_coherent_to_original[kk] = orig`. That makes the new field an element-for-element copy of an existing field. It is not an inverse permutation; the inverse would map original\u2192coherent.\n\nSelf-exclusion can keep using `_sorted_agent_ids[kk] != i`, which reads the same sequential `kk` address. Cut the field, its allocation, its binding, and its Risk 2. Keep the permutation test in Verification step 1, pointed at `sorted_agent_ids`. If the outer loop moves to coherent order (see the FAIL above), a true original\u2192coherent inverse may become necessary. In that case, name and justify it on that basis.",
+   "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md:113-120"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Slice plan scope dropped: FRNN collect-then-sort deferred",
+   "description": "The slice plan entry for 152 (`140-slices.simulation-scaling.md:56`) assigns this to the slice: \"k-nearest via FRNN (collect all within radius R, then partial-sort the small candidate set per thread) becomes viable at scale.\"\n\nThe design explicitly moves FRNN out of scope (line 75) and into Future Work (line 458). Dropping scope the plan assigns to this slice needs one of two things:\n- the slice plan entry updated to match, or\n- FRNN kept in scope.",
+   "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md#heap-is-the-starting-point-frnn-style-collect-then-sort-is-the-likely-follow-up"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Exit criteria and mode set differ from the slice plan entry",
+   "description": "The plan's exit criteria are:\n- \"k-nearest TPS at N=200k within 20% of **k-first** TPS at the same N\"\n- \"**no regression on k-first path**\"\n\nThe design makes three changes the plan doesn't authorize:\n- It removes `k_first` entirely (items 67, 177).\n- It adds a new `radius_only` mode, which goes beyond the plan.\n- It re-bases the gate on `radius_only`.\n\nThe design argues for this well, but the change is to plan-level contract and the plan has not been updated. Update the slice plan entry, including the new gate baseline and the removal of the k_first non-regression criterion, before or alongside this design.",
+   "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md#success-criteria"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "`k_first` removal timing contradicts itself, and the gate-failure outcome is undefined",
+   "description": "The document gives three different accounts:\n- **Scope item 7 (line 67) and lines 177\u2013199:** `k_first` is removed and raises `ConfigurationError`.\n- **Mitigation (line 433):** `k_first` stays \"still parsed, with a deprecation warning\" until the final commit.\n- **Line 349:** both the removal and the default flip are conditioned on \"once the TPS exit criterion is met.\"\n\nNothing says what ships if criterion 4 fails. Either `k_first` survives as the default, or the default is `k_nearest` without passing the gate. Pick one removal sequence and state the gate-failure end state explicitly.\n\nLine 93 also says \"No file outside the GPU compute path is touched\", but the slice edits `migratory_server/config.py` and `bench/workload.py`. Correct that statement.",
+   "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md:433"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Coherent field dtype hard-coded to f32, but the plan records f64 on CUDA",
+   "description": "The slice plan records that \"slice 145's full-GPU integrated tick uses f64 throughout on CUDA\" (line 36) and that only the `_ti` (f64) path is maintained going forward (lines 32, 40).\n\nThe design says coherent fields use the \"Same dtypes as the originals\", but it hard-codes `qd.f32`. It also asserts \"f32 throughout\" (line 449) and \"No new f64\" (line 364). If the originals are f64, the copy silently loses precision and the parity test is weakened.\n\nSpecify that the coherent fields mirror the originals' dtype, for example by deriving it from the original field. Don't hard-code it. Recompute the memory figure on the same basis.",
+   "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md:208-219"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "Benchmark workloads for verification are under-specified",
+   "description": "Only `mid-flock-200k` is listed as a workload to add (lines 367, 452). Criterion 3 and Verification step 5, however, require `mid-flock-500k` and `mid-flock-1M`, plus a `radius_only` run at N=1M. Either add those workload entries to scope, or trim the headroom probe. Without the workloads, the FRNN trigger condition in Future Work can't be evaluated.",
+   "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md:397-402"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "Extra `qd.sync()` contradicts the synchronisation rationale",
+   "description": "Line 146 says synchronisation is \"implicit at kernel boundaries in `graph=True` mode\". The `build_spatial_hash` change nonetheless appends an explicit `qd.sync()` after the reindex, which adds a host sync every tick. Per-launch and per-sync cost is a recurring theme in the plan (slice 147).\n\nEither drop the sync, or state which hazard it guards against. The existing CPU prefix sum already forces a sync earlier in the build; if this one is needed, say why that earlier sync is insufficient.",
+   "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md:341-345"
+  },
+  {
+   "i": 8,
+   "severity": "NOTE",
+   "title": "Tier 3 target restated inconsistently",
+   "description": "The design calls N=200k \"the architecture's Tier 3 target\". The slice plan defines Tier 3 as 250k on production-class hardware (plan line 81), while this slice gates on the dev-class box. The 200k gate is a reasonable checkpoint, but it should be labelled as such rather than as the Tier 3 NFR.",
+   "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md:17"
+  },
+  {
+   "i": 9,
+   "severity": "NOTE",
+   "title": "x-fractal agent count inconsistent",
+   "description": "Line 27 and line 185 describe x-fractal as ~10000 / 9998 orbs. Criterion 5 uses N=4500. Reconcile the two so the visual-parity check runs the configuration the rationale describes.",
+   "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md:359"
+  },
+  {
+   "i": 10,
+   "severity": "NOTE",
+   "title": "Redundant `radius_only` specializations",
+   "description": "`radius_only` ignores `max_k_heap`, but the kernel still specializes per `(mode, max_k_heap)`. That produces identical compiled variants for every heap size. Pinning `max_k_heap` to a sentinel for `radius_only` would avoid this. It's minor.",
+   "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md:68"
+  }
+ ]
+}

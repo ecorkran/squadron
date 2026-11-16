@@ -1,0 +1,243 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Resolving function- and class-level edges conflicts with the read discipline and Success Criterion 9",
+      "description": "The architecture says \"function- and class-level nodes are not read\" (`360-arch.document-intelligence.md:107-110`). The slice's own Success Criterion 9 (line 332-333) says \"no function- or class-level node is read\". Section 6, however, says \"Function- and class-level edge endpoints are resolved to their owning file's layer rather than dropped, so a `calls` edge between two functions \u2026 still counts.\"\n\nThe design does not say how that resolution happens. The obvious way is to look up each function or class node's `filePath`, or to follow `contains` edges, and both read function- and class-level data. The way that stays within the rule is to parse the type-prefixed `id` (`function:path:name` \u2192 `file:path`, which the architecture documents at line 94-95) inside `jq`. That way only per-layer-pair counts come back.\n\nThe design also never says that edge aggregation (counting, `group_by`, weight tie-breaks) happens inside `jq` rather than returning edge rows. This graph has 2184 edges.\n\nFix: either state the id-prefix resolution and in-`jq` aggregation explicitly, or limit section 6 to edges where both endpoints are file-level. Also make walkthrough step 7 check whichever rule is chosen.",
+      "file_ref": null,
+      "category": "architecture-boundary",
+      "raw_category": null,
+      "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:215-220"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "File-level selector departs from the architecture's allow-list, and the text contradicts itself",
+      "description": "Line 151 says \"the file-level selector becomes an explicit type allow-list\". The code block and line 158 then do the opposite: an exclusion (`.type != \"function\" and .type != \"class\"`), \"deliberately\" chosen over an allow-list.\n\nThe architecture defines file-level types as a closed list of nine (`360-arch.document-intelligence.md:108-109`). The exclusion form departs from that definition. It also creates the very risk the read discipline exists to prevent. If an upstream release adds a new fine-grained node type (for example `method`, `variable` or `module`), it gets pulled into context automatically. That is the same \"upstream drift\" this slice says it reports rather than absorbs. The \"carries no `filePath` \u2192 drift\" check does not help, because fine-grained nodes can carry a `filePath`.\n\nFix: use the architecture's nine-type allow-list, and report any node type outside both the allow-list and {`function`, `class`} as upstream drift. That keeps all 238 nodes here and makes new types visible instead of silently included. If the exclusion form is kept on purpose, record it as a departure from the architecture and remove the \"allow-list\" wording at line 151.",
+      "file_ref": null,
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:151-161"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Example closing observation fails the slice's own test and is a hallucination trap",
+      "description": "The rule is that a closing observation must be \"derivable from the table directly above it\". The example given, \"complexity concentrates in the seams where squadron meets an external SDK\", is not derivable from a complexity table. No graph field identifies \"external SDK seams\", so the example is exactly the kind of inferred claim the section says becomes a gap marker instead.\n\nIf this example, or one like it, is copied into `understand.md`, it sits next to an instruction to summarise retrieved data. Under the project's \"Hallucination traps in prompts\" rule, a model with thin data will reach for it.\n\nFix: remove the concrete example from the design and from the skill text. Describe the test in abstract terms, for example \"names only quantities, layers or paths shown in the table above\".",
+      "file_ref": null,
+      "category": "prompt-design",
+      "raw_category": null,
+      "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:245-250"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`.understandignore`: missing file gets the wrong fallback, and the \"defaults only\" rule is unclear",
+      "description": "The architecture treats `.understandignore` as an optional scope file (`360-arch.document-intelligence.md:89`). The mapping table (line 180) gives every unreadable coverage input the same fallback: \"`[GAP: ...]` naming the unreadable file\". A project with no `.understandignore` is the normal default case, not missing data, so a gap marker there is wrong. It would also undercut line 235's own rule that the defaults-only state is \"not a gap\".\n\nSeparately, line 234 says \"An all-comments file (this repo's current state has 17 active lines) is reported as 'defaults only'\". The verified-facts table (line 108) also says 17 active lines. Read literally, the parenthetical calls this repo's file all-comments, which is inconsistent and will confuse the implementer.\n\nFix: list the cases separately:\n- File missing: report \"no ignore file, upstream defaults\".\n- Zero active patterns: report \"defaults only\".\n- N active patterns: list them.\n- File present but unreadable: emit a gap marker.\n\nThen remove the confusing parenthetical.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:232-235"
+    },
+    {
+      "severity": "NOTE",
+      "title": "What a layer's count shows when drift is detected is not specified",
+      "description": "The cross-check reports a `function`/`class` member of `nodeIds` as drift. The Risk section (line 439-445) admits that `nodeIds | length` would overcount in that case. The design does not say whether the reported layer count still includes such members. One sentence would settle it, for example \"count includes them, and the drift line states how many\".",
+      "file_ref": null,
+      "category": "under-specification",
+      "raw_category": null,
+      "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:138-141"
+    },
+    {
+      "severity": "NOTE",
+      "title": "How `weight` breaks ties when aggregating edges is not defined",
+      "description": "Section 6 orders layer pairs by \"descending count, ties by `weight`\". A layer pair groups many edges, so its tie-breaker needs a defined aggregate (sum, max or mean). Naming one keeps the ordering reproducible across runs.",
+      "file_ref": null,
+      "category": "under-specification",
+      "raw_category": null,
+      "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:179"
+    },
+    {
+      "severity": "NOTE",
+      "title": "\"Unchanged\" wording vs the added cross-reference line",
+      "description": "Line 277 says the reference document \"stays \u2026 unchanged\". The next sentence and Success Criterion 7/11 add a cross-reference line to it. The architecture only requires that the document be \"retained, not superseded\", so the edit is allowed. Change the wording to \"retained; only a cross-reference line is added\".",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:277-280"
+    },
+    {
+      "severity": "PASS",
+      "title": "Fits the slice plan entry and stays inside the architecture's boundaries",
+      "description": "- Every 362 success criterion in `360-slices.document-intelligence.md:97-105` maps to a criterion here: field-named sections, gap markers, the four required structural outputs, selective reads, the reuse decision, and a self-run against squadron.\n- Interview, candidates and dispatcher work are left to 363, 364 and 366, as planned.\n- No Python, installer or `src/` change, which matches the plan's \"no Python\" rule.\n- The new sections (project identity, coverage) are small and directly serve the 363 mapping and the architecture's `.understandignore` coverage role. They are not scope creep.",
+      "file_ref": null,
+      "category": "scope",
+      "raw_category": null,
+      "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md#technical-scope"
+    },
+    {
+      "severity": "PASS",
+      "title": "The corrections to 361 are well founded and do not change the upstream contract",
+      "description": "Both corrections bring the 361 skill text back in line with what the architecture already says: \"every file is assigned to exactly one layer\", and the multi-type file-level set. They rest on measured facts that reconcile (238 = sum of layer `nodeIds` = `analyzedFiles`). The walkthrough re-checks those numbers before implementation and stops if they disagree. The integration points for 363 and 364 name what each one consumes.",
+      "file_ref": null,
+      "category": "integration",
+      "raw_category": null,
+      "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md#corrections-to-the-361-contract"
+    },
+    {
+      "severity": "PASS",
+      "title": "Read-discipline requirement restated and verified",
+      "description": "The architecture's only performance-style constraint is \"never load the whole graph\". The slice restates it, measures the effect of widening the node filter (201 \u2192 238 nodes, 687 still excluded), and verifies it in walkthrough step 7. The direct read of `.understandignore` is justified, because the rule is about the graph's size.",
+      "file_ref": null,
+      "category": "nfr",
+      "raw_category": null,
+      "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md#read-discipline-unchanged"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "architecture-boundary",
+      "raw_category": null,
+      "summary": "Resolving function- and class-level edges conflicts with the read discipline and Success Criterion 9",
+      "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:215-220",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "summary": "File-level selector departs from the architecture's allow-list, and the text contradicts itself",
+      "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:151-161",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "prompt-design",
+      "raw_category": null,
+      "summary": "Example closing observation fails the slice's own test and is a hallucination trap",
+      "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:245-250",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "`.understandignore`: missing file gets the wrong fallback, and the \"defaults only\" rule is unclear",
+      "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:232-235",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "under-specification",
+      "raw_category": null,
+      "summary": "What a layer's count shows when drift is detected is not specified",
+      "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:138-141",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "under-specification",
+      "raw_category": null,
+      "summary": "How `weight` breaks ties when aggregating edges is not defined",
+      "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:179",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "note",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "\"Unchanged\" wording vs the added cross-reference line",
+      "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:277-280",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "pass",
+      "category": "scope",
+      "raw_category": null,
+      "summary": "Fits the slice plan entry and stays inside the architecture's boundaries",
+      "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md#technical-scope",
+      "location_verified": null
+    },
+    {
+      "id": "F009",
+      "severity": "pass",
+      "category": "integration",
+      "raw_category": null,
+      "summary": "The corrections to 361 are well founded and do not change the upstream contract",
+      "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md#corrections-to-the-361-contract",
+      "location_verified": null
+    },
+    {
+      "id": "F010",
+      "severity": "pass",
+      "category": "nfr",
+      "raw_category": null,
+      "summary": "Read-discipline requirement restated and verified",
+      "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md#read-discipline-unchanged",
+      "location_verified": null
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md",
+    "against": "project-documents/user/architecture/360-slices.document-intelligence.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/squadron-362-design"
+  },
+  "timestamp": "2026-11-16T13:59:57.303561",
+  "model": "claude-opus-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 5,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-opus-5-5",
+  "answering_models": [
+    "claude-opus-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 10,
+    "in_fences": 0,
+    "in_section": 10,
+    "surviving": 10
+  },
+  "effort": "medium",
+  "profile": "sdk",
+  "turns": 6,
+  "prompt_tokens": 428543,
+  "cached_tokens": 417285,
+  "cache_write_tokens": 11248,
+  "completion_tokens": 6378,
+  "reasoning_tokens": null,
+  "duration_seconds": 76.6626230829861,
+  "cost_usd": 0.30152,
+  "cost_basis": "provider"
+}

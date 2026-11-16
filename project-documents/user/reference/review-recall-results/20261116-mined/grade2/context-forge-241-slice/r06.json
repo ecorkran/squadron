@@ -1,0 +1,96 @@
+{
+ "review": "r06",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "FAIL",
+   "title": "Pre-slice-plan (arch) gate has no index, status carrier, or branch",
+   "description": "Line 57 puts the arch gate in \"the no-active-slice / pre-slice-plan path\" but does not define three things:\n- **Index.** `detectDocuments(projectPath, sliceIndex, reviewType?)` (line 78) needs a slice index, and no slice is selected at this boundary. Arch line 141 checks `NNN-review.arch.*.md` without saying what NNN is.\n- **Status carrier.** `pending-review` and `review-failed` are `SliceStatus` values set by `deriveSliceStatus()` (lines 33, 57). No slice exists at this boundary, and TD-3 (lines 220\u2013222) makes status derivation the single source of truth, which cannot hold here.\n- **Branch.** Line 58 puts gate logic in the reserved `LIFECYCLE: review-gate` branch. Slice 240 (TD-4) classes the no-active-slice path as a `GUARD:` routing branch. The design does not say which branch the arch gate belongs in.\n\nThe arch-boundary success criteria (lines 308, 315) and the walkthrough have no defined inputs or expected output, so an implementer would have to invent all three. Define them, or cut the boundary back to slice 244 (see the scope finding below).",
+   "location": "project-documents/user/slices/241-slice.gate-logic-in-workflownavigator.md:57"
+  },
+  {
+   "i": 1,
+   "severity": "FAIL",
+   "title": "TD-7 recommendation values contradict the arch routing contract",
+   "description": "TD-7 puts prose in the `recommendation` field (`'Review required before advancing'`, `'Blocked: review verdict does not clear threshold'`) and defers the exact strings to implementation (line 268). Arch lines 118 and 124 define `recommendation: \"review\"` and `recommendation: \"blocked\"`, with the prose in `rationale`. Arch line 173 requires a stable vocabulary that Amoeba routes on. Line 286 of this design calls `review`/`blocked` \"the stable strings runners route on,\" but the walkthrough (lines 340, 348) shows the prose. Implemented as written, runners would route on sentences. Pin `recommendation` to `review` and `blocked`, move the text into `rationale`, and remove \"finalized in implementation.\"",
+   "location": "project-documents/user/slices/241-slice.gate-logic-in-workflownavigator.md:255-268"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Parent architecture still states the decisions this design reverses",
+   "description": "The design follows the slice plan, which records Phase 4 decisions that supersede the arch. The arch is still `status: active` and has not been amended:\n- **reviewType configurability.** Design Goal 2 (line 30) and the config schema (lines 81\u201385) make reviewType configurable per transition. 241 TD-4 (lines 226\u2013231) makes it position-derived and makes `review_type` inert.\n- **v1 scope.** Arch lines 22 and 141 say v1 is slice-level only, and line 163 lists pre-slice-plan as a separate slice. 241 folds it in (line 68), and the slice plan retires 244.\n- **`pending-review` meaning.** Arch line 106 defines it as \"tasks complete.\" 241 sets it at four boundaries (lines 21\u201326).\n- **Insertion point.** Arch lines 44 and 113\u2013115 place the gate after task completion. 241 adds gates before tasks and before implementation, which changes `needs-design`/`needs-tasks` output for gated projects.\n- **Score.** Arch lines 46 and 100 require CF to read and store `score` when present. 241 does not mention it.\n- **Stale text.** Arch line 147 says `\"concern\"`, lines 82\u201385 use hyphenated keys that slice 240 changed to underscores (240 TD-1), and line 106 says UNKNOWN can map to pending, which has no enum value. 241 line 216 chose \"never pending,\" which is sound.\n\nAmend the arch to record the Phase 4 decisions (including reading `score`), or cut 241 back to the arch's v1 scope. The parents need to agree before this slice can be called aligned.",
+   "location": "project-documents/user/architecture/240-arch.review-aware-workflow-gating.md:30"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Slice 240 still names retired slice 244 as a consumer",
+   "description": "240's `interfaces` list includes 244, and its Integration Points (lines 31, 220\u2013221) say 244 reuses the `review` slot with `reviewType = arch`. 241 retires 244 (line 68). Slice 240 is `status: complete`, so its contract names a consumer that will not be built, and nothing in 241 records the change. Update 240's interfaces and integration text, or add a retirement note to 240.",
+   "location": "project-documents/user/slices/240-slice.review-artifact-discovery-and-config-keys.md:7"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Inert `review_type` keys accept values and silently ignore them",
+   "description": "TD-4 keeps `workflow.review_gates.{gate}.review_type` \"defined but unread.\" A user who sets `review_type = \"slice\"` on `pre_advance` gets no error and no effect. Arch line 48 requires that \"an unrecognized per-gate config is a config error surfaced immediately, not a silent pass or silent block.\" The stated reason for keeping the keys is that they \"shipped in a released version,\" but nothing in the provided documents shows 240 has shipped. The design's own alternative, deleting the four keys, is a small change that meets the arch principle. Delete the `review_type` keys in 241 (or make setting them an error), and drop the \"document as inert\" obligation from 243 (line 297).",
+   "location": "project-documents/user/slices/241-slice.gate-logic-in-workflownavigator.md:226-229"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Config ownership is contradictory, and the navigator depends on the concrete ConfigManager",
+   "description": "- **Ownership.** Line 109 says \"the navigator owns resolution \u2026 hands raw values to reviewGate.\" Line 172 says reviewGate has \"a config-resolution helper over ConfigManager.\" Line 178 calls reviewGate \"pure,\" but line 191 gives it `resolveGateConfig(config)`, which reads keys. Slice 242 imports reviewGate, so whether it touches config changes what 242 inherits.\n- **Dependency type.** The constructor takes the concrete `ConfigManager` (line 103). Line 112 rejects resolving config inside the navigator because it \"couples core to config-file I/O + worktree resolution,\" but injecting the concrete class keeps the same coupling. The project's program-to-interfaces rule (CLAUDE.md) and DIP (review-code.md) call for a narrow contract. The navigator only needs a read method, so inject a small `ConfigReader` interface.\n\nName one owner for resolution, and make the constructor take the narrow interface.",
+   "location": "project-documents/user/slices/241-slice.gate-logic-in-workflownavigator.md:99-112"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "Config is validated only on `cf config set`; invalid values read from a file are not covered",
+   "description": "Slice 240's enum check runs at `cf config set` (240 line 166). A hand-edited `.context-forge.toml` with `review_threshold = \"bogus\"` or `review_unknown_as = \"warn\"` reaches 241 unchecked, and the design does not say what `resolveGateConfig` does with it. Line 275 narrows `review_enabled` with `=== true`, so a quoted `\"true\"` or `\"yes\"` silently turns gating off. That is the silent-fallback pattern CLAUDE.md forbids and arch line 48 rejects. The design also adds a read path (`ConfigManager.get` from the navigator) with no stated failure mode for a malformed or unreadable config file. Validate the three values at read time, failing with the key name and allowed values. Treat a non-boolean `review_enabled` as an error, and state the observable outcome of a config-read failure.",
+   "location": "project-documents/user/slices/241-slice.gate-logic-in-workflownavigator.md:275"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "Read and parse failures look like \"no verdict\" and are not reported",
+   "description": "Line 79 says `parseFrontmatter` returns `{ found: false, data: {} }` on \"any read/parse error,\" so a permission error and a missing `verdict` both become UNKNOWN. Three gaps:\n- Arch line 149 requires that \"the rationale returned to the caller names the parse failure explicitly.\" The rationale templates (lines 260\u2013264) name only the verdict and threshold, and success criterion line 310 does not require it. Slice 240 deferred \"file-read / parse failure handling\" to 241 (240 line 232), so this is 241's to implement.\n- The failure-mode rule requires each failure to be observable (a WARNING-or-higher log or a metric). Nothing is emitted, though the design already has a `warnings` channel through `enrich()` (line 268).\n- The design relies on the parser never throwing, a contract it does not own. The relative `review` path (240 line 220) must also be resolved against the project path before `parseFrontmatter` is called, and line 161 does not say so.\n\nDistinguish \"no verdict\" from \"read/parse failed\" in both the rationale and a warning, and add tests that assert the signal. Success criteria lines 314\u2013318 have none.",
+   "location": "project-documents/user/slices/241-slice.gate-logic-in-workflownavigator.md:79"
+  },
+  {
+   "i": 8,
+   "severity": "CONCERN",
+   "title": "The tasks boundary also fires during implementation",
+   "description": "Line 25 defines the tasks boundary as \"task file exists, **not implemented**.\" The signal table (line 138) and Technical Scope (line 57) use \"**not complete**\" and evaluate the tasks gate at the `in-implementation` status. \"Not complete\" includes slices that are partly implemented, so:\n- Enabling gating on a project with a slice already in progress, and no tasks review, turns `in-implementation` into `pending-review` on the next `cf next`. The recommendation becomes \"review\" instead of continuing the work.\n- While a slice without a tasks review is being implemented, `cf status` shows `pending-review` rather than the real state.\n\nPick one trigger. \"Not implemented\" (no implementation started) matches the position model. Then state what happens to slices already in progress when gating is turned on.",
+   "location": "project-documents/user/slices/241-slice.gate-logic-in-workflownavigator.md:25"
+  },
+  {
+   "i": 9,
+   "severity": "CONCERN",
+   "title": "Per-gate threshold keys use three spellings, and the design hedges on whether they are used",
+   "description": "The four boundaries appear as camelCase (`preSlicePlan`, line 185), snake_case in TOML (240 TD-1), and hyphenated in the arch (lines 82\u201385). The design never states the mapping between them. It also hedges on whether the per-gate threshold is used: line 56 says \"any retained per-gate threshold override,\" and line 309 says \"(if set).\" TD-4 (lines 229\u2013231) says \"retain and consume,\" and the arch requires it, so the hedges should go. Define one table from boundary to review type, config key, and label that every consumer reads. CLAUDE.md requires comparison values to be defined once.",
+   "location": "project-documents/user/slices/241-slice.gate-logic-in-workflownavigator.md:185"
+  },
+  {
+   "i": 10,
+   "severity": "NOTE",
+   "title": "Worktree scope is claimed for the CLI only",
+   "description": "Line 110 says worktree scope is \"inherited for free\" because the CLI resolves the worktree path first. The MCP call sites (line 93) get the same wiring, but the design does not say they pass the worktree-resolved path. Arch line 171 wants the keys resolvable at worktree scope. State that both surfaces pass the same resolved path, or name the MCP path as a gap.",
+   "location": "project-documents/user/slices/241-slice.gate-logic-in-workflownavigator.md:110"
+  },
+  {
+   "i": 11,
+   "severity": "NOTE",
+   "title": "New `SliceStatus` values reach consumers the design does not scope",
+   "description": "Line 285 says the new statuses are \"consumed by the visualizer and any status reader,\" but the Included scope does not list the visualizer, and the design does not say whether it switches exhaustively on `SliceStatus`. If it does, the compiler will flag it. List the consumers and the expected handling so the work is scoped.",
+   "location": "project-documents/user/slices/241-slice.gate-logic-in-workflownavigator.md:285"
+  },
+  {
+   "i": 12,
+   "severity": "NOTE",
+   "title": "Some text can be trimmed without losing a requirement",
+   "description": "- `positionToReviewType()` (line 188) is a one-line wrapper around `BOUNDARY_REVIEW_TYPE`. Export the constant and drop the function, unless 242 needs the function.\n- \"Special Considerations\" repeats TD-2, TD-5, and the \"no magic strings\" rule already stated at line 276.\n- The per-gate `review_type` handling (see the inert-key finding) is the largest cut.\n\nThe three slice-level boundaries and the per-gate thresholds are arch-required, so keep them.",
+   "location": "project-documents/user/slices/241-slice.gate-logic-in-workflownavigator.md:389-395"
+  }
+ ]
+}

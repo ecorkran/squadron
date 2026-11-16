@@ -1,0 +1,40 @@
+{
+ "review": "r07",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "D5 receipt naming creates new name collisions that the Excluded list wrongly calls pre-existing",
+   "description": "`receipt_name = base + receipt_suffix + (\"-local\" if local)` joins the parts with `-`, and `-` is also legal inside a pack name. That makes these pairs identical:\n- A Claude machine install of a pack named `foo-agents` and an agents machine install of pack `foo` both produce `foo-agents.toml`.\n- A Claude machine install of pack `foo-local` and a Claude `--local` install of pack `foo` both produce `foo-local.toml`.\n\nBoth suffixes are new for skill packs in this slice. Skills had no `--local` and no target before. So this is not covered by line 52's \"pre-existing on the Claude path and unchanged here\". When two installs share a name, one overwrites the other's receipt. Uninstall then removes the wrong file set, which breaks the \"Receipts remain the only authority\" principle (line 176).\n\nFix: pick one and add a test for it in the receipt-name table:\n- reject pack names that end in `-agents` or `-local` when the pack config is loaded, or\n- use a separator that pack names cannot contain.",
+   "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md:134"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Doctor's \"pack ships no Codex content\" row needs pack-source access the design doesn't specify",
+   "description": "D8 says an agents row reports `WARN \u2014 pack ships no Codex content` instead of \"not installed\". But `installed_path(entry, root)` (line 104) only looks at the install root. Telling \"not installed\" apart from \"has no `agents/`\" needs the pack *source*. For a `github` source that means a clone or a cached checkout. Slice 905 set doctor's scope as read-only inspection, and a network clone does not fit that.\n\nThe design should say which applies:\n- doctor only checks local and bundled sources, and github packs report a neutral status, or\n- `PackLayout` gets a source-free signal.\n\nIt should also add that case to the \"doctor rows\" test list on line 233.",
+   "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md:140"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Install and uninstall failure modes are not covered for shared files, missing files, or half-finished writes",
+   "description": "Validation runs before anything is written (D3), but these cases are left open:\n\n1. **Two receipts own the same files.** After D4, `install-commands --ide codex` writes `analysis-understand/` and `analysis-tech-debt-audit/`. `sq skills install analysis --ide codex` writes the same directories under a second receipt. Walkthrough steps 5\u20136 already show the overlap. Uninstalling one deletes files the other receipt still lists, and doctor reports `analysis (codex)` as installed through either path.\n2. **Recorded files that are already gone.** The extracted `remove_receipt_files` (D7, line 138) does not say what it does with these: skip, warn, or fail. After case 1 this is the normal situation.\n3. **A write that fails midway.** If `write_skill_dirs` hits a permission or disk error, the design doesn't say whether the receipt is written, written partially, or skipped.\n4. **Name clashes in the shared root.** D3 notes that `~/.agents/skills` is shared with every other skill source. The design doesn't say what happens when a skill directory with the same name already exists there and squadron did not write it: overwrite, or refuse. If it overwrites, uninstall later deletes the user's own file.\n\nEach case needs a stated handling rule and a WARNING-level signal, as the failure-mode rule requires.",
+   "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md:93-97"
+  },
+  {
+   "i": 3,
+   "severity": "NOTE",
+   "title": "A one-alternative-per-subcommand rule unsandboxes whole command groups",
+   "description": "`pattern = [\"sq\", [<subcommands>]]` matches on the second word only. Listing `skills` (for the git clone) or `auth` (if `login` needs the network) would also let `sq skills uninstall` or `sq auth status` run outside the sandbox. D9 already says the docs must state what the rule authorizes. When the D10 probe results come in, use deeper prefixes such as `[\"sq\", \"skills\", \"install\"]` for those groups.",
+   "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md:144-151"
+  },
+  {
+   "i": 4,
+   "severity": "NOTE",
+   "title": "The pack-format rule is close to the edge of 900's \"no new capabilities\" scope",
+   "description": "\"Provides to Other Slices\" offers a pack-format contract and `PACK_LAYOUTS` for future targets. That leans toward new capability, the issue that sent 912 to initiative 300. Here the slice-plan entry explicitly asks for this decision as part of fixing #125, so it is in scope. Keep the contract as small as D2 describes.",
+   "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md:208-211"
+  }
+ ]
+}

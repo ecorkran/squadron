@@ -1,0 +1,75 @@
+{
+ "review": "r08",
+ "findings": [
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "The neighbor-query and BulkForce contracts require per-agent Python loops in the hot path",
+   "description": "The slice's own technical requirement (line 247) says there are no Python-level per-agent loops in the hot path. The architecture's \"GPU compute path\" requires bulk array-in/array-out operations with no per-agent Python branching and no dynamic allocation. Three parts of the design conflict with this:\n- **Single-point queries:** `SpatialQuery` has only `query_radius(position, radius)`, and the data flow (line 88) calls it \"for each *active* agent\". That is a Python loop over agents.\n- **Ragged neighbor lists:** `BulkForce` takes `neighbor_lists: list[NDArray[np.intp]]`, a Python list holding one array per agent, so each tick allocates a new set of lists.\n- **Profile lookup:** `profiles: list[BehavioralProfile]` makes every vectorized force gather parameters per agent in Python.\n\nThese are the long-lived contracts. The slice plan says slice 105 swaps implementations \"behind the existing query interface\", and slices 101\u2013104 build forces against `BulkForce`. If they ship as written, they lock in the pattern the architecture says to avoid.\n\n**Fix:** add a batched query, for example `query_radius_batch(indices, radii)`, that returns a CSR-style pair of arrays (`offsets` and `neighbor_indices`). Pass that pair to `BulkForce` in place of the list. Give forces per-agent parameter arrays built from `profiles` once per tick, for example `max_speed[profile_indices]`.",
+   "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:138-171"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "The per-agent `Force` protocol has no route into `tick()`",
+   "description": "`tick()` accepts only `forces: list[BulkForce]` (line 185). Line 152 says \"the tick loop prefers the bulk variant when available\", which implies `tick()` can also take per-agent forces, but the signature does not allow it. Line 248 requires the placeholder forces to \"exercise both the `Force` and `BulkForce` protocol paths\", yet the design defines no `Force` path through the tick. Any such path would also be a per-agent Python loop, which line 247 forbids.\n\nNothing in the slice plan or the architecture asks for a per-agent force protocol. **Fix:** cut `Force`, its placeholder forces and its tests, keep only `BulkForce`, and remove the \"prefers the bulk variant\" wording. Per-agent reference checks can live in test helpers.",
+   "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:124-154"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "The brute-force design does not match the query signature",
+   "description": "Line 173 says `build()` \"computes all pairwise distances\", which gives an N\u00d7N matrix indexed by agent. But `query_radius` takes an arbitrary `position`, not an agent index, so the matrix cannot answer it unless the implementation first maps the position back to an agent. Done that way it is a silent assumption; done any other way the precomputed matrix is wasted.\n\n**Fix:** pick one contract. Either queries are by agent index, so the matrix applies (and this ties into the batched query above), or `build()` only stores positions and each query does a vectorized distance scan.",
+   "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:173"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "The architecture's scale target is not restated",
+   "description": "The architecture's \"Efficient large-scale evaluation\" goal is tens of thousands of agents at full fidelity on a single CPU. This slice defines the tick hot path but only says \"hundreds-of-agents scale this slice targets\" (line 173). It does not restate the architecture's target or explain how this slice relates to it.\n\nThis matters because the brute-force N\u00d7N float64 matrix needs about 800 MB at N=10K. **Fix:** restate the target, state the agent count this slice is verified at, and say that slice 105 is responsible for the gap.",
+   "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:173"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "`active_indices` and other inputs are not validated",
+   "description": "The design integrates with `state.velocities[active_indices] += ...` (line 215). With NumPy fancy indexing, a duplicated index gets the update only once, with no error. That is silent misbehavior, which the project's \"fail explicitly\" principle forbids.\n\nThe design also does not say what happens with:\n- out-of-range indices\n- a `profile_indices` entry that has no matching profile\n- `dt <= 0`\n- an empty population or an empty `active_indices`\n\n**Fix:** state that `tick()` checks these at the start and raises, and list the error behavior in the success criteria.",
+   "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:177-215"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "`accelerations` is stored but never used",
+   "description": "`AgentState` includes `accelerations` (N\u00d72). The integrator goes straight from summed force to velocity (`velocity += force * dt`, lines 90 and 208), so nothing reads or writes this array. The slice plan lists only positions, velocities and profile indices.\n\n**Fix:** cut the field. If it is meant to hold the accumulated force for debugging, say so and say when it is written.",
+   "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:96"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "Removing agents leaves indices undefined",
+   "description": "Agent removal \"resizes arrays\", but the design does not say whether it compacts the arrays or moves the last agent into the gap. Either way, other agents' indices shift. The world server is the caller that builds `active_indices` (architecture, \"Subset-evaluable tick\") and calls register/remove (architecture lines 81 and 97). It needs to know whether an index stays valid after a removal and how it learns that indices have been remapped.\n\n**Fix:** define the removal semantics. For example, `remove()` returns the old-to-new index mapping, or the design states that no stable ID is kept and that callers must rebuild their subsets after any removal.",
+   "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:98"
+  },
+  {
+   "i": 8,
+   "severity": "CONCERN",
+   "title": "`AgentState.create` is under-specified for the determinism check",
+   "description": "The walkthrough calls `AgentState.create(n=100, profiles=[profile])` twice and expects identical results. Two things are not defined:\n- **Initial positions:** if `create` randomizes them, the two states differ before the first tick unless a seed or RNG is passed in.\n- **Profile assignment:** the state stores `profile_indices`, but it is not said how passing `profiles` turns into those indices.\n\n**Fix:** specify the `create` signature, including an explicit initial-position argument or an RNG, and how profile indices are assigned.",
+   "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:274-283"
+  },
+  {
+   "i": 9,
+   "severity": "NOTE",
+   "title": "The integration section is indented and will render as a code block",
+   "description": "Lines 205\u2013215, from the \"Integration: Semi-Implicit Euler\" heading through the fancy-indexing note, are indented four spaces. Markdown will show the heading and its text as a preformatted block, not a section. Remove the indentation.",
+   "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:205-215"
+  },
+  {
+   "i": 10,
+   "severity": "NOTE",
+   "title": "The environment query surface is deferred without saying so",
+   "description": "The architecture's tick receives \"environmental context\" (Envisioned State, step 1), but `tick()` has no environment parameter. The slice plan does not assign this to slice 100, so this is not a defect. Adding it to the Excluded list would make the deferral explicit.",
+   "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md#excluded"
+  }
+ ]
+}

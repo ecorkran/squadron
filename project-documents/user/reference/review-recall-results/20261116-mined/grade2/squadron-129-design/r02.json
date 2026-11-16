@@ -1,0 +1,33 @@
+{
+ "review": "r02",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Login and logout paths have unbounded steps and no failure-mode table",
+   "description": "D7 defines three timeouts:\n- `turn_timeout_s` covers `thread.run`.\n- `login_timeout_s` covers only `handle.wait()`.\n- `account_timeout_s` covers runtime start plus `account()`.\n\nThe Failure Modes table is scoped to \"Codex Turn\" and adds one login row (the `wait()` timeout). Several new I/O paths that spawn the runtime (line 82) are left out:\n\n- **`sq auth logout`**: runtime start and `AsyncCodex.logout()` have no timeout key, no hang behavior, and no stated handling for an SDK error or transport close. A hung runtime hangs the command with no limit.\n- **Login before `wait()`**: `AsyncCodex.__aenter__` and the `login_chatgpt()` / `login_chatgpt_device_code()` calls happen before the timeout starts. A runtime that never finishes `initialize` hangs `sq auth login` with no limit.\n- **Extra missing on `sq auth login/logout`**: Success Criteria line 190 requires that any `openai-oauth` use without the extra fail with the install command. The design does not say where `login.py` or `OAuthFileStrategy.login` raise it, or what exit path they use. Only `create_agent` is named (line 122).\n- **Transport closes mid-login**: there is no row saying the handle is cancelled and the runtime shut down, as the turn path does at lines 128-129.\n\nUnder the failure-mode rule, each of these needs an explicit, observable behavior and a test. Suggested fix: add a \"Failure Modes \u2014 Login/Logout\" table. Bounding runtime start, `login_chatgpt*()` and `logout()` with the existing `account_timeout_s` would cover the gaps without adding a new key.",
+   "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:103-135"
+  },
+  {
+   "i": 5,
+   "severity": "NOTE",
+   "title": "Lighter alternative to the new `ExtraRequirement` Protocol",
+   "description": "`ExtraRequirement` has one implementer and no planned consumer slice (frontmatter line 7). Because it is checked at runtime (`missing_extra_hint()`), it can't simply be a static `ProviderCapabilities` field, so a small Protocol is a reasonable choice. Even so, the \"Provides to Other Slices\" list (lines 179-181) describes reuse that nothing has planned yet. Keep the Protocol, but treat that list as speculative.",
+   "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:112"
+  },
+  {
+   "i": 6,
+   "severity": "NOTE",
+   "title": "Dependency on slice 931 is not in the slice-plan entry",
+   "description": "The plan lists `Dependencies: [128]`. The design also depends on 931 for `AgentConfig.effort`, `applies_effort` and `core/usage.py`. That dependency is real and correctly declared here. The plan entry could be updated to match.",
+   "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:6"
+  },
+  {
+   "i": 7,
+   "severity": "NOTE",
+   "title": "Version upper bound is stated and also called undecided",
+   "description": "D1 specifies `openai-codex>=0.159.3,<1`, but the same line and line 231 call the upper bound undecided. Either keep `<1` as the design's decision or drop it from the spec, so the task breakdown doesn't receive contradictory instructions. Also, D9 appears before D8 in the decision list (lines 112-114), which is cosmetic only.",
+   "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:97"
+  }
+ ]
+}

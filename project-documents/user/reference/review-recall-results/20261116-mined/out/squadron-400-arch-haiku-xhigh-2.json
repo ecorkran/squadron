@@ -1,0 +1,422 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "Adoption handoff uses the CF-probe model that 440 retired",
+      "description": "Lines 77, 107 and 123 say CF \"offers\" the baseline \"at handoff through 440's capability probe,\" and that the baseline is \"consumable by 440's capability probe.\" The initiative plan's 440 entry (item 16, `001-initiative-plan.squadron.md`) was re-scoped on 20261025. It says this \"replaces the 20261020 split, in which CF ran onboarding and read squadron's capability probe.\" Its direction rule is that squadron calls CF, and CF never runs `sq` or parses squadron output. The probe is now internal to `sq onboard`, and its CF-facing contract is deprecated. This document's `dateUpdated: 20261020` (line 10) predates the re-scope. Its `not_started` status also conflicts with the plan, which marks item 14 `[x]`. A slice built from this section would define a CF-facing contract that the plan retired, and would invert the dependency. Rewrite the handoff so `sq onboard` owns it and passes the baseline path to CF's adoption prompt.",
+      "file_ref": null,
+      "category": "dependencies",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#envisioned-state"
+    },
+    {
+      "severity": "FAIL",
+      "title": "\"Same value on the same commit\" does not hold for type errors or coverage",
+      "description": "Line 33 promises that every metric gives the same value on the same commit with the same tool versions. Line 37 says the record captures \"everything that would make two snapshots incomparable.\" Neither holds for `type_errors`. Pyright reports unresolved imports when dependencies are not installed, and installed versions change its results. Line 37's identity list (project, commit, language, tool versions, rule set, exclusions) has no environment field: no lockfile hash, interpreter, or resolved dependency set. Coverage has the same gap, and it also depends on which tests ran and passed. Line 87 mentions environment only for coverage. Add environment identity to the snapshot. When the environment is unresolved, record `type_errors` as absent with a reason. Otherwise, drop the determinism claim for these two metrics.",
+      "file_ref": null,
+      "category": "feasibility",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md:33"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Measuring a past commit is undefined, and it conflicts with \"doesn't modify the repository\"",
+      "description": "Line 71 says taking a snapshot \"doesn't modify the measured repository.\" Line 75 needs the fork-point snapshot, which is a past commit, and the document never says how a commit gets materialized. Checking it out moves HEAD and rewrites the working tree. `git worktree add` registers a worktree inside the measured repo. Coverage writes a `.coverage` file and bytecode into the tree, which dirties it unless the project ignores them. That then trips the dirty rule at line 49. Measure a detached export in a temporary directory outside the repo, with tool caches redirected there, and state that rule. For the dirty case, adopt the rule 323 already uses. Its harness refuses to reduce a series whose worktree was dirty (323 slice, pinned-commit section), instead of leaving \"refused or marked\" open.",
+      "file_ref": null,
+      "category": "feasibility",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md:71"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Snapshot identity (project, commit) cannot hold dirty, re-measured, or tool-upgraded records",
+      "description": "Line 49 allows a dirty snapshot to be \"recorded with an explicit dirty marker,\" and line 71 says there is \"one snapshot record per commit.\" If the key is (project, commit), a dirty measurement and a clean one of the same commit collide. So do two measurements of the same commit under different tool versions. Line 59 says reports refuse to diff across a tool change, but nothing defines what happens at the same commit. Overwriting loses the old tool's measurement, so there is nothing to compare against. Appending breaks the one-record-per-commit rule. Decide whether the key includes tool identity and the dirty flag, and state a replace-or-append policy with an owner.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md:49"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Running a brownfield project's own code is a trust decision left to a slice",
+      "description": "Line 87 defers whether snapshots install or run project code, calling it a \"security and environment cost.\" The trust boundary belongs in the architecture. Line 45 says pipeline steps may write snapshots, and 440 points this at repos squadron did not write. Project code runs in several places even without coverage. A `conftest.py` and test modules run under pytest. A build backend runs on install. An ESLint-based adapter executes `eslint.config.js` as code. Set the default to static analysis only, with no execution of project code. Take coverage only from a report the project already produces, and check it against the commit (`REPORT_STALE`). Make running the test suite an explicit opt-in that runs in a sandbox the document specifies.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md:87"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Pipeline-attached snapshots have no timeout, no whole-run failure record, and no time budget",
+      "description": "Line 95 says a failed snapshot \"must never fail the pipeline step\" and must be \"recorded as absent.\" Two gaps. First, absence is defined per metric (line 51). A snapshot that crashes before any metric runs has nothing to attach an absence to, and the document does not say what happens if the record write also fails. Second, nothing bounds time. A hung tool or a coverage run on a large suite blocks the step indefinitely, and every slice's fork and merge adds unbounded wall-clock cost. Specify per-tool and whole-snapshot timeouts as config constants, a process-group kill on timeout, and a wall-time budget for each pipeline-attached snapshot.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md:95"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The owner of fork and merge snapshots is undecided, but the Overview promises per-slice before/after",
+      "description": "Line 25 promises that \"every later slice on that project is a measured before and after.\" Line 75 defines a slice's before/after as \"the snapshot at its fork point against the snapshot at its merge.\" Line 95 then presents automatic capture at fork and merge as an optional trade-off. The design never says who takes those snapshots if that option is declined. Choose one: a pipeline action at fork and merge, or a manual step the operator is accountable for, with the Overview's promise adjusted to match.",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md:25"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "A fork-to-merge range on a shared target is confounded",
+      "description": "Line 93 uses \"fork point to merge commit\" as the slice's commit range. On a shared target, that range contains everything else that landed in the window. That includes other slices' merges, fix commits (which the document says land directly on the target), and syncs from the parent branch that the git rules permit. Line 93 says unattributed commits roll up at project level, but these commits are inside the range, not unattributed. Attribute the slice's own commits (its branch's commits since the fork point, excluding target-only history), or label the delta explicitly as a range measure with those confounders.",
+      "file_ref": null,
+      "category": "feasibility",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md:93"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Metric definitions and the adapter contract are undefined, so \"independent of language\" is unsupported",
+      "description": "Line 39 says \"metrics are defined independently of language, and each language is a pluggable adapter.\" Line 83 says the adapter contract \"has to define each metric well enough that adapters agree.\" The document does neither. It does not define what counts as a function (decorators, nested functions, lambdas, methods), how lines are counted (blank and comment lines), or what counts as a branch for cyclomatic complexity. It has no adapter output schema, no registration or discovery mechanism, and no rule for choosing between two adapters that cover one language. Function length is the hardest case, since it needs a parser per language, and no parser is named. As written, the keystone would define the contract by building it for Python. That is the Python-shaped contract line 104 is meant to test.",
+      "file_ref": null,
+      "category": "abstraction",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md:83"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "No tool is named, and the likely candidates carry stack costs the document does not weigh",
+      "description": "The section is titled \"tool choice,\" but no tool is named. Three facts bear on the choice. First, the project's ruff config selects `E,F,W,I,UP,BLE,ASYNC,B` and does not enable `C90` (mccabe), so ruff already ships a cyclomatic-complexity rule that a Python adapter could use without a new dependency. Second, the PyPI `pyright` package wraps the Node.js-based pyright and needs Node at runtime. Third, a language-agnostic duplication tool such as jscpd is an npm package, so it adds a Node toolchain to a Python project. Name the tool for each metric and language, state which ones add a runtime, and say how each tool's version is captured (line 59 requires it per metric).",
+      "file_ref": null,
+      "category": "technology",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md:83"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "One vocabulary does not fit review output, and `other` means two things",
+      "description": "Line 35 promises \"the same ten categories\" for review and audit findings. Line 113 concedes that a poor fit \"is a finding to report,\" but gives no decision path. Review findings are mostly about behavior (\"this breaks when X\") rather than tech-debt dimensions, so most would fall into `other`. That share is the very fit signal 323 treats as evidence (see the `AuditCategory` docstring). `other` is also overloaded. Line 65 says review `category` is `None` on many findings, and line 73 calls `other` \"the honest fallback.\" \"No category given\" and \"out-of-vocabulary category given\" would both land in `other`. Read-side mapping (line 91) is a lookup table the document says \"will miss,\" with no table, coverage target, or miss rule. Before committing, count the existing review corpus's category values and the share outside the closed set. Then decide whether to extend the review vocabulary or hold at ten, and give `None` its own representation.",
+      "file_ref": null,
+      "category": "feasibility",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md:35"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Review categories are LLM output with no noise floor, and the rollup pools unlike units",
+      "description": "Line 91 calls write-time categorization \"deterministic at ingest.\" The parse is deterministic. The category is the model's choice at review time, which makes it LLM-derived. Line 75 says LLM-sourced numbers are \"shown against their noise floor,\" but nothing in the document measures a floor for review findings. 323's floor requires repeated audits at a pinned commit, and no one reviews the same commit N times. Reports would therefore show review counts with no floor, which is the \"absent presented as a value\" failure line 51 forbids. The rollup also pools unlike units. A review is one sample per file, its findings include NOTE-level items, and an audit total is a reduced 3-run figure. State that review figures are single-sample, show the `NO_FLOOR_MEASURED` marker that 323 already defines, and decide which review severities count as findings.",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md:91"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Review ingest has no absent-not-zero rule and no record identity",
+      "description": "Line 73 describes ingest but not its failure behavior. A review with malformed frontmatter, or one that predates categories, could be read as zero findings. A rollup reads zero as \"clean,\" which is the hazard line 51 names. The record's identity is also undefined. Line 47 says records key on `ProjectId` and never on a path, but review files are paths and are rewritten in place. Re-ingest must either replace or append, and the document must say which. Require that an unparsed review is recorded as absent with a reason, never as zero findings. Define the key as (ProjectId, review kind, slice or PR, commit), and state what re-ingest does.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md:73"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The keystone's proof on squadron itself cannot run as specified",
+      "description": "Line 103 says the keystone is \"proven on Python against squadron itself.\" But line 67 says squadron's limits exist only as prose in CLAUDE.md and the review rules. Line 53 says that with no declared limits, no violations are counted. So the proof either shows distributions only, or needs a limits key the document never names. The document does not say where limits live, what their schema is, or whether they vary by language. `.squadron.toml` already carries `metrology.project_id` and is the natural home. Exclusions have a similar gap. Line 89 lists vendored, generated and third-party code, but this checkout also contains nested worktrees. The file under review sits in `project-documents/user/reference/review-recall-results/20261116-mined/wt/squadron-400-arch/`, which holds a second full copy of `src/` inside the measured tree. A walk from the checkout root would count it.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md:103"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "\"Without editing the project's config files\" is false for local-only repositories",
+      "description": "Line 41 promises that an existing project gets a baseline \"without editing the project's config files or code.\" Line 47 keys records on `ProjectId`, which comes from the git remote or from a recorded `metrology.project_id` in `.squadron.toml`. The 320 slice states that a repo with neither a remote nor a recorded id fails explicitly. Brownfield repos are often local-only, so the one-command baseline either fails with an instruction to edit `.squadron.toml`, or has to write the id itself. Both contradict line 41. Make writing the recorded id an explicit first step of the adoption command, or drop the claim.",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md:41"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The envelope has no record-type invariant, and the store's scan drops bad records from rollups silently",
+      "description": "Line 47 adds record types as optional sibling payloads on `MetrologyRecord`, and it does not ask whether that mechanism holds up. The envelope is a set of nullable fields with a string discriminator. Nothing enforces that `record_type` names the one non-null payload, and each new type adds another field. The store's list functions skip unreadable records with a WARNING (`_iter_records`, `store.py`) and carry on. A snapshot or review that fails validation after a schema change would disappear from every rollup with only a log line. The report would then read \"N slices measured\" when N+k exist. That is the absent-not-zero failure line 51 forbids, reached through the store instead of the metrics. Make rollup output report skipped records by count and identity, and add a validated invariant or a discriminated union before the new types land.",
+      "file_ref": null,
+      "category": "abstraction",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md:47"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "A review-template change may reach judge templates, which lapses 322 graduations and is missing from the dependencies",
+      "description": "Line 91 changes review templates to emit categories, and line 8 lists dependencies as `[100, 320]` only. The plan's 300 entry says a judge is \"a review template plus a numeric score.\" Judge templates live in the same directory (`judge-*.yaml`). 320's `JudgeConfigId` keys on `template_content_hash`, and 322's `GraduatedConfig` lapses on a prompt or model edit. If the categorization instruction goes into any template a judge also uses, every graduation against that template lapses and 320 samples keyed to the old hash stop matching. The document does not say which templates change. Scope the change to the code-review template explicitly, or list 300 and 322 as dependencies and state the re-graduation cost.",
+      "file_ref": null,
+      "category": "dependencies",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md:91"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Reporting reuses nothing from 321 or 323, which risks a parallel report stack",
+      "description": "Line 106 introduces \"rollup and trend reports,\" and the Scope paragraph names only the store, envelope, `ProjectId`, audit harness and noise-floor method as reused. The worktree already has report subcommands for agreement, dispersion, trend and baseline in `cli/commands/metrology.py`. 323's baseline report already attaches a floor to every figure (323 slice, goals). The genuinely new work is the join across three sources. The adoption command is similarly mostly composition, since `audit variance` and the baseline report already exist. Scope the reports as a join layer over the 321 and 323 report models, and name the new code.",
+      "file_ref": null,
+      "category": "antipattern",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md:106"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Scope is overweight for a keystone-first initiative, and several cuts are named nowhere",
+      "description": "The document adds mechanisms that the plan does not ask for, and several sit on the keystone's critical path:\n- **Read-side mapping of historical reviews** (line 91) through a lookup table the document itself says \"will miss.\" Plan item 14 asks for normalization, not a back-fill of history.\n- **A second, fixed reference rule set** alongside the configured one (line 85). The document does not choose between them, yet line 37's cross-project comparability depends on the choice. Choosing configured-only for the keystone, and naming the reference set when a second adapter needs it, takes a decision off the critical path.\n- **Coverage in the snapshot path** (line 87). It is already optional, so keep it out of the keystone entirely. The keystone should not depend on tests running.\n- **Per-slice before/after** (line 75) should be sequenced after the attribution fix above, not built first. Per-project snapshot and baseline come first.\n\nThese are mechanisms inside the plan's four capabilities, not dropped capabilities. A minimal keystone would be: the snapshot record, a Python adapter for file and function length, lint and type counts under the configured rule set, absent-with-reason, declared limits, and the baseline command.",
+      "file_ref": null,
+      "category": "antipattern",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md:99"
+    },
+    {
+      "severity": "NOTE",
+      "title": "This copy predates code already in the main checkout",
+      "description": "This is not a flaw in the worktree's design. The main checkout (`/Users/manta/source/repos/manta/squadron`) already contains code for this initiative's pieces: `metrology/snapshot_models.py`, `metrology/snapshot/take.py`, `metrology/review_ingest.py`, `metrology/quality_report/`, and `core/finding_categories.py`. The last defines `ReviewCategory` with a review-only `correctness` value. That is the vocabulary outcome line 113 anticipated, and it contradicts line 35's \"same ten categories.\" If this document is meant to be the live design, Current State and Anticipated Slices need a refresh before slicing. None of the findings above depends on the main checkout's code.",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#current-state"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "dependencies",
+      "raw_category": null,
+      "summary": "Adoption handoff uses the CF-probe model that 440 retired",
+      "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#envisioned-state",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "fail",
+      "category": "feasibility",
+      "raw_category": null,
+      "summary": "\"Same value on the same commit\" does not hold for type errors or coverage",
+      "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md:33",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "feasibility",
+      "raw_category": null,
+      "summary": "Measuring a past commit is undefined, and it conflicts with \"doesn't modify the repository\"",
+      "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md:71",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "Snapshot identity (project, commit) cannot hold dirty, re-measured, or tool-upgraded records",
+      "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md:49",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "Running a brownfield project's own code is a trust decision left to a slice",
+      "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md:87",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "Pipeline-attached snapshots have no timeout, no whole-run failure record, and no time budget",
+      "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md:95",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "concern",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "The owner of fork and merge snapshots is undecided, but the Overview promises per-slice before/after",
+      "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md:25",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "concern",
+      "category": "feasibility",
+      "raw_category": null,
+      "summary": "A fork-to-merge range on a shared target is confounded",
+      "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md:93",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "concern",
+      "category": "abstraction",
+      "raw_category": null,
+      "summary": "Metric definitions and the adapter contract are undefined, so \"independent of language\" is unsupported",
+      "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md:83",
+      "location_verified": true
+    },
+    {
+      "id": "F010",
+      "severity": "concern",
+      "category": "technology",
+      "raw_category": null,
+      "summary": "No tool is named, and the likely candidates carry stack costs the document does not weigh",
+      "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md:83",
+      "location_verified": true
+    },
+    {
+      "id": "F011",
+      "severity": "concern",
+      "category": "feasibility",
+      "raw_category": null,
+      "summary": "One vocabulary does not fit review output, and `other` means two things",
+      "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md:35",
+      "location_verified": true
+    },
+    {
+      "id": "F012",
+      "severity": "concern",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "Review categories are LLM output with no noise floor, and the rollup pools unlike units",
+      "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md:91",
+      "location_verified": true
+    },
+    {
+      "id": "F013",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "Review ingest has no absent-not-zero rule and no record identity",
+      "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md:73",
+      "location_verified": true
+    },
+    {
+      "id": "F014",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "The keystone's proof on squadron itself cannot run as specified",
+      "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md:103",
+      "location_verified": true
+    },
+    {
+      "id": "F015",
+      "severity": "concern",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "\"Without editing the project's config files\" is false for local-only repositories",
+      "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md:41",
+      "location_verified": true
+    },
+    {
+      "id": "F016",
+      "severity": "concern",
+      "category": "abstraction",
+      "raw_category": null,
+      "summary": "The envelope has no record-type invariant, and the store's scan drops bad records from rollups silently",
+      "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md:47",
+      "location_verified": true
+    },
+    {
+      "id": "F017",
+      "severity": "concern",
+      "category": "dependencies",
+      "raw_category": null,
+      "summary": "A review-template change may reach judge templates, which lapses 322 graduations and is missing from the dependencies",
+      "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md:91",
+      "location_verified": true
+    },
+    {
+      "id": "F018",
+      "severity": "concern",
+      "category": "antipattern",
+      "raw_category": null,
+      "summary": "Reporting reuses nothing from 321 or 323, which risks a parallel report stack",
+      "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md:106",
+      "location_verified": true
+    },
+    {
+      "id": "F019",
+      "severity": "concern",
+      "category": "antipattern",
+      "raw_category": null,
+      "summary": "Scope is overweight for a keystone-first initiative, and several cuts are named nowhere",
+      "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md:99",
+      "location_verified": true
+    },
+    {
+      "id": "F020",
+      "severity": "note",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "This copy predates code already in the main checkout",
+      "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#current-state",
+      "location_verified": null
+    }
+  ],
+  "template_name": "arch",
+  "input_files": {
+    "input": "project-documents/user/architecture/400-arch.code-quality-measurement.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/squadron-400-arch"
+  },
+  "timestamp": "2026-11-16T12:41:52.329935",
+  "model": "claude-haiku-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 37,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-haiku-5-5",
+  "answering_models": [
+    "claude-haiku-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 20,
+    "in_fences": 0,
+    "in_section": 20,
+    "surviving": 20
+  },
+  "effort": "xhigh",
+  "profile": "sdk",
+  "turns": 38,
+  "prompt_tokens": 2070441,
+  "cached_tokens": 1845731,
+  "cache_write_tokens": 224680,
+  "completion_tokens": 84307,
+  "reasoning_tokens": null,
+  "duration_seconds": 375.80827804189175,
+  "cost_usd": 0.43246775,
+  "cost_basis": "provider"
+}

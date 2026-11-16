@@ -1,0 +1,131 @@
+{
+ "review": "r06",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "FAIL",
+   "title": "Artifact records the operator's HEAD, not the reviewed PR head",
+   "description": "Technical Considerations and Envisioned State say the head SHA recorded in the artifact is the SHA that was reviewed. The current save path does not do that. `save_review_result` calls `resolve_reviewed_sha(\".\")`, which runs `git rev-parse HEAD` in the process cwd. Running `sq review pr 123` from a checkout on `feature-x` would stamp `feature-x`'s HEAD. A scratch worktree does not help, because the stamp reads the process cwd and not the review's `cwd`. The reviews directory has the same problem: `REVIEWS_DIR` (persistence.py:23, used at :494) is resolved against the process cwd, so `--cwd` does not move the artifact. The `sq review resolve` diff is anchored on this stamp (slice 306), so a wrong SHA produces a wrong later diff. The design must pass the reviewed SHA and reviews location explicitly through the save path.",
+   "location": "src/squadron/review/persistence.py:515"
+  },
+  {
+   "i": 1,
+   "severity": "FAIL",
+   "title": "Base-to-head range cannot be computed as described",
+   "description": "Two gaps.\n\n1. **The base is never fetched.** Only \"the head ref\" is fetched. `git merge-base` runs against whatever `main` or `origin/main` the operator has locally, which may be stale or missing. The reviewed range then differs from the host's diff, and nothing reports it. The adapter must resolve the base SHA at resolution time, fetch it, and use that SHA.\n2. **`normalize_diff_spec` cannot be reused as-is.** It returns `f\"{spec}...HEAD\"` (src/squadron/review/git_utils.py:390), with `HEAD` hard-wired to the operator's current branch. Reusing it with the PR base would review the operator's branch. The PR path has to build `base_sha...pr_head_sha` explicitly and bypass normalization. The document says \"same merge-base semantics\" but does not say this.\n\nIn shallow clones, which are common in enterprise CI checkouts, `merge-base` can fail. The design does not say whether to deepen the clone.",
+   "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#technical-considerations"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Rules degradation promised in unplanned repos does not match the code",
+   "description": "The document says an unplanned repo runs \"with the template's rules and language auto-detection only\". The code does not do this. `load_review_rules` auto-detects only when `rules_dir is not None and file_paths` (src/squadron/review/rules.py:244). `review_code` computes `file_paths` only inside `if resolved_rules_dir is not None:` (src/squadron/cli/commands/review.py:1049-1054). With no rules directory, auto-detection is off and `file_paths` is empty. Either the document accepts \"template rules only\" and says so, or the shared engine must decouple changed-path extraction from rules-dir presence. The second is a change to the existing engine, which the Overview says is unchanged.",
+   "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#technical-considerations"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "\"Every existing flag behaves as today\" cannot hold for `--files`, `--diff`, and `--cwd`",
+   "description": "- `--files` is globbed relative to `review_cwd` (review.py:1054, `root_dir=review_cwd`). For a PR review run from the operator's checkout, it reads the operator's working tree, not the PR head. That is the exact disagreement the Overview says to remove.\n- `--diff` has no defined meaning next to a PR target. It would be a second range.\n- `--cwd` changes meaning once the scratch worktree becomes the tool jail root.\n\nThe document should list each flag as accepted, rejected, or redefined for `sq review pr`.",
+   "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#overview"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Protocol operations do not cover what the requirements need",
+   "description": "\"Host behind a protocol\" lists six operations. Other sections need more:\n\n- list squadron's own prior comments by marker, and edit one (Posting idempotency)\n- fetch linked issues (Envisioned State)\n- resolve the base SHA and re-check it for \"base moved since resolution\" (Architectural Principles)\n- find an existing PR for a branch, so `sq pr create` does not create a duplicate\n- push the branch (see the next finding)\n- confirm the authenticated identity matches the operator (the refusal rule)\n\nThe protocol should be complete before slice 1 fixes its interface. The document says a second host is \"a new implementation, not an edit\", and that only holds if the interface is complete now.",
+   "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#design-goals"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "`sq pr create` has no push step, and the write surface is incomplete",
+   "description": "Creating a PR needs the head branch on the remote. The document says `sq pr create` \"creates the PR through the adapter\" and never mentions a push. A push is a remote write. The \"Reads before writes, and writes are explicit\" principle requires every write to be explicit and dry-runnable, so the dry run must show the push too. The document must also say what happens when the branch is unpushed: push it, refuse, or ask.",
+   "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#envisioned-state"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "Posting \"updates or supersedes\" conflicts with per-head provenance",
+   "description": "Envisioned State says a later run \"updates or supersedes rather than stacking\". Technical Considerations says a review posted against a moved head \"must say so\". If the marked comment is edited in place, the earlier head-SHA record is gone, so the second requirement cannot hold after an update. Marker-based editing also only works on comments the operator's own login authored. If a different operator runs `--post`, the document does not define the result. It should choose one model: one comment per (PR, head SHA) with the old one marked superseded, or in-place edit with history lost.",
+   "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#envisioned-state"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "Review-thread state needs GraphQL, and `gh` calls block the async path",
+   "description": "1. Resolved/unresolved state on PR review threads comes from GraphQL (`reviewThreads { isResolved }`), not from REST PR-comment endpoints. The adapter needs `gh api graphql` with cursor pagination. The document treats \"read unresolved threads\" as one simple read. Check `gh`'s current JSON field coverage before the design relies on either route.\n2. `_execute_review` is `async` (review.py:636). The `gh` and git calls in the adapter are blocking subprocesses. Run inside the loop, they block all I/O. The project's Python rules require sync work in an `async def` to finish in under 1ms, or to go through `run_in_executor` or `asyncio.create_subprocess_exec`. The document does not say which.",
+   "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#technical-considerations"
+  },
+  {
+   "i": 8,
+   "severity": "CONCERN",
+   "title": "Fetch refspec and fork handling are GitHub-specific, but the design claims host neutrality",
+   "description": "\"Hosts expose PR heads as fetchable refs\" is true for GitHub's `refs/pull/<n>/head`. GitLab uses `refs/merge-requests/<n>/head`. The document should say the refspec lives only inside the GitHub adapter. It should also say that fork-PR heads are reached through that same ref on GitHub, and what happens to a head that has been force-pushed or garbage-collected.",
+   "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#technical-considerations"
+  },
+  {
+   "i": 9,
+   "severity": "CONCERN",
+   "title": "Untrusted PR content can change the rules that review it",
+   "description": "The document treats PR title, body, and threads as untrusted data. It does not cover rules. For a tool-enabled review, `review_cwd` is the PR's scratch worktree, and `_resolve_review_cwd` (review.py:244-258) resolves `.claude/rules/` from `find_git_root` of that path. A PR can therefore add or edit the conventions that govern its own review. Rules should come from the operator's checkout or the base ref, not the head.\n\nThe \"read-only tool set applies unchanged\" claim also depends on `allowed_tools` being enforced. Slice 916 (`project-documents/user/slices/916-slice.review-scope-correctness.md:209`) records that the SDK path did not enforce it at the time of writing. Verify this before relying on the claim.",
+   "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#technical-considerations"
+  },
+  {
+   "i": 10,
+   "severity": "CONCERN",
+   "title": "Persistence is SliceInfo-typed end to end; \"generic target\" is overstated",
+   "description": "The document says the save path \"already accepts a generic save target in the CLI\". Only `_resolve_save_outcome[SaveTargetT]` is generic (review.py:316). `_save_and_report` (review.py:345), `save_review_result` (persistence.py:457), and `format_review_markdown` (persistence.py:160) all take `SliceInfo`. The filename is built from `slice_info['index']` as an `int` (persistence.py:497). `save_review_file` (persistence.py:412) is a second filename builder with `slice_index: int`. `save_review_result` already has nine parameters. The document should name the contract, for example a `ReviewTarget` protocol providing name stem, frontmatter, and reviews location. It should also say which of the two existing builders is removed.",
+   "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#architectural-principles"
+  },
+  {
+   "i": 11,
+   "severity": "CONCERN",
+   "title": "\"One review engine\" has no reusable seam",
+   "description": "`review_code` is a Typer command of about 155 lines (review.py:940-1095). It owns diff normalization, scope pre-flight, rules, inputs, save outcome, and exit, and it is well past the project's ~50-line guideline. The document says `sq review pr` \"hands range, working directory, and PR metadata to the existing code review\", but no callable exists for that. Either `sq review pr` duplicates the orchestration, or the document requires extracting a `run_code_review(...)` function first. PR metadata as prompt inputs also needs new template placeholders in the code template. The document does not mention them.",
+   "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#design-goals"
+  },
+  {
+   "i": 12,
+   "severity": "CONCERN",
+   "title": "Scratch worktree lifecycle is deferred, but it shapes the adapter interface",
+   "description": "The document defers \"concurrency, disk use, and cleanup on failure\" to slice-level decisions. Those decisions determine where scratch paths and `refs/...` namespaces live, who removes them, and when `git worktree prune` runs. Enterprise repositories can be large, so one full checkout per review is a real cost. There is also a collision with project rules. `git worktree add` registers a worktree in the operator's repository. The project's CLAUDE.md treats unregistered worktrees as a STOP condition, and `git.integration_branch` is stored per checkout directory. Tools running in the scratch tree may therefore read different configuration. The document needs a rule for ownership, naming, and cleanup (a `finally` plus a startup prune).",
+   "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#technical-considerations"
+  },
+  {
+   "i": 13,
+   "severity": "CONCERN",
+   "title": "Failure-mode list is incomplete against its own principle",
+   "description": "Six failure modes are named. Missing:\n\n- base SHA not fetchable\n- merge-base failure in a shallow clone\n- fork head unavailable, or PR head deleted\n- scratch worktree creation or cleanup failure\n- incomplete thread pagination\n- more than one host remote (listed under target grammar, not as a failure)\n- `gh` output in an unexpected shape or version\n- PR closed or merged during the review\n- head moved during the review (checked only at post time)\n\nThe principle requires each one to have a named error, a log at WARNING or above, and a test.",
+   "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#architectural-principles"
+  },
+  {
+   "i": 14,
+   "severity": "CONCERN",
+   "title": "The \"how it was verified\" section has no input to draw from",
+   "description": "The fixed body sections include \"how it was verified\" and \"known gaps\". The listed inputs are commits, slice design and tasks, and the latest review. Commits do not record test results, and task checkboxes record what was planned, not what ran. A one-shot model call will fill that section from nothing. That breaks \"nothing is asserted that no input supports\" (Design Goals) and the 360 traceability rule. The document names no check that enforces it. Either add a verification input (test output or CI status), or make that section deterministic and empty when no input exists. \"Latest saved review\" is also undefined: the document does not say whether it means the newest file or the one matching the branch's slice.",
+   "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#technical-considerations"
+  },
+  {
+   "i": 15,
+   "severity": "CONCERN",
+   "title": "PR base falls back to a hard-coded `main`",
+   "description": "The integration-branch rule implies that `main` is used when no integration branch is set. `DEFAULT_DIFF_BASE = \"main\"` (src/squadron/review/git_utils.py:15). The document's own motivation is enterprise repositories, which often use `master`, `develop`, or `trunk`. The PR base should come from the host's default branch through an adapter operation, not from a constant. The document should also say what `sq pr create` does when there is no `cf` and no integration branch.",
+   "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#technical-considerations"
+  },
+  {
+   "i": 16,
+   "severity": "CONCERN",
+   "title": "Three capabilities share only the adapter, and the chain is linear and heavy",
+   "description": "The Overview says the three capabilities \"share one new boundary and nothing else\". The Anticipated Slices then chain them: adapter \u2192 `review pr` \u2192 persistence (gated on 916/917) \u2192 posting (needs a saved review) \u2192 `pr create`. Several parts can be cut or deferred:\n\n- Posting can render from the in-memory `ReviewResult`. Making it depend on an on-disk artifact couples slice 4 to the slice 3 persistence seams.\n- `sq review pr` in an unplanned repo can use the existing `--output file --output-path` path (review.py:296-313 names it), which removes the need for a new squadron data directory and config key in the first cut.\n- `sq pr create` is the heaviest piece: an LLM composition step with a fixed body contract, plus slash-command and doc parity. It is not needed to review or post, and it should be its own initiative, or be cut to a deterministic body the human edits.",
+   "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#overview"
+  },
+  {
+   "i": 17,
+   "severity": "CONCERN",
+   "title": "No mechanism selects a host implementation",
+   "description": "\"A second host is a new implementation, not an edit\" is only true if squadron can choose an implementation. The document does not say whether that choice comes from the remote hostname, a config key, or the target syntax. Enterprise repositories often have a GitHub Enterprise host alongside github.com, and `sq doctor` is described as checking \"the host adapter\" in the singular. The protocol needs a selection function or registry, and `doctor` needs to enumerate implementations.",
+   "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#envisioned-state"
+  }
+ ]
+}

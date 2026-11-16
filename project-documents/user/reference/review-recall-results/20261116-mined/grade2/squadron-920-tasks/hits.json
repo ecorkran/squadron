@@ -1,0 +1,11 @@
+{
+ "case": "squadron-920-tasks",
+ "flaws": [
+  {
+   "id": "F1",
+   "text": "Task 15 (live `sq metrology audit run -v`; \"Confirm: the audit runs to completion\") could not be completed as written. At `b5939ca4`, `metrology/audit",
+   "hits": {}
+  }
+ ],
+ "note": "Borderline: r03 #6, r07 #9, r08 #7 say Tasks 14-15 need a straight CLI and want a BLOCKED path, but none names the Claude-native tool names in _AUDIT_ALLOWED_TOOLS or the translate_tool_names ProviderError, so none counts as a hit."
+}

@@ -1,0 +1,279 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "`cf config unset --project` deletes the personal file, so the collision remedy and walkthrough step 9 cannot work",
+      "description": "Line 89 says delete \"mirrors write\" and removes the key from whichever project file its scope maps to. For `git.integration_branch` (personal), `cf config unset git.integration_branch --project` therefore removes the value from `.context-forge.local.toml`. It never touches the shared file. Yet line 146 and walkthrough step 9 (line 259) both tell the user to run exactly that command to \"clear the stale shared-file copy.\" Following the design as written:\n- The stale shared copy remains, so step 9's \"`cf check` is clean again\" fails.\n- The developer's personal value (`legacy/value`), which the collision rule is meant to protect, is deleted.\n- Read fallback then makes the stale shared value effective.\n\nNo command in the design removes a personal key from the shared file except `migrate-personal`, and that command skips on collision. Specify an explicit way to remove a shared-file copy of a personal key (for example, a target-file flag on `unset`), and make line 146 and step 9 use it.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:146"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Projects initialized before this slice get no ignore entry, so the first personal write recreates the leak",
+      "description": "The ignore line is written only by `cf init` (line 159). The success criterion at line 216 covers fresh projects only. For any project initialized before this slice, the first `cf config set <personal-key> --project` or `cf config migrate-personal` creates `.context-forge.local.toml` with no ignore entry, and a routine `git add -A` commits it. That is the leak this slice exists to close. The plan's 915 entry requires a migration story for projects that already committed personal keys, and this path does not meet it. I confirmed no other gitignore-writing code exists in the packages, so `cf init` is the only current writer. Ensure the ignore line whenever the personal file is created, using the helper `cf init` already uses, or have `cf check` flag an unignored personal file. Add an existing-project success criterion.",
+      "file_ref": null,
+      "category": "integration",
+      "raw_category": null,
+      "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:157-159"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Read precedence is stated two ways, and `list()` has no defined behavior",
+      "description": "Technical Decisions (lines 124\u2013126) defines precedence as project-personal \u2192 project-shared \u2192 user \u2192 default with no qualifier. That implies the personal file applies to every key. The Data Flow (lines 78\u201379) consults the personal file only when the key's own scope is `personal`. An implementer cannot tell which rule applies to a shared key with a value in the personal file, such as a hand-edited `workflow.review_enabled`. `list()` is in Technical Scope (line 30) and Component Structure (line 59), but no flow says how a key present in both files is listed or which `source` it reports. Pick one rule for whether the personal file is consulted for shared keys, and specify the `list()` merge and the per-entry `source`.",
+      "file_ref": null,
+      "category": "under-specification",
+      "raw_category": null,
+      "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:77-80"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`migrate-personal` per-key failure handling conflicts with the exception rule and has no failure-path test",
+      "description": "The command \"continues past a single key's failure, reporting that key as `failed: <error>` in its summary.\" The project rule requires every try/except to re-raise after `logger.exception` at ERROR, handle a specific exception with a justifying comment, or sit at a process boundary. A per-key catch that only writes to the summary meets none of these, and the design names no ERROR log. The review rule also requires each failure mode to be observable through a log or metric and asserted by a test. The test list at line 222 covers only the happy and no-op paths. The collision and `failed:` paths appear only in the manual walkthrough. Name the specific exception types, log each at ERROR with `logger.exception`, and add unit tests for collision skip, identical-value cleanup, and a forced write failure that asserts the failed-key signal.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:148-149"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`cf worktree init` is not addressed, though the design makes the personal value per-checkout",
+      "description": "Line 111 describes the personal value as \"per-developer/per-worktree.\" The personal file is gitignored, so git no longer carries it to a new worktree. A value committed in the shared file did propagate before this slice. The Integration Points section does not mention worktrees. I confirmed that the worktree command does not reference the config store or `git.integration_branch`, so a new worktree starts with no personal value. It then resolves to the default `main` target, which the 914 and 916 fork and merge rules depend on. State whether `cf worktree init` seeds the personal file and from where, or that the user sets it per worktree. Add that to Integration Points and to the walkthrough.",
+      "file_ref": null,
+      "category": "integration",
+      "raw_category": null,
+      "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:202-208"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Read-path failures on the new file are inherited but not stated",
+      "description": "The design reuses the existing read helper. I confirmed it returns an empty object only for a missing file and rethrows everything else, including TOML parse and permission errors. Failing loudly is the correct behavior. But every personal-key read now opens a second file, and the failure-modes section (lines 148\u2013151) covers only write and ignore-line failures. State that a malformed or unreadable personal file throws from `get()` and `list()` and is not treated as empty.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:121"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`scope` means two different things in the same API",
+      "description": "`ConfigKeyDefinition.scope` (line 169) is `'shared' | 'personal'`. The `get`/`set`/`delete` parameter (line 130) keeps `scope: 'user' | 'project'`. A call like `set(key, value, { scope: 'project' })` on a `personal` key reads confusingly. A distinct field name, such as `sharing` or `visibility`, would keep the registry field and the call-site parameter apart.",
+      "file_ref": null,
+      "category": "naming",
+      "raw_category": null,
+      "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:130"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Dependencies disagree with the slice plan",
+      "description": "The frontmatter declares `dependencies: [914]`, and the body names 916 as a prerequisite (lines 45\u201346). The 900 plan lists 915 with \"Dependencies: none.\" The 916 prerequisite, the `--project`/`--global` default-scope fix, is recorded in the 916 slice doc's Prerequisite Fix section, not in the plan's 916 entry. Both are complete, so nothing is blocked. The plan's 915 entry should still list 914 and 916 so the graph matches the slice doc.",
+      "file_ref": null,
+      "category": "traceability",
+      "raw_category": null,
+      "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:6"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The new `migrate-personal` option should use the shared project-option helper",
+      "description": "The design writes `cf config migrate-personal [-p, --project <id>]` as an inline option. The plan's 907 entry centralized `--project` into shared helpers, and I confirmed `withProjectOption` is in use across the CLI command modules. Use the helper so the option stays a one-line change.",
+      "file_ref": null,
+      "category": "integration",
+      "raw_category": null,
+      "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:193"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Proportionality is sound, with restated sections that can be trimmed",
+      "description": "The migration machinery is needed to meet the plan's \"defined migration/compat story,\" so the scope is justified. Trim the following without changing behavior:\n- Functional Requirements (210\u2013218) and the nine-step walkthrough (225\u2013259) restate each other.\n- The Risk mitigation (267\u2013268) restates the Migration Plan.\n- The `.env.local` rationale (113) does not change any decision.",
+      "file_ref": null,
+      "category": "proportionality",
+      "raw_category": null,
+      "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:210-259"
+    },
+    {
+      "severity": "PASS",
+      "title": "Consumers stay behind `ConfigManager`, as the slice claims",
+      "description": "A search of the worktree for the project config file name and path helper returns only the config module, the config CLI, the MCP config tool, and their tests. The \"no consumer changes\" claim holds, and the routing stays encapsulated in `ConfigManager`.",
+      "file_ref": null,
+      "category": "integration",
+      "raw_category": null,
+      "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:49"
+    },
+    {
+      "severity": "PASS",
+      "title": "Migration ordering, idempotency, and read compatibility are well specified",
+      "description": "Write-personal-then-delete-shared means a mid-run failure leaves a key in both files rather than neither. The read fallback keeps the value resolving, and re-running converges. The identical-value and different-value rules are explicit. The write-failure path (line 150) reuses the existing helper's throw behavior. This meets the plan's migration requirement, subject to the FAIL on the clearing path above.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:136-146"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "`cf config unset --project` deletes the personal file, so the collision remedy and walkthrough step 9 cannot work",
+      "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:146",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "integration",
+      "raw_category": null,
+      "summary": "Projects initialized before this slice get no ignore entry, so the first personal write recreates the leak",
+      "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:157-159",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "under-specification",
+      "raw_category": null,
+      "summary": "Read precedence is stated two ways, and `list()` has no defined behavior",
+      "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:77-80",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "`migrate-personal` per-key failure handling conflicts with the exception rule and has no failure-path test",
+      "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:148-149",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "integration",
+      "raw_category": null,
+      "summary": "`cf worktree init` is not addressed, though the design makes the personal value per-checkout",
+      "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:202-208",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "Read-path failures on the new file are inherited but not stated",
+      "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:121",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "note",
+      "category": "naming",
+      "raw_category": null,
+      "summary": "`scope` means two different things in the same API",
+      "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:130",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "note",
+      "category": "traceability",
+      "raw_category": null,
+      "summary": "Dependencies disagree with the slice plan",
+      "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:6",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "note",
+      "category": "integration",
+      "raw_category": null,
+      "summary": "The new `migrate-personal` option should use the shared project-option helper",
+      "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:193",
+      "location_verified": true
+    },
+    {
+      "id": "F010",
+      "severity": "note",
+      "category": "proportionality",
+      "raw_category": null,
+      "summary": "Proportionality is sound, with restated sections that can be trimmed",
+      "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:210-259",
+      "location_verified": true
+    },
+    {
+      "id": "F011",
+      "severity": "pass",
+      "category": "integration",
+      "raw_category": null,
+      "summary": "Consumers stay behind `ConfigManager`, as the slice claims",
+      "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:49",
+      "location_verified": true
+    },
+    {
+      "id": "F012",
+      "severity": "pass",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "Migration ordering, idempotency, and read compatibility are well specified",
+      "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:136-146",
+      "location_verified": true
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md",
+    "against": "project-documents/user/architecture/900-slices.maintenance-and-refactoring.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/context-forge-915-slice"
+  },
+  "timestamp": "2026-11-16T12:48:55.428120",
+  "model": "claude-haiku-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 9,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-haiku-5-5",
+  "answering_models": [
+    "claude-haiku-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 12,
+    "in_fences": 0,
+    "in_section": 12,
+    "surviving": 12
+  },
+  "effort": "xhigh",
+  "profile": "sdk",
+  "turns": 10,
+  "prompt_tokens": 479983,
+  "cached_tokens": 340378,
+  "cache_write_tokens": 139595,
+  "completion_tokens": 44025,
+  "reasoning_tokens": null,
+  "duration_seconds": 193.5085162918549,
+  "cost_usd": 0.14599266,
+  "cost_basis": "provider"
+}

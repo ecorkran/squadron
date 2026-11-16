@@ -1,0 +1,207 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "PASS",
+      "title": "Layer boundaries and dependency direction match the slice plan",
+      "description": "Rule compilation stays in the ai-project-guide `scripts/setup-ide` script. CF CLI only validates the target, checks the managed marker, runs the script and propagates to worktrees. `packages/core` and `packages/mcp-server` are explicitly unchanged (lines 116-119). `cf init` composition from slice 202 is reused without changing its interface (line 91). The non-goals (Cursor, bidirectional sync, custom agents) match the slice plan's non-goals.",
+      "file_ref": null,
+      "category": "architecture",
+      "raw_category": null,
+      "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md#compilation-lives-in-the-guides-submodule-not-cf-core"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Unmanaged-file protection covers only two of the four output locations",
+      "description": "Sequence step 4 and `isManagedCopilotFiles` (line 109) check only `.github/copilot-instructions.md` and `AGENTS.md`. The script also writes to `.github/instructions/*.instructions.md` and `.github/prompts/*.prompt.md`. A repo already using Copilot is likely to have hand-written files in both directories. If a generated file has the same name (for example `testing.instructions.md` or `commit.prompt.md`), the user's file is overwritten with no prompt and no backup.\n\nThis breaks the slice plan success criterion \"Re-running on a project with existing unmanaged files prompts before overwriting (same safety as Claude path)\". The Claude path covers its whole output because `.claude/rules/` and `.claude/skills/` are CF-owned. `.github/` is not CF-owned.\n\n`AGENTS.md` is also a cross-tool file that users often write by hand, and the backup is a single `.bak` per file.\n\n**Fix:** extend the check to every target path the script will write. Either the script emits a manifest or dry-run list of target paths, or the CLI checks for collisions with marker-less files in the two directories. Add a test for an unmanaged `.github/instructions/*.instructions.md` collision.\n\nThe design also names the helper two ways: `isManagedCopilot(filePath)` at line 29 and `isManagedCopilotFiles(projectPath)` at line 109. Pick one.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:98-99"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Copilot output appears to depend on generated `.claude/` files that a Copilot-only user won't have",
+      "description": "The file layout says the outputs are \"from `.claude/rules/typescript.md`\" and \"from `.claude/skills/commit.md`\". That makes the Copilot backend read the output of the Claude target. The overview (line 17) and the slice plan (\"never touching `.claude/`\", additive dual-write) imply the two targets are independent.\n\nThe motivating user cancelled Claude and will run `cf init --ide copilot`. That flow never runs `setup-ide claude`, so `.claude/` would not exist and the Copilot output would be empty or the script would fail. Line 114 does not say whether the script reads the guide's source rules or the generated `.claude/` tree.\n\n**Fix:** state that the Copilot backend reads the same guide-side rule and skill sources the Claude backend reads, and update the file-layout comments to match. If reading `.claude/` really is the intent, list `setup-ide claude` as a prerequisite and make `--ide copilot` run it first. That would contradict the \"additive only\" framing, so the design would need to say so.",
+      "file_ref": null,
+      "category": "hidden-dependency",
+      "raw_category": null,
+      "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:36-49"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Guide-script translation is under-specified and has no test coverage",
+      "description": "Most of the work is the guide-script `copilot` case, which gets one bullet at line 114. Every test listed exercises the CLI wrapper. None covers what the slice plan's success criteria require:\n- \"Path\u2192applyTo translation correctly converts Claude frontmatter to Copilot frontmatter for split rule files\"\n- `.instructions.md` and `.prompt.md` files are generated from non-alwaysApply rules and skills\n- The manual VS Code verification criterion is not in the test plan either.\n\nSome translation rules are ambiguous or missing:\n- Line 83 says that when `paths` is absent the output defaults to `applyTo: \"**\"`, then says those rules go into `copilot-instructions.md` instead. The design needs to say how \"is alwaysApply\" is decided, and what happens to a non-alwaysApply rule with no `paths`. A split file with `applyTo: \"**\"` is always-on content in an unordered file, which the design's own ordering decision (lines 59-61) rules out.\n- There is no mapping from skill frontmatter to prompt-file fields (`name`, `description`, `argument-hint`, `agent`, `tools`).\n- It is not stated where the managed marker goes relative to YAML frontmatter in the `.instructions.md` and `.prompt.md` outputs. It must come after the frontmatter, or VS Code may not parse the frontmatter.\n\n**Fix:** add a short translation spec covering these cases. Add guide-script tests (fixture rules and skills in, expected files and frontmatter out), including multi-path `paths`, missing `paths`, and alwaysApply classification. Add the manual VS Code check to the test list.",
+      "file_ref": null,
+      "category": "testing",
+      "raw_category": null,
+      "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:121-129"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Version skew between CLI and guides has no defined failure handling",
+      "description": "The Risks section says that if the installed guides lack a `copilot` case, the command \"will fail at the script step with a clear error\". The design never defines that error. On any non-zero exit the CLI just reports \"setup-ide exited with code N\", and an older script given an unknown argument may print usage or do something else.\n\nTwo more failure modes are not covered:\n- **Partial writes:** the script fails after writing some `.github/` files. The design doesn't say whether a re-run cleans up or whether the half-written state is acceptable.\n- **Unmet prerequisites:** the advertised `cf init --ide copilot` flow fails at its last step on a fresh install whose guide release has no `copilot` case.\n\n**Fix:** pick a lightweight detection approach and specify it. Options include having the script exit with a defined code for an unknown target, which the CLI maps to \"installed guides do not support copilot \u2014 run `cf guides update`\", or a capability or version check before running the script. Also state that a re-run after a partial failure is safe because outputs are regenerated idempotently.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:133"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Slice-plan requirement to reference the Copilot tool guide is dropped",
+      "description": "The slice plan entry names `project-documents/user/tool-guides/copilot-vscode/setup-ide.md` as the reference. It also lists as a success criterion that the tool guide is \"referenced in slice design, promoted to a proper published tool guide if needed\". The slice design never mentions the file and doesn't decide whether to promote it.\n\nThat file is the source for the design's claims about `applyTo` syntax, prompt frontmatter and ordering. As it stands it is a raw chat export with an external logo image and a trailing question.\n\n**Fix:** reference the guide in the design. Either add a task to promote it to a cleaned-up tool guide, or state why that is deferred.",
+      "file_ref": null,
+      "category": "scope",
+      "raw_category": null,
+      "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The same content will be loaded more than once",
+      "description": "The design writes identical content to `AGENTS.md` and `.github/copilot-instructions.md`. The slice plan's mapping table requires both. The tool guide says VS Code treats both as always-on and also reads `CLAUDE.md` for compatibility, so a dual-target project could load the same rules two or three times. The cost is tokens and noise, not correctness. A one-line acknowledgement, or a future-work note about making `AGENTS.md` the only output, would cover it.",
+      "file_ref": null,
+      "category": "design",
+      "raw_category": null,
+      "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:59-61"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The promised custom-agent mapping doc is not in the design",
+      "description": "The \"Not included\" list says \"document the mapping but defer implementation\", but the design doesn't contain that mapping. Deferring the implementation matches the slice plan. Add a brief mapping paragraph or drop the \"document the mapping\" wording.",
+      "file_ref": null,
+      "category": "scope",
+      "raw_category": null,
+      "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:54"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "pass",
+      "category": "architecture",
+      "raw_category": null,
+      "summary": "Layer boundaries and dependency direction match the slice plan",
+      "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md#compilation-lives-in-the-guides-submodule-not-cf-core",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "Unmanaged-file protection covers only two of the four output locations",
+      "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:98-99",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "hidden-dependency",
+      "raw_category": null,
+      "summary": "Copilot output appears to depend on generated `.claude/` files that a Copilot-only user won't have",
+      "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:36-49",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "testing",
+      "raw_category": null,
+      "summary": "Guide-script translation is under-specified and has no test coverage",
+      "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:121-129",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "Version skew between CLI and guides has no defined failure handling",
+      "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:133",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "scope",
+      "raw_category": null,
+      "summary": "Slice-plan requirement to reference the Copilot tool guide is dropped",
+      "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md",
+      "location_verified": null
+    },
+    {
+      "id": "F007",
+      "severity": "note",
+      "category": "design",
+      "raw_category": null,
+      "summary": "The same content will be loaded more than once",
+      "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:59-61",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "note",
+      "category": "scope",
+      "raw_category": null,
+      "summary": "The promised custom-agent mapping doc is not in the design",
+      "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:54",
+      "location_verified": true
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md",
+    "against": "project-documents/user/architecture/200-slices.developer-onboarding.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/context-forge-210-slice"
+  },
+  "timestamp": "2026-11-16T13:04:36.134963",
+  "model": "claude-opus-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 7,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-opus-5-5",
+  "answering_models": [
+    "claude-opus-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 8,
+    "in_fences": 0,
+    "in_section": 8,
+    "surviving": 8
+  },
+  "effort": "medium",
+  "profile": "sdk",
+  "turns": 8,
+  "prompt_tokens": 294300,
+  "cached_tokens": 213861,
+  "cache_write_tokens": 80429,
+  "completion_tokens": 5778,
+  "reasoning_tokens": null,
+  "duration_seconds": 64.07021883293055,
+  "cost_usd": 0.8023589,
+  "cost_basis": "provider"
+}

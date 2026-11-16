@@ -1,0 +1,27 @@
+{
+ "case": "squadron-927-design",
+ "flaws": [
+  {
+   "id": "F1",
+   "text": "D6 and Success Criterion 7 assume a stated PASS with `fallback_used=True` (verdict read, findings not parsed) can reach the PASS-to-CONCERNS cap, and ",
+   "hits": {
+    "r02": [
+     0
+    ]
+   }
+  },
+  {
+   "id": "F2",
+   "text": "Walkthrough step 6 says \"one run per configured profile\" but the command pins `--model sonnet`, which exercises one profile only. The correction uses ",
+   "hits": {
+    "r04": [
+     6
+    ],
+    "r08": [
+     0
+    ]
+   }
+  }
+ ],
+ "note": "r04 finding 10 (D6 notice renders on every degraded parse) is excluded from F1 because it asks for a criterion rather than naming the false fallback_used premise; gemini-only findings (r02#1, r05#1, r06#0) are excluded from F2 because they do not name the fixed --model sonnet command."
+}

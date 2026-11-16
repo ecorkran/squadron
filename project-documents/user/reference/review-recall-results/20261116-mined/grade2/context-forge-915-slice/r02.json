@@ -1,0 +1,47 @@
+{
+ "review": "r02",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "FAIL",
+   "title": "The documented collision fix deletes the personal value and leaves the stale shared copy",
+   "description": "The Delete rule at line 89 says delete \"mirrors write \u2014 deletes from whichever project file the key's scope maps to\". For `git.integration_branch` (personal), that file is `.context-forge.local.toml`. The collision rules at line 146 and walkthrough step 9 at line 259 then tell the user to run `cf config unset git.integration_branch --project` \"to clear the stale shared-file copy\". Under this slice's own routing, that command deletes the developer's personal value (`legacy/value`) and leaves the stale shared value. Reads then fall through to the stale value (`another-legacy-value`). This silently reverts the developer's preference, which the collision rule exists to protect, and the `cf check` warning stays. As designed, nothing can remove a personal key from the shared file once a personal value exists: `migrate-personal` skips it and `unset` targets the other file. Step 9's final check (\"confirm `cf check` is clean again\") cannot pass.\n\nFix options:\n- **(a)** In the collision case, have `migrate-personal` delete the shared copy, since the personal value already wins at read time. The shared copy is a stale duplicate, not data at risk.\n- **(b)** Add an explicit way to target the shared file.\n\nOption (a) is lighter and removes the separate remedy step.",
+   "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:146"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "No API covers the parts that must touch the shared file directly",
+   "description": "The design says `ConfigManager`'s public API is unchanged (lines 49 and 181). Two new components still need to read or change the shared file regardless of key scope:\n- **`migrate-personal`:** it lives in CLI `config.ts` (line 65) and must delete keys from the shared file. Line 89 calls this \"the one exception that touches the *other* project file, by design\" but never says how. Routed `delete()` cannot do it, and `readToml`/`writeToml`/`deleteKey` are private to `ConfigManager.ts`.\n- **The new `ConsistencyChecker` rule:** it must list the personal keys present in the shared file, including the collision case where the personal file also has the key. `get()` can't detect that case, because it returns `source: 'project-personal'` and hides the shared copy. `ConsistencyChecker` already receives an optional `ConfigManager`.\n\nWithout a defined API, the implementer will either copy the TOML helpers into the CLI and checker (violates DRY) or invent an API during implementation (hidden dependency). Add one or two `ConfigManager` methods to the contract, for example `findPersonalKeysInSharedFile()` and `migratePersonalKeys(): MigrationReport`. The CLI command and the checker rule then just call core.",
+   "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md#api-contracts"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Existing projects never get the personal file gitignored",
+   "description": "The `.gitignore` line is only added by `cf init` (lines 32 and 159). Every project that already exists, including every project in the migration case, has run `cf init` already. On those projects, `cf config set git.integration_branch ... --project` and `cf config migrate-personal` create `.context-forge.local.toml` as an untracked file that is not ignored, so the next `git add -A` commits it. That defeats the stated Value (line 23): \"Prevents personal ... settings from being silently committed.\"\n\nThe smallest fix: run the same \"add the line if missing\" helper whenever the personal file is first written (in `ConfigManager.set` or `migrate-personal`), or at least in `migrate-personal`. Line 32 also mentions \"reusing the pattern already used for personal ignores\". Line 159 confirms no such pattern exists, so remove the phrase.",
+   "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md#gitignore-handling-in-cf-init"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "The `migrate-personal` failure handling is heavier than one personal key needs, and its exit code is unspecified",
+   "description": "The registry has exactly one personal key. The design still specifies keys processed independently, continue-past-failure, and a per-key `failed: <error>` summary. With one key, this machinery adds nothing over \"write personal, then delete shared, and let any error throw\". The write-then-delete ordering already guarantees a failure is recoverable. The design also never says whether the command exits non-zero when a key fails, which scripts and agents need to know.\n\nSimplify: process keys in order, stop at the first error (the ordering keeps it safe and re-runnable), and let the error surface through the existing `handleError` with a non-zero exit.",
+   "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:149"
+  },
+  {
+   "i": 4,
+   "severity": "NOTE",
+   "title": "The read-path wording in Data Flow step 2 contradicts itself",
+   "description": "Step 2 says to read the shared file \"only if the key's own scope is `shared`, OR it's a personal key falling through\". Every key matches one of those, so the condition is always true. The real rule is simpler: for personal keys check the personal file first, then all keys check the shared file, then user, then default. Saying it that way avoids implementers adding a guard that never triggers.",
+   "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:79"
+  },
+  {
+   "i": 5,
+   "severity": "NOTE",
+   "title": "The `dependencies: [914]` frontmatter differs from the plan's \"Dependencies: none\"",
+   "description": "The slice plan entry lists no dependencies. The slice doc names 914 and explains why at line 45. 914 is complete, so nothing is blocked. Consider updating the plan entry so the two agree.",
+   "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:6"
+  }
+ ]
+}

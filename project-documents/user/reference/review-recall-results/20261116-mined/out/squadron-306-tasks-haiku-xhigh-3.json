@@ -1,0 +1,405 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "Overwrite guard misses the CLI save path that success criterion 7 names",
+      "description": "T12 puts the archive guard in `save_review_file` (persistence.py:220). `sq review code` reaches `save_review_result` (cli/commands/review.py:746), which writes directly with `path.write_text(...)` at persistence.py:302\u2013303 and never calls `save_review_file`. As specified, re-running `sq review code 305` over an edited review still overwrites it silently, which is the case criterion 7 requires to be archived. Only the pipeline fallback (pipeline/actions/review.py:272) goes through `save_review_file`, so the two paths would also diverge, against the interface-parity rule. The design has the same gap in Decision 7. Fix: one archive-then-verify write helper called by both functions. `save_review_result` returns `Path`, not `Path | None`, so the breakdown must also decide how an aborted save surfaces there. Raising is the likely choice because CLI callers expect a path.",
+      "file_ref": null,
+      "category": "requirement-coverage",
+      "raw_category": null,
+      "location": "src/squadron/review/persistence.py:302"
+    },
+    {
+      "severity": "FAIL",
+      "title": "A second overwrite silently destroys the first archive",
+      "description": "T12 archives to `archive/{original filename}`, and Decision 7 says \"with its original name.\" Every overwrite of the same review uses the same archive path, so the second overwrite replaces the first archived copy. Example: save V1, hand-edit to V1+note, re-review (archives V1+note), hand-edit V2 to V2+note, re-review (archives V2+note over V1+note). V1's hand edits are gone, which breaks criterion 7's \"nothing is silently destroyed.\" The byte-verify step passes because it checks only the new copy. Fix: give each archive a unique name (timestamp or sequence suffix) and never overwrite an existing archive. Add a two-overwrite test, which T13 lacks. This needs a Decision 7 design edit first.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-1.md:236"
+    },
+    {
+      "severity": "FAIL",
+      "title": "The cf archive-scanning check runs after the commit it gates",
+      "description": "The design's Phase 5 note (slice design lines 381\u2013383) and T14's own title say this check is blocking and must come before Part D lands. T13's `fix:` commit (line 272) lands Part D before T14 runs. T12's \"do not mark done until T14\" rule is prose and does not stop that commit. If cf turns out to scan recursively, the archive name must change after it is already committed. Fix: move T14 before T12 and make it a gate on the Part D commit.",
+      "file_ref": null,
+      "category": "sequencing",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-1.md:275"
+    },
+    {
+      "severity": "FAIL",
+      "title": "Judge extraction breaks the test patch targets, so the T6 gate fails as written",
+      "description": "The judge tests patch `squadron.pipeline.actions.findings_addressed.judge.run_review_with_profile` (this line; also `test_findings_addressed_e2e.py:27`). The only call is at `pipeline/actions/findings_addressed/judge.py:129`. T5 moves that call into `review/addressed/judge.py`, so the pipeline module no longer uses that name. The patch then raises `AttributeError` or patches a name nothing calls, and the real transport runs. T6 requires these tests to pass without changes, so it fails. The breakdown also uses \"unchanged\" inconsistently: T1 already edits the four test files' imports, but T6 stops on any rewritten test. Fix: have the wrapper pass its module-level `run_review_with_profile` into `judge_residue_core` as a parameter, so the patch targets stay live. Define \"unchanged\" as assertions and fixtures unchanged, with import edits allowed.",
+      "file_ref": null,
+      "category": "test-strategy",
+      "raw_category": null,
+      "location": "tests/pipeline/test_findings_addressed_judge.py:32"
+    },
+    {
+      "severity": "FAIL",
+      "title": "The review package imports pipeline internals, which the design forbids",
+      "description": "T3 keeps `verification.py`'s import of `RoundDiff` from `pipeline/actions/findings_addressed/screens.py` and calls it \"the pipeline\u2192review direction.\" It is the reverse: `review/addressed/verification.py` would import from pipeline. The design's F002 dependency rule rejects exactly this because it creates a review\u2194pipeline cycle. `RoundDiff` is defined at `screens.py:34`, and `judge.py:21` imports it too, so T5's `judge_residue_core(..., diff, ...)` has the same problem. File 2 repeats it: T21 has `review/resolution.py` import `RoundDiff` and `screen_byte_identical` from `screens.py`. Fix: move `RoundDiff` (a data shape) into `review/addressed/`, and decide before T3 which screen logic the resolve path needs in `review/addressed/`. The design's \"screens stay loop-specific\" premise does not hold for resolve. This is a PM-level boundary decision.",
+      "file_ref": null,
+      "category": "architecture",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-1.md:109-113"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Part D drops the design's \"print the review content to the terminal\" requirement",
+      "description": "Slice design lines 328\u2013330 say the review content is still printed to the terminal when the overwrite aborts. T12 does not say this. The new review is in memory, so on abort its output is lost unless printed. Add the print to T12 and assert it in T13's abort test.",
+      "file_ref": null,
+      "category": "requirement-coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-1.md:240-243"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "T9 and T10 are implementation tasks with no test directly after them",
+      "description": "Line 70 says every implementation task is immediately followed by its test. T9 is followed by T10, another implementation task, and the test (T11) comes after both. T9 is a single optional parameter. Merge T9 and T10 into one implementation task followed by T11.",
+      "file_ref": null,
+      "category": "test-strategy",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-1.md:190"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Part D is a `fix:` commit inside slice 306, which the fixes rule places elsewhere",
+      "description": "`bug-fixes.md` says a multi-step fix belongs in the standing-fixes task file (990) as a group titled with its issue number. T12\u2013T14 are a multi-step fix committed as `fix:`, and the design gives no issue number for the overwrite hazard. The slice-own-code exception may apply, since Part A edits the same file. Either way, the breakdown should state which path applies: open an issue and move the group to 990, or record the PM's decision to keep it in 306.",
+      "file_ref": null,
+      "category": "process",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-1.md:233"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "No test for an unreadable judge response, and \"review discovery\" is untested",
+      "description": "Criterion 9 requires an unreadable judge response to yield UNKNOWN with a WARNING. T26 tests only a transport that raises. Add a test where the judge response fails parsing (`is_parse_failure`). Criterion 11 also names \"review discovery,\" but T32 tests only metrology's `discover_judge_results`. Name the review-discovery function (probably T17's `locate_review`) and test it against a resolution artifact, or drop it from the criterion.",
+      "file_ref": null,
+      "category": "test-coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-2.md:224"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Two fallthrough cases are unspecified and could fail open",
+      "description": "T23 branches only on PASS and FAIL/CONCERNS. A missing or unrecognized verdict is not covered, so an implementer could fall through to ADDRESSED. Specify that any other verdict yields UNKNOWN with a WARNING, and compare against the project's verdict type, not string literals. Separately, T19's `git log -1 -- <file>` for an uncommitted legacy review (a common case) returns no output with exit 0. That empty result must not become the diff base. Treat it as a git failure and return UNKNOWN.",
+      "file_ref": null,
+      "category": "fail-closed",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-2.md:164"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Commit markers use `Commit:`, not `**Commit**:`",
+      "description": "The markers are plain lines but not in the `**Commit**:` form the cadence rule names. If tooling matches the bold form, the markers are skipped and commits fall back to per-task. Normalize them. Placement at tested points is otherwise correct.",
+      "file_ref": null,
+      "category": "format",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-1.md:99"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Part 0 has eight tasks and four gate commits for mechanical moves",
+      "description": "T2, T4, T6, and T8 each rerun the same suite after a move. Merging each move with its gate (T1+T2, T3+T4) is reasonable, and keeping them aids bisecting. T8's \"plus this slice's later additions\" is ambiguous because none exist at that point. The expected count is exactly 2832 passed, 2 skipped, the 305 baseline the task cites.",
+      "file_ref": null,
+      "category": "granularity",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-1.md:94"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The design text places `records_from_frontmatter` in the old package",
+      "description": "Part B says `findings_addressed/models.py`, which file 1 moves away. The architecture section (line 126) and T15 correctly say `review/addressed/models.py`. Update line 306 to match.",
+      "file_ref": null,
+      "category": "design-consistency",
+      "raw_category": null,
+      "location": "project-documents/user/slices/306-slice.review-resolution-recording-that-findings-were-addressed.md:306"
+    },
+    {
+      "severity": "NOTE",
+      "title": "T25's injection cap is conditional on a fact the code already answers",
+      "description": "T25 says to reuse 305's cap if one exists, and otherwise add one and flag the PM. The cap exists: `review.max_total_injection_bytes` (src/squadron/config/keys.py:107), read in `review_client.py:238`. Name that key. Also confirm whether the judge's diff passes through it, since `review_client` applies it to injected file content. I did not verify the diff path.",
+      "file_ref": null,
+      "category": "completability",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-2.md:212"
+    },
+    {
+      "severity": "NOTE",
+      "title": "T29 offers an alternative the design already decided",
+      "description": "The design says the YAML helper is extracted from `evidence.py`. T29 allows keeping a second copy if the enum sets \"differ.\" Pick the extraction, or name the evidence that would justify a copy.",
+      "file_ref": null,
+      "category": "completability",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-2.md:270"
+    },
+    {
+      "severity": "NOTE",
+      "title": "T36 cites a test file that does not exist",
+      "description": "`tests/cli/commands/test_review.py` does not exist. The existing CLI review tests are in `tests/review/test_cli_review.py`.",
+      "file_ref": null,
+      "category": "completability",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-2.md:383"
+    },
+    {
+      "severity": "NOTE",
+      "title": "T24's `fix:` commit describes new behavior",
+      "description": "The resolve command is new in this slice, so the verdict-consistency screen is a `feat:`. `fix:` is for restoring intended behavior.",
+      "file_ref": null,
+      "category": "process",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-2.md:190"
+    },
+    {
+      "severity": "PASS",
+      "title": "No scope creep; every task traces to a criterion or design decision",
+      "description": "I found no task without a trace. Part 0, the judge extraction, and T14 each trace to a design decision. In file 2, every implementation task is followed by its test. The design restates no NFR, so no load-test or CI-gate task is required.",
+      "file_ref": null,
+      "category": "scope",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-1.md"
+    },
+    {
+      "severity": "PASS",
+      "title": "The design-review rules have dedicated test tasks",
+      "description": "F001 has its own test task (T24), F004 has T26 (with the gap noted above), and F003 has T13 in file 1. The design's \"do not merge into a general error-handling task\" instruction is followed.",
+      "file_ref": null,
+      "category": "test-strategy",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-2.md:181"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "requirement-coverage",
+      "raw_category": null,
+      "summary": "Overwrite guard misses the CLI save path that success criterion 7 names",
+      "location": "src/squadron/review/persistence.py:302",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "A second overwrite silently destroys the first archive",
+      "location": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-1.md:236",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "fail",
+      "category": "sequencing",
+      "raw_category": null,
+      "summary": "The cf archive-scanning check runs after the commit it gates",
+      "location": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-1.md:275",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "fail",
+      "category": "test-strategy",
+      "raw_category": null,
+      "summary": "Judge extraction breaks the test patch targets, so the T6 gate fails as written",
+      "location": "tests/pipeline/test_findings_addressed_judge.py:32",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "fail",
+      "category": "architecture",
+      "raw_category": null,
+      "summary": "The review package imports pipeline internals, which the design forbids",
+      "location": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-1.md:109-113",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "requirement-coverage",
+      "raw_category": null,
+      "summary": "Part D drops the design's \"print the review content to the terminal\" requirement",
+      "location": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-1.md:240-243",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "concern",
+      "category": "test-strategy",
+      "raw_category": null,
+      "summary": "T9 and T10 are implementation tasks with no test directly after them",
+      "location": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-1.md:190",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "concern",
+      "category": "process",
+      "raw_category": null,
+      "summary": "Part D is a `fix:` commit inside slice 306, which the fixes rule places elsewhere",
+      "location": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-1.md:233",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "concern",
+      "category": "test-coverage",
+      "raw_category": null,
+      "summary": "No test for an unreadable judge response, and \"review discovery\" is untested",
+      "location": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-2.md:224",
+      "location_verified": true
+    },
+    {
+      "id": "F010",
+      "severity": "concern",
+      "category": "fail-closed",
+      "raw_category": null,
+      "summary": "Two fallthrough cases are unspecified and could fail open",
+      "location": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-2.md:164",
+      "location_verified": true
+    },
+    {
+      "id": "F011",
+      "severity": "note",
+      "category": "format",
+      "raw_category": null,
+      "summary": "Commit markers use `Commit:`, not `**Commit**:`",
+      "location": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-1.md:99",
+      "location_verified": true
+    },
+    {
+      "id": "F012",
+      "severity": "note",
+      "category": "granularity",
+      "raw_category": null,
+      "summary": "Part 0 has eight tasks and four gate commits for mechanical moves",
+      "location": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-1.md:94",
+      "location_verified": true
+    },
+    {
+      "id": "F013",
+      "severity": "note",
+      "category": "design-consistency",
+      "raw_category": null,
+      "summary": "The design text places `records_from_frontmatter` in the old package",
+      "location": "project-documents/user/slices/306-slice.review-resolution-recording-that-findings-were-addressed.md:306",
+      "location_verified": true
+    },
+    {
+      "id": "F014",
+      "severity": "note",
+      "category": "completability",
+      "raw_category": null,
+      "summary": "T25's injection cap is conditional on a fact the code already answers",
+      "location": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-2.md:212",
+      "location_verified": true
+    },
+    {
+      "id": "F015",
+      "severity": "note",
+      "category": "completability",
+      "raw_category": null,
+      "summary": "T29 offers an alternative the design already decided",
+      "location": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-2.md:270",
+      "location_verified": true
+    },
+    {
+      "id": "F016",
+      "severity": "note",
+      "category": "completability",
+      "raw_category": null,
+      "summary": "T36 cites a test file that does not exist",
+      "location": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-2.md:383",
+      "location_verified": true
+    },
+    {
+      "id": "F017",
+      "severity": "note",
+      "category": "process",
+      "raw_category": null,
+      "summary": "T24's `fix:` commit describes new behavior",
+      "location": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-2.md:190",
+      "location_verified": true
+    },
+    {
+      "id": "F018",
+      "severity": "pass",
+      "category": "scope",
+      "raw_category": null,
+      "summary": "No scope creep; every task traces to a criterion or design decision",
+      "location": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-1.md",
+      "location_verified": null
+    },
+    {
+      "id": "F019",
+      "severity": "pass",
+      "category": "test-strategy",
+      "raw_category": null,
+      "summary": "The design-review rules have dedicated test tasks",
+      "location": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-2.md:181",
+      "location_verified": true
+    }
+  ],
+  "template_name": "tasks",
+  "input_files": {
+    "input": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-1.md",
+    "against": "project-documents/user/slices/306-slice.review-resolution-recording-that-findings-were-addressed.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/squadron-306-tasks"
+  },
+  "timestamp": "2026-11-16T13:42:09.064924",
+  "model": "claude-haiku-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 15,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-haiku-5-5",
+  "answering_models": [
+    "claude-haiku-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 19,
+    "in_fences": 0,
+    "in_section": 19,
+    "surviving": 19
+  },
+  "effort": "xhigh",
+  "profile": "sdk",
+  "turns": 16,
+  "prompt_tokens": 715729,
+  "cached_tokens": 535073,
+  "cache_write_tokens": 180644,
+  "completion_tokens": 68833,
+  "reasoning_tokens": null,
+  "duration_seconds": 303.938566791825,
+  "cost_usd": 0.25700477,
+  "cost_basis": "provider"
+}

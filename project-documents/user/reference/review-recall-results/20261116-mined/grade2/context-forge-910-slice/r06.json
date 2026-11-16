@@ -1,0 +1,47 @@
+{
+ "review": "r06",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "FAIL",
+   "title": "WorkflowNavigator's three \"sites\" are `SliceStatus.status`, which TD-3 excludes",
+   "description": "The scope table (line 36), the component table (line 75) and work step 4 (line 90) mark 3 `=== 'complete'` sites in `WorkflowNavigator.ts` for sweeping. In the code, all three are on the `SliceStatus` union: `slice.status === 'complete'` (twice) and `return { ...base, status: 'complete', taskProgress }`. That `slice` is the same variable compared against `'no-active-slice'`, `'needs-design'`, `'pending-review'` and so on. TD-3 (lines 104\u2013106) and the Excluded list (line 49) say this union must not be swept onto `STATUS`. The swap would still compile because `STATUS.Complete` is assignable to that union, so nothing would catch the mistake.\n\nThe design therefore contradicts itself. Following step 4 breaks TD-3. Skipping it fails the functional criterion at line 135 (\"zero matches in the six swept files\"). Two other notes from the code: `WorkflowNavigator.ts` already imports `STATUS` (line 90 says \"confirm\"), and its actual `NormalizedStatus` comparisons already use it.\n\n**Fix:** set WorkflowNavigator to 0 sites, remove step 4, move the file into Excluded, and drop it from the \"six swept files\" (5 remain).",
+   "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md:36"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "ConsistencyChecker's 36 sites mix normalized status with raw frontmatter values",
+   "description": "TD-2 (lines 100\u2013102) says raw frontmatter tokens and `NormalizedStatus` are separate vocabularies and must not be merged. The 36-site count at line 33 merges them anyway:\n\n- **Fix-writer values (11 sites).** These are `fixAction.detail: { key: 'status', value: 'in-progress' | 'complete' }` lines. They are the values `cf check --fix` writes into frontmatter, which is TD-2's raw vocabulary. A neighbouring fix action already writes `value: 'in_progress'`, so the file uses both spellings today. Sweeping the 11 onto `STATUS.*` would tie frontmatter writes to the normalized enum and leave that one site inconsistent.\n- **Comparisons against raw frontmatter.** `fmStatus`, `planStatus` and `archStatus` are each `frontmatter.data.status.toLowerCase()`: plain `string`, not normalized. Only one rule also converts `_` to `-`. So the design's value claim (line 23, \"a typo \u2026 becomes a compile error\") doesn't apply to these comparisons. The operand is `string`, so the compiler checks nothing.\n\n**Fix:** split the ConsistencyChecker inventory into three groups. Comparisons against a typed `NormalizedStatus` (`taskResult.inferredStatus`) get swept. `fixAction.detail.value` frontmatter writes are excluded under TD-2. Raw-`fmStatus` comparisons need an explicit decision: sweep them, with a note that they get no type safety, or leave them for a slice that runs `fmStatus` through `normalizeStatus()`.",
+   "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md:33"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Unswept raw-frontmatter comparisons have a live bug the design doesn't mention",
+   "description": "In the frontmatter-vs-computed rule, `fmStatus` is only lowercased, then tested with `fmStatus === 'in-progress' || fmStatus === 'not-started'`. The canonical frontmatter values are `in_progress` and `not_started` (`VALID_STATUSES`), and those never match. So a slice design marked `in_progress` with all tasks complete is never flagged. The same applies to the `'not-started' && 'in-progress'` check. The task-frontmatter rule avoids this by calling `.replace(/_/g, '-')`.\n\nThis slice correctly promises no behavior change, so it shouldn't fix the bug. But a sweep that makes these comparisons look type-checked will hide it further. Under the project's found-while-implementing rule this is \"actually broken\", so it should be filed as an issue.\n\n**Fix:** add a line under Excluded/Deferred naming the defect and pointing to the issue.",
+   "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md#explicitly-excluded"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Verification counts and the grep criterion don't match the code",
+   "description": "- **`SliceStatus.status` sites:** the \"after\" estimate expects 4 to remain. Only 1 literal matches the grep (`| 'complete'`).\n- **`types.ts` count:** line 35 lists 5 sites to sweep. The 3 literals in `inferredStatus` are retyped (TD-1), not swept, and the fourth is `SliceStatus`. So 0 are swept.\n- **`statusNormalizer.ts` count:** line 34 says 13 values and 3 quoted keys. The code has 14 values (`complete`, `completed`, `done`, `in_progress`, `'in-progress'`, `'in progress'`, `active`, `not_started`, `'not-started'`, `'not started'`, `ready`, `pending`, `planned`, `deprecated`) and 2 quoted keys that match the grep.\n- **Comment hits:** 3 of ConsistencyChecker's 36 are in a comment (`// 'complete' | 'in-progress' | 'not-started'`). The line-135 grep will flag them unless the comment is updated, and the design never says to update it. `ProjectModelBuilder.ts`'s one grep hit is also a comment (`'not-started'`), not the `'unknown'` sentinel line 39 cites. Zero code sites either way, but the reasoning given is wrong.\n- **Tests:** line 51 says \"zero `.test.ts` files assert against these literals\". Tests live in `packages/*/tests/`, and `ConsistencyChecker.test.ts` alone has about 100 matching lines. Leaving tests on literal strings is still correct: they act as an independent check on the wire values, and they'll pass unchanged. Only the stated reason is wrong.\n\nCombined with the WorkflowNavigator problem, the \"after\" number in step 1 would send the implementer chasing a mismatch. **Fix:** recount from the code after reclassifying, and say that the explanatory comment changes or that comment lines are excluded from the grep.",
+   "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md:147-151"
+  },
+  {
+   "i": 6,
+   "severity": "NOTE",
+   "title": "Slice plan lists ProjectModelBuilder; the design reasonably drops it",
+   "description": "The slice-plan entry for 910 names `ProjectModelBuilder.ts` as a site. The design's 0 count is correct because that file has no code literal, so nothing assigned to the slice is lost. Correcting the cited reason (see the verification finding) is enough.",
+   "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md:39"
+  },
+  {
+   "i": 7,
+   "severity": "NOTE",
+   "title": "No new I/O paths and no NFRs apply",
+   "description": "This is a compile-time-only refactor with no new I/O or message types, and the parent architecture states no NFRs. Failure-mode listing and NFR restatement don't apply.",
+   "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md"
+  }
+ ]
+}

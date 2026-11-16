@@ -1,0 +1,54 @@
+{
+ "review": "r02",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Success criterion 6 is only half covered, yet the slice is marked complete",
+   "description": "Criterion 6 has two parts. The first part (a materialized `cf_workflow_status` executor returns the real project status) is covered by Tasks 8.2 and 9.1 step 2. The second part (a non-SDK model dispatch calls `cf_build_context` and receives assembled context, walkthrough \u00a74) has no task. Task 9.3 explicitly leaves it \"open alongside 263's demo\" but still sets the task file and slice design to `status: complete`.\n\nThe CLAUDECODE guard is a real limit on where \u00a74 can run. It does not justify dropping the criterion. Add a Task 9 item for walkthrough \u00a74, run from a standard terminal. If it cannot be done in-session, leave the item unchecked with a `BLOCKED:` line. Do not set `status: complete` while it is open.",
+   "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md:286-292"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "The protocol/transport error failure mode has no test",
+   "description": "The design's failure-mode table says \"Each row above has a test asserting the observable signal\" (slice line 149\u2013150). Task 4.3 implements the `McpError` / closed-stream row. Task 5.4, however, lists only timeout, server isError and spawn failure for WARNING assertions. `test_unknown_tool_name` doesn't fill the gap: with the python SDK's FastMCP, an unknown tool normally comes back as an `isError` result, not a protocol error. That path would leave the protocol-error row untested.\n\nFix:\n- Add a `crash` tool to the Task 3 fixture that exits the process mid-call, which closes the stream.\n- Add a Task 5 test asserting it returns `is_error=True` and logs a WARNING.",
+   "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md:156-177"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "The live round-trip in Task 8.2 depends on more than the availability gate checks",
+   "description": "The module-level gate only checks that `cf.mcp_command` can be launched. Task 8.2 then asserts that `cf_workflow_status` returns non-error content mentioning the project. That also requires a CF store with the squadron project registered for the bound directory.\n\nMost CI runners have node preinstalled, so `npx -y @context-forge/mcp` launches, the gate passes, and 8.2 fails. The design's promise that \"CI without node stays green\" does not hold on machines that have node but no CF project data. The gate's launch attempt also has no time limit, and an `npx -y` cold fetch can stall on a slow or offline network.\n\nFix:\n- Gate 8.2 separately: skip if `workflow_status` returns an error saying no project is registered.\n- Wrap the gate's launch probe in `cf.mcp_timeout_s`.",
+   "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md:255-268"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Tasks 1 and 2 are split too finely for two config keys",
+   "description": "Two task headings and two commits cover two `ConfigKey` entries and two tests that just restate the default constants. Task 1's own success criteria already check that the defaults resolve. Task 7.3 then checks the keys are read at execute time, which is the behavior that actually matters.\n\nMerge Tasks 1 and 2 into one task with one commit. Alternatively, drop Task 2 and rely on Task 1's criteria plus Task 7.3. Overall, nine tasks is heavy for a slice the design rates 2/5 effort.",
+   "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md:70-96"
+  },
+  {
+   "i": 4,
+   "severity": "NOTE",
+   "title": "Result-mapping rules are only partly exercised",
+   "description": "Criterion 2 says \"maps results per the Result mapping rules\". Task 4.2 implements all four rules. The fake server in Task 3 only produces a single text block, an error, or an empty result. Two rules have no fixture or test:\n- several text blocks joined with `\\n`\n- non-text blocks noted by type\n\nOne extra fixture tool returning two text blocks and an image block would cover both cheaply.",
+   "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md:102-111"
+  },
+  {
+   "i": 5,
+   "severity": "NOTE",
+   "title": "Task 3 names the wrong dependent tasks and leaves out the PID hook that Task 5 needs",
+   "description": "\"tasks 5, 6 both need a real stdio peer\" should say Tasks 4 (its smoke check) and 5. Task 6 mocks the transport and never uses the fake server.\n\nTask 5.2 suggests the fake server write its PID to a temp file so the test can check the child is gone. Task 3's spec doesn't include that. The implementer would have to go back and change the fixture mid-Task 5. Add the PID hook to Task 3.1.",
+   "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md:100-115"
+  },
+  {
+   "i": 6,
+   "severity": "NOTE",
+   "title": "Commits are scheduled after untested implementation tasks",
+   "description": "Each task commits, including Tasks 1, 4 and 6, which land code before the tests that follow them. This matches the project's \"commit at least once per task\" rule, so it is not a defect here. Pairing each implementation task with its test task under one `**Commit**:` marker would put every commit at a tested point.",
+   "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md:57-61"
+  }
+ ]
+}

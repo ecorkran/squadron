@@ -1,0 +1,68 @@
+{
+ "review": "r01",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "FAIL",
+   "title": "T13's fallback cannot meet the \"non-empty offers\" requirement, and the fallback is the path it will take",
+   "description": "T13 says to reuse \"320's existing result-discovery surface\" and, if there isn't one, to \"scope this task to the store-recorded samples only.\" There isn't one. `capture.py` has only `resolve_target`, which globs `{index}-review.*` for a single index you already know (`capture.py:95`). Nothing lists every judge review file and keys it by `JudgeConfigId`. So T13 will take the fallback. Store-recorded samples are by definition the results that have already been sampled, so they can never produce unsampled offers. That breaks the success criterion \"a graduated config with unsampled results yields a non-empty offer set.\" It also breaks the lapsed-graduation detection, which needs current results, and walkthrough steps 6\u20137.\n\nFix: give T13 a concrete step to add a review-file listing. Walk the reviews directory, run `derive_judge_config_id` on each file, and skip unreadable files with a WARNING, like the pruned-file rule. Remove the hedge. Also set out how a lapse is detected: a graduation has lapsed when no current review file matches its `JudgeConfigId`, but one does match its `(template_name, model)`.",
+   "location": "src/squadron/metrology/capture.py:68-95"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "T7's precedence list contradicts itself on TIGHTEN below the floor",
+   "description": "Rule 1 returns `INSUFFICIENT_EVIDENCE` for any `n < floor`. Rule 4 is supposed to return `TIGHTEN` \"even if `n < floor`.\" With rules checked in the listed order, rule 4 can never run for below-floor cells. The step admits this in prose (\"implement so\u2026\") but doesn't fix the list. T8 will then test the opposite of what rules 1\u20135 say. The unversioned case is also unclear: should an unversioned cell with a low match rate return `TIGHTEN`?\n\nRewrite it as one correct order:\n1. `match_rate <= tighten_rate` \u2192 `TIGHTEN`\n2. `n < floor` or unversioned \u2192 `INSUFFICIENT_EVIDENCE`\n3. `match_rate >= graduate_rate` \u2192 `GRADUATE`\n4. otherwise \u2192 `HOLD`\n\nAlso say explicitly how unversioned cells with low agreement are handled.",
+   "location": "unverified"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "The malformed `judge:` block failure mode has no task, and the coverage check says it does",
+   "description": "`resolve_thresholds` calls `float(pass_floor)` with no guard, so a non-numeric floor raises `ValueError`. The design's failure-mode row says the target should be flagged with a WARNING naming the template. T7's success line says `read_current_thresholds` \"never raises,\" but only the unregistered-template case is handled. The coverage check claims the malformed block is \"exercised in T8.\" T8 has no such test, and `ThresholdTarget` (T3) has no field to flag it.\n\nFix: in T7, catch `ValueError`/`TypeError` around `resolve_thresholds`, log a WARNING, and return `current=None` (or a flag field). Add the matching test to T8.",
+   "location": "src/squadron/pipeline/actions/judge.py:54-57"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "The runtime-drawn-model limitation is never stated in output or tested",
+   "description": "One success criterion requires that the \"runtime-drawn-model limitation is stated where the recommendation is produced (asserted: the note is present in output, including `--json`).\" T9's `model_dimension_note` covers only the model+threshold pairing. It leaves out the design's sentence that a step drawing its model from a 180 pool cannot track the drawn model. T16 checks that `--json` parses, but never that the note is in the JSON.\n\nFix: add the runtime-pool sentence to T9's note text. In T16, assert the note is present in the `--json` output.",
+   "location": "unverified"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Idempotent re-graduate needs a store update path that T11 doesn't provide",
+   "description": "T15 requires `graduate` to \"update its evidence snapshot in place\" so only one record exists. T11 adds only `write_graduation`, which mirrors `write_sample` and returns a freshly generated id. That creates a second record. The store has no replace or overwrite method.\n\nFix: in T11, either have `write_graduation` overwrite an existing matching record (atomic replace of the same record id) or add an explicit `replace_graduation`. Add a T12 test for it, so T16's \"record count stays at 1\" can pass.\n\nT11 is also unclear about where `write_graduation` lives: it says both \"in `graduation.py`\" and \"extend `MetrologyStore` with this method.\" Pick one.",
+   "location": "src/squadron/metrology/store.py:131"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "T2's fixtures don't fit the real `_template_content_hash` signature",
+   "description": "T2 says to pass two `ReviewTemplate` fixtures to `_template_content_hash`. The function takes a `template_name: str` and looks the template up with `get_template`. A junior implementer following T2 literally will write calls that can't work.\n\nFix: tell T2 to monkeypatch `squadron.review.templates.get_template`, or to register temporary templates, so each fixture is returned by name.",
+   "location": "src/squadron/metrology/identity.py:298-311"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "A commit after every task leaves code committed untested, and doubles the commit count",
+   "description": "All 17 tasks have their own `**Commit**:` marker. Each implementation task (T1, T3, T5, \u2026 T15) is committed before its test task runs. Markers should sit at working, tested points.\n\nFix: remove the markers after the implementation tasks and keep one per pair, after T2, T4, T6 and so on. That gives about 9 commits, each on tested code. You could also merge each implementation/test pair into one task, since every pair is small.",
+   "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md"
+  },
+  {
+   "i": 7,
+   "severity": "NOTE",
+   "title": "Defaults for the new config keys are never given",
+   "description": "T5/T6 require \"defaults\" for `graduate_match_rate`, `tighten_match_rate` and `residual_sample_rate`, but neither the task nor the design gives values. An implementer will make them up. Either state the values in T5 or mark them as a decision for the Project Manager (PM).",
+   "location": "unverified"
+  },
+  {
+   "i": 8,
+   "severity": "NOTE",
+   "title": "The `recommend_thresholds` signature differs from the design",
+   "description": "The design has `current: ThresholdSnapshot`. T9 instead passes the rates and reads thresholds for each cell. The change is reasonable, since rates must be config keys. Record it in the slice design so the two documents agree.",
+   "location": "unverified"
+  }
+ ]
+}

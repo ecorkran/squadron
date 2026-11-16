@@ -1,0 +1,40 @@
+{
+ "review": "r04",
+ "findings": [
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Receipt suffix scheme lets two packs share one receipt",
+   "description": "D5 builds receipt names as `pack + (\"-agents\" | \"\") + (\"-local\" | \"\")`. A Claude install of a pack named `foo-agents` and a Codex install of a pack named `foo` both produce `foo-agents.toml`. The same happens with `foo-local` against a local Claude install of `foo`. Pack names are free text from `skills.toml`. The second install overwrites the first receipt. The first pack's files are then orphaned, and uninstalling either pack removes the wrong set.\n\nThis collision is new. Skill packs had no `--local` and no target suffix before, so it is not covered by the Excluded item about collisions with \"squadron's own receipt names\". It breaks the rule the design itself states: receipts are the only authority for what squadron owns (#65).\n\nFix: either reject pack names ending in `-agents` or `-local` when `skills.toml` is loaded, or write the target and scope as a separator the pack-name grammar cannot contain.",
+   "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md#technical-decisions"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Install into the shared `~/.agents/skills` root can overwrite or orphan files",
+   "description": "Claude packs install into a directory the pack owns (`~/.claude/commands/<prefix>/`). The agents layout writes skill directories straight into a root shared with every other skill source (D3 says so itself). The design does not say what happens in these cases:\n\n- **A skill directory already exists that no receipt owns.** For example, the user has their own `demo-hello/`. If `write_skill_dirs` overwrites it, the user's skill is silently replaced. The new receipt then records it as squadron's, and a later `skills uninstall` deletes it. That is exactly the harm receipts exist to prevent.\n- **A write fails partway** (permissions, disk full) after some skill directories are written. The receipt is written last in the data flow, so the files already written are not tracked by any receipt and are never uninstalled.\n- **A reinstall where the pack now ships fewer skills.** The design does not say whether skill directories from the previous receipt are removed.\n\nD3 makes validation all-or-nothing, but none of these cases is a validation failure. Each needs an explicit rule. A suggestion: during the validation pass, refuse with `SkillSourceError` if any target directory exists and is not in the pack's prior receipt. Write the receipt for whatever was written even when the install fails. Remove skill directories from the prior receipt that are missing from the new one.",
+   "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md#data-flow"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Doctor's \"ships no Codex content\" row needs pack sources that doctor may not be able to read",
+   "description": "D8 has doctor report `WARN \u2014 pack ships no Codex content` instead of \"not installed\". To tell those apart, doctor has to look inside the pack source for an `agents/` directory. For a GitHub-sourced pack, that source exists only after `clone_github`. That means network access and a write to disk, from a command the plan defines as read-only inspection (entry 905).\n\nThe design does not say how doctor resolves the source, or what it reports when the source is unreachable (offline, clone timeout, local path deleted). Walkthrough step 7 tests only a local-path pack.\n\nFix: say that the check only inspects local or bundled sources, and shows a distinct \"source not available locally\" state for GitHub packs. Alternatively, record \"has agents content\" in the receipt or cache at install time.",
+   "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md#technical-decisions"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Agents status check globs a shared root instead of reading receipts",
+   "description": "For a prefix pack, `installed_path` treats \"first `root/p-*/SKILL.md`\" as proof that the pack is installed. In the shared `~/.agents/skills`, any skill from another source that happens to start with `p-` will make `skills list` and doctor report the pack as Installed. The design states that receipts are the only authority for what squadron owns (Patterns and Conventions, #65), and per-target receipts are being added in this same slice.\n\nFix: for the agents layout, take installed status from the receipt (receipt present, and its recorded files present). This is also lighter than keeping a second, glob-based source of truth.",
+   "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md:104-109"
+  },
+  {
+   "i": 6,
+   "severity": "NOTE",
+   "title": "Scope is larger than the plan entry, but every extra item is justified",
+   "description": "The plan names only `skills install/uninstall`. The design adds:\n\n- `skills list`\n- doctor rows\n- `PACK_LAYOUTS`\n- `remove_receipt_files`\n- the move of the `analysis` skills\n- the `sq models list` fix\n\nEach item is tied to a stated defect:\n\n- `list` and doctor would otherwise report status for Claude only (the Overview cites the hardcoded roots).\n- The flat `unlink` loop would leave empty skill directories behind (D7).\n- Without the `analysis` move, D2's rule would need a special case for the bundled pack (D4).\n\nNone is speculative configuration. The revised effort of 3/5 is already recorded in the plan. No cut is recommended.",
+   "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md#technical-scope"
+  }
+ ]
+}

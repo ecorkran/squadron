@@ -1,0 +1,68 @@
+{
+ "review": "r04",
+ "findings": [
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "The `tick.py` hook and its `hasattr` guard are unnecessary; the wrapper already sees `counts`",
+   "description": "The design adds `if hasattr(spatial, \"record_density\")` to the tick hot path (lines 158-159, 342, 437). This makes the engine aware of a method only the dispatcher has, checked by duck typing outside the protocol. It also creates an ordering rule that nothing enforces: the call must come \"after CSR construction and before the next build()\". None of this is needed. `AdaptiveSpatial.query_radius_batch` already returns `(flat_neighbors, counts)`, so the wrapper can record density from its own output. Those raw counts come before `exclude_self` and before the cap. Each evaluated agent counts itself exactly once, so the raw mean is the filtered mean plus 1, a constant offset that can be folded into the threshold. **Cut:** the `tick.py` change (step 4 in Implementation Notes), the public `record_density` API, and the `hasattr` guard test. The slice then touches only `server.py`, `config.py` and the new module, which better matches the claim that \"the dispatcher is invisible upstream\".",
+   "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:145-164"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "The bit-exact integration test conflicts with documented row-order differences",
+   "description": "Implementation step 5 requires \"bit-exact position equality against brute-force-only over N ticks\" with a density sequence that exercises both backends. But slice 105 (line 100) says the grid's order within a row may differ, and this doc's own testing strategy (line 431) compares neighbors as sets for that reason. The CSR forces add neighbors in row order with `np.add.reduceat`, and floating-point addition is order-sensitive, so positions will drift apart after the first grid tick. Walkthrough step 2 (line 359) admits \"documented determinism caveats\". The requirement that the full suite pass identically under all three backends (line 335) has the same problem for any test that asserts exact floats. Pick one: sort each grid row into canonical order (and state its cost), or define parity as tolerance-based or per-tick set equality.",
+   "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:421"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "`initial_backend` is called configurable but is missing from `SpatialConfig` and hard-coded in wiring",
+   "description": "Line 37 lists the initial backend as a tunable, line 301 says \"Make it configurable \u2026 so an operator running a scattered-start scenario can choose grid-first\", and line 400 discusses an operator setting `initial_backend: grid`. Yet `SpatialConfig` has no such field, `_build_spatial` passes `initial_backend=\"brute\"` as a literal (line 238), and validation (lines 198-202) doesn't cover it. Either add the field and validate it, or drop the claim that it is configurable.",
+   "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:171-176"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "Backend names and defaults are defined in several places",
+   "description": "The `AdaptiveSpatial` constructor sets its own defaults (`hysteresis_band=0.0`, `initial_backend=\"brute\"`). These differ from the config defaults (`hysteresis_band=2.0`, line 175), even though line 136 says \"a reasonable default lives in the config layer rather than hardcoded in the dispatcher\". The backend names `\"adaptive\" | \"grid\" | \"brute\"` are bare `str` values (line 173). They get compared in config validation, in `_build_spatial` and inside the dispatcher. Project rules require comparison values to be defined once and defaults to live in config. Use one enum or `Literal` constant set shared by all three places, and make the constructor parameters required, with no defaults.",
+   "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:83-90"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "No observability for switches, though the walkthrough depends on it",
+   "description": "Walkthrough step 4 measures \"the ratio of ticks served by grid vs. brute\". Step 5 checks \"`grid_selected` count in the dispatcher's log output\" and \"dispatcher flips at least once\". The design specifies no log line, counter or accessor for the selected backend or for switch events. Without one, those walkthrough checks can't be run, and flip-flop (the top technical risk, line 398) can't be seen in production. Specify one: an INFO log on each switch (old \u2192 new, `m`, tick), per-backend tick counters, or a read-only `selected_backend` property.",
+   "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:369-379"
+  },
+  {
+   "i": 8,
+   "severity": "CONCERN",
+   "title": "An empty active subset crashes or silently stops switching",
+   "description": "The signal is `float(counts.sum()) / len(counts)` (line 25; also line 116 as \"/ n_active\"). 100-arch's subset-evaluable tick allows the caller to pass any subset, including an empty one, and the parity tests even include an \"empty\" distribution (line 366). With `len(counts) == 0`, the Python division raises `ZeroDivisionError` mid-tick. A NumPy division would instead produce `nan`, and every comparison against `nan` is false, so switching would silently freeze. Define the handling: skip the update and keep the current backend when `n_active == 0`, and add a test for it.",
+   "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:25"
+  },
+  {
+   "i": 9,
+   "severity": "CONCERN",
+   "title": "The default threshold conflicts with the cited data and doesn't scale with N",
+   "description": "The justification's first bullet computes a *uniform* distribution (mean about 132) and uses it to explain why brute wins at *clustered* steady state, which is self-contradictory. Entry 4's uniform benchmark (N=2000, 1000\u00d71000, r=50) has a mean of about \u03c0\u00b750\u00b2/10\u2076\u00b72000 \u2248 15.7 neighbors, where the grid was 3.3\u00d7 faster. That is above the default switch point (10 + 2), so the default would choose brute exactly where the grid wins. On `test.yaml` (2500 agents, 300\u00d7300) a uniform spread is far above 10, so out of the box `adaptive` may never choose the grid. The doc's own cost model (line 120: brute cost is `n_active \u00d7 n`) means the crossover in absolute mean neighbors grows with N. Entry 4's addendum normalized by `n` for this reason. Normalize the signal (for example `mean_neighbors / n`), or derive the default from the step-4 sweep before making `adaptive` the default.",
+   "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:206-213"
+  },
+  {
+   "i": 10,
+   "severity": "NOTE",
+   "title": "`record_density` switches immediately, not \"on the next `build()`\"",
+   "description": "Line 110 has `record_density` change the selected backend, while line 138 says the switch \"takes effect on the **next** `build()`\". If anything calls `query_radius` between ticks, it would hit a backend that hasn't been rebuilt and may be stale. No current 300-series consumer does this, but applying a pending choice inside `build()` removes the risk. This becomes moot if the hook moves inside `query_radius_batch` as recommended above.",
+   "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:110"
+  },
+  {
+   "i": 11,
+   "severity": "NOTE",
+   "title": "The \"first-build spike\" reasoning is unfounded",
+   "description": "In grid mode the grid is rebuilt every tick anyway, so the first build after a switch costs the same as any other grid tick. There is no warm state to lose. The suggested refinement of building both backends every tick has no basis. The note also clashes with the success criterion of \"no dispatcher-induced spike\" (line 380). Consider dropping it.",
+   "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:439"
+  }
+ ]
+}

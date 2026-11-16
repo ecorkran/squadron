@@ -1,0 +1,45 @@
+{
+ "case": "migratory-102-tasks",
+ "flaws": [
+  {
+   "id": "F1",
+   "text": "Task 2.1 adds two required fields to `BehavioralProfile`, and Task 2.2 updates test call sites only (\"search for `BehavioralProfile(` across `tests/`\"",
+   "hits": {
+    "r01": [
+     0
+    ]
+   }
+  },
+  {
+   "id": "F2",
+   "text": "Slice design Technical Requirement 1: \"both forces are vectorized within each agent's neighborhood\". No task checks or enforces it (the tasks' sketche",
+   "hits": {
+    "r01": [
+     4
+    ],
+    "r02": [
+     1
+    ],
+    "r03": [
+     0
+    ],
+    "r04": [
+     3
+    ],
+    "r05": [
+     0
+    ],
+    "r06": [
+     0
+    ],
+    "r07": [
+     0
+    ],
+    "r08": [
+     1
+    ]
+   }
+  }
+ ],
+ "note": "F1 hit only by r01 finding 0 (server-side BehavioralProfile call site in simulation.py/ProfileConfig); r06 finding 6 concerns AgentState src callers, not BehavioralProfile, so not counted. F2 hits are all clear vectorization-requirement findings."
+}

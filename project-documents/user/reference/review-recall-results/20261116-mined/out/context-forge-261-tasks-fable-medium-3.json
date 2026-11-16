@@ -1,0 +1,243 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Commit points are checkbox tasks, not plain `**Commit**:` lines",
+      "description": "All ten commit points (2C, 3C, 5C, 6C, 8C, 9C, 11C, 13C, 14C, 15C) are written as `- [ ] **Task nC: Commit** \u2014 \u2026`. A commit checkbox can only be ticked after the commit it describes, which leaves a dirty tree or forces a check-off-only commit. Convert each to a plain `**Commit**: <message>` line under the preceding task. Their placement is fine: each sits after a tested group. Task 15C (line 269) commits only walkthrough notes; fold it into 14C or the last defect-fix commit.",
+      "file_ref": null,
+      "category": "commit-markers",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:78"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Renderer behaviour for three outcome kinds is unspecified and untested",
+      "description": "The slice's Technical Requirements ask for `renderAdoptionFacts` tests on \"every outcome\". Task 8 requires an exhaustive switch on `outcome.kind`, but Task 8T covers only brownfield, adoption-in-progress and `NOT_EVALUATED`. Task 8 never says what the outcome bullet reads for `greenfield`, `already-planned` or `adoption-closed`, so the implementer has to invent that text. Add one line to Task 8 stating the text (or that these kinds throw as unreachable), and a matching case each in 8T.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:163-176"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Byte-identical walkthrough step does not say where each build runs",
+      "description": "This step is the only coverage of the Integration Requirement \"planned projects build byte-identical prompts before and after\". \"A temporary `git worktree add` of `main`, built there\" can be read as running `cfl build` inside the temp worktree. I did not check how `cf` resolves a project from an unregistered path, but that reading risks a failed build or a diff caused by the path rather than the slice. State it explicitly: compile the CLI in the temp worktree, then run both the main-built and slice-built `dist/index.js build` from the same registered checkout directory.",
+      "file_ref": null,
+      "category": "task-clarity",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:262"
+    },
+    {
+      "severity": "NOTE",
+      "title": "History `unknown` reason will carry gitExec's full message",
+      "description": "Task 5 sets `reason` to the error message. `gitExec` wraps that as `git <args> failed in <cwd>: \u2026` and passes it through `withNetworkErrorHint`, whose patterns match \"timed out after Ns\". The Adoption Facts history bullet may therefore include an absolute path and a network hint, not the design's short \"git timed out after 5s\". Task 5T's `contains 'timed out'` assertion still passes; decide whether Task 5 should trim the reason.",
+      "file_ref": null,
+      "category": "task-clarity",
+      "raw_category": null,
+      "location": "packages/core/src/guides/gitExec.ts:96-101"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`context_build` error result and CLI non-zero exit have no new automated test",
+      "description": "No task adds a test for the criterion \"`cf build` exits non-zero; `context_build` returns it as an error\". Coverage is adequate without one:\n- **Rethrow:** Task 10T asserts the integrator rejects on `AdoptionError`.\n- **Pipeline:** Task 12 fixture 12 asserts the pipeline rejects on a guide without the profile.\n- **MCP:** the existing catch turns any thrown error into `errorResult`, and `packages/mcp-server/tests/contextTools.test.ts:271` is an existing test named \"returns isError on core generation failure\".\n- **CLI:** Task 15 walkthrough step 4 checks the exit code by hand.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "packages/mcp-server/src/tools/contextTools.ts:210-213"
+    },
+    {
+      "severity": "PASS",
+      "title": "Functional success criteria all trace to tasks",
+      "description": "Task 12 fixtures 1\u201313 cover every functional case in the slice:\n- empty, scaffold-only, brownfield and shallow-clone repos;\n- monorepo scoping with root CI;\n- concept-only, planned and resume;\n- both overrides and re-detect;\n- `Phase 2` on an `in_progress` project and the explicit `brownfield-adoption` instruction;\n- a guide without the profile, and the `template_preview` read-only path.\n\nInvalid-value rejection is in Task 1T and walkthrough step 3. Task 13 covers CLI/MCP parity.",
+      "file_ref": null,
+      "category": "coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:229-245"
+    },
+    {
+      "severity": "PASS",
+      "title": "Unit-test requirements, sequencing and test-with pattern",
+      "description": "Each implementation task (1\u201310) is followed directly by its test task, and Task 11 carries its own tests. Dependencies run in order: key and contracts, then facts, outcome, renderer, resolver, integrator, callers. The two import cycles (`ConfigKeys` \u2194 `adoptionState`, `adoptionOutcome` \u2194 `sourceVolume`) are handled explicitly. Other than the renderer gap above, the listed unit tests match the slice's Technical Requirements item by item.",
+      "file_ref": null,
+      "category": "sequencing",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:52-225"
+    },
+    {
+      "severity": "PASS",
+      "title": "Caller update list matches the code",
+      "description": "The only source callers of `createContextPipeline` are `packages/cli/src/commands/build.ts:84` and `packages/mcp-server/src/tools/contextTools.ts:92`, both named in Task 11. The task's grep reaches every test caller: `CoreServiceFactory.test.ts`, `pipeline-integration.test.ts` and `build.integration.test.ts`. Every existing test file the tasks name exists, as does the README row for `workflow.permissiveness` (`README.md:388`).",
+      "file_ref": null,
+      "category": "coverage",
+      "raw_category": null,
+      "location": "packages/core/src/services/CoreServiceFactory.ts:26"
+    },
+    {
+      "severity": "PASS",
+      "title": "No scope creep; proportionality fits the slice",
+      "description": "Every task traces to a Development Approach step or a success criterion. The Task 6 pattern extraction is the task file's own answer to D6's \"other read errors throw\", not extra scope; the existing regex is already case-insensitive (`ArtifactIntrospector.ts:39`). Sixteen tasks in one file is proportionate to about ten new source files. No merge or push tasks are present.",
+      "file_ref": null,
+      "category": "scope",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md"
+    },
+    {
+      "severity": "PASS",
+      "title": "Performance target needs no load test",
+      "description": "D2 states the sub-second target and decides that \"tests assert the caps, not timings\". The target is not in the Success Criteria. Task 3T asserts both caps (early exit and `MAX_WALK_ENTRIES`), and the Context Summary records the reasoning, so no `tests/load/` or CI gating task is owed.",
+      "file_ref": null,
+      "category": "nfr",
+      "raw_category": null,
+      "location": "project-documents/user/slices/261-slice.detection-and-adoption-state.md:167"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "commit-markers",
+      "raw_category": null,
+      "summary": "Commit points are checkbox tasks, not plain `**Commit**:` lines",
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:78",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "Renderer behaviour for three outcome kinds is unspecified and untested",
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:163-176",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "task-clarity",
+      "raw_category": null,
+      "summary": "Byte-identical walkthrough step does not say where each build runs",
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:262",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "note",
+      "category": "task-clarity",
+      "raw_category": null,
+      "summary": "History `unknown` reason will carry gitExec's full message",
+      "location": "packages/core/src/guides/gitExec.ts:96-101",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "`context_build` error result and CLI non-zero exit have no new automated test",
+      "location": "packages/mcp-server/src/tools/contextTools.ts:210-213",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "pass",
+      "category": "coverage",
+      "raw_category": null,
+      "summary": "Functional success criteria all trace to tasks",
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:229-245",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "pass",
+      "category": "sequencing",
+      "raw_category": null,
+      "summary": "Unit-test requirements, sequencing and test-with pattern",
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:52-225",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "pass",
+      "category": "coverage",
+      "raw_category": null,
+      "summary": "Caller update list matches the code",
+      "location": "packages/core/src/services/CoreServiceFactory.ts:26",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "pass",
+      "category": "scope",
+      "raw_category": null,
+      "summary": "No scope creep; proportionality fits the slice",
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md",
+      "location_verified": null
+    },
+    {
+      "id": "F010",
+      "severity": "pass",
+      "category": "nfr",
+      "raw_category": null,
+      "summary": "Performance target needs no load test",
+      "location": "project-documents/user/slices/261-slice.detection-and-adoption-state.md:167",
+      "location_verified": true
+    }
+  ],
+  "template_name": "tasks",
+  "input_files": {
+    "input": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md",
+    "against": "project-documents/user/slices/261-slice.detection-and-adoption-state.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/context-forge-261-tasks"
+  },
+  "timestamp": "2026-11-16T13:15:03.132326",
+  "model": "claude-fable-5-2",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 11,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-fable-5-2",
+  "answering_models": [
+    "claude-fable-5-2"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 10,
+    "in_fences": 0,
+    "in_section": 10,
+    "surviving": 10
+  },
+  "effort": "medium",
+  "profile": "sdk",
+  "turns": 12,
+  "prompt_tokens": 389505,
+  "cached_tokens": 245937,
+  "cache_write_tokens": 143560,
+  "completion_tokens": 10232,
+  "reasoning_tokens": null,
+  "duration_seconds": 101.40177912521176,
+  "cost_usd": 2.7562223,
+  "cost_basis": "provider"
+}

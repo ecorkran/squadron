@@ -1,0 +1,75 @@
+{
+ "review": "r04",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "FAIL",
+   "title": "Outer loop in spawn order means warp threads never read coalesced memory; the standard alternative is turned down using wrong numbers",
+   "description": "The slice's main claim (lines 17\u201321, 138, 169, 285\u2013289) is that after the reindex, \"neighbor reads ... coalesce across warp threads.\" Coalescing needs adjacent threads in a warp to read adjacent addresses with the same instruction. But the force kernel keeps `for i in range(n)` over original spawn-order indices (lines 123, 161, 322). Threads `i` and `i+1` therefore sit at unrelated places in the world. They scan different `(2S+1)\u00b2` neighborhoods, so their `kk` ranges differ. At any one instruction, `_px_c[kk]` across a warp is still scattered.\n\nWhat the coherent layout does give is locality within each thread: one thread walks a contiguous range, which improves cache-line reuse. That helps, but it is a different and smaller effect than the 2\u20133\u00d7 coalescing figure from Hoetzlein 2014. The same reasoning undercuts the claim at line 169 that eviction reads are \"coalesced again.\"\n\nThe alternative the slice turns down at line 165 is the standard approach in the cited references (Hoetzlein 2014, BoidsWebGPU): the outer loop walks coherent slots `i_c`, with `i_orig = _coherent_to_original[i_c]`. The slice argues that this makes writebacks \"just as bad as the original gather problem.\" That doesn't hold. A scattered writeback is 4 writes per agent per tick. The gather it replaces is about 1400 scattered reads per agent per tick (line 19), roughly 350\u00d7 more traffic. The cited references accept that scatter, or do a final reorder (which the slice itself describes at line 461).\n\n**Fix:** Either adopt slot-order threads (outer loop over `i_c`; self-data read from coherent fields; scatter or reorder the 4 writebacks), or rewrite the performance claims as \"per-thread cache locality.\" In the second case, the expected-gain statement and criterion 4 should be re-justified on that basis.",
+   "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md:159-165"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "The N=200k gate cannot detect whether the coherent layout helped",
+   "description": "Criterion 4 requires `k_nearest_tps >= 0.8 \u00d7 radius_only_tps` at N=200k \"on the same workload.\" At the same `query_radius`, both modes scan exactly the same candidates through exactly the same memory-access path. They differ only in the accept block: heap compare/discard versus unconditional accumulate. The gate therefore measures heap overhead relative to accumulation, not memory layout.\n\nIf the reindex delivered no improvement at all, both modes would slow down equally and the gate would still pass. The only check sensitive to layout is the N=10k sanity check in criterion 3. Line 395 already lists \"the coherent layout did not deliver the expected coalescing\" as a failure cause, but the gate as written cannot produce that diagnosis.\n\n**Fix:** Add an absolute or before/after gate at N=200k, for example `k_nearest` TPS against the slice-150 scattered-grid `k_nearest` at the same N, or against the slice-plan baseline described in the next finding.",
+   "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md:358"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Slice changes its slice-plan entry without the plan being updated",
+   "description": "Plan entry 13 (`140-slices.simulation-scaling.md:56`) sets these exit criteria: \"k-nearest TPS at N=200k within 20% of **k-first** TPS at the same N \u2026 **no regression on k-first path**.\" It also describes this slice's path as \"k-nearest via FRNN (collect all within radius R, then partial-sort).\" The slice design:\n\n- removes `k_first` entirely (lines 34, 67, 177\u2013179), which contradicts \"no regression on k-first path\";\n- adds a new `radius_only` mode that the plan does not mention (lines 31, 68);\n- moves the gate baseline from `k_first` to `radius_only` (line 358), a weaker gate as described above;\n- defers FRNN collect-then-sort to a follow-up slice (lines 75, 187\u2013193, 458).\n\nSome of these changes may be good decisions. But the plan entry is the contract for this slice, and deferring scope the plan assigns needs the plan updated alongside it.\n\n**Fix:** Revise plan entry 13 so it states the two-mode contract, the new gate, and that FRNN is deferred, or else bring the slice back in line with the plan.",
+   "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md:29-34"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "`k_first` removal timeline contradicts itself, and the outcome if the gate fails is undefined",
+   "description": "The slice says three incompatible things about `k_first`:\n\n- Scope item 7 (line 67) and lines 177\u2013179 and 199: `k_first` is \"removed entirely,\" and configs that use it raise `ConfigurationError`.\n- Line 433: until the final commit, `k_first` is kept and \"still parsed, with a deprecation warning.\"\n- Lines 197 and 349: the default flips from `k_first` to `k_nearest` only \"once the TPS gate is met.\"\n\nThe slice never says what happens if criterion 4 fails. Does `k_first` stay as the default, which line 34 calls a \"behavioral landmine\"? Does the slice not land? Line 395 sends a failure to an FRNN follow-up slice, which suggests this slice would ship with the gate unmet, leaving `k_first`'s status unclear.\n\nLine 93 (\"No file outside the GPU compute path is touched\") also contradicts the edits to `config.py` and `workload.py` and the bench workload registry (lines 349, 452).\n\n**Fix:** Pick one removal timeline, and state the shipped mode set and default for both the gate-passes and gate-fails cases.",
+   "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md:433"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Behavior for `max_neighbors <= 0` under `k_nearest` is unspecified and can read out of bounds",
+   "description": "Slice 150 guaranteed an uncapped sub-branch for `max_neighbors <= 0` inside the capped mode (slice 150 criterion 4 and its \"Uncapped neighbor note\"). Scope item 8 (line 68) \"promotes\" that sub-branch to `radius_only`, and the AFTER pseudocode no longer has it in the `k_nearest` branch.\n\nTrace `max_neighbors = 0` under `k_nearest` through the pseudocode:\n\n1. `heap_size < max_neighbors` evaluates to `0 < 0`, which is false.\n2. `dsq < heap_dsq[0]` evaluates to `dsq < INF`, which is true.\n3. `evicted = heap_idx[0] = -1`, so the kernel reads `_px_c[-1]`.\n\n**Fix:** Say explicitly whether `k_nearest` keeps the uncapped sub-branch or rejects `max_neighbors <= 0` at config parse time. Whichever is chosen, cover it with a test, as slice 150 verification step 5 did.",
+   "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md:283-313"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Architecture performance target is restated wrongly and incompletely",
+   "description": "The slice calls N=200k \"the architecture's Tier 3 target\" (lines 17, 44). The architecture defines Tier 3 as **250k** at the initiative's 60 TPS tier rate, on production-class CUDA hardware (`140-arch.simulation-scaling.md:74`). The slice gives only relative gates and never restates the absolute 60 TPS target. It also doesn't say how its dev-box 200k checkpoint relates to the Tier 3 target.\n\n**Fix:** Restate Tier 3 as 250k @ 60 TPS on production-class hardware. Then state explicitly that the N=200k dev-box gate is an intermediate checkpoint, and give the expected absolute TPS range.",
+   "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md:17"
+  },
+  {
+   "i": 6,
+   "severity": "NOTE",
+   "title": "Headroom probe uses workloads the slice never creates; Metal exclusion rationale is inconsistent",
+   "description": "Verification step 5 runs `mid-flock-500k` and `mid-flock-1M`, but scope (lines 367 and 452) adds only `mid-flock-200k`. Either add the two workloads to scope or mark step 5 as conditional on them existing.\n\nLine 367 also excludes `mid-flock-200k` from Metal on \"memory budget\" grounds. At 200k, the architecture's own table puts the working set at a few tens of MB (`140-arch:90`), so the rationale is probably platform support, not memory.",
+   "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md:397-402"
+  },
+  {
+   "i": 7,
+   "severity": "NOTE",
+   "title": "Coherent-field dtypes are hard-coded instead of derived from the originals",
+   "description": "The comment says \"Same dtypes as the originals,\" but the snippet hard-codes `qd.f32`. The architecture says f32 on GPU. The slice plan's substrate note for slice 143 (plan line 36), however, says slice 145 \"uses f64 throughout on CUDA.\" Deriving each `_c` field's dtype from its original field removes the risk of a silent mismatch and leaves the type defined in one place.",
+   "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md:207-215"
+  },
+  {
+   "i": 8,
+   "severity": "NOTE",
+   "title": "Overview narrative could be trimmed",
+   "description": "The \"Reference points\" and \"Implication\" passages (lines 36\u201344), and the repeated 16M-boids framing in Value, Technical Decisions, Success Criteria and Future Work, are motivation rather than design. They could be shortened to one paragraph with references.\n\nLine 461 (\"writebacks scatter to `_px[i]`\") also contradicts line 331 (\"sequential in `i`, already coalesced\").",
+   "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md#reference-points-the-design-anchors"
+  },
+  {
+   "i": 9,
+   "severity": "NOTE",
+   "title": "Branch name doesn't follow the naming convention",
+   "description": "Line 439 names the branch `152-coherent-grid-for-k-nearest-neighbor-search`. The convention is the slice filename without `.md`, which gives `152-slice.coherent-grid-for-k-nearest-neighbor-search`.",
+   "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md:439"
+  }
+ ]
+}

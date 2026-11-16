@@ -1,0 +1,26 @@
+{
+ "review": "r01",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "FAIL",
+   "title": "Commit gates 3.2a and 3.7 require passing tests that still assert the removed behavior",
+   "description": "Two test files still assert adoption output when the section 3 gates run:\n\n- **`adoptionBuild.integration.test.ts`**: it calls `createContextPipeline(dir, { adoptionStateWrites, squadronProbe })` (line 68), expects `### Adoption Facts` in the output (line 102) and expects state `in_progress` (line 123). The task file deletes it only in 4.1.\n  - Gate 3.2a (`pnpm --filter @context-forge/core test`) fails once 3.2 removes the Adoption Facts section.\n  - Gate 3.7 (`pnpm -r test`) fails once 3.3 removes the hook.\n- **`pipeline-integration.test.ts:184`**: it expects `Comprehension: \u2026` in a build. Task 3.1 removes that line, but the case is deleted only in 3.3, so it also fails gate 3.2a.\n\nThe section 3 preamble says 3.1\u20133.2 \"only stop rendering fields that still exist, so everything compiles\". That is true of compilation but not of the tests. Typecheck gives no early warning either, because each package's `tsconfig.json` includes only `src/**/*`.\n\nAn implementer following the file literally hits a red gate with no instruction, and may try to \"fix\" source to satisfy tests that are scheduled for deletion.\n\nFix, either of:\n- **Smallest change:** drop 3.2a and commit 3.1\u20133.6 once at 3.7, and move the deletion of `adoptionBuild.integration.test.ts` from 4.1 into 3.3.\n- **Keep 3.2a:** move the `pipeline-integration.test.ts` `Comprehension:` case deletion into 3.1 and the `adoptionBuild.integration.test.ts` deletion into 3.2.",
+   "location": "packages/core/tests/adoption/adoptionBuild.integration.test.ts:68-123"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Commit markers are checkboxes, and there are more of them than the slice needs",
+   "description": "Commits are written as checkbox items or whole tasks, not plain `**Commit**:` lines: `- [ ] **2.3 Commit**`, `- [ ] **3.2a Commit the render removal**`, and `- [ ] Commit: \u2026` sub-items in 3.7, 4.1\u20134.4, 5.1 and 6.3.\n\nThere are nine commit points for a slice the design rates effort 2/5. Section 4 commits after every task, and 3.2a is a task that exists only to commit.\n\nChange to:\n- Convert each to a plain `**Commit**:` line.\n- Fold 3.2a into 3.7, which also simplifies the FAIL above.\n- Collapse 4.1\u20134.4 into one commit at the end of section 4. The four deletions are one logical change, and each task's grep and typecheck still gates it.",
+   "location": "project-documents/user/tasks/268-tasks.pure-cf-build.md:79"
+  },
+  {
+   "i": 2,
+   "severity": "NOTE",
+   "title": "Checks for leftover references do not cover test files",
+   "description": "Task 3.4 says to remove remaining `adoptionFacts`/`fileComprehension` references \"in core tests and helpers\", but its success check is `pnpm --filter @context-forge/core typecheck`, which excludes `tests/`. The 6.2 grep covers only `packages/*/src`. A stale test reference, such as `createTestEnhancedContextData({ fileComprehension })`, passes both checks, and vitest does not typecheck.\n\nExtend the 6.2 grep to `packages/*/tests`, as 4.2\u20134.4 already do, with the kept `brownfield-guide` fixture as the stated exception.",
+   "location": "packages/core/tsconfig.json:20"
+  }
+ ]
+}

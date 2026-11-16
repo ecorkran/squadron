@@ -1,0 +1,124 @@
+{
+ "review": "r03",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "FAIL",
+   "title": "Task 3 fixture contradicts Task 10's success grep",
+   "description": "Task 3 adds a test in `tests/providers/sdk/test_agent.py` asserting that `_is_throttle(ClaudeSDKError(\"rate_limit_event: slow down\"))` is True. Task 10's success check (line 99) requires `grep -n 'ClaudeSDKError(\"rate_limit_event' tests/providers/sdk/test_agent.py` to return nothing. An implementer cannot satisfy both. The fixture is also the fabricated form that criterion 9 rules out. Criterion 7 needs the retained substring path exercised with a plain-text 429 message containing `rate_limit`, not a `rate_limit_event:` prefix. Change the Task 3 fixture and state that explicitly.",
+   "location": "project-documents/user/tasks/920-tasks.claude-agent-sdk-upgrade-and-rate-limit-parser-shim-retirement.md:41"
+  },
+  {
+   "i": 1,
+   "severity": "FAIL",
+   "title": "Task 6 misses the exhaustion gate at agent.py:180",
+   "description": "Task 6 says to replace \"both\" `RATE_LIMIT_MARKER in str(exc)` gates. `agent.py` has three: the query-mode retry gate (167), a query-mode exhaustion classifier (180, `if RATE_LIMIT_MARKER in str(exc): raise ProviderRateLimitError`), and the client-mode retry gate (216). The design's \"three sites\" count is also wrong. There are four in `src/`, including `sdk_session.py:192`.\n\nIf line 180 keeps the substring test, a budget-exhausted `RateLimitRejected` whose message lacks `rate_limit` becomes a plain `ProviderError`. That breaks criterion 6: exhaustion must raise `ProviderRateLimitError` and report `RATE_LIMITED`.\n\nTasks 6 and 7 also do not list the imports to add (`_is_throttle`, `RateLimitRejected`, `event_blocks`, `RateLimitEvent`) or remove. `RATE_LIMIT_MARKER` at `agent.py:35` and `sdk_session.py:35` becomes unused once the gates are replaced, and ruff F401 would fail in Task 13.\n\nFix: Task 6 replaces line 180 as well. Its success check should grep for `RATE_LIMIT_MARKER in str(exc)` in `agent.py` and `sdk_session.py` and expect no matches.",
+   "location": "src/squadron/providers/sdk/agent.py:180"
+  },
+  {
+   "i": 2,
+   "severity": "FAIL",
+   "title": "Pipeline dispatch records no RateLimitStats, so criterion 3 is unmet",
+   "description": "Criterion 3 requires that a rejected event on any of the three paths increments `RateLimitStats.throttles`. The agent loops do this (`agent.py:176` and `:225`). `sdk_session.py` has no `RateLimitStats` at all. Its backoff block (192\u2013201) logs and sleeps only.\n\nThe design says the `sdk_session` loop already has `RateLimitStats` and that \"None of that changes.\" That premise is wrong, and no task adds it. Task 11 asserts only `\"done\" in result` and `call_count == 3`.\n\nFix: add a step that gives the session a stats object or sink, records the delay on the rejected path, and adds a test asserting the increment. Also, if the Task 15 audit summary (`N rate-limit pauses`) is built from `RateLimitStats`, pipeline pauses will not appear in it until this exists. Correct the design as well.",
+   "location": "src/squadron/pipeline/sdk_session.py:192"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Test-with pattern is broken; commits after Tasks 6 and 9 go red",
+   "description": "Tasks 6 and 7 change throttle behavior, but their tests are Tasks 10 and 11, which come after the shim deletion in Task 9. From the task text:\n- Task 6 removes the `is_rate_limit_event` special case. `test_a_rejected_rate_limit_event_reaches_the_backoff` (`test_agent.py:648`) fabricates a `MessageParseError` with a rate-limit payload, so it should fail at the Task 6 commit.\n- Task 9 deletes the shim, so the four `test_the_shim_*` tests (`test_agent.py:684\u2013753`) should fail at the Task 9 commit.\n\nTasks 6, 7 and 9 have no test run in their steps. Fix: move Tasks 10 and 11 to directly follow Task 7, or group Tasks 6\u201311 into one commit set. Add a test run to each implementation task.",
+   "location": "project-documents/user/tasks/920-tasks.claude-agent-sdk-upgrade-and-rate-limit-parser-shim-retirement.md:58-103"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Intermediate commits leave a silent throttle drop and an issue #23 leak",
+   "description": "Two intermediate states are wrong, not just untested:\n- After Task 1 (the floor bump) and before Task 7, a rejected event parses natively into `RateLimitEvent`. `translate_sdk_message` returns `[]` for it, so the throttle is dropped silently. That is the design's highest-risk failure. Task 1's commit is green only because the old tests fabricate exceptions.\n- After Task 4 and before Task 8, informational events become system messages. `sdk_session.py:173` appends any `sdk_type` not in its tuple, which reintroduces the issue #23 defect in the pipeline path.\n\nThe slice branch merges only after review, so these are bisect and review hazards rather than shipped regressions. The file nonetheless treats its commits as working points. Fix: move Task 8 into the Task 4 commit, or directly after it. Group Task 1 with the re-key commits.",
+   "location": "project-documents/user/tasks/920-tasks.claude-agent-sdk-upgrade-and-rate-limit-parser-shim-retirement.md:28"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Commit lines are checkboxes, not `**Commit**:` markers",
+   "description": "Thirteen `- [ ] Commit:` lines (after Tasks 1\u201311, 13 and 16) are checkboxes. Markers must be plain `**Commit**:` lines and never checkboxes. With no valid markers, CLAUDE.md commits at the end of each top-level task, which produces the non-working points above.\n\nReplace them with plain `**Commit**:` lines at working, tested points: after Task 8 (behavior and its exclusion in place), after Task 11 (tests rewritten), after Task 13 (suite green), and after Task 16.",
+   "location": "project-documents/user/tasks/920-tasks.claude-agent-sdk-upgrade-and-rate-limit-parser-shim-retirement.md:28"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "Tasks 14\u201315 need a straight CLI, and no BLOCKED path is stated",
+   "description": "Design Part C and walkthrough steps 3\u20135 are mandatory. The design also says SDK-backed runs must not happen inside a Claude Code session. An executor working under Claude Code cannot meet that, and the task says nothing about the case. An executor could substitute unit tests and check the boxes.\n\nPer the BLOCKED convention, the task should say: if the run is not from a straight CLI, write `BLOCKED:` with the reason under Task 14 or 15, leave the boxes unchecked, and stop for the live step. The forced-throttle observation in Task 15 has the same dependency.",
+   "location": "project-documents/user/tasks/920-tasks.claude-agent-sdk-upgrade-and-rate-limit-parser-shim-retirement.md:127-138"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "Two more `sdk_type` exclusion lists share the tuple Task 8 must extend",
+   "description": "Task 8 says to grep `SDK_RESULT_TYPE` and decide. The grep finds two more copies of `(SDK_RESULT_TYPE, \"tool_use\", \"tool_result\")`: `review_client.py:263` and `src/squadron/pipeline/summary_oneshot.py:139`. The design's consumer check names only `dispatch`.\n\nIf either consumer reads translated agent output, informational rate-limit notices reach its prose after Task 4, which is the same issue #23 class. I did not read either consumer, so whether they receive these messages is unverified.\n\nFix: decide per consumer in Task 8 and add a success check for each. Preferably move the tuple into one shared constant, since CLAUDE.md forbids scattering comparison values.",
+   "location": "src/squadron/review/review_client.py:263"
+  },
+  {
+   "i": 8,
+   "severity": "CONCERN",
+   "title": "Criterion 3's WARNING and client-mode coverage are not named",
+   "description": "Criterion 3 also requires a WARNING naming the attempt number on each path. No task asserts a WARNING on any path. The Task 10 and 11 rewrites assert outcomes only.\n\nNo task names a client-mode rejected-event test. `_handle_client_mode` is one of the three paths, and Task 10 does not say which mode its rewritten tests drive.\n\nFix: name one query-mode and one client-mode rejected-event test in Task 10, and assert the WARNING and the stats in each. Do the same in Task 11.",
+   "location": "project-documents/user/tasks/920-tasks.claude-agent-sdk-upgrade-and-rate-limit-parser-shim-retirement.md:91-108"
+  },
+  {
+   "i": 9,
+   "severity": "CONCERN",
+   "title": "Criterion 6's audit half has no test; Task 12 overrides the design silently",
+   "description": "The design's affected-files list says `test_provider.py` and `test_audit_cli.py` require the criterion-9 rewrite. Task 12 says neither needs one. On the merits that is defensible: the audit tests construct `AuditRunResult` directly and fabricate no SDK exception. But the task does not say it overrides the design.\n\nMore importantly, nothing exercises exhaustion through to `AuditRunFailure.RATE_LIMITED`. The two named tests start from the result object.\n\nFix: state that Task 12 overrides the design list and why. Add a test that drives exhaustion to `RATE_LIMITED`, or name the existing test that does.",
+   "location": "project-documents/user/tasks/920-tasks.claude-agent-sdk-upgrade-and-rate-limit-parser-shim-retirement.md:110"
+  },
+  {
+   "i": 10,
+   "severity": "CONCERN",
+   "title": "Task 6's informational branch says both \"don't yield\" and \"let it flow to translation\"",
+   "description": "Task 6 says to \"continue the loop without yielding it to the caller as a raw SDK type \u2014 let it flow to translation as normal.\" Translation only sees what `_skip_unparseable` yields, so both cannot hold. Task 7 (pipeline) yields informational events to translation.\n\nThe design is inconsistent as well. Decision D4 says informational events \"must not reach translation.\" Decision D6 and the Data Flow section say they do, and that they become observable. Resolve to D6: change Task 6 to yield informational events, so the query and client paths match the pipeline. Correct D4 in the design.",
+   "location": "project-documents/user/tasks/920-tasks.claude-agent-sdk-upgrade-and-rate-limit-parser-shim-retirement.md:61"
+  },
+  {
+   "i": 11,
+   "severity": "CONCERN",
+   "title": "Task breakdown is overweight for a small diff",
+   "description": "The file has 16 top-level tasks and 13 commit lines for a design rated \"3/5, small diff.\" Cuts that keep every criterion covered:\n- Merge 2 and 3 (classification and its tests).\n- Merge 4 and 5 (translation and its test).\n- Fold 8 into 7. It is a one-line tuple change in a function Task 7 already edits.\n- Fold 12 into 13. Task 12 is verify-only.\n- Drop the conditional in Task 12 about `create_agent` assertions. The task itself says that assertion does not exist.\n- Keep Task 10 as one unit, but list its three groups (rewrite five, delete four, add one) so progress can be checked.\n\nThat gives about 12 tasks with the test-with pairs intact.",
+   "location": "project-documents/user/tasks/920-tasks.claude-agent-sdk-upgrade-and-rate-limit-parser-shim-retirement.md"
+  },
+  {
+   "i": 12,
+   "severity": "NOTE",
+   "title": "Task 1 check and Task 8 commit type",
+   "description": "Task 1's check \"reports `>= 0.2.152`\" cannot be verified literally, because `importlib.metadata.version` prints a version string. Say the output must be a version \u2265 0.2.152 and name how to compare it. Task 1 also has no test run before its commit; see the sequencing findings.\n\nTask 8's commit is `fix:`, but the defect is slice-internal and never shipped. The bug-fix rules say a slice's own bugs are part of the slice, so use `refactor:` or fold the change into Task 4's commit.",
+   "location": "project-documents/user/tasks/920-tasks.claude-agent-sdk-upgrade-and-rate-limit-parser-shim-retirement.md:81"
+  },
+  {
+   "i": 13,
+   "severity": "NOTE",
+   "title": "Task 16's DEVLOG and architecture-doc steps trace to no criterion",
+   "description": "The DEVLOG entry, the architecture-doc entry update, and the design status change do not trace to any success criterion. The process guide may require them, and I did not check it. If it does, keep them. If not, reduce Task 16 to the status updates and the task-checker step.",
+   "location": "project-documents/user/tasks/920-tasks.claude-agent-sdk-upgrade-and-rate-limit-parser-shim-retirement.md:140-147"
+  },
+  {
+   "i": 14,
+   "severity": "NOTE",
+   "title": "Test placement and grep coverage details",
+   "description": "`test_other_unknown_messages_are_still_skipped` sits inside `TestRateLimitBackoff` (the class starts at line 493, and no other class follows), not `TestUnparseableMessages` as Task 10 says.\n\nTask 9 greps only `src/` for the shim name and `claude_agent_sdk._internal`. Criterion 2 also covers `tests/`, and no step checks it. Add a `tests/` grep to Task 10's success check.",
+   "location": "tests/providers/sdk/test_agent.py:765"
+  },
+  {
+   "i": 15,
+   "severity": "NOTE",
+   "title": "`_is_throttle` is private but imported across modules",
+   "description": "Task 2 names the helper `_is_throttle`, and Tasks 6 and 7 import it into `agent.py` and `sdk_session.py`. A leading underscore on a cross-module helper is misleading. Consider `is_throttle`. The design uses the underscore too, so this is a judgment call.",
+   "location": "project-documents/user/tasks/920-tasks.claude-agent-sdk-upgrade-and-rate-limit-parser-shim-retirement.md:33"
+  },
+  {
+   "i": 16,
+   "severity": "NOTE",
+   "title": "Hedged instructions the executor will have to resolve",
+   "description": "- Task 3: \"or a new focused test module if preferred.\" Pick one.\n- Task 5: \"create if it does not exist.\" `tests/providers/sdk/test_translation.py` exists, so say \"add to it.\"\n- Task 6: the \"keep the import\" hedge on `MessageParseError`. It stays, so say so.\n- Task 12: remove the conditional about `create_agent` assertions.",
+   "location": "project-documents/user/tasks/920-tasks.claude-agent-sdk-upgrade-and-rate-limit-parser-shim-retirement.md:39"
+  }
+ ]
+}

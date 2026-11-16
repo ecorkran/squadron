@@ -1,0 +1,54 @@
+{
+ "review": "r01",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "FAIL",
+   "title": "Task 1's unindexed `[~]` fixture line will not match the parser, so Task 5's assertions cannot pass",
+   "description": "Task 1's example unindexed line is `7. [~] Feature Epsilon without explicit index \u2014 cut for scope.`, with no `**Name**` wrap. Its success criterion reinforces this by requiring the bold wrap only \"for the indexed form\".\n\n`PLAN_UNINDEXED_RE` (`packages/core/src/introspection/parsers/slicePlanParser.ts:9`) requires `\\*\\*\u2026\\*\\*`. Task 2 widens only the checkbox class and forbids any other regex change, so the line stays silently dropped. Task 5 then asserts `totalSlices: 7`, `completedSlices: 5` and an unindexed entry with `indexSource: 'fallback'`, which will fail. A junior implementer is then likely to loosen the regex, which contradicts Decision 1.\n\nThe slice's own criterion gives the correct form: `N. [~] **Name** \u2014 rationale`.\n\nFix: change the example to a bold-wrapped name (for instance `7. [~] **Feature Epsilon** \u2014 cut for scope.`) and state that both forms require the bold wrap.",
+   "location": "project-documents/user/tasks/918-tasks.sliceplanparser-deprecated-entry-handling.md:40-45"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Editing the shared fixture conflicts with the \"existing tests pass unchanged\" criterion and has unaccounted knock-on effects",
+   "description": "The slice's last success criterion says regression-freedom is \"proven by the existing `sample-slice-plan.md` fixture tests continuing to pass unchanged\". Task 5 instead rewrites an existing assertion (5/3 to 7/5) because Task 1 mutates that fixture.\n\n- **Other consumers:** the fixture is read at seven call sites in `slicePlanParser.test.ts` and also by `overviewParser.test.ts`, `futureWorkParser.test.ts` and `ArtifactIntrospector.test.ts`. Task 5 updates one test and no task audits the rest.\n- **Sort order:** an unindexed entry gets `index: 1` from the fallback counter and sorts ahead of 101. Any test that reads `entries` by position would shift.\n\nFix: use the sibling-fixture option the slice explicitly allows (a new `sample-slice-plan-deprecated.md`, say) and leave the existing fixture and tests untouched. That also makes Task 5's separate \"explicit regression test\" bullet (lines 99-102) redundant, so cut it.",
+   "location": "project-documents/user/tasks/918-tasks.sliceplanparser-deprecated-entry-handling.md:36-45"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "`arch-status-vs-plans` success criterion has no task",
+   "description": "The slice criterion names both `plan-status-vs-entries` and `arch-status-vs-plans`. Task 12 covers only the first.\n\nExisting `arch-status-vs-plans` tests sit in `packages/core/tests/introspection/ConsistencyChecker.test.ts` (around lines 879 and 912) and can be mirrored. Add one case to Task 12: arch `status: complete`, child plan all `[x]` or `[~]`, no finding.",
+   "location": "project-documents/user/tasks/918-tasks.sliceplanparser-deprecated-entry-handling.md:199-212"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Task 9's `derivedStatus` initializer change is scope creep with an incorrect rationale",
+   "description": "The slice scopes `slice.ts` to \"the same one-line addition to its inline `deriveEntryStatus()` call\". Task 9 also rewrites the initializer, on the grounds that a `detectDocuments` failure would otherwise report `not-started`.\n\nThat is not what the code does. In `packages/cli/src/commands/slice.ts:91-127` the `catch` sets `derivedStatus = 'degraded'`, and the success path always reassigns it. The initializer value never survives, so the change has no observable effect and no test can cover it. Cut the sub-item.",
+   "location": "project-documents/user/tasks/918-tasks.sliceplanparser-deprecated-entry-handling.md:155-163"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Commit markers are written as checkbox items",
+   "description": "All six commit points (lines 105, 135, 179, 197, 212, 224) are `- [ ] Commit: \u2026` sub-items. They should be plain `**Commit**:` lines, never checkboxes.\n\nThe conditional commit in Task 13 (lines 224-225) should be dropped. If verification finds a defect, it belongs to the task that owns it.\n\nPlacement is otherwise sound: each marker sits after a passing test task.",
+   "location": "project-documents/user/tasks/918-tasks.sliceplanparser-deprecated-entry-handling.md:105"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Task granularity is heavier than a roughly 15-line change needs",
+   "description": "- **Tasks 2, 3 and 4:** these are three tasks for about six lines in one function of one file, and none is testable alone. Merge them into one \"parser: accept `[~]`, set Deprecated, count as resolved\" task, followed by Task 5.\n- **Task 11:** this is the only test of Task 8's wiring, but it sits after the Task 10 commit that already includes Task 8. Move it directly after Task 8, or before the Task 10 commit, and drop its separate test-only commit.\n- **Task 12:** its commit can likewise fold into the parser commit, since it verifies Task 4's arithmetic.\n\nThe result is about 8 tasks and 3 commits instead of 13 and 6.",
+   "location": "project-documents/user/tasks/918-tasks.sliceplanparser-deprecated-entry-handling.md:52-83"
+  },
+  {
+   "i": 6,
+   "severity": "NOTE",
+   "title": "Unindexed `description` capture is not asserted",
+   "description": "The criterion says the unindexed form \"parses equivalently\", including the rationale as `description`. Task 5 asserts `description` only for the indexed entry. Add it to the unindexed assertion.",
+   "location": "project-documents/user/tasks/918-tasks.sliceplanparser-deprecated-entry-handling.md:91-92"
+  }
+ ]
+}

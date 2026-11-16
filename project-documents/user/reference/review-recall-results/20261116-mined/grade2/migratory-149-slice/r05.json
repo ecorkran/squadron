@@ -1,0 +1,47 @@
+{
+ "review": "r05",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Cell-subdivision performance model is arithmetically wrong",
+   "description": "The design says S=3 alone drops candidates to ~5000, and both interventions give \"~555, exits after ~32\". Those are per-cell figures, not per-scan figures.\n- **Actual scan size at S=3:** (2S+1)\u00b2 = 49 cells \u00d7 ~555 \u2248 27,000 candidates, against 45,000 at S=1. The scanned area only shrinks from 150\u00b2 to ~116.7\u00b2, so subdivision alone gives about 1.65\u00d7, not 9\u00d7.\n- **Interaction with early exit:** the scan starts at the (-S,-S) corner cell. At S=3 that cell lies almost entirely outside the query radius, so few candidates there qualify. Iterations before the cap is reached may not improve over S=1, and 49 cell lookups add overhead.\n- **Consequence:** \"compose multiplicatively\" is unsupported, and fixing S=3 as the gate configuration (line 128) is premature.\n\nCorrect the estimates and let the ablation pick the gate value of S. Do not cut the intervention; the slice plan assigns it here.",
+   "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:56-58"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Ablation walkthrough cannot be run as designed, and A5 has no defined check",
+   "description": "- **Identical commands:** Step 3 lists four configurations, but \"counter-gating\" and \"break enabled\" use the same command lines. The design makes the `break` unconditional, so there is no toggle.\n- **Baseline unreachable:** once the break lands, the \"should reproduce ~38 TPS\" baseline and the \"S=3, counter-gating\" run cannot be produced.\n- **Lightest fix:** measure at two commits (subdivision first, then the break) or use the recorded slice 145 figure as the baseline, and say so. A runtime flag would add configuration nothing else uses.\n- **A5 mechanism:** Step 4 relies on \"`TI_PRINT_KERNEL_STATS=1` or equivalent\", which is a guessed mechanism. A5 is also not among the slice plan's exit criteria. Name the real mechanism or drop the criterion.\n- **Parity mismatch:** Step 1 compares S=3 against S=1, while A4 gates against the numpy reference. It also passes `--subdivision-factor` in a pytest context without saying how.",
+   "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:158-182"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "`cell_size` and `S` are two sources of truth for one invariant",
+   "description": "Correctness needs `S * cell_size >= query_radius`. The design shows both `cell_size` and `S` as `BenchConfig` inputs and says the harness \"reads [cell_size] from config\". It does not say `cell_size` stops being independently settable.\n- **Failure case:** a workload config with an explicit `cell_size` (existing configs use 50) combined with a different S either over-scans or silently drops in-radius neighbors.\n- **Fix:** state that `cell_size` is derived in exactly one place from `query_radius / S`, or that an explicit conflicting value is a config-time error. This matches the fail-fast validation already specified for S.\n- **Related claim:** \"Default S=1 reproduces slice 145 behavior exactly\" only holds if every existing workload has `cell_size == query_radius`. State that or verify it.",
+   "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:80-92"
+  },
+  {
+   "i": 3,
+   "severity": "NOTE",
+   "title": "First-k selection changes with S; \"correct neighborhood is preserved\" overstates",
+   "description": "The candidate set is preserved under subdivision, but the first-k-found subset depends on scan order, which changes with the cell grid. A4's 20% statistical gate is the right guard. The doc should say that early exit is selection-identical to counter-gating (so A1 holds exactly) while S>1 is only statistically equivalent.",
+   "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:56"
+  },
+  {
+   "i": 4,
+   "severity": "NOTE",
+   "title": "Upper bound S \u2264 8 has an incorrect rationale and is a bare constant",
+   "description": "The text says a 17\u00d717 scan is \"larger than the physical neighborhood\". The scan always covers the same physical radius, whatever S is. The real costs are per-agent cell-loop overhead and S\u00b2-growth in grid cell count. Restate the rationale, and define the bound once as a named config constant per the project's no-magic-values rule.",
+   "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:74-78"
+  },
+  {
+   "i": 5,
+   "severity": "NOTE",
+   "title": "Minor gaps against the slice plan and prior slices",
+   "description": "- **Line-number references:** the design pins changes to source line numbers (291, 155\u2013184, 411\u2013462). Slice 148, marked complete, worked on the same kernel, and the doc does not say what state it left the kernel in. Reference symbols rather than lines. I did not check whether the numbers are stale.\n- **7-neighbor operating point:** the slice plan calls `max_neighbors=7` \"a benchmark target\". The design has no such run. It is not an exit criterion, so one extra bench line would cover it.",
+   "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:29-31"
+  }
+ ]
+}

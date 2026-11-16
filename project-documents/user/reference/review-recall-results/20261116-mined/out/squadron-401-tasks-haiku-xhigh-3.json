@@ -1,0 +1,405 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "PASS",
+      "title": "Success criteria map to tasks",
+      "description": "SC1 \u2192 Tasks 8, 10, 14, 26. SC2 \u2192 9. SC3 \u2192 4, 6. SC4 \u2192 11, 13, 15. SC5 \u2192 21, 22, 26. SC6 \u2192 20 and walkthrough step 4. SC7 \u2192 18, 20, 24. SC8 \u2192 19, 20. SC9 \u2192 16, 17. SC11 \u2192 26. SC12 \u2192 7, 9. SC10 has a gap (see below). Technical and integration requirements map to Tasks 2, 18, 20, 28 and 30. I found no task that traces to nothing.",
+      "file_ref": null,
+      "category": "coverage",
+      "raw_category": null,
+      "location": "project-documents/user/slices/401-slice.complexity-duplication-and-coverage.md:260"
+    },
+    {
+      "severity": "PASS",
+      "title": "Enum-first sequencing is sound",
+      "description": "Task 2 says that adding enum members while `PythonAdapter.metrics` is still `frozenset(SnapshotMetric)` (python_adapter.py:105) would make `take_snapshot` raise. That is correct: take.py:78 raises when an adapter's returned set differs from its declared set, so narrowing the declaration in Task 2 is required and the task does it. Take.py:91\u201392 fills undeclared metrics with `metric_unsupported`, so `LanguageSnapshot`'s every-metric validator (snapshot_models.py:197) stays satisfied. I did not run the suite. Literal-list `LanguageSnapshot` constructions at `tests/metrology/snapshot/test_snapshot_models.py:62,174,229` and `test_render.py:61` were not checked.",
+      "file_ref": null,
+      "category": "sequencing",
+      "raw_category": null,
+      "location": "src/squadron/metrology/snapshot/take.py:78"
+    },
+    {
+      "severity": "PASS",
+      "title": "Helpers and config points cited by the breakdown exist",
+      "description": "Confirmed: `absent` (:26), `tool_failed` (:42), `repo_relative` (:57); `FIXTURE_ROOT_TOKEN` and `read_fixture` in `tests/metrology/snapshot/builders.py:28,92`; `_is_counted` in `typescript_length.py:110`; `measure_length_metrics` in `lengths.py:190`, called from `python_adapter.py:90` and `typescript_length.py:144`; `run_git` returns `CompletedProcess | None` (`review/git_utils.py:28`), matching Task 21; `CONFIG_KEYS` in `config/keys.py:24`. `.squadron.toml` is gitignored (`.gitignore:174`), so walkthrough step 3's edit won't dirty the tree.",
+      "file_ref": null,
+      "category": "verification",
+      "raw_category": null,
+      "location": "src/squadron/metrology/snapshot/tool_support.py:26"
+    },
+    {
+      "severity": "PASS",
+      "title": "Test-with order and dependencies",
+      "description": "Each implementation task is followed by its tests (3\u21924, 5\u21926, 10\u219211, 12\u219213, 14\u219215, 16\u219217, 19\u219220, 21\u219222, 23\u219224, 25\u219226). The dependency graph has no cycles. Task 5's predicate parameter keeps `typescript_complexity` from importing `typescript_length`.",
+      "file_ref": null,
+      "category": "sequencing",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:48"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "SC10's \"other metrics unchanged\" has no test",
+      "description": "SC10 (slice design line 278) requires that a language past `DUPLICATION_MAX_TOKENS` keeps its other metrics unchanged. The failure table (design line 109) says the same, and design line 286 requires each row to assert its signal and outcome. Task 11 tests `measure_duplication` in isolation, so it can't see other metrics. Task 26 has no ceiling case. Add a Task 26 bullet: lower the constant with `monkeypatch`, run the adapter, and assert that file length, function length, complexity, lint and type measurements equal the no-ceiling run.",
+      "file_ref": null,
+      "category": "coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:138"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Task 14 routes MemoryError into the unparsed-file path, contradicting Task 10",
+      "description": "Task 14 lists the TypeScript token errors as `TypeScriptParseError` and `MemoryError`. Task 10 (line 123) requires a MemoryError during the pass to make `duplicated_lines` `tool_failed` for the whole language, and the design's failure table agrees. Under Task 14's wiring, a MemoryError would only mark one file unparsed, and the language would report a valid-looking measurement. Task 11's MemoryError test uses a test tokenizer, so it won't catch this. Remove MemoryError from Task 14. Task 12 (line 146) already has the correct Python list.",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:160"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Task 10 is too large and mixes two responsibilities",
+      "description": "It is the largest task (Effort 4). It covers file reading and unparsed handling, token-id arrays, the ceiling and MemoryError, the rolling hash, the window index, confirmation, the overlap rule, per-file counts and the counting text. Split it into 10a (read, tokenize, ids, ceiling, MemoryError, identity and counting) and 10b (window hash, index, confirmation, marking, overlap, per_file). Each half then has its own cases in Task 11.",
+      "file_ref": null,
+      "category": "granularity",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:117"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`coverage.py` takes four responsibilities across four tasks with no size contingency",
+      "description": "Tasks 16, 19, 21 and 23 all add to `snapshot/coverage.py`: the key and path parser, the Cobertura reader and its failure set, `read_coverage` with the freshness check, and `coverage_measurements` with its ToolIdentity. The design's module table (design line 81) keeps all four in one file. The file doesn't exist yet, so this is an estimate, but the content will likely exceed the ~300-line limit, and it breaks the single-responsibility rule in review-code.md. Tasks 12 and 14 have a split contingency; these don't. Name the split now, for example `coverage_config.py` (key and parser), `coverage_report.py` (reader), `coverage.py` (freshness) and `coverage_measurements.py`. Update the module table as Tasks 12 and 14 do, and update Task 16's \"key name appears once, in coverage.py\" check (line 177) to match.",
+      "file_ref": null,
+      "category": "granularity",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:173"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Task 26's combined-language test has no fixture",
+      "description": "Bullet 1 requires \"a fresh report covering files of both languages.\" Task 18 captures one report per tool. coverage.py lists no `.ts` files, and Istanbul lists no `.py` files. The breakdown doesn't say how the combined report is made. Either merge the two captured reports under one root inside the test (and call it synthetic), or split the bullet into one test per language. Bullet 5 (\"holds all eight metrics\") is also satisfied by absent entries. It should assert that complexity and duplication are `present` for both languages, since SC1 requires present values.",
+      "file_ref": null,
+      "category": "specificity",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:255"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Task 20 omits the non-integer `number` case from the failure table",
+      "description": "Task 19 (line 198) and design line 111 name a non-integer `number` as well as `hits`. Task 20 tests only `hits=\"x\"`. Add `number=\"x\"` to the malformed-report cases, since design line 286 requires every failure-table row to be tested.",
+      "file_ref": null,
+      "category": "verification",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:206"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Skipped-record behavior has no deterministic test, and Task 29 can skip it",
+      "description": "The design accepts this behavior and documents it for users (design lines 246\u2013248). 400-written records lack the four metrics, fail `LanguageSnapshot` validation (`snapshot_models.py:197`), and are skipped with a WARNING. No task tests this. The only check is walkthrough step 10 (design line 306), and Task 29 lets that step be recorded as not run when no 400 record exists. Add a unit test that loads a record missing the four metrics and asserts the skip and the WARNING. In Task 29, make producing a 400-written record a setup step, for example by running the 0.24.0 release from a checkout at its tag. Live runs are pre-authorized.",
+      "file_ref": null,
+      "category": "verification",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:280"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Task 8 changes the Python call site's signature without naming it",
+      "description": "`measure_length_metrics` is called here today. Task 8 makes `measure_parse_metrics` take a second `ToolIdentity` and return a third measurement. Line 104 names the TypeScript caller (`measure_typescript_lengths`), but nothing tells the implementer to update this call or say which identity it passes. Add a bullet covering it and the import at `python_adapter.py:20`.",
+      "file_ref": null,
+      "category": "specificity",
+      "raw_category": null,
+      "location": "src/squadron/metrology/snapshot/python_adapter.py:90"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Commit markers are checkboxes, not `**Commit**:` lines",
+      "description": "All 17 markers (lines 46, 68, 88, 97, 115, 142, 156, 171, 183, 191, 208, 229, 246, 262, 271, 276, 283) are written `- [ ] Commit: ...`. The convention is a plain `**Commit**:` line, never a checkbox, and as written task-checker could tick a commit. Placement is sound: each marker follows the tests for its work. Change the format only.",
+      "file_ref": null,
+      "category": "format",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:46"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Development order differs from the design's Implementation Notes",
+      "description": "Design step 3 says \"Tokenizers for both languages, then `duplication.py`.\" The breakdown does duplication (Tasks 10\u201311) before both tokenizers (12, 14). No dependency breaks, since duplication only needs the `Tokenizer` type and its tests use a test tokenizer. Either reorder, or record the change in the design.",
+      "file_ref": null,
+      "category": "sequencing",
+      "raw_category": null,
+      "location": "project-documents/user/slices/401-slice.complexity-duplication-and-coverage.md:313"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Duplication will import a helper from the length module",
+      "description": "Task 7 places the read-and-decode helper in `lengths.py`, and Task 10 reuses it from the language-agnostic `duplication.py`. That makes duplication depend on the length module. Name the helper's home before Task 7. `tool_support.py` is the likely choice, but it isn't in the design's module table, so add it there.",
+      "file_ref": null,
+      "category": "design-fidelity",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:94"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Task 28 has no success line",
+      "description": "Every other task ends with a Success line. Add one, for example: \"Success: both docs name the four new metrics and the stale-snapshot note; no other file changes.\"",
+      "file_ref": null,
+      "category": "specificity",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:273"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Task 29's fix loop is unbounded and needs preconditions",
+      "description": "\"Any step that fails is a bug in this slice: fix it, add a regression test, rerun the step\" has no limit. Each fix should be its own bullet with its own commit. The walkthrough also needs `../context-forge` and a scratch vitest project. If either is missing, the task should stop with `BLOCKED:` rather than skip steps 8\u20139.",
+      "file_ref": null,
+      "category": "granularity",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:281"
+    },
+    {
+      "severity": "NOTE",
+      "title": "No load test for the duplication time and memory bound",
+      "description": "The design states a measured memory rate (about 133 bytes per token) and a ceiling (design lines 163\u2013166). No task covers `tests/load/`, and there is no CI-gating task. The parent architecture document wasn't provided, so I can't tell whether it restates this as an NFR. If it does, add a load task and a CI gate. If it doesn't, no action is needed.",
+      "file_ref": null,
+      "category": "coverage",
+      "raw_category": null,
+      "location": "project-documents/user/slices/401-slice.complexity-duplication-and-coverage.md:164"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Task 1 is a one-command task",
+      "description": "Creating the branch could sit in the Context Summary, which already names it. Keep it as a numbered step only if the file convention calls for one.",
+      "file_ref": null,
+      "category": "granularity",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:38"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "pass",
+      "category": "coverage",
+      "raw_category": null,
+      "summary": "Success criteria map to tasks",
+      "location": "project-documents/user/slices/401-slice.complexity-duplication-and-coverage.md:260",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "pass",
+      "category": "sequencing",
+      "raw_category": null,
+      "summary": "Enum-first sequencing is sound",
+      "location": "src/squadron/metrology/snapshot/take.py:78",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "pass",
+      "category": "verification",
+      "raw_category": null,
+      "summary": "Helpers and config points cited by the breakdown exist",
+      "location": "src/squadron/metrology/snapshot/tool_support.py:26",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "pass",
+      "category": "sequencing",
+      "raw_category": null,
+      "summary": "Test-with order and dependencies",
+      "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:48",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "coverage",
+      "raw_category": null,
+      "summary": "SC10's \"other metrics unchanged\" has no test",
+      "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:138",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "Task 14 routes MemoryError into the unparsed-file path, contradicting Task 10",
+      "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:160",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "concern",
+      "category": "granularity",
+      "raw_category": null,
+      "summary": "Task 10 is too large and mixes two responsibilities",
+      "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:117",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "concern",
+      "category": "granularity",
+      "raw_category": null,
+      "summary": "`coverage.py` takes four responsibilities across four tasks with no size contingency",
+      "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:173",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "concern",
+      "category": "specificity",
+      "raw_category": null,
+      "summary": "Task 26's combined-language test has no fixture",
+      "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:255",
+      "location_verified": true
+    },
+    {
+      "id": "F010",
+      "severity": "concern",
+      "category": "verification",
+      "raw_category": null,
+      "summary": "Task 20 omits the non-integer `number` case from the failure table",
+      "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:206",
+      "location_verified": true
+    },
+    {
+      "id": "F011",
+      "severity": "concern",
+      "category": "verification",
+      "raw_category": null,
+      "summary": "Skipped-record behavior has no deterministic test, and Task 29 can skip it",
+      "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:280",
+      "location_verified": true
+    },
+    {
+      "id": "F012",
+      "severity": "concern",
+      "category": "specificity",
+      "raw_category": null,
+      "summary": "Task 8 changes the Python call site's signature without naming it",
+      "location": "src/squadron/metrology/snapshot/python_adapter.py:90",
+      "location_verified": true
+    },
+    {
+      "id": "F013",
+      "severity": "concern",
+      "category": "format",
+      "raw_category": null,
+      "summary": "Commit markers are checkboxes, not `**Commit**:` lines",
+      "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:46",
+      "location_verified": true
+    },
+    {
+      "id": "F014",
+      "severity": "note",
+      "category": "sequencing",
+      "raw_category": null,
+      "summary": "Development order differs from the design's Implementation Notes",
+      "location": "project-documents/user/slices/401-slice.complexity-duplication-and-coverage.md:313",
+      "location_verified": true
+    },
+    {
+      "id": "F015",
+      "severity": "note",
+      "category": "design-fidelity",
+      "raw_category": null,
+      "summary": "Duplication will import a helper from the length module",
+      "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:94",
+      "location_verified": true
+    },
+    {
+      "id": "F016",
+      "severity": "note",
+      "category": "specificity",
+      "raw_category": null,
+      "summary": "Task 28 has no success line",
+      "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:273",
+      "location_verified": true
+    },
+    {
+      "id": "F017",
+      "severity": "note",
+      "category": "granularity",
+      "raw_category": null,
+      "summary": "Task 29's fix loop is unbounded and needs preconditions",
+      "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:281",
+      "location_verified": true
+    },
+    {
+      "id": "F018",
+      "severity": "note",
+      "category": "coverage",
+      "raw_category": null,
+      "summary": "No load test for the duplication time and memory bound",
+      "location": "project-documents/user/slices/401-slice.complexity-duplication-and-coverage.md:164",
+      "location_verified": true
+    },
+    {
+      "id": "F019",
+      "severity": "note",
+      "category": "granularity",
+      "raw_category": null,
+      "summary": "Task 1 is a one-command task",
+      "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:38",
+      "location_verified": true
+    }
+  ],
+  "template_name": "tasks",
+  "input_files": {
+    "input": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md",
+    "against": "project-documents/user/slices/401-slice.complexity-duplication-and-coverage.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/squadron-401-tasks"
+  },
+  "timestamp": "2026-11-16T13:33:25.604859",
+  "model": "claude-haiku-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 14,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-haiku-5-5",
+  "answering_models": [
+    "claude-haiku-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 19,
+    "in_fences": 0,
+    "in_section": 19,
+    "surviving": 19
+  },
+  "effort": "xhigh",
+  "profile": "sdk",
+  "turns": 15,
+  "prompt_tokens": 817609,
+  "cached_tokens": 654252,
+  "cache_write_tokens": 163343,
+  "completion_tokens": 65897,
+  "reasoning_tokens": null,
+  "duration_seconds": 273.6675089581404,
+  "cost_usd": 0.34338406,
+  "cost_basis": "provider"
+}

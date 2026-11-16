@@ -1,0 +1,47 @@
+{
+ "review": "r02",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Task 21 changes the `list_run_summaries` return type without updating its only caller before the Task 22 commit",
+   "description": "Task 21 makes `list_run_summaries` return `RunListing(rows, unavailable)` and removes the per-run \"pipeline unavailable\" WARNING. Its only caller, `runs.py:27`, treats the result as a list of summaries and is not touched until Task 25. The Task 22 commit therefore lands with `sq runs list` broken or failing `pyright`, and with no unavailable-pipeline signal at all until Task 25 adds the summary line.\n\nFix: add a Task 21 step that adapts `runs.py` (and the `run_views` entry point) to read `listing.rows`. Either move the stderr summary line from Task 25 into Task 21, or say explicitly that the signal is absent between the two commits.",
+   "location": "src/squadron/cli/commands/runs.py:27"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Task 22a's seeding instruction collides with the keep-10 prune inside `init_run`, and its bound is thinner than stated",
+   "description": "`init_run` calls `self.prune(pipeline_name)`, which deletes completed/failed runs beyond 10 per pipeline (`state.py:547-562`). Task 22a says only \"seed a few hundred run-state files through `StateManager`\" with a mix of completed and failed runs, then asserts the row count equals the seeded readable count. A junior implementer who seeds naively gets a count mismatch that is hard to diagnose. The 199 helpers already solve this (`tests/pipeline/run_listing_support.py:3-6`: begin all runs before finalizing any), but 22a does not point to them.\n\nFix:\n- Tell the task to seed through `run_listing_support.begin`/`end` in begin-all-then-finalize order, or spread runs across pipeline names.\n- Give the file count as a named constant; \"a few hundred\" is not a number.\n- Reword \"generous enough for CI jitter\": the design's only measurement is 0.67 s for 188 runs for the whole CLI, so `MAX_LISTING_S = 1.0` has about 1.5\u00d7 headroom at best, on shared runners across two Python versions.",
+   "location": "src/squadron/pipeline/state.py:264"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "No task logs the run-id for an unknown process check",
+   "description": "The design requires the unknown-PID case to be \"logged at WARNING with the run-id and PID\" (the error table at line 373 repeats it as \"WARNING naming run and PID\"). Task 9 logs the PID only and defers the run-id to \"the caller that has it\". None of the callers' tasks (19 wait, 21 listing, 33 prune) includes that log, and Task 10 asserts only the PID warning.\n\nFix: have `assess_liveness`, which holds the `RunState`, emit the WARNING with run-id and PID when `process_alive` returns `None`, and assert it in Task 10. One implementation point covers all three consumers.",
+   "location": "project-documents/user/slices/174-slice.run-liveness-stall-bounds-pruning-and-readable-listings.md:175"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Spike outcome handling: a stop the design already resolves, and an unverifiable success criterion in Task 16",
+   "description": "Task 2 says to stop and ask the Project Manager if no `ResultMessage` arrives after `interrupt()`. The design already decides that case (lines 621 and 261): the fallback is \"always mark unusable\", the step fails, and the design is updated. The stop is unnecessary and halts the slice on a planned branch.\n\nTask 16's only success line (line 243), \"adjust to the Task 2 spike findings if they differ from the design\", is not checkable.\n\nFix:\n- Replace the Task 2 stop with: record the finding, update the design's risk section, and implement Task 16 as always-unusable.\n- Give Task 16 concrete criteria: usable when interrupt and drain complete; `unusable_reason` set and ERROR logged otherwise; `DispatchStalledError` raised in both cases.\n- The D5 stop (line 59-60) is a real design fork (a per-run lock). If it is kept, express it as a `BLOCKED:` line, not an ask.",
+   "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md:54-56"
+  },
+  {
+   "i": 4,
+   "severity": "NOTE",
+   "title": "Task 39 does not assert exit 1 for a failed deletion at the CLI level",
+   "description": "D9 says \"The command exits 1 if any deletion failed\". Task 37 covers the failed count in `apply_prune` and Task 38 implements the exit code, but Task 39 lists exit 1 only for the live-run refusal. One more case in Task 39 would close it.",
+   "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md:488-492"
+  },
+  {
+   "i": 5,
+   "severity": "NOTE",
+   "title": "Task 42 adds a test seed helper inside a `docs:` commit, after the walkthrough it supports",
+   "description": "The seed helper under `tests/pipeline/` (orphan, stale, unowned, gone and junk runs) is code and would be committed as `docs: record slice 174 verification`. The same fixtures are needed by Tasks 22 and 39. Creating the helper in Task 22 as an extension of `run_listing_support.py` puts it in a `feat`/`test` commit and avoids duplicate seeding logic.",
+   "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md:521-527"
+  }
+ ]
+}

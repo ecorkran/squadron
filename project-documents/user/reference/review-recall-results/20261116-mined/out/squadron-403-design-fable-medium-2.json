@@ -1,0 +1,225 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "The editable-install mitigation cannot detect the risk it is meant to catch",
+      "description": "The risk is that pyright resolves `import squadron` through the live editable install instead of the exported tree, so export type counts reflect live code. Neither named check can see that:\n\n- **Criterion 5 (in-place equals export at HEAD):** at HEAD the exported tree and the live `src` are identical, so the result is the same whichever one pyright reads.\n- **Walkthrough step 4 (older commit):** there is no reference value to compare against, and on squadron the lockfile gate will usually make type errors absent there anyway.\n\nThis leaves the architecture's \"a snapshot measures a commit\" and \"deterministic numbers\" principles unverified for type counts at an export. The fallback of marking them `environment_unresolved` \"if they differ\" has no trigger.\n\nAdd one export test where the exported tree differs from the live tree in a way that changes the type-error count, with an identical `uv.lock`. Assert the count reflects the exported tree.",
+      "file_ref": null,
+      "category": "testing",
+      "raw_category": null,
+      "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:375-380"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The lockfile gate blanks type counts across every squadron release, and the design does not say so",
+      "description": "D6 compares the whole-file SHA-256 of the export's `uv.lock` with the live one. Squadron's `uv.lock` records the project's own version (`squadron-ai`, editable), and that version is bumped on every release. Any boundary commit from before the latest bump therefore fails the gate, and `type_errors` is absent for almost every historical slice.\n\n400 D8 avoided this same trap for rule-set hashes by hashing the pyproject table rather than the file. The design treats a lockfile difference as occasional (walkthrough step 4: \"if the lockfile changed since then\"), which undersells it.\n\nThe slice plan criterion is met literally, so this is not a violation. But the slice's stated value, a static before and after per slice, is largely lost for type counts on the project it is built for. Do one of two things:\n\n- State the consequence in D6 and Risks.\n- Compare lockfiles with the root project's own package entry excluded, and record that as the comparison rule.",
+      "file_ref": null,
+      "category": "under-specification",
+      "raw_category": null,
+      "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:220-224"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`report history` has unowned git access and no rule for landings off the target's first-parent line",
+      "description": "Two gaps, both in the history report:\n\n- **Git access has no owner or failure row.** History orders snapshots by the target's first-parent history, and the slice report runs `git cat-file -e`. The component table (line 99) says the report modules do \"no git\", and no other module is assigned these calls. The failure-mode table has no row for the first-parent listing returning `None`. The `git_utils` contract (\"`None` is never an answer\") needs an explicit outcome: error and exit 1, not an empty history.\n- **Landings stored from another target are unhandled.** D2 expects a slice that landed on a worktree branch to be resolved from a checkout targeting that branch. The record is per project, not per target, so the main checkout later reads that landing. Its `after_sha` is not on main's first-parent line, so history has no row for it. The slice has a resolved landing, so its reviews don't fall into the \"no resolved landing\" closing line either. Those reviews are silently dropped, or their placement is left to the implementer.\n\nThe design also doesn't say whether `report slice` filters stored landings by `target_ref` or shows them under the \"landings on main\" header. State the rule for both reports.",
+      "file_ref": null,
+      "category": "failure-modes",
+      "raw_category": null,
+      "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:298"
+    },
+    {
+      "severity": "NOTE",
+      "title": "A lost concurrent write has no signal",
+      "description": "Two commands writing `slice_ranges` at once can drop a fast-forward landing, with signal \"None\". This follows 400's precedent and the exposure is small, since the landing is found again while the reflog lasts. But it is the one silent row in the table, and it touches the record whose durability is the slice's stated risk. A re-read before the write, with a WARNING when the stored record changed, would make it observable. Not required.",
+      "file_ref": null,
+      "category": "failure-modes",
+      "raw_category": null,
+      "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:166"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Export limits and exclusions come from the live checkout, not the commit",
+      "description": "The architecture says limits come from the project and that an export reads that commit's config. D5 applies that to rule-set configs but reads squadron settings from the live checkout. A project that commits `.squadron.toml` has its committed limits ignored at an export. The design discloses the trade-off in Risks (line 377), and it is consistent with 400 D9 and D10, which make these settings checkout-local. Acceptable as stated.",
+      "file_ref": null,
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:214"
+    },
+    {
+      "severity": "PASS",
+      "title": "Slice plan scope is fully covered and nothing is deferred",
+      "description": "All five slice-plan criteria map to design criteria:\n\n- Topology and reflog resolution with persistence: criteria 1\u20133.\n- `git archive` export with the lockfile gate: criteria 4\u20136.\n- Full-identity comparison with named breaks: criterion 7.\n- Sample sizes, noise-floor state and no score: criteria 8\u20139.\n- Unresolved slices at project level only: criterion 10.\n\nThe exclusions are all architecture non-goals or slice-plan Future Work.",
+      "file_ref": null,
+      "category": "scope",
+      "raw_category": null,
+      "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:47-66"
+    },
+    {
+      "severity": "PASS",
+      "title": "Architectural principles are respected",
+      "description": "- **Store:** `slice_ranges` is an optional sibling payload with no schema bump.\n- **Coarse records:** one record per project, read once and written at most once per command.\n- **No gate, hook or composite:** D4 and D8, with a test that no serialized key contains `score`.\n- **Severities:** kept on the review scale only.\n- **Attribution:** commit messages are used only for the merge convention the architecture accepts (D9).\n- **D3's before/after refinement:** already reflected in the architecture's Envisioned State.",
+      "file_ref": null,
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:169-176"
+    },
+    {
+      "severity": "PASS",
+      "title": "Integration points match what neighbouring slices provide and expect",
+      "description": "- **402:** `None` category is missing, `read_side_mapped` is labelled, and records without a `slice_index` are project-level, as 402's \"Provides to 403\" states.\n- **400:** 400 anticipated 403 extending `take_snapshot` for exports and comparing limits and exclusions before diffing. D7 does both.\n- **401:** coverage absent at an export matches 401's statement. The ordering dependency on 401 is handled in both directions.\n- **323:** audit runs are keyed on commit and prompt hash, which the audit section relies on.\n- **420:** gets `take_snapshot_at` and `get_slice_ranges` with `fork..tip`.",
+      "file_ref": null,
+      "category": "integration",
+      "raw_category": null,
+      "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:317-327"
+    },
+    {
+      "severity": "PASS",
+      "title": "Size is proportionate to a 4/5 slice",
+      "description": "Three deliverables, each required by the plan entry. The separate `slice-ranges` command is justified by criterion 2: it persists a fast-forward range without running pyright. The one contract change, `environment_root`, is the lighter option against a `.venv` symlink, with the rejection reasoned. The design already cuts a slice table in `report project`. Nothing further to cut.",
+      "file_ref": null,
+      "category": "proportionality",
+      "raw_category": null,
+      "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "testing",
+      "raw_category": null,
+      "summary": "The editable-install mitigation cannot detect the risk it is meant to catch",
+      "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:375-380",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "under-specification",
+      "raw_category": null,
+      "summary": "The lockfile gate blanks type counts across every squadron release, and the design does not say so",
+      "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:220-224",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "failure-modes",
+      "raw_category": null,
+      "summary": "`report history` has unowned git access and no rule for landings off the target's first-parent line",
+      "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:298",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "note",
+      "category": "failure-modes",
+      "raw_category": null,
+      "summary": "A lost concurrent write has no signal",
+      "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:166",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "summary": "Export limits and exclusions come from the live checkout, not the commit",
+      "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:214",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "pass",
+      "category": "scope",
+      "raw_category": null,
+      "summary": "Slice plan scope is fully covered and nothing is deferred",
+      "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:47-66",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "pass",
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "summary": "Architectural principles are respected",
+      "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:169-176",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "pass",
+      "category": "integration",
+      "raw_category": null,
+      "summary": "Integration points match what neighbouring slices provide and expect",
+      "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:317-327",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "pass",
+      "category": "proportionality",
+      "raw_category": null,
+      "summary": "Size is proportionate to a 4/5 slice",
+      "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md",
+      "location_verified": null
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md",
+    "against": "project-documents/user/architecture/400-slices.code-quality-measurement.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/squadron-403-design"
+  },
+  "timestamp": "2026-11-16T12:08:51.550370",
+  "model": "claude-fable-5-2",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 13,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-fable-5-2",
+  "answering_models": [
+    "claude-fable-5-2"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 9,
+    "in_fences": 0,
+    "in_section": 9,
+    "surviving": 9
+  },
+  "effort": "medium",
+  "profile": "sdk",
+  "turns": 14,
+  "prompt_tokens": 593980,
+  "cached_tokens": 451436,
+  "cache_write_tokens": 142532,
+  "completion_tokens": 10512,
+  "reasoning_tokens": null,
+  "duration_seconds": 107.80585833312944,
+  "cost_usd": 2.7921054,
+  "cost_basis": "provider"
+}

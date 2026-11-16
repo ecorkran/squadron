@@ -1,0 +1,171 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "The 3.2a commit can't pass its own success check",
+      "description": "Tasks 3.1 and 3.2 stop rendering `Comprehension:` and `### Adoption Facts`. They only remove the matching unit-test cases in `SectionBuilder.test.ts` and `ContextTemplateEngine.test.ts`. Three end-to-end tests still assert that the removed output appears:\n- `packages/core/tests/pipeline-integration.test.ts:184` expects `` `Comprehension: ${COMPREHENSION}` ``. The facts/probe cases at lines 154\u2013175 also assert probe output in the prompt. This block is only deleted in 3.3.\n- `packages/core/tests/adoption/adoptionBuild.integration.test.ts:102` expects `### Adoption Facts` (`FACTS_HEADING`). This file is only deleted in 4.1.\n- `packages/mcp-server/tests/integration/adoptionParity.test.ts:116` expects `Comprehension:`. This file is only deleted in 3.6.\n\nSo 3.2a's check, \"`pnpm --filter @context-forge/core test` passes\", fails. 3.2a also never runs the MCP tests, so even with that fixed, the commit would land with a failing MCP suite. An agent will either get stuck or pull deletions forward on its own.\n\nFix: either remove the 3.2a commit and let 3.1\u20133.2 commit with 3.3\u20133.6 at 3.7, or move those three deletions into 3.1/3.2 and add `pnpm -r test` to 3.2a's check.",
+      "file_ref": null,
+      "category": "sequencing",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/268-tasks.pure-cf-build.md:99-101"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Commit steps are checkboxes instead of plain `**Commit**:` lines",
+      "description": "Every commit point is a checkbox, never a plain `**Commit**:` line:\n- 2.3 (line 79) is a top-level checkbox task.\n- 3.2a (lines 99\u2013101) and 3.7 (131\u2013134) are checkbox tasks.\n- 4.1\u20134.4 have `- [ ] Commit:` sub-items (148, 155, 163, 169).\n- 5.1 has one too (186).\n\nThis causes two problems under the project rules:\n- **Checking off is out of order.** The rules say: implement, run task-checker, then commit, and never make a commit that only checks boxes. A commit checkbox can only be ticked after the commit exists, which forces exactly that box-only commit.\n- **The rules see no markers.** They key on `**Commit**:` markers, so this file counts as having none. The default then applies: commit at the end of each top-level task. That conflicts with the placement intended here, such as four separate commits inside section 4 and none in section 1.\n\nFix: replace each commit checkbox with a plain `**Commit**: <message>` line at the same spot. The placements themselves are good: each one is a compiling, tested point.",
+      "file_ref": null,
+      "category": "commit-markers",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/268-tasks.pure-cf-build.md:79"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Nothing proves the fake-`sq` marker would ever fire",
+      "description": "5.1's mutation check confirms that the snapshot assertion catches a `.context-forge.toml` write. Nothing confirms that the fake-`sq` marker would catch a spawn. By the time 5.1 runs, 4.4 has deleted the probe, so no code path left in the build can spawn `sq`. If the PATH prepend, the executable bit or the marker path is wrong, \"marker does not exist\" passes anyway. That assertion is the only automated evidence for the \"spawns no `sq`\" part of the first functional criterion.\n\nFix: add one sanity line. In `beforeAll`, run `sq` once through `execFileSync` with the patched `PATH`, assert the marker appears, then delete it before the real runs.",
+      "file_ref": null,
+      "category": "test-quality",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/268-tasks.pure-cf-build.md:177-185"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The purity test sits after the deletions, not right after the behavior change",
+      "description": "The brownfield behavior changes in 3.3\u20133.6. Those tasks delete the old brownfield coverage (`pipeline-integration` brownfield block, `adoptionParity.test.ts`), and its replacement only arrives in 5.1. That leaves the four section-4 commits with no brownfield purity test. This matches the design's step order, and section 4 only removes code that is already dead, so the compiler and the golden test carry it. The cost is the `git show {target}:\u2026` step needed to recover `createBrownfieldCheckout`. Moving 5.1 to just after 3.7 would avoid that step and follow the test-with pattern. This is optional.",
+      "file_ref": null,
+      "category": "sequencing",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/268-tasks.pure-cf-build.md:173-186"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The purity test's \"CLI path\" re-creates `build.ts` instead of calling it",
+      "description": "The CLI runs and the CLI/MCP parity check use \"pipeline plus integrator, as `build.ts` does it\", not `build.ts` itself. D5 allows this, since all surfaces share `createContextPipeline`. Two things back up the real CLI: 3.5 updates `cli/tests/commands/build.test.ts`, and walkthrough 6.3 steps 1\u20132 exercise the built CLI. No change needed. Just be aware that parity is checked against a stand-in for the CLI.",
+      "file_ref": null,
+      "category": "test-quality",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/268-tasks.pure-cf-build.md:179-182"
+    },
+    {
+      "severity": "PASS",
+      "title": "Every success criterion has a task",
+      "description": "- **No reading/writing of `adoption.state`, no detection, no `sq` spawn:** 3.3 and 3.6, the grep checks in 6.2, and 5.1.\n- **Brownfield Phase 0 returns the concept prompt and writes nothing:** 5.1, both state variants.\n- **Byte identity:** golden capture in 2.1\u20132.2, then rechecked in 3.7 and 6.1.\n- **CLI/MCP parity:** 5.1.\n- **`MIN_GUIDE_VERSION` warning:** 6.1, whose check pins the existing `expect` lines.\n- **`services/` imports nothing from `adoption/` or `detection/`:** 3.3 and 6.2. All four imports in services today are adoption/probe wiring that 3.3 removes.\n- **No orphan exports:** the 6.2 audit, which carries the 269/271 exception.\n- **Format, lint, typecheck, full suite:** 3.7 and 6.1.\n- **Verification walkthrough:** 6.3.\n\nEvery task traces to the Migration Plan or a decision (D1\u2013D6), so there is no scope creep.\n\nChecks that came out clean:\n- `sourceVolume.ts` walks with `readdir` from the project root, so golden fixtures inside the repo stay greenfield.\n- The fixture guide has the `design` section that 2.2 relies on.\n- `adoption-completed` is only referenced inside `adoption/`, so 4.3 doesn't touch slice 270's navigation code.\n\nThe design restates no NFR, so no load test or CI-wiring task is needed. Task count and detail fit an effort-2 slice in a single task file.",
+      "file_ref": null,
+      "category": "coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/268-tasks.pure-cf-build.md"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "sequencing",
+      "raw_category": null,
+      "summary": "The 3.2a commit can't pass its own success check",
+      "location": "project-documents/user/tasks/268-tasks.pure-cf-build.md:99-101",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "commit-markers",
+      "raw_category": null,
+      "summary": "Commit steps are checkboxes instead of plain `**Commit**:` lines",
+      "location": "project-documents/user/tasks/268-tasks.pure-cf-build.md:79",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "test-quality",
+      "raw_category": null,
+      "summary": "Nothing proves the fake-`sq` marker would ever fire",
+      "location": "project-documents/user/tasks/268-tasks.pure-cf-build.md:177-185",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "note",
+      "category": "sequencing",
+      "raw_category": null,
+      "summary": "The purity test sits after the deletions, not right after the behavior change",
+      "location": "project-documents/user/tasks/268-tasks.pure-cf-build.md:173-186",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "test-quality",
+      "raw_category": null,
+      "summary": "The purity test's \"CLI path\" re-creates `build.ts` instead of calling it",
+      "location": "project-documents/user/tasks/268-tasks.pure-cf-build.md:179-182",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "pass",
+      "category": "coverage",
+      "raw_category": null,
+      "summary": "Every success criterion has a task",
+      "location": "project-documents/user/tasks/268-tasks.pure-cf-build.md",
+      "location_verified": null
+    }
+  ],
+  "template_name": "tasks",
+  "input_files": {
+    "input": "project-documents/user/tasks/268-tasks.pure-cf-build.md",
+    "against": "project-documents/user/slices/268-slice.pure-cf-build.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/context-forge-268-tasks"
+  },
+  "timestamp": "2026-11-16T12:24:33.037008",
+  "model": "claude-opus-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 15,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-opus-5-5",
+  "answering_models": [
+    "claude-opus-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 6,
+    "in_fences": 0,
+    "in_section": 6,
+    "surviving": 6
+  },
+  "effort": "high",
+  "profile": "sdk",
+  "turns": 16,
+  "prompt_tokens": 781304,
+  "cached_tokens": 671214,
+  "cache_write_tokens": 110072,
+  "completion_tokens": 11047,
+  "reasoning_tokens": null,
+  "duration_seconds": 122.24271620810032,
+  "cost_usd": 1.2365625,
+  "cost_basis": "provider"
+}

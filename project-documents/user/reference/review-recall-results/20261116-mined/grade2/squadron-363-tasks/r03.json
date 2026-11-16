@@ -1,0 +1,61 @@
+{
+ "review": "r03",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Commit markers are checkboxes, not plain `**Commit**:` lines",
+   "description": "All eight commit points (lines 99, 125, 164, 185, 221, 254, 296, 351) are written as `- [ ] Commit: ...` checklist items. Commit markers must be plain lines, `**Commit**: {message}`, never checkboxes. As checkboxes they get mixed up with check-off bookkeeping, and task-checker could tick them without a commit having happened. Convert each one to a plain `**Commit**:` line under its task. Where the commits sit is fine: each comes after a verify step.",
+   "location": "project-documents/user/tasks/363-tasks.concept-generation.md:99"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Success Criterion 4 (dropped topics absent from the document) is never verified on output",
+   "description": "Task 4.1 writes the dropped-topics rule into the skill, and 4.2 checks the table. But neither the 8.1 happy-path checks nor the 8.2 decline-path checks look at the written `000-concept.squadron.md` for why-now, audience-evolution or methodology-preference content, or for gap markers on those topics. SC4 is a property of the generated document (\"appear nowhere in the document \u2014 neither as content nor as gap markers\"), not of the skill text. The design's own walkthrough leaves this out too, so the task file inherited the gap. Add one check to 8.1 and to 8.2: the document has no content and no `[GAP: ...]` marker for any of the three dropped topics. In 8.2 this matters most, because with both questions declined the model is most tempted to gap-mark extra topics.",
+   "location": "project-documents/user/tasks/363-tasks.concept-generation.md:308-318"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "PM interaction notice covers only 8.1, but 8.2 and 8.4 also need a human",
+   "description": "The notice says \"Walkthrough Task 8.1 requires the PM live\". But:\n- 8.2 needs someone to decline both engagement questions and then answer (or refuse) the description confirmation.\n- 8.4 needs someone to choose \"augment\" at the re-run prompt. Under the augment rule, new answers are appended under a dated subheading, so the flow will likely ask the engagement questions again.\n\nA junior agent reading the notice may answer or decline the questions itself. That would quietly undermine SC2 (\"only questions ever asked\u2026\") and SC6 (\"verbatim operator answers\"). Extend the notice, and the framing line at the top of Task 8 (line 302), to name 8.2 and 8.4 and say what the PM will be asked in each.",
+   "location": "project-documents/user/tasks/363-tasks.concept-generation.md:48-53"
+  },
+  {
+   "i": 3,
+   "severity": "NOTE",
+   "title": "Success Criterion 7: only the renamed-heading case is tested",
+   "description": "SC7 covers three cases: guide absent, guide unreadable, and section title missing. Task 8.3 tests only the renamed heading. 6.1 writes all three stop messages, and the absent case uses a different message (naming the setup step). Pointing the check at a scratch path that doesn't exist would cover the absent case cheaply. That's optional, since the renamed case is the one the contract exists for.",
+   "location": "project-documents/user/tasks/363-tasks.concept-generation.md:326-330"
+  },
+  {
+   "i": 4,
+   "severity": "NOTE",
+   "title": "Mechanical refillability is never shown filling a gap",
+   "description": "8.4 confirms that populated sections stay byte-identical under augment. But the 8.1 document likely has no gap-only sections, so the \"fills sections holding exactly `[GAP: ...]`\" half of SC8 is never exercised. Running the augment step against the 8.2 scratch document, which has Q1/Q2 gaps, would cover both halves in one run.",
+   "location": "project-documents/user/tasks/363-tasks.concept-generation.md:332-336"
+  },
+  {
+   "i": 5,
+   "severity": "NOTE",
+   "title": "Success Criterion 10's \"every `[INFERRED]` sentence satisfies the checkable rule\" is checked only by presence",
+   "description": "8.1 confirms that provenance has an inferred-claims line. It doesn't ask the agent to check each listed `[INFERRED]` sentence against the 7.1 rule: derived from a named field, but not a literal restatement of it. One added check item would close this.",
+   "location": "project-documents/user/tasks/363-tasks.concept-generation.md:315-316"
+  },
+  {
+   "i": 6,
+   "severity": "NOTE",
+   "title": "Success Criterion 12 has no explicit task",
+   "description": "\"A concept a PM would edit rather than discard\" can only be judged by the PM. The PM review in 9.3 already covers it in practice. Naming SC12 in the 9.3 hand-off report would make the link traceable. No extra step is needed.",
+   "location": "project-documents/user/tasks/363-tasks.concept-generation.md:370-375"
+  },
+  {
+   "i": 7,
+   "severity": "NOTE",
+   "title": "8.6 changed-file set includes the DEVLOG before 9.2 writes it",
+   "description": "The expected `git diff --name-only main` set in 8.6 lists the DEVLOG, but the DEVLOG entry is written in 9.2. The check still passes, because a subset of the stated set is fine. Wording it as \"at most these files\" avoids confusing whoever runs it.",
+   "location": "project-documents/user/tasks/363-tasks.concept-generation.md:346-347"
+  }
+ ]
+}

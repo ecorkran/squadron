@@ -1,0 +1,47 @@
+{
+ "review": "r07",
+ "findings": [
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Commit markers are checkboxes, not plain `**Commit**:` lines",
+   "description": "The commits are written as checklist items: `- [ ] **Task 2C: Commit** \u2014 ...` at lines 71, 94, 117, 126 and 134. Commit markers must be plain lines and never checkboxes. As checkboxes they become tasks the task-checker ticks off, which risks commits that only check boxes. They are placed at the right points (after each tested layer), so only the format needs to change. Rewrite each as a plain line, for example `**Commit**: feat(core): add slice design heading validator`, and keep the \"only if files changed\" wording for 5C and 6C.",
+   "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md:71"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Task 5 commit type does not fit the code fixes Task 5 allows",
+   "description": "Task 5 says to fix any unexplained parity `DIFF` in code and add a test. But the only commit after it is `docs: record slice 214 parity sweep results`. If the sweep finds a bug, a code fix and its new test would be committed as `docs:`, which breaks the semantic commit rule. Make the marker conditional on what changed: `fix:`/`test:` for code, `docs:` when only Implementation Notes changed. Or tell the agent to commit code fixes separately before the docs commit.",
+   "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md:122-126"
+  },
+  {
+   "i": 4,
+   "severity": "NOTE",
+   "title": "Order of template load vs. file preflight is not stated",
+   "description": "Design Data Flow steps 2\u20133 load the template first and preflight the file arguments second. Task 3 lists both but does not say which runs first. Exit code and stdout are the same either way. But when both the template and a file are missing, the stderr message changes. One clause (\"load the template, then preflight\") would match the design.",
+   "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md:76-77"
+  },
+  {
+   "i": 5,
+   "severity": "NOTE",
+   "title": "Doctype message string has no single defined home",
+   "description": "Task 4 prints \"the frontmatter message\", and Task 4T asserts on it. Neither task says where the string `frontmatter must declare 'docType: slice-design' (see file-naming-conventions.md)` is defined. The project's define-once rule suggests a constant in core, next to the `'doctype'` reason constant from Task 3, which the CLI and tests then import.",
+   "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md:101"
+  },
+  {
+   "i": 6,
+   "severity": "NOTE",
+   "title": "Unreadable file and unreadable template have no test",
+   "description": "FR5 lists unreadable files and unreadable templates as exit-2 cases. Task 3 implements the readability check and the fs-error wrapping, but no test covers either case. The design's Technical Requirements don't require one, and chmod-based tests can be flaky in CI. This is acceptable as written; a single chmod test, skipped when running as root, would close the gap if wanted.",
+   "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md:91"
+  },
+  {
+   "i": 7,
+   "severity": "NOTE",
+   "title": "Task 4T leaves \"files that pass the bash script today\" for the implementer to pick",
+   "description": "A junior agent needs to run `./project-documents/ai-project-guide/scripts/validate-slice-design` to choose which designs to use. Add a sub-step that says so, and require the chosen paths to be listed in the test. This keeps the fixture set deterministic, not guessed.",
+   "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md:108"
+  }
+ ]
+}

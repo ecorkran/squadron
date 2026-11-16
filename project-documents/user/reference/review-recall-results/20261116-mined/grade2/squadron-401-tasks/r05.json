@@ -1,0 +1,75 @@
+{
+ "review": "r05",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Task 2's \"suite passes unchanged\" conflicts with an existing assertion",
+   "description": "`test_python_length.py:60` asserts `adapter.metrics == set(SnapshotMetric)`. Task 2 adds four enum members and replaces `PythonAdapter.metrics` (`python_adapter.py:105`, `frozenset(SnapshotMetric)`) with the four 400 metrics. The assertion then fails, and it can't pass again until Task 25 (line 250) restores the full set. Task 2's success line (task file:45) says the full suite passes unchanged, so the Task 2 commit (line 46) and the commits at lines 68 through 246 would be red for the full suite. Fix: have Task 2 change this assertion to the explicit four-metric set, and have Task 25 restore `set(SnapshotMetric)`.",
+   "location": "tests/metrology/snapshot/test_python_length.py:60"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Task 7's rename breaks `test_render.py`, which the task doesn't name",
+   "description": "Task 7 renames `FunctionLength` to `MeasuredFunction` and says \"400's length tests\" are edited only for the rename (task file:96). `test_render.py` also imports `FunctionLength` (lines 9 and 36), and `test_lengths.py:8` does too. Without an edit, the import fails and the whole module errors at the Task 7 commit (line 97). Name both files in Task 7.",
+   "location": "tests/metrology/snapshot/test_render.py:9"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Commit markers are checkboxes, not `**Commit**:` markers",
+   "description": "All 17 commit lines (46, 68, 88, 97, 115, 142, 156, 171, 183, 191, 208, 229, 246, 262, 271, 276, 283) are written `- [ ] Commit: ...`. That is a checkbox, not the plain `**Commit**:` marker the cadence rule reads. Because the file has no recognized markers, the fallback applies and an implementer would commit after every top-level task. A checkbox commit line also can't be checked before the commit that the implement \u2192 task-checker \u2192 commit order requires. The placements themselves are good: each sits after a green, tested point. Change the form and keep the placements.",
+   "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:46"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Criterion 10's \"other metrics unchanged\" has no task",
+   "description": "Slice criterion 10 (slice design line 278) requires that a language past `DUPLICATION_MAX_TOKENS` gets `tool_failed` and that its other metrics are unchanged. Task 11 tests the `tool_failed` and WARNING outcome but not the other metrics. Task 26 is the snapshot-level test list and doesn't include the ceiling case either. Add an assertion to Task 11 or Task 26 that file length, function length, complexity and lint for the same language are unchanged when the ceiling trips.",
+   "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:138"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Task 18's token substitution can produce paths that never match",
+   "description": "Task 18 says \"the absolute `<source>` path is replaced with `FIXTURE_ROOT_TOKEN`.\" The design's mapping rule (slice design line 179) joins `<source>` with `filename` and makes the result repo-relative. If the captured `<source>` is the absolute `src/squadron` directory, replacing the whole value with the token drops the `src/squadron` segment. Every reported file would then fall outside `files` and land in `tool_ignored_files`, and Task 20's assertions would fail for a reason the implementer can't see from the text. State that the token replaces only the absolute repo-root prefix and the segment after it is kept. Check the captured value before relying on it.",
+   "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:187"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Task 10 bundles too much for one task",
+   "description": "Task 10 is Effort 4 and has nine sub-bullets: reading and unparsed handling, token-id arrays, the ceiling and `MemoryError`, rolling hash, collision confirmation, overlap rule, `per_file`, counting text, and the `Tokenizer` type. That's the largest task in the slice and mixes a pure window index with a file-IO wrapper. Split it: 10a is the window index over token-id arrays (hash, confirm, overlap, line marking), testable without files; 10b is `measure_duplication` (read, tokenize, `unparsed_files`, ceiling, `per_file`, counting). Each gets its test step.",
+   "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:117-129"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "Tasks 4 and 6 test more than the criteria require",
+   "description": "Criterion 3 names three fixtures. Task 4 adds one test per Python decision point (about nine tests), and Task 6 adds one per TypeScript node type and operator (about eleven). The definition is worth guarding, so keep the coverage but express it as one parametrized table in each file, with the three criterion fixtures as separate named tests. That keeps the same checks in fewer test functions.",
+   "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:60-66"
+  },
+  {
+   "i": 7,
+   "severity": "NOTE",
+   "title": "`config/keys.py` is an unlisted change and its literal duplicates the defined-once rule",
+   "description": "Task 16 adds `metrology.coverage_report` to `CONFIG_KEYS` in `keys.py`. The design's module table (slice design lines 70-85) doesn't list that file. D6 (line 213) says the key name is defined once in `coverage.py`, but Task 16's success line allows the literal in `CONFIG_KEYS`. The existing `metrology.max_function_lines` pattern (`keys.py:247` and `preflight.py:26`) already repeats the literal, so this follows convention. Add `config/keys.py` to the design table, and either import the constant or accept the repeat explicitly.",
+   "location": "src/squadron/config/keys.py:247"
+  },
+  {
+   "i": 8,
+   "severity": "NOTE",
+   "title": "Tasks 1 and 17 are finer than they need to be",
+   "description": "Task 1 (branch creation) is a one-command step and could be a preamble line. Task 17 is a one-item test task that follows Task 16 directly and could merge into it. The test-with pattern is satisfied either way, so this is optional.",
+   "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:38"
+  },
+  {
+   "i": 9,
+   "severity": "NOTE",
+   "title": "No load test is required by this slice",
+   "description": "The slice design restates no performance NFR. The memory figures (133 bytes per token, the 4M-token ceiling) are measurements behind the D3 design choice, and the ceiling path is covered by lowering the constant in a test. I checked only the slice design and not the parent architecture file, so this is limited to what the slice states.",
+   "location": "project-documents/user/slices/401-slice.complexity-duplication-and-coverage.md:164"
+  }
+ ]
+}

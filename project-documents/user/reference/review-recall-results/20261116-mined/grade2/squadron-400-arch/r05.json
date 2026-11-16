@@ -1,0 +1,110 @@
+{
+ "review": "r05",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "FAIL",
+   "title": "Snapshot record key cannot hold the doc's own comparability rules",
+   "description": "\"A snapshot measures a commit. The record keys on project and commit SHA.\" Envisioned State says \"one snapshot record per commit.\" But one commit legitimately produces several snapshots: a rerun after a tool upgrade (Architectural Principles, \"Tool identity\"), lint and type counts under two rule sets (Technical Considerations, \"Which rule set\"), coverage added later (optional per snapshot), a different exclusion set, and a dirty-marked snapshot (principle 3). The doc never says whether a rerun overwrites, appends, or is rejected, so \"reports refuse to diff across a tool change\" has no defined record pair to act on. Polyglot repos are also unresolved: there is one adapter per language, but a snapshot \"identifies \u2026 language\" in the singular. Define the record identity (commit plus a measurement-set identity over tool versions, rule-set identities, exclusions, dirty flag and language) and the supersede-or-append rule before the keystone slice.",
+   "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#architectural-principles"
+  },
+  {
+   "i": 1,
+   "severity": "FAIL",
+   "title": "The determinism goal is false for type-error counts",
+   "description": "Design Goal 1: \"Every snapshot metric gives the same value on the same commit with the same tool versions.\" Pyright's error count depends on the resolved third-party environment, because missing or differently resolved imports change the diagnostics. The same commit and pyright version gives different counts on machines with different installed packages. Technical Considerations raises environment cost only for coverage and never for type counts. `main` had to gate pyright on a resolved uv environment (`src/squadron/metrology/snapshot/python_types.py:1`), which confirms the dependency. Duplication thresholds (minimum tokens or lines) are parameters that are absent from the identity too. Either add an environment identity (lockfile hash, interpreter version) to the snapshot identity and narrow the goal to \"deterministic given that identity,\" or drop type counts from the deterministic set.",
+   "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#design-goals"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "The headline per-slice before/after has no mechanism and no slice",
+   "description": "Envisioned State: \"A slice's before and after is the snapshot at its fork point against the snapshot at its merge.\" That requires a snapshot to be written at fork and at merge. Technical Considerations leaves automatic capture at slice boundaries as an open trade-off (\"adds work and a failure mode\"). No Anticipated Slice implements it. The keystone and the baseline are on-demand, and the rollup slice only reads snapshots that already exist. The capability the doc leads with therefore depends on an undecided mechanism that no slice owns. Either add a slice for fork and merge capture, with its failure policy, or restate per-slice comparison as a pair of on-demand snapshots.",
+   "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#envisioned-state"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Measuring historical commits and running project code are undesigned",
+   "description": "Fork-point and merge commits are not HEAD, so measuring them needs a checkout (which touches the working tree) or an export (`git archive` or a temporary worktree). Envisioned State says \"Taking a snapshot doesn't modify the measured repository\" but never names the mechanism. `main` already has an export route (`src/squadron/metrology/snapshot/export.py`). The real cost is coverage and dependency install. Installing from a repo's sdist runs its build backend, and running its test suite executes its code. The doc calls this a \"security and environment cost\" and defers it. The default should be decided now: read an existing coverage report, and run tests only on explicit opt-in. Cost also scales with history. Per-commit duplication and whole-project pyright across every commit in a trend is unbounded. The doc caps baseline LLM spend but puts no bound on deterministic runs.",
+   "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#technical-considerations"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Failure modes are covered for the snapshot as a whole, not per I/O path",
+   "description": "\"A failed snapshot must never fail the pipeline step\" covers one case. Not addressed:\n- A tool that hangs or exceeds a timeout. The doc has no timeout anywhere, though `main` requires a bound on every tool call (`contract.py:43`).\n- One language adapter failing in a polyglot repo. Is the whole record absent, or partial with reasons?\n- One of the three noise-floor audit runs failing. Does the floor compute on two runs, and is the baseline marked incomplete?\n- A malformed review file during ingest.\n- Two snapshots of the same commit written concurrently from CLI and pipeline.\n\nProject convention requires each I/O path to say what happens on hang, timeout and disconnect, and each failure to be observable at WARNING or above. Add a failure table per I/O path.",
+   "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#technical-considerations"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Review ingest has no finding identity, so re-ingest inflates counts",
+   "description": "\"An ingest step reads review files into the store as normalized finding records.\" The doc does not define a key for a finding (file path plus index, content hash, or a frontmatter id). It does not say whether ingest is idempotent or what triggers it (manual command, pipeline step, or hook). Rollups summed over re-ingested files would silently double-count, which is the failure the \"absent is not zero\" principle exists to prevent. The doc also ties findings to \"commit where known,\" but does not say review files record the reviewed SHA. If they don't, most historical findings never attach to a slice.",
+   "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#envisioned-state"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "One ten-value vocabulary cannot hold code review's primary output",
+   "description": "The ten `AuditCategory` values form a tech-debt taxonomy. A behavioral defect (\"returns the wrong result\") has no slot, so it normalizes to `other`. Then 323's rule that a rising `other` share means \"the vocabulary doesn't fit\" fires for every review that finds a bug. Non-Goals parks this as \"a finding to report,\" but the preferred write-time option commits templates to the closed list now. Missing values are also unaddressed: `category` is `None` on many current findings. The doc does not say whether `None` becomes `other`, is dropped (absent-as-zero, which the principles forbid), or stays distinct.\n\nThe code on `main` has already had to fork the vocabulary. `ReviewCategory` adds `correctness` as a review-only value (`src/squadron/core/finding_categories.py:43-64`), which breaks the \"same ten categories\" goal. The review output format text also uses `category: error-handling` as its example (`src/squadron/review/review_client.py:86`), a value outside the closed set. Decide the review vocabulary before the template change.",
+   "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#design-goals"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "Review findings promise a noise floor that no step produces",
+   "description": "Design Goal 1 says LLM-derived signals \"(audit, review) \u2026 carry their own noise floor,\" and Envisioned State says \"LLM-sourced numbers are shown against their noise floor.\" The only floor defined is 320's per-category audit floor, which the baseline command captures for audit runs. Nothing measures a review floor. Write-time categorization does not make categories deterministic either. It makes the parse deterministic, but the model still chooses the category, so the variance 323 measured for audit categories still applies. Specify how a review floor is measured and what it costs, or state that review counts ship without one and are labelled unvalidated.",
+   "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#design-goals"
+  },
+  {
+   "i": 8,
+   "severity": "CONCERN",
+   "title": "Changing review templates is a comparability boundary the doc doesn't mark",
+   "description": "Tool identity is versioned \"the same reasoning 320 applied to judge template versions.\" But the doc's preferred change, write-time categorization, rewrites the review templates, which changes what every later review finding means. The design attaches no template version to review findings, and the report rule covers only tool changes. A before/after straddling the template change compares two different instruments, which is the problem the Tool-identity principle exists to prevent. Record the template version per finding and treat a template change like a tool change.",
+   "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#technical-considerations"
+  },
+  {
+   "i": 9,
+   "severity": "CONCERN",
+   "title": "The adapter contract is named but unspecified, and it owns too much",
+   "description": "Scope and Anticipated Slices make the adapter contract the keystone, but the doc never writes it down. Missing:\n- Inputs: exported tree, commit, exclusion set, rule set, timeout.\n- Outputs: a value or absent-with-reason per metric, plus tool identity.\n- Metric definitions: what counts as a function line, what cyclomatic complexity counts, what makes a duplicate.\n- Language selection: how \"a language present\" is detected, and how vendored code in another language is treated.\n\nThe adapter as described also does four jobs: invoke tools, parse output, define metric semantics, and apply exclusions. Exclusion policy belongs in the coordinator, not in each adapter. The \"project config\" that supplies limits and exclusions is never named. Brownfield projects have no squadron config, so the doc needs to say where those values come from.",
+   "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#technical-considerations"
+  },
+  {
+   "i": 10,
+   "severity": "CONCERN",
+   "title": "Each record type adds a nullable sibling to one envelope, with no pairing check",
+   "description": "The \"extend, don't fork\" principle adds optional sibling payloads to `MetrologyRecord`. On `main` that envelope already has 20 nullable payload fields (`src/squadron/metrology/models.py:272-291`), and `record_type` is a bare `str` with no validator. Nothing stops `record_type=\"code_snapshot\"` with `code_snapshot=None`, or with several payloads set at once. The new snapshot and review siblings extend that pattern. A model validator that requires exactly the payload named by `record_type` leaves the on-disk JSON unchanged, needs no migration, and can be added at the keystone without giving up the principle.",
+   "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#architectural-principles"
+  },
+  {
+   "i": 11,
+   "severity": "CONCERN",
+   "title": "Rollups have no rule for partially absent values",
+   "description": "\"Absent is not zero\" says what a missing metric is. It does not say what a rollup or a before/after does with one. Consider a range where coverage exists at merge but not at fork, a language present at one end only, or a tool version change inside a slice's range. Does the delta show n/a, compute on the metrics both sides share, or refuse? Envisioned State says reports show \"source and sample size,\" but the sample size for deterministic metrics (files? functions?) and for LLM sources is not defined. Specify the comparison rule before the reports slice.",
+   "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#architectural-principles"
+  },
+  {
+   "i": 12,
+   "severity": "CONCERN",
+   "title": "Consumers read the store directly, and the call direction conflicts with the plan",
+   "description": "Related Work says 440 gets the baseline \"offered at CF's handoff through 440's capability probe,\" and context-forge initiative 260 consumes it. The initiative plan's cross-initiative note for 440 says \"Squadron calls CF, never the reverse; CF owns its formats.\" The doc does not say who calls whom, or which format CF reads. Downstream, 420 and 440 read records from the metrology store, but no read interface is defined, so they couple to a record envelope that Architectural Principles keeps growing. Define a typed read surface (baseline and snapshot queries) in this component, and state the direction of every cross-initiative call.",
+   "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#related-work"
+  },
+  {
+   "i": 13,
+   "severity": "CONCERN",
+   "title": "Current State and status are out of date with `main`",
+   "description": "The doc says record types today are six, static metrics are \"None,\" review findings are \"never ingested or counted anywhere,\" and fork-point attribution is an open slice decision. On `main`, `src/squadron/metrology/models.py:44-75` defines about 20 record types, including `code_snapshot` (line 52), `code_review` (line 54) and `slice_ranges` (line 56, a per-project commit-range resolver). `snapshot/` has Python and TypeScript adapters, and `review_ingest.py` and `review_category_map.py` exist. The proposed record names are already taken, and the attribution question is already answered in code. The header still says `status: not_started`. Re-base this doc on `main`, or mark it as a historical design. A slice written from this version would collide with the existing constants.",
+   "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#current-state"
+  },
+  {
+   "i": 14,
+   "severity": "CONCERN",
+   "title": "Scope is larger than the motivation needs; name the cuts",
+   "description": "The motivation names two consumers and one check: 420 needs comparable scores, 440 needs a baseline, and squadron needs a checkable \"got better.\" The scope adds five slices, four capabilities, three report families over three sources, a write-path change to every review template, read-side mapping of history, and automatic fork/merge capture. Cuts that still meet the three needs:\n- The over-time trend report. It needs repeated snapshots, and nothing schedules them.\n- The review-template write-path change. It can wait until read-side mapping shows the `other` share is a real problem. Caveat: the plan's 420 entry lists normalized review findings as an input, so this is a cut only if 420 can score on static metrics alone.\n- Automatic fork/merge capture. Two on-demand snapshots meet the per-slice need.\n- The non-Python adapter until 440 is scheduled. The doc already implies this, since it requires one only \"before 440 relies on this.\"\n\nCheck these against initiative entry 14 before cutting. I did not read entry 14.",
+   "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#overview"
+  }
+ ]
+}

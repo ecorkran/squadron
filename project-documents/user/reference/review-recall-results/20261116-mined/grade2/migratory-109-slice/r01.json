@@ -1,0 +1,68 @@
+{
+ "review": "r01",
+ "findings": [
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Profile-weight lookup is itself a per-agent Python loop inside `BulkForce.__call__`",
+   "description": "The proposed weight construction, `np.array([profiles[pi].cohesion_weight for pi in state.profile_indices[eval_indices]])`, is a Python comprehension over every active agent. It runs once per force call, so five forces mean five O(n) Python loops per tick. That breaks the slice's own defining rule at line 198 (\"No Python-level per-agent loops in any `BulkForce.__call__`\") and the claim of constant Python overhead at line 19. The grep check at line 223 won't catch it because it doesn't match the patterns being searched for. The fix is cheap and removes the \"precompute if needed\" hedge: build a per-*profile* array, which is O(#profiles), and gather it with `profile_indices`, e.g. `np.array([p.cohesion_weight for p in profiles])[state.profile_indices[eval_indices]]`. State this as the required pattern for all five forces.",
+   "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:127-136"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "`build_neighbor_data` construction is unspecified and reads as a per-agent Python pass",
+   "description": "The design calls step 3 \"a single pass to pad, mask, and self-exclude\", and describes self-exclusion as \"when copying query results into the padded array for agent `i`, skip the entry\u2026\". Taken literally, that is a Python loop over agents with a copy and filter per row. It moves the per-agent work the slice is trying to remove rather than removing it. Specify the vectorized construction: concatenate the raw lists, compute the lengths, build row/column indices with `np.repeat` and `np.arange`, drop self with a boolean filter on the flat array, recompute counts, and scatter into the padded array. Then state that `build_neighbor_data` is covered by the same no-per-agent-loop rule. Otherwise the 50ms target in step 2 of the Verification Walkthrough depends on an implementation detail the design leaves open.",
+   "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:86-101"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Scaling NFR covers only 100 agents; padded memory grows O(n\u00b2) under clustering",
+   "description": "The architecture's design goal is \"tens of thousands of agents at full behavioral fidelity on a single CPU process\" (`100-arch.behavior-engine.md:36`). The slice restates only the 50ms budget at 100 agents (line 23, line 215). Yet it claims the cost is constant \"regardless of agent count or clustering density\" (line 19, echoing the plan entry), and puts CSR off until \"100K+\".\n\nThe padded width is set by the single densest agent, and the slice's own motivating case is clustering that drives k toward n. At 10K clustered agents that gives:\n- `indices`: 10K\u00d710K intp, about 800 MB\n- gathered `(n, max_neighbors, 2)` float64: about 1.6 GB per gather, repeated in each of five forces\n\nSo the trade-off in this section breaks down about an order of magnitude below the tier the architecture targets. The fix is to state the agent count and density this slice guarantees within 50ms, plus a memory ceiling. Two options:\n- Bound `max_neighbors`, with an explicit, logged truncation policy. Note this changes behavior, so the equivalence tests would need to account for it.\n- Scope the guarantee honestly, so 105 and the world-server tiers know where the limit is.",
+   "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:140-148"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Padded `-1` gathers can inject NaN/inf into the Separation reduction",
+   "description": "Line 80 says padded entries are \"never dereferenced thanks to `mask`\". That is wrong for the gather-first pattern on line 111: `state.positions[neighbor_data.indices]` *does* dereference `-1`, which reads agent N-1. For Separation (line 123), the masked row's offset and distance are computed before masking. For agent N-1's own row, the padding gathers its own position, giving distance 0 and division by zero. If masking is applied by multiplication rather than replacement, `NaN * 0 = NaN` and the agent's force becomes NaN. The design should require replacement masking before division (`np.where(mask & in_radius, offset / dist\u00b2, 0)`, or setting masked distances to `inf` before dividing). It should also add an edge-case test: an agent at index N-1 with padding in its row. The Risk Assessment (lines 229-231) names nested masking but not this hazard.",
+   "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:79-81"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "Downstream slice 103 is designed against the protocol this slice removes",
+   "description": "The frontmatter lists `103-predator-prey-dynamics` as an interface, and line 178 says predator-prey forces will \"consume this instead of raw lists\". But the 103 design, which has not been started, specifies `FlightForce` and `PursuitForce` with the `(state, neighbor_lists, profiles, active_indices)` signature and per-agent `neighbor_lists[list_idx]` loops (`103-slice.predator-prey-dynamics.md:399-452, 507-515`). Once 109 lands, 103's design won't compile against the protocol, and it would bring back the loop pattern this slice bans. 109 should say outright that 103's design must be revised to use `NeighborData` and the gather-mask-reduce pattern, or treat that revision as a follow-up. That keeps the breaking change complete across the planned slices, not just the existing code.",
+   "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md#provides-to-other-slices"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "Multi-tick old-vs-new integration comparison is heavier than needed and likely flaky",
+   "description": "Line 260 asks for a full `tick()` comparison over N ticks between the old and new implementations. That means keeping a loop-based *tick path* in the tests, not just reference forces. Masked vectorized sums add in a different order from per-agent loops, and flocking dynamics amplify small differences, so `atol=1e-12` comparisons over N ticks may fail without any defect. The per-force equivalence tests at line 258 already cover correctness. Cut the N-tick integration comparison, or reduce it to a single tick. Use the multi-tick run only as a determinism check: the same new implementation run twice gives identical output, which is the architecture's \"Tick determinism\" goal.",
+   "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:256-260"
+  },
+  {
+   "i": 8,
+   "severity": "NOTE",
+   "title": "`NeighborData.mask` and `counts` are redundant",
+   "description": "`mask` can be fully derived from `counts` (`np.arange(max)[None, :] < counts[:, None]`), and line 81 defines it exactly that way. Storing both is a reasonable choice to save recomputing it in every force. Just make the builder the only code that produces both, so they can't drift apart.",
+   "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:71-77"
+  },
+  {
+   "i": 9,
+   "severity": "NOTE",
+   "title": "\"GPU-ready\" claim depends on per-tick variable shapes",
+   "description": "The architecture's GPU path asks for \"no dynamic allocation\" in the hot loop (`100-arch.behavior-engine.md:102`). Here `max_neighbors` changes every tick, so every buffer is reallocated each tick. That's fine for a CPU/NumPy slice. But \"directly compatible with GPU compute dispatch\" overstates the case until the width is fixed or capped. Consider softening the claim in the Value section.",
+   "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:27"
+  },
+  {
+   "i": 10,
+   "severity": "NOTE",
+   "title": "Spatial contract still returns indices only",
+   "description": "The architecture's minimal spatial contract includes squared distances (`100-arch.behavior-engine.md:48`), and Separation recomputes them. Keeping that out of this slice is correct, since it belongs to 105. When 105 adds distances, `NeighborData` is the natural place to carry a padded `sq_distances` array, and it would be worth noting this under \"Consumes from Other Slices\".",
+   "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:60"
+  }
+ ]
+}

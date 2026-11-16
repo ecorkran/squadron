@@ -1,0 +1,61 @@
+{
+ "review": "r04",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Function- and class-level edges are mapped to layers with no stated mechanism",
+   "description": "Section 6 says function- and class-level edge endpoints \"are resolved to their owning file's layer rather than dropped,\" but never says how. Reading the function node's `filePath` would read function-level nodes, which the read discipline (lines 285\u2013289) and Success Criterion 9 (line 333) prohibit. Parsing the type-prefixed id (`function:{path}:{name}`, per architecture lines 94\u201395) avoids a node read, but the design does not say so, and parsing names is brittle. The verified-facts table (line 99) measured `filePath` only jointly with `complexity`, so it does not establish that function nodes carry `filePath`. State the resolution rule, and make criterion 9 explicit that edge endpoints are parsed, not read.",
+   "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:215-220"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Closing-observation rule is ungoverned, and its example is a hallucination trap",
+   "description": "Lines 245\u2013250 introduce a \"closing observation each section carries.\" It is absent from the mapping table (172\u2013180), from the fallback rule that forbids prose \"not traceable to its named fields\" (186\u2013189), and from the success criteria. The sentence \"complexity concentrates in the seams where squadron meets an external SDK\" is hardcoded as the model for these sentences. CLAUDE.md's hallucination-trap rule prohibits exactly this: a generator asked for such a sentence will copy the example when the data does not support it. The example also fails the design's own test, since no row in the table names an SDK or a seam. Remove the closing observations. If they stay, define them as a field with a source and a fallback, and drop the example.",
+   "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:245-250"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "File-level filter admits unknown node types silently, departing from the architecture's enumerated set",
+   "description": "Correction 2 says the architecture \"defines file-level types as a set of nine\" (architecture lines 107\u2013110 agree), then implements an exclusion filter (`!= function and != class`) under which any unknown upstream type is included \"automatically.\" The architecture requires drift to surface loudly: \"a renamed field \u2026 must surface as a loud failure, never as a silently thinner document\" (lines 134\u2013135). CLAUDE.md requires explicit failure over silent fallback. A future upstream type with a `filePath` would silently enter layer counts, hotspots and entry points. The only drift check covers survivors with no `filePath`, which does not catch this. Either filter on the architecture's nine types and report any other non-function/class type as drift, or record a decision to supersede the architecture's list and amend it.",
+   "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:151-161"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Failure modes for the three new reads are not enumerated, and the walkthrough tests only one",
+   "description": "The design adds reads of `config.json`, `.understandignore` and `meta.json`'s `analyzedFiles`. The only handling is one fallback, \"[GAP: \u2026] naming the unreadable file\" (line 180), which does not distinguish:\n- `config.json` present but not valid JSON;\n- `.understandignore` absent, which is not the same as all-comments (\"defaults only\");\n- `analyzedFiles` absent or non-numeric, which the reconciliation at lines 224\u2013227 assumes away.\n\nHang, timeout and peer-disconnect are not addressed, even as not applicable to local reads. The gap-marker walkthrough (lines 406\u2013411) covers only removing `meta.json`. The review standard requires an explicit handling strategy for each failure and at least one test asserting its observable signal. List absent, unreadable, malformed, empty and key-missing cases for each new read, with the gap text for each, and add walkthrough cases.",
+   "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:222-235"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "The 363/364 handoff has no designated home for shared rules, and the 363 input is incomplete",
+   "description": "(a) The design says 364 needs \"the corrected layer composition and the file-level definition,\" but those rules sit in the comprehension flow. The 361 structure gives sibling flows the shared Preflight Graph Contract. The design does not say whether 363 and 364 cite the 362 section or restate it. A restated selector is the exact divergence Correction 2 fixes. Move the file-level selector, layer-count rule and cross-check into the shared contract, or state that siblings cite them and must not restate them.\n\n(b) The architecture's interview table (line 220) attributes Initial Technical Direction to `project.languages`, `project.frameworks` and `config` nodes. The design's mapping provides only `project.*` (section 1, lines 195\u2013198). No row selects `config` nodes for a concept. Add that selection, or state that it is excluded and what 363 should do instead.",
+   "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:297-306"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Scope is heavier than a markdown-only slice needs",
+   "description": "The design runs to 473 lines for a no-code slice the plan rates effort 3/5. Cuts, with reasons:\n- **Verified graph facts (90\u2013109)** repeats figures already in the correction tables (130\u2013134), criteria 4\u20135 (322\u2013326) and walkthrough steps 1\u20132 (346\u2013378). Keep the re-measurement in the walkthrough only.\n- **\"Read discipline, unchanged\" (282\u2013293)** restates 361. Keep only the two deltas: the new selections and the `.understandignore` exception.\n- **[INFERRED] governance (237\u2013254)** reduces to one sentence: this flow does not use it, and 363 governs it. Removing the closing-observation rule removes most of this section.\n- **Section 7 (222\u2013235):** `config.json` is one key. Reading it and reporting \"settings present\" adds a read and a failure mode for no check. Acknowledge it in one line. Report `.understandignore` as a count, not 17 listed patterns.\n- **Walkthrough step 8 (430):** `ruff format --check` on a change that touches no Python. Drop it.\n\nKeep the two corrections, the mapping table, the `analyze-codebase-prompt.md` decision and the `analyzedFiles` reconciliation.",
+   "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "Walkthrough hardcodes `main` as the target",
+   "description": "`git diff --stat main -- src/` assumes the target is `main`. The project's git rules say to read the target from `cf config get git.integration_branch` and never infer it. With an integration branch configured, this check compares against the wrong base and can report false results. Replace `main` with the configured target.",
+   "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:429"
+  },
+  {
+   "i": 7,
+   "severity": "NOTE",
+   "title": "The 361 deferrals are cited to the wrong source",
+   "description": "The design says 361 \"explicitly deferred\" `config.json`, `.understandignore` and `analyzedFiles`. The 361 slice design does not say so. The deferral is in the 361 review notes (`project-documents/user/reviews/361-review.slice.graph-contract-and-provenance.md`, lines 139\u2013145), which ask 362 to acknowledge it. Cite the review as the source. Coverage and project identity also go beyond what the plan's 362 entry lists, so note them as additions justified by that review and by 363's needs.",
+   "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:53-55"
+  }
+ ]
+}

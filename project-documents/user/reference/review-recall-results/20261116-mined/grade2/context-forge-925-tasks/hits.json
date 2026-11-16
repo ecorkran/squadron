@@ -1,0 +1,51 @@
+{
+ "case": "context-forge-925-tasks",
+ "flaws": [
+  {
+   "id": "F1",
+   "text": "The design's Success Criteria say \"A project whose shared config has `guide.git_strategy: manual` installs as tarball with the same warning\" (a `cf gu",
+   "hits": {
+    "r01": [
+     8
+    ],
+    "r02": [
+     4
+    ],
+    "r03": [
+     5
+    ],
+    "r04": [
+     5
+    ],
+    "r05": [
+     5
+    ],
+    "r06": [
+     3
+    ],
+    "r07": [
+     7
+    ],
+    "r08": [
+     6
+    ]
+   }
+  },
+  {
+   "id": "F2",
+   "text": "Task 20 puts the CLI `ensureGuideReady` call for `prompt.ts` \"before the read\" at \"~lines 60 and 116\". In `prompt.ts` at `25ef4d74` the `get` action r",
+   "hits": {
+    "r01": [
+     9
+    ],
+    "r02": [
+     6
+    ],
+    "r03": [
+     9
+    ]
+   }
+  }
+ ],
+ "note": "F2 hits are borderline: r01/r02/r03 flag phaseShorthand.ts:22 as an unlisted guide read in Task 20 but none state the prompt.ts line-116 ordering defect (ensure call after resolvePhaseInput at 114); counted because fixing them would add the missing call site. F1 hits all name the untested config-sourced alias warning in the CLI."
+}

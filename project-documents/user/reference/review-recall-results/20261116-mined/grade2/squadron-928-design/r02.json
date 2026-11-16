@@ -1,0 +1,40 @@
+{
+ "review": "r02",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "D8 doctor \"no Codex content\" row is unspecified for github-sourced packs, and is scope the plan entry did not assign",
+   "description": "D8 says that for a pack with no `agents/` directory, doctor reports `WARN \u2014 pack ships no Codex content`. Doctor can only know this by looking at the pack's source. For a local or bundled source that means checking that a path exists. For a `github:` source there is no local copy: the installer gets one only by cloning into a temporary directory (`clone_github`). The design does not say which of these doctor does:\n- clones the repo, which puts network I/O and a hang/timeout path into a check that slice 905 defined as read-only inspection;\n- skips the check for git sources;\n- reads a cached copy.\n\nNone of those cases has failure handling. The data-flow table (lines 104\u2013109) covers only `installed_path`, not this source check.\n\nSeparately, the plan entry for 928 (`900-slices\u2026md:454`) assigns Part A as `skills install/uninstall --ide`. Neither doctor rows nor `skills list` are in it. `skills list --ide` is cheap and earns its place for parity. Doctor rows per target, the WARN state and the hint suppression are extra mechanism that no stated #125 requirement needs, and they are part of why the effort estimate rose from 2/5 to 3/5.\n\n**Fix:** Defer D8 to a follow-up issue. Without it, success criterion 5 and walkthrough step 7 go away. If D8 stays, limit the WARN to local and bundled sources, and say that git sources report only installed or not installed, with no network access from doctor.",
+   "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md:140"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "D9's \"single `prefix_rule` with alternatives\" cannot express the two-token subcommands D10 expects to find without granting more than intended",
+   "description": "The rule takes the form `pattern = [\"sq\", [<subcommands>]]`, and Interfaces Required (line 63) says a matching `allow` runs the command outside the sandbox with no prompt. D10's table expects at least one two-token entry, `sq skills install` (when the source is GitHub). It also lists `sq auth login` as not yet probed.\n\nIn one rule with alternatives in position 1, the only way to cover `skills install` is the alternative `\"skills\"`. That would also let `sq skills uninstall` and `sq skills list` run outside the sandbox. Neither needs network access, and `uninstall` deletes files. `sq metrology` raises the same question if only some of its subcommands reach a provider.\n\n**Fix:** Say what happens when a \"yes\" row is narrower than a top-level command: either a second `prefix_rule` with a longer pattern, or an explicit, documented acceptance of the wider grant. Add a criterion 8 check that `codex execpolicy check` returns no decision for at least one sibling subcommand that should stay sandboxed, such as `sq skills list`.",
+   "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md:142-151"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "The agents install path does not say what happens if writing fails partway",
+   "description": "The install flow guarantees \"nothing written\" only for failures found during validation (D3). After validation, `write_skill_dirs` writes several skill directories into `~/.agents/skills`, a directory shared with other tools, and only then writes the receipt. If writing fails partway (permission denied, disk full, a path already taken), the files already written exist but no receipt records them. That breaks the design's own rule that \"receipts remain the only authority for what squadron owns\" (line 176). It also undermines success criterion 2: `skills uninstall` cannot remove files no receipt lists.\n\nSquadron's rules require each new I/O path to name its failure modes and make each one observable. The agents layout is a new I/O path.\n\n**Fix:** Pick one approach and add a test for it. Either remove the files already written on failure, or write a receipt for the partial set and exit 1 with a message listing what was written.",
+   "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md:93-97"
+  },
+  {
+   "i": 3,
+   "severity": "NOTE",
+   "title": "D10 deliberately leaves the final rule list to the implementation probe",
+   "description": "Four rows (`review`/`run`/`metrology`, `skills install`, the daemon clients, `auth login`) are marked \"confirm by probe\". The method is concrete: `codex sandbox` run from a real terminal, with the results recorded in the DEVLOG, and criterion 8 checks the outcome. This is acceptable and needs no change. It does mean the README text and the possible correction to the `$sq-spawn` sentence cannot be finalized until step 5 of the development approach.",
+   "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md:155-166"
+  },
+  {
+   "i": 8,
+   "severity": "NOTE",
+   "title": "`sq model list` fix is in scope",
+   "description": "The `sq model list` \u2192 `sq models list` correction touches `commands/agents/sq-review/SKILL.md`, a file this slice already edits for D12, plus its Claude counterpart. It is a one-line fix next to the slice's own work, so it belongs here rather than in a separate issue.",
+   "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md:24"
+  }
+ ]
+}

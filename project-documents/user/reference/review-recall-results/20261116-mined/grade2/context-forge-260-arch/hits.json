@@ -1,0 +1,54 @@
+{
+ "case": "context-forge-260-arch",
+ "flaws": [
+  {
+   "id": "F1",
+   "text": "Dependencies: \"cf releases that select the brownfield profile require at least v0.22.2\", while the Amendment states \"`cf build` is pure again: no dete",
+   "hits": {
+    "r01": [
+     6
+    ],
+    "r02": [
+     0
+    ],
+    "r03": [
+     7
+    ],
+    "r04": [
+     4
+    ],
+    "r05": [
+     5
+    ],
+    "r06": [
+     1
+    ],
+    "r08": [
+     5
+    ]
+   }
+  },
+  {
+   "id": "F2",
+   "text": "Responsibility table row (c): \"CF writes the architecture doc on both paths\", while the amendment and Design Goals make squadron the only adoption pat",
+   "hits": {
+    "r02": [
+     0
+    ],
+    "r03": [
+     7
+    ],
+    "r04": [
+     3
+    ],
+    "r06": [
+     7
+    ],
+    "r08": [
+     5
+    ]
+   }
+  }
+ ],
+ "note": "F1: counted only findings that name the stale Dependencies v0.22.2 line; r05#5 is borderline (pin tied to superseded contract); r07#15 (floor stale vs 0.22.6) and r04#7 excluded as different defects. F2: counted findings that name row (c) \"both paths\"; r05#6, r08#6, r02#10 (cf does not write artifacts) excluded as a different defect though they touch the same rows."
+}

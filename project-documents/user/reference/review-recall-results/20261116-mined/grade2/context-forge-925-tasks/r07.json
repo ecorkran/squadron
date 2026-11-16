@@ -1,0 +1,68 @@
+{
+ "review": "r07",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "FAIL",
+   "title": "Task 17 routes `ensureCheckout()` through `detect()`, which runs an unbounded `git ls-remote` on every read command",
+   "description": "Task 17 says to use `GuideInfo.checkout` from `detector.detect()` rather than calling `checkSyncStatus()` directly. `detect()` always calls `fetchLatestVersion()` (lines 82 and 89), which runs `git ls-remote --tags <source>` with no timeout. After Tasks 19\u201322, every `cf build`, `cf prompt`, `cf setup-ide`, `context_build` and `prompt_*` call would make that network round trip, for every strategy and for the not-installed case.\n\nBehind a blackholing proxy this is exactly the hang the design calls \"not tolerable inside `cf build` or an MCP tool call\" (D10, review finding F004). The timeout added in Tasks 13\u201315 bounds only the `init()` fetch, so the slice would introduce the hang class it claims to close.\n\nFix: have Task 11 or Task 17 specify a detection path that skips the latest-version lookup (method detection plus `checkSyncStatus()`, or a `detect()` option). Add a Task 18 assertion that no `ls-remote` is issued on any `ensureCheckout()` branch.",
+   "location": "packages/core/src/guides/GuideDetector.ts:164-175"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Real-git fixture tests are assigned to files that module-mock `fs`, `gitExec`, `GuideDetector` and `SubmoduleStrategy`",
+   "description": "- **Task 18** puts fixture-based `ensureCheckout()` tests (\"assert directory populated\") in `GuideManager.test.ts`. That file `vi.mock`s `fs`, `gitExec`, `GuideDetector` and all three strategies, so a real-repo test cannot run there.\n- **Task 12** has the same problem in `GuideDetector.test.ts` (mocks `fs` and `gitExec`, lines 7 and 12).\n- **Task 16** has the same problem in `SubmoduleStrategy.test.ts` (lines 5 and 10).\n- **Task 9 and the Context Summary** say `SubmoduleStrategy.test.ts` holds an existing real-git temp-repo pattern. It does not; the file has no `mkdtemp`, `tmpdir` or `git init`.\n\nFix: name separate unmocked integration test files for Tasks 9, 12, 16 and 18, and drop the \"extend the existing helper\" step.",
+   "location": "packages/core/tests/guides/GuideManager.test.ts:7-47"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Task 11 makes `detect()` throw for every caller and breaks existing mocked tests without saying so",
+   "description": "The design puts the `'error'` \u2192 throw branch inside `ensureCheckout()`. Task 11 moves it into `detect()`, which is also called by `install()`, `update()`, `uninstall()`, `syncWorktrees()` and `status()`. A failing `git submodule status` would then fail `cf guides info`, uninstall and update, none of which the slice asks for.\n\nExisting submodule cases in `GuideDetector.test.ts` (lines 68\u2013112, 215) default `gitExec` to reject (line 32) and stub only specific args. They will start throwing after Task 11. Neither Task 11 nor Task 12 lists updating them, and Task 11's success criterion (\"checkout is populated\") is not a runnable check.\n\nFix: state where the throw lives and which callers tolerate `'error'`, add the existing-test updates to Task 12, and give Task 11 a runnable criterion.",
+   "location": "packages/core/src/guides/GuideDetector.ts:64-102"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Task 13 relies on a `/timed out/i` pattern that does not exist, and Tasks 14 and 17 double up the remediation text",
+   "description": "Task 13 says the timeout message will get the hint because \"the `/timed out/i` pattern already matches\". `NETWORK_ERROR_PATTERNS` contains `/connection timed out/i` and `/etimedout/i` only. A message like \"git \u2026 timed out after 60 seconds\" matches neither, so Task 14's assertion fails unless a pattern is added, and Task 13 does not list that edit.\n\nSeparately, `withNetworkErrorHint` already embeds `GUIDE_OFFLINE_REMEDIATION`. Task 17's \"rethrow with `GUIDE_OFFLINE_REMEDIATION` appended\" would print it twice on network failures.\n\nFix: add the pattern change to Task 13, and have Task 17 append only when the text is absent, with a Task 18 assertion that it appears exactly once.",
+   "location": "packages/core/src/guides/gitExec.ts:20-30"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Task 15 contradicts itself on who applies the init timeout, and no test covers it",
+   "description": "The first bullet gives `init(operationPath)` no options parameter and says it runs with `GUIDE_INIT_TIMEOUT_MS`. The second says the timeout is passed \"as an `init()` option\" so `sync()` stays unbounded. Task 17 then calls `init(operationPath)` with no option.\n\nDepending on how a junior resolves this, either auto-init is unbounded (D10 unmet) or `sync()` and `update()` become bounded (D10 violated). Task 16 asserts neither.\n\nFix: fix the signature and default in Task 15, and add two Task 16 assertions: the auto-init path passes `timeoutMs` to `gitExec`, and `sync()` does not.",
+   "location": "packages/core/src/guides/strategies/SubmoduleStrategy.ts:127"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Task 22 is underspecified for the real shape of the MCP context tools",
+   "description": "- **`template_preview` side effect:** line 57 is inside `generateContext()`, which `template_preview` also uses. That tool is annotated `readOnlyHint: true` and described as having no side effects. Placing `ensureCheckout()` there makes it auto-init too; the design lists only `context_build`, `prompt_list` and `prompt_get`. The task must say which is intended.\n- **No place for `notices[]`:** `context_build` and `prompt_get` return `textResult(string)`, and both helpers return bare strings. The task does not say how notices attach (second content block, `structuredContent`) or that helper return types must change, yet Task 23 asserts on it.\n- **Path resolution unstated:** the task does not say which `projectPath`/`operationPath` the MCP side passes. `resolveOperationPath.ts` exists but is not mentioned.\n- **Missing grep:** D3 requires a grep of `packages/mcp-server/src`. Task 20 greps only `packages/cli/src`.",
+   "location": "packages/mcp-server/src/tools/contextTools.ts:57"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "Commit instructions are embedded in checkbox items, not plain `**Commit**:` lines",
+   "description": "All 14 commit points are written inside \"Success criteria: \u2026 Commit: `\u2026`\" checkbox sub-items (Tasks 4, 6, 8, 12, 14, 16, 18, 21, 23, 24, 27, 29, 31, 32). Placement is right: each sits after a test task at a green point. Move each to a plain `**Commit**: \\`\u2026\\`` line after the task.",
+   "location": "project-documents/user/tasks/925-tasks.guide-install-robustness.md:99-100"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "Config-file alias warning has no user-facing test and no MCP path",
+   "description": "The criterion \"a project whose shared config has `guide.git_strategy: manual` installs as tarball with the same warning\" is tested only at core level (Task 6b, \"alias is reported\"). Task 7 adds the CLI print for the config path, but Task 8 tests only `--strategy manual`.\n\nD5 also requires an MCP notice when the alias comes from config. Task 7 adds the notice only for the parameter.\n\nFix: add one CLI case to Task 8 (config `manual`, no flag \u2192 stderr warning) and one `guide_install` case with the alias sourced from config.",
+   "location": "project-documents/user/tasks/925-tasks.guide-install-robustness.md:146-154"
+  },
+  {
+   "i": 8,
+   "severity": "NOTE",
+   "title": "Minor merges and clarifications",
+   "description": "- **Task 10:** its only success criterion is \"typecheck passes once Task 11 populates the field\", so it is not independently completable. Merge it into Task 11.\n- **Tasks 28 and 29:** one constant plus two assertions. They can be a single task.\n- **Task 27:** \"calls `guidesInstallAction` with `tarball` and no `.gitmodules` is created\" mixes a mocked assertion with a real-install assertion. Pick one.\n- **Task 7:** the hard-coded MCP zod enum `['submodule','clone','tarball','manual']` is a third spelling of the list. Derive it from the canonical values plus `GUIDE_METHOD_DEPRECATED_ALIASES` so the Task 32 grep criterion is unambiguous.\n\nThe total of 32 tasks is heavy but defensible for a three-issue, three-package slice.",
+   "location": "project-documents/user/tasks/925-tasks.guide-install-robustness.md:176-195"
+  }
+ ]
+}

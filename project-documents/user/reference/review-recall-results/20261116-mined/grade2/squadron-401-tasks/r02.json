@@ -1,0 +1,54 @@
+{
+ "review": "r02",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "FAIL",
+   "title": "Task 4's expected complexity values contradict Task 3's counting rules",
+   "description": "Task 3 (line 54, from D2) says a comprehension adds 1 per `for` plus 1 per `if`. Task 4 then asks for three results those rules cannot produce:\n\n- **The Success Criterion 3 fixture scores 6 (line 65).** A comprehension `if` cannot exist without its `for`, so the fixture scores 1 + `if` + `elif` + `and` + comprehension `for` + comprehension `if` + `except` = 7.\n- **Each decision point scores 2 (line 63).** A comprehension-`if` test scores 3 for the same reason.\n- **`try`/`else` scores 1 (line 64).** A `try` with an `else` must have an `except` handler, which counts, so the minimum is 2.\n\nThe error originates in the slice design: D2 at `401-slice\u2026md:139` conflicts with Success Criterion 3 at line 266. An implementer will either bend the D2 definition to reach 6 or silently change the expected value.\n\nFix: decide whether the comprehension `for` counts. Then correct the fixture value or its construct list in both documents, state the comprehension-`if` expectation as 3, and replace `try`/`else` with `try`/`finally` or `for`/`else`.",
+   "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:60-66"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Task 2's \"suite passes unchanged\" cannot hold",
+   "description": "Task 2 replaces `PythonAdapter.metrics = frozenset(SnapshotMetric)` with the four 400 metrics while adding four enum members. The existing test asserts `adapter.metrics == set(SnapshotMetric)`, so it fails as soon as Task 2 is done. It only becomes true again at Task 25.\n\nTask 2 should name this test and say how to edit it (assert the explicit set, updated as each metric lands). Its Success line should read \"passes, edited only for this assertion\".",
+   "location": "tests/metrology/snapshot/test_python_length.py:60"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "`MemoryError` handling is contradictory between Tasks 10/11 and Task 14",
+   "description": "Task 10 says a `MemoryError` during the pass gives `tool_failed`, and Task 11 tests that a tokenizer raising `MemoryError` gives `tool_failed`. Task 14 lists `MemoryError` among the TypeScript `token_errors`, which Task 10 routes to `unparsed_files` per file. The outcome for TypeScript then depends on the order of the except clauses.\n\n400 does treat `MemoryError` as a per-file parse error (`typescript_length.py:151`, `python_adapter.py:81`), which is probably where Task 14's list came from. The slice's failure-mode table says `tool_failed`. Drop `MemoryError` from Task 14's token errors, or state the precedence in Task 10.",
+   "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:158-160"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Commit steps are checkboxes, not `**Commit**:` markers",
+   "description": "All 15 commit points are written as `- [ ] Commit: \u2026` checklist items (lines 46, 68, 88, 97, 115 and onward). Task 30 ends with an unmarked \"Commit any remaining changes\" checkbox. Markers must be plain `**Commit**:` lines.\n\nPlacement is good: each sits after an implementation-plus-test pair at a green point. Convert them in place and fold Task 30's last item into a marker or drop it.",
+   "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:46"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Two test steps are not implementable as worded",
+   "description": "- **Task 9, line 110:** it asks that the complexity and function-length measurements have the same (path, qualified name, start line) set. Complexity is a `distribution` only (D2: no per-function rows), and function length exposes rows only over the limit, so the set is not readable from either measurement. Say the comparison runs on the `MeasuredFunction` lists from each extractor, with `distribution.count` compared on the measurements.\n- **Task 13, line 154:** it says a file with an unterminated triple-quoted string has \"function length unaffected\". That file also fails `ast.parse`, so it is unparsed for length too. State the assertion as \"function length's result for that file is the same as without the duplication pass\".",
+   "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:110"
+  },
+  {
+   "i": 5,
+   "severity": "NOTE",
+   "title": "Small coverage gaps against the failure-mode requirement",
+   "description": "The slice requires each failure-mode row to have both signal and outcome asserted. Three assertions are missing:\n\n- Task 9's `RecursionError` and parse-error cases assert the outcome but not the per-file WARNING.\n- Success Criterion 10's \"its other metrics are unchanged\" is tested only at unit level in Task 11, with no adapter-level assertion.\n- An `OSError` on stat of the report itself (Task 21) has no test; Task 22 covers only a tracked file.\n\nEach is a one-line addition to an existing test task.",
+   "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:111"
+  },
+  {
+   "i": 6,
+   "severity": "NOTE",
+   "title": "`coverage.py` has no size fallback",
+   "description": "Tasks 16, 19, 21 and 23 all land in `snapshot/coverage.py` (key parser, Cobertura reader, freshness check, measurement builder). Tasks 12 and 14 name a split target if their file passes ~300 lines; the coverage tasks do not, and Task 30 will only catch it at the end.",
+   "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:193-237"
+  }
+ ]
+}

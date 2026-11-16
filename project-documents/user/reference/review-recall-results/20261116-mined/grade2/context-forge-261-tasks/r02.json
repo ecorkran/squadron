@@ -1,0 +1,33 @@
+{
+ "review": "r02",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Commit markers are checkbox tasks, not plain `**Commit**:` lines",
+   "description": "All ten commit points (Tasks 2C, 3C, 5C, 6C, 8C, 9C, 11C, 13C, 14C, 15C) are written as `- [ ] **Task NC: Commit** \u2014 ...` checklist items. Commit markers must be plain `**Commit**: {message}` lines, never checkboxes.\n\n- **Placement is fine:** each sits after an implementation task and its test task, at a working, tested point.\n- **Fix:** convert each to a plain line under the preceding task.\n- **Task 15C:** it commits only the recorded walkthrough outcomes (`docs: record slice 261 verification walkthrough`), a notes-only commit. Fold those notes into whichever commit carries the last real change.",
+   "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:78"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "No automated test that `cf build` and `context_build` surface `AdoptionError`",
+   "description": "The functional requirement reads: \"A guide without the profile or prompt: `cf build` exits non-zero with the `AdoptionError` message; `context_build` returns it as an error.\"\n\n- **What exists:** Task 12 fixture 12 and Task 9T assert only that the core pipeline rejects.\n- **CLI side:** covered only by manual walkthrough step 4 in Task 15.\n- **MCP side:** not covered anywhere; walkthrough step 5 checks parity and `template_preview`, not the error result.\n- **Fix:** the handling already exists (`packages/mcp-server/src/tools/contextTools.ts:210-213`, `packages/cli/src/commands/build.ts:116`), so this is two assertions added to Task 11. In `contextTools.test.ts`, a mocked pipeline rejecting with `AdoptionError` yields `isError: true` with the message. In `build.test.ts`, the same rejection reaches `handleError`.",
+   "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:243"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Two unit-test items in the Technical Requirements are only partly covered",
+   "description": "- **Renderer, \"every outcome\":** Task 8T renders `brownfield`, `adoption-in-progress` and `NOT_EVALUATED` only. Task 8 requires an exhaustive switch over all five `AdoptionOutcome` kinds, so the `greenfield`, `already-planned` and `adoption-closed` branches are written but untested. Add one case each to 8T.\n- **Renderer, known history:** 8T tests only the `unknown` history bullet. The known form (commit count and shallow) is checked only indirectly, by Task 12 fixture 4.\n- **Write failure, \"state unchanged\":** the Task 9T write-failure case (line 199) asserts the error message but not that `adoption.state` is still `''` afterward. Add that assertion.",
+   "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:174"
+  },
+  {
+   "i": 3,
+   "severity": "NOTE",
+   "title": "Task 12 fixture 4 is ambiguous about when fixture 3 is committed",
+   "description": "\"Shallow clone of fixture 3 (committed, cloned with `--depth 1 file://`)\" does not say the commit happens before fixture 3 is built. If it happens after, the clone carries `adoption.state = in_progress` in `.context-forge.toml` and tests the resume path instead of detection. State that the source repo is committed before any build, or that the clone's state is `''`.",
+   "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:235"
+  }
+ ]
+}

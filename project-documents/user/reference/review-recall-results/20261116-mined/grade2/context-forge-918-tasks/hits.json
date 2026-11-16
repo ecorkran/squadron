@@ -1,0 +1,87 @@
+{
+ "case": "context-forge-918-tasks",
+ "flaws": [
+  {
+   "id": "F1",
+   "text": "Success Criterion 6 names both `plan-status-vs-entries` and `arch-status-vs-plans`; Task 12 adds regression cases only for `plan-status-vs-entries`, a",
+   "hits": {
+    "r01": [
+     2
+    ],
+    "r02": [
+     1
+    ],
+    "r03": [
+     5
+    ],
+    "r05": [
+     6
+    ],
+    "r06": [
+     3
+    ],
+    "r07": [
+     2
+    ],
+    "r08": [
+     6
+    ]
+   }
+  },
+  {
+   "id": "F2",
+   "text": "Task 8 widens `resolveEntryStatus`'s `entry` parameter to `Pick<SlicePlanEntry, 'index' | 'isChecked' | 'status'>` and says \"its only caller passes a ",
+   "hits": {
+    "r03": [
+     2
+    ],
+    "r05": [
+     2
+    ],
+    "r07": [
+     4
+    ],
+    "r08": [
+     2
+    ]
+   }
+  },
+  {
+   "id": "F3",
+   "text": "Task 1's unindexed fixture example is `7. [~] Feature Epsilon without explicit index \u2014 cut for scope.` (no bold). `PLAN_UNINDEXED_RE` (`slicePlanParse",
+   "hits": {
+    "r01": [
+     0
+    ],
+    "r03": [
+     0
+    ],
+    "r04": [
+     0
+    ],
+    "r05": [
+     0
+    ],
+    "r06": [
+     0
+    ],
+    "r07": [
+     0
+    ],
+    "r08": [
+     0
+    ]
+   }
+  },
+  {
+   "id": "F4",
+   "text": "Design Decision 3 and Scope say `completedSlices` is \"computed once, in the parser\" and the consumers take it unchanged, so the change is \"narrow, loc",
+   "hits": {
+    "r07": [
+     7
+    ]
+   }
+  }
+ ],
+ "note": "F1: r03 i5, r05 i6, r08 i6 call the missing arch-rule test low-risk/optional but still name the gap and propose adding a case, counted as hits; r04 i4 says no extra task is needed, not counted."
+}

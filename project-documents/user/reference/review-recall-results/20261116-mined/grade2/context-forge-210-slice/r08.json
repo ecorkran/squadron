@@ -1,0 +1,61 @@
+{
+ "review": "r08",
+ "findings": [
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Source of rules and skills is ambiguous, so a Copilot-only project may have nothing to translate",
+   "description": "The file layout says instruction files come \"from .claude/rules/typescript.md\" and prompts \"from .claude/skills/commit.md\". Those are outputs of `cf setup-ide claude`. On the plan's required flow (`cf init --ide copilot` on a fresh directory), the claude target never runs and `.claude/` does not exist. Read literally, the copilot backend then produces no instruction or prompt files, or it silently depends on the claude target having run first.\n\nThat fails the first success criterion for the slice's stated driver, a user with no Claude setup. The design must name the script's actual input (presumably the guide's own rules and skills sources) and state that the target works with no `.claude/` directory present.",
+   "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:36-49"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Unmanaged-content protection covers two of the four output locations, and not worktrees",
+   "description": "The plan requires that a first run \"warns before overwriting unmanaged user content\". The design leaves three gaps:\n\n- **Instruction and prompt directories:** step 4 checks only `.github/copilot-instructions.md` and `AGENTS.md`. A user's own `.github/instructions/typescript.instructions.md` or `.github/prompts/commit.prompt.md` is overwritten with no prompt or backup. Either check the marker per generated file or state that name collisions are overwritten.\n- **Worktrees:** `propagateToWorktrees` copies all four paths into every registered worktree with no marker check, so unmanaged files there are clobbered without a prompt.\n- **`AGENTS.md`:** this file is shared with other tools and is the one most likely to be hand-written. Test Coverage only exercises the unmanaged `copilot-instructions.md` case.\n\nRelated under-specification:\n\n- The helper is named `isManagedCopilot(filePath)` at line 29 and `isManagedCopilotFiles(projectPath)` at line 109, with different signatures.\n- \"Backup to `.bak`\" does not say copy or move, or what happens to an existing `.bak`.\n- The marker's placement in files that start with YAML frontmatter is not stated.\n- Generated files whose source rule or skill was later removed are never cleaned up.",
+   "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:98-100"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Failure modes of the script and propagation paths are not enumerated",
+   "description": "The Risks section asserts that an older guide script without a `copilot` case \"will fail at the script step with a clear error\". Nothing in the design guarantees this. If that script exits 0 on an unknown argument, step 7 prints `IDE setup complete for copilot.` with no files written, which is a silent failure.\n\nMissing handling:\n\n- **Script result:** non-zero exit handling, and a check that the expected outputs exist before reporting success.\n- **Version skew:** how CLI and submodule versions are detected, given the design itself calls sync release \"the highest-risk coupling\".\n- **Partial writes:** what state is left when the script fails after backups were taken.\n- **Hang:** `execFileSync` has no stated timeout.\n- **Propagation:** behaviour when a registered worktree path is missing or a copy fails (abort, or continue and report).",
+   "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:131-133"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Translation rules are under-specified and untested",
+   "description": "- **Classification:** line 83 equates \"`paths` absent\" with \"alwaysApply\". These are separate properties. The plan requires `applyTo: \"**\"` when the source omits paths, but the design says such files go into the compiled file instead. A rule with neither `alwaysApply` nor `paths` has no defined destination.\n- **Input forms:** the plan says the translator \"must handle both forms\". The design shows only the multi-line YAML array and is silent on inline arrays and single strings.\n- **Comma joining:** globs that contain commas, such as brace sets like `**/*.{ts,tsx}`, are ambiguous once joined into a comma-separated `applyTo` string. No handling is stated.\n- **Skills to prompts:** the plan lists target frontmatter fields (`name`, `description`, `argument-hint`, `agent`, `model`, `tools`). The design gives no field mapping at all.\n- **Tests:** every test listed targets the CLI. None covers the guide script, so the \"Path\u2192applyTo translation correctly converts\" criterion is unverified. The fixtures should use real rule files.",
+   "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:71-83"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "Tool guide not referenced; agents mapping not documented",
+   "description": "The plan's success criteria require `project-documents/user/tool-guides/copilot-vscode/setup-ide.md` to be referenced in the slice design. The file exists but the design never cites it. Line 54 promises to \"document the mapping\" for custom agents and defer implementation; no mapping appears in the design, and no deliverable is named for it. The manual VS Code verification criterion is also absent from Test Coverage.",
+   "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md"
+  },
+  {
+   "i": 7,
+   "severity": "NOTE",
+   "title": "Output path list is duplicated across the repo boundary",
+   "description": "The four Copilot paths are known to the guide script (which writes them) and hard-coded in the CLI (marker check and propagation). The Value section claims this slice sets the pattern for Cursor and Windsurf. A single per-target path definition in `setup-ide.ts`, used by both the safety check and propagation, would keep that knowledge in one place on the CLI side.",
+   "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:105-114"
+  },
+  {
+   "i": 8,
+   "severity": "NOTE",
+   "title": "Help text change may conflict with \"no changes to init.ts\"",
+   "description": "Scope says to update help text to `IDE target: claude, copilot`, while Files Changed says `init.ts` is untouched. If the `--ide` option description lists targets, one of the two statements is wrong. The design also does not say whether `cf init` passes `--yes` through when the copilot safety prompt fires mid-sequence.",
+   "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:34"
+  },
+  {
+   "i": 9,
+   "severity": "NOTE",
+   "title": "Identical content in two always-on files",
+   "description": "The plan prescribes writing the same compiled content to `.github/copilot-instructions.md` and `AGENTS.md`. If VS Code loads both, the always-on guidance is injected twice per request. The implementer should confirm this against the tool guide, and trim `AGENTS.md` to a pointer if so.",
+   "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:59-61"
+  }
+ ]
+}

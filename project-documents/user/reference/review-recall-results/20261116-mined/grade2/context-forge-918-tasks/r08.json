@@ -1,0 +1,61 @@
+{
+ "review": "r08",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "FAIL",
+   "title": "Task 1's unindexed `[~]` line can't match `PLAN_UNINDEXED_RE`, so Task 5 fails",
+   "description": "Task 1 tells the implementer to add `7. [~] Feature Epsilon without explicit index \u2014 cut for scope.` with no `**\u2026**` around the name. `PLAN_UNINDEXED_RE` requires the bold wrap (`\\*\\*([^(].*?)\\*\\*`), so this line still won't match after Task 2 adds `~` to the checkbox class. The entry is silently dropped, and Task 5's `indexSource: 'fallback'` check and its `totalSlices: 7` / `completedSlices: 5` numbers both fail. A junior AI may then \"fix\" this by loosening the regex, which is outside the slice's scope. Task 1's success line only requires the bold wrap \"for the indexed form\", which reinforces the mistake.\n\nThe slice design's success criterion gives the form as `N. [~] **Name** \u2014 rationale`. Change the example to match it, and drop the hard-coded line in favour of stating the required shape.",
+   "location": "packages/core/src/introspection/parsers/slicePlanParser.ts:9"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Editing `sample-slice-plan.md` breaks existing tests that Task 5 doesn't account for",
+   "description": "Adding the two lines to the shared fixture breaks more than the totals test Task 5 updates:\n- The unindexed entry gets fallback index 1, so after sorting it becomes `entries[0]`. That breaks the `entries[0]` = 101 and `entries[2]` = 103 assertions (`slicePlanParser.test.ts:12-30`) and the description checks on `entries[0]`/`entries[1]` (`:166-167`).\n- `toHaveLength(5)` (`:10`) is not called out as an edit.\n- \"tags every entry indexSource: explicit when the plan uses only the indexed format\" (`:126-129`) fails once an unindexed entry is in this fixture.\n- `ArtifactIntrospector.test.ts:52` asserts `totalSlices` is 5 for the same fixture.\n\nThis also contradicts the success criterion that existing `[ ]`/`[x]`/`[X]` behaviour is proven \"by the existing `sample-slice-plan.md` fixture tests continuing to pass **unchanged**.\" The slice design allows adding a sibling fixture instead. Put the `[~]` lines in a new file, or put the unindexed one in `unindexed-slice-plan.md`. The existing tests then stay unchanged and become the regression proof, and Task 5's separate \"byte-identical regression test\" step can go.",
+   "location": "packages/core/tests/introspection/slicePlanParser.test.ts:10-31"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Task 8 misses the `Pick` in `resolveEntryStatusSafe` and misdescribes the caller",
+   "description": "Task 8 says to widen only `resolveEntryStatus`'s `Pick<SlicePlanEntry, 'index' | 'isChecked'>`, and claims \"its only caller passes a full `SlicePlanEntry`.\" In fact its caller is `resolveEntryStatusSafe` (`:740`), which declares the same narrow `Pick` (`:736`). Widening only one of the two causes a type error. Tell the implementer to widen both, or have `resolveEntryStatusSafe` take `SlicePlanEntry`.",
+   "location": "packages/core/src/introspection/WorkflowNavigator.ts:734-740"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Task 9's second step rests on a wrong reading of the error path",
+   "description": "Task 9 says to change the `derivedStatus` initializer because it is \"the fallback used if `detectDocuments` throws.\" It isn't. The `catch` at `:125-127` sets `derivedStatus = 'degraded'`, and the success path always reassigns the variable at `:122-124`. The initializer value is never what gets used, so this step adds a change the slice design doesn't ask for, based on an incorrect explanation. Remove the step.",
+   "location": "packages/cli/src/commands/slice.ts:91-127"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Commit markers are checkboxes instead of plain `**Commit**:` lines",
+   "description": "Tasks 5, 7, 10, 11, 12 and 13 write their commit markers as `- [ ] Commit: \u2026`. Markers must be plain `**Commit**:` lines, not checkboxes, or task-checker and commit-cadence tooling treat them as work items. Their placement (after each tested group) is fine.",
+   "location": "project-documents/user/tasks/918-tasks.sliceplanparser-deprecated-entry-handling.md:105"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Task 8's test runs only after Task 8 is committed",
+   "description": "Task 8 (wiring in `WorkflowNavigator`) is tested by Task 11, but Task 11 comes after the Task 10 commit. So that commit includes untested navigator wiring. Move Task 11 to directly after Task 8, before the Task 10 commit. This follows the test-with pattern and makes every commit point tested.",
+   "location": "project-documents/user/tasks/918-tasks.sliceplanparser-deprecated-entry-handling.md:137-197"
+  },
+  {
+   "i": 6,
+   "severity": "NOTE",
+   "title": "`arch-status-vs-plans` has no test of its own",
+   "description": "The success criterion names both `plan-status-vs-entries` and `arch-status-vs-plans`, but Task 12 tests only the first. Both read the same `completedSlices === totalSlices` value, so the risk is low. Adding one case to Task 12 would cover the criterion as written.",
+   "location": "packages/core/src/introspection/ConsistencyChecker.ts:828"
+  },
+  {
+   "i": 7,
+   "severity": "NOTE",
+   "title": "The file is heavier than the change needs; merge Tasks 2\u20134",
+   "description": "Tasks 2, 3 and 4 are each a one- or two-line edit to `parseSlicePlan` in the same file, with no test between them. Merge them into one \"parser handles `~`\" task, followed by Task 5. With the sibling-fixture change above, Task 5's extra regression-test step can go too.",
+   "location": "project-documents/user/tasks/918-tasks.sliceplanparser-deprecated-entry-handling.md:52-83"
+  }
+ ]
+}

@@ -1,0 +1,75 @@
+{
+ "review": "r03",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Frontmatter contract changes without the cross-tool coordination slice 911 requires",
+   "description": "Slice 911's Part C (900-slices plan, line 146) says artifact frontmatter is the documented boundary with context-forge review-gating, so adding a field is a cross-tool contract change to coordinate before the schema settles. 927 adds `diffTruncated`, `requestedModel`, and `verdictSource: imposed`, and it changes what `aiModel` means (line 273: \"No existing key changes meaning except `aiModel`\"). The design's only evidence is a grep that found no `verdictSource` reader, plus an unverified assertion that consumers \"assumed\" the answering-model meaning. The plan's own Risk line for 927 says context-forge gates read these fields. No coordination is recorded.\n\nD2 (line 119) also makes an absent `diffTruncated` mean either \"no diff\" or \"pre-927 artifact.\" For a code review, a gate cannot tell a pre-927 truncated PASS from a review with no diff. That is the ambiguity 911 says must be explicit.\n\nAsk: record the coordination status with context-forge for each new key and for the `aiModel` meaning change, and state how a gate should treat a code-review artifact with no `diffTruncated` key.",
+   "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:273"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Answering-model key is a bare string literal shared by three modules",
+   "description": "D8 (line 174) stamps `metadata[\"answering_models\"]` in both provider agents, and `TurnCapture` (line 71) reads it back as a lookup. Line 217 says metadata keys \"are string literals.\" The root CLAUDE.md requires a value used in a lookup to be defined once and referenced everywhere, and this is that case. A mismatched literal would make every provider look like the Codex \"not reported\" outcome (D11), and nothing would fail.\n\nAsk: define the key as one constant in a shared module that providers and the review layer both import.",
+   "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:217"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Synthetic finding has no location, which slice 904 requires on every finding",
+   "description": "Line 152 says the synthetic finding has no `location` because it cites no file. The 904 entry in the plan (lines 71\u201376) requires `location:` on every finding, PASS included, with `unverified` as the explicit \"I don't know\" token. The parser normalises a missing location to `unverified` with a WARNING, and ensemble deduplication keys on location (plan slices 182 and 189). The Artifact Contract example (lines 234\u2013238) also omits it.\n\nAsk: emit `location: unverified` on the synthetic finding and show it in the Artifact Contract, or state the exception in 904's terms.",
+   "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:152"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Depends on slice 924's recovery turn, which is unbuilt and not declared",
+   "description": "Lines 105 and 380 say the answering-model accumulation and the coverage cap run \"across the #92 recovery turn\" and \"after the #92 recovery turn.\" That turn is slice 924 (plan line 414, unchecked, depending on 918 and 919). The design's Prerequisites (line 53) say \"None\" and do not list 924. The two slices also touch the same closed vocabulary. 924 Part A (plan line 416) requires a repair-turn verdict to be disclosed through 919's `verdictSource`, and 927 adds `IMPOSED` to that enum (D5, line 156).\n\nAsk: either declare 924 as a dependency and set the order, or state that 927 lands without a recovery turn and what changes when 924 lands. Reconcile the `verdictSource` vocabulary between the two.",
+   "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:105"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "OpenRouter comparison rests on an assumption, and the check that would verify it is not a success criterion",
+   "description": "Plan 927 Part C asks the design to decide how an OpenRouter dated or routed id is compared. D9 (line 181) asserts that \"OpenRouter's dated forms\" sit under the same `vendor/` prefix, with no evidence. Walkthrough step 6 (lines 348\u2013353) is the only check that would confirm it, and it is not among the Success Criteria (lines 293\u2013297). Risk (line 359) names the case where `:free` suffixes or dropped prefixes are reported as substitutions on a live router.\n\nAsk: make the step-6 OpenRouter capture a pre-merge success criterion, or mark the OpenRouter form in D9 as an unverified assumption.",
+   "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:181"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Metrology identity breaks for dated-snapshot judges with no handling for existing series",
+   "description": "I verified that `src/squadron/metrology/identity.py:35` maps `aiModel` to the judge identity field, and line 54 requires it to hash a result. D10 (line 196) says OpenAI-direct judges change identity from `gpt-5` to `gpt-5-2025-08-07` from this slice forward, and calls that correct. Under the new identity, existing `gpt-5` calibration history stops pooling with new results, and nothing signals the break. Metrology appears only as a consumer in Integration Points (line 274), and the plan entry's Risk line does not mention it.\n\nAsk: state whether metrology needs a re-key, a recorded series break, or a migration, and record that the metrology side has accepted the change.",
+   "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:196"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "\"Not reported\" is invisible in frontmatter, and D11 relies on a body line",
+   "description": "D11 keeps `aiModel` as the requested id when the provider reports nothing. It argues this is \"not a silent fallback\" because the Run Digest says so, but the Digest is in the body. The frontmatter that gates and metrology read cannot tell a verified answer from \"not reported,\" because `requestedModel` appears only on substitution (D10). The Value section (line 28) promises that the artifact will not name \"a model that never ran.\" D2 uses a tri-state marker for `diffTruncated` to make exactly this kind of distinction, and no equivalent is given for models. The project rule is never to use silent fallback values.\n\nAsk: emit a frontmatter marker only when the answer was not reported. That keeps `aiModel` as the requested id, which D11 needs for metrology identity, and gives gates something to read.",
+   "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:200"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "Scope is heavier than the maintenance architecture asks for",
+   "description": "The parent architecture guidelines (`900-arch.maintenance-and-refactoring.md`, lines 38\u201341) ask for small, focused slices, prefer many small slices over few large ones, and a lighter-weight design for maintenance work. This design runs about 380 lines, with 13 decisions and 27 success criteria. Line 375 says Parts A and C are independent after step 1. Cuts that keep every plan-assigned Part intact:\n- **Implementation Notes \u2192 Development Approach (lines 367\u2013375):** an ordered build plan with file lists is task-breakdown content.\n- **Overview and Value (lines 15\u201329):** these restate the plan entry and issues #134 and #135 almost verbatim (900-slices lines 440\u2013446). One paragraph would do.\n- **Patterns and Conventions (lines 212\u2013217):** these restate CLAUDE.md rules (`is None`, metadata literals, optional keys), which bind by reference.\n\nWhether to split the slice into truncation (A+B) and model identity (C) is a PM decision, and the architecture guidelines support it. The design should not defer any Part, because plan 927 assigns all three to this slice.",
+   "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md"
+  },
+  {
+   "i": 8,
+   "severity": "NOTE",
+   "title": "Diff cap is measured in characters but named in bytes",
+   "description": "D1 correctly measures characters, because `_truncate` compares `len(content)`. The config key is still `review.max_file_size_bytes`. The synthetic finding at line 145 prints \"characters\" next to that key and tells the user to raise it. For non-ASCII diffs, bytes and characters differ, so the advice can be off. The design records the mismatch but leaves the wording unchanged.\n\nAsk: have the user-facing text name the unit correctly, and file the key-name mismatch as a follow-up.",
+   "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:111"
+  },
+  {
+   "i": 12,
+   "severity": "NOTE",
+   "title": "Input file labelled \"architecture\" is a slice plan",
+   "description": "The file supplied as the architecture is a slice plan (`docType: slice-plan`). The design's `parent:` correctly points to it, and its own parent is `900-arch.maintenance-and-refactoring.md`. I used that architecture document for the scope guidelines behind the proportionality finding. It states no NFRs, so no NFR restatement is required.",
+   "location": "project-documents/user/architecture/900-slices.maintenance-and-refactoring.md"
+  }
+ ]
+}

@@ -1,0 +1,73 @@
+{
+ "case": "migratory-152-slice",
+ "flaws": [
+  {
+   "id": "F1",
+   "text": "Overview: \"at the architecture's Tier 3 target (N=200k)\" and \"our current Tier 3 milestone of 200k\". `140-arch` (Tier 3 \"250k\") and `140-slices` (\"Tie",
+   "hits": {
+    "r02": [
+     5
+    ],
+    "r03": [
+     4
+    ],
+    "r04": [
+     5
+    ],
+    "r05": [
+     6
+    ],
+    "r06": [
+     8
+    ],
+    "r07": [
+     5
+    ],
+    "r08": [
+     5
+    ]
+   }
+  },
+  {
+   "id": "F2",
+   "text": "Technical Scope item 7 and Technical Decisions: `k_first` \"is removed entirely from the kernel\", configs using it \"raise a `ConfigurationError`\", \"no ",
+   "hits": {
+    "r01": [
+     2
+    ],
+    "r02": [
+     4
+    ],
+    "r03": [
+     7
+    ],
+    "r04": [
+     3
+    ],
+    "r05": [
+     1
+    ],
+    "r06": [
+     4
+    ],
+    "r07": [
+     11
+    ],
+    "r08": [
+     2
+    ]
+   }
+  },
+  {
+   "id": "F3",
+   "text": "Walkthrough steps 2-5 use `python -m migratory.bench parity ...` and `python -m migratory.bench run ... --neighbor-mode ... --ticks`. `bench/cli.py` a",
+   "hits": {}
+  },
+  {
+   "id": "F4",
+   "text": "Success path raises `ConfigurationError`; the config module defines `ConfigError`. **VALID** (minor): contradicts code. Needs: code.",
+   "hits": {}
+  }
+ ],
+ "note": "F2: r04:3, r06:4, r07:11 name the removal-timing contradiction (scope item 7 vs mitigation line 433) but not the silent k_nearest run between steps 2 and 4; counted as borderline hits. r05:6 mentions the 200k vs 250k Tier 3 mismatch only as a minor item; counted. F3 and F4 (bench CLI subcommands, ConfigError name) were not raised by any review."
+}

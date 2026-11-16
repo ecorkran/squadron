@@ -1,0 +1,40 @@
+{
+ "review": "r08",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Task 2 says the suite passes \"unchanged\", but an existing test pins the full metric set",
+   "description": "Task 2 changes `PythonAdapter.metrics` (now `frozenset(SnapshotMetric)` at `src/squadron/metrology/snapshot/python_adapter.py:105`) to the four 400 metrics. Its success line is \"the full `tests/metrology/` suite passes unchanged\". But `test_adapter_declares_its_metrics_and_pb2_conventions` asserts `adapter.metrics == set(SnapshotMetric)`. Once the enum grows and the set narrows, that test fails, so the success line can't be met and the Task 2 commit isn't at a passing point. Tasks 8 and 12 change the set again, and Task 25 brings it back to the full set. Fix: in Task 2, change this assertion to the explicit four-metric set. Each later task that adds a metric then updates the same assertion. Change the success line to \"passes, with only that assertion edited\".",
+   "location": "tests/metrology/snapshot/test_python_length.py:60"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Task 14 makes `MemoryError` a per-file token error, which contradicts D3 and Task 11",
+   "description": "D3, the failure-mode table, Task 10 (line 123) and Task 11 (line 139) all say a `MemoryError` during the duplication pass makes `duplicated_lines` `tool_failed`. It must never be a partial figure. Task 14 lists `MemoryError` in TypeScript's `token_errors`. Task 10 (line 121) says those errors put the file in `unparsed_files` with a WARNING. So for TypeScript, an out-of-memory condition would quietly drop one file and still report a duplication count. That is the partial figure D3 forbids, and which branch wins depends on the order of the `except` clauses. 400 does list `MemoryError` as a length parse error (`src/squadron/metrology/snapshot/typescript_length.py:151`), which explains where this came from, but D3 sets a different rule for duplication. Fix: Task 14 should pass only `TypeScriptParseError` as the token error. Task 10 should state that `MemoryError` is always caught at pass level, ahead of `token_errors`.",
+   "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:160"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Commit markers are checkboxes, not `**Commit**:` lines",
+   "description": "Every commit point is written as `- [ ] Commit: \u2026` (lines 46, 68, 88, 97, 115, 142, 156, 171, 183, 191, 208, 229, 246, 262, 271, 276, 283, 290). The project rule says implementation commits happen only at `**Commit**:` markers, and those markers are plain lines, never checkboxes. Under that rule, this file has no recognised markers. That falls back to \"commit at the end of each top-level task\", which would commit after untested implementation tasks (3, 5, 8, 10, 12, 14, 16, 19, 21, 23, 25). A checkbox commit also has to be ticked after the commit itself, so the tick lands in a separate checkbox-only commit, which the rules forbid. The placement is otherwise right: every marker sits after a test task or at a verified point. Fix: change each one to a plain `**Commit**: \u2026` line, keeping the same positions.",
+   "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:46"
+  },
+  {
+   "i": 3,
+   "severity": "NOTE",
+   "title": "SC10's \"other metrics unchanged\" isn't asserted at adapter level",
+   "description": "Task 11 tests the token ceiling only through `measure_duplication` alone. SC10, and the failure-mode table's outcome column (which the Technical Requirements say tests must assert), also require the language's other metrics to stay present. One extra check in Task 13 would cover it: lower `DUPLICATION_MAX_TOKENS` and confirm that `file_length`, `function_length` and `cyclomatic_complexity` are still present.",
+   "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:138"
+  },
+  {
+   "i": 4,
+   "severity": "NOTE",
+   "title": "Task 9's `RecursionError` case doesn't check the WARNING",
+   "description": "In the failure-mode table, the `RecursionError` row has the signal \"WARNING per file\". The Technical Requirements ask tests to check both the signal and the outcome, but Task 9 checks only that the file lands in `unparsed_files`. Add a check for the warning.",
+   "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:111"
+  }
+ ]
+}

@@ -1,0 +1,82 @@
+{
+ "review": "r01",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "\"Stateless pure tick\" contradicts the engine's own stated interface",
+   "description": "Envisioned State says the engine is \"stateless between ticks \u2014 all state lives in the arrays passed to it\". Two paragraphs later the interface is \"tick the simulation forward, query agent state, register/remove agents\". An engine that registers agents and answers state queries owns state.\n- **Ownership conflict:** 300-arch assigns entity lifecycle and array allocation to the server (\"The behavior engine ... does not manage the entity lifecycle itself\"). Mutable-state ownership is therefore claimed by both documents.\n- **Copy vs in-place:** step 5 \"Returns the updated state array\" implies copy-out semantics. The implemented `tick()` in `src/migratory/engine/tick.py` returns `None` and mutates in place. This decides whether the server's \"tick as transaction\" commit is possible, and the document never makes the choice.\n- **Hidden state:** the spatial index is engine-side state that persists across calls, which \"no setup, no teardown\" ignores.",
+   "location": "project-documents/user/architecture/100-arch.behavior-engine.md#envisioned-state"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Neighbor-query interface shape is undefined and its only description is per-agent",
+   "description": "The query is described only as \"which agents are within radius R of agent A\" and \"for each active agent, queries nearby neighbors\". The same section requires \"no Python-level per-agent branching, no dynamic allocation, and no callbacks into Python during the hot loop\". These are incompatible.\n- **Result format is the real contract:** radius queries return ragged results. Whether that is CSR offsets plus indices, a padded K-nearest matrix, or pair lists determines how every force kernel is written.\n- **Replaceability claim fails:** the document says the strategy \"can be replaced without touching the force computation code\", but a GPU or grid backend cannot sit behind a point-at-a-time protocol. The existing code shows the result: a Python loop calling `spatial.query_radius` per agent and a `list[NDArray]` handed to forces.\n- **Performance goal unvalidated:** \"tens of thousands of agents at full behavioral fidelity on a single CPU process\" is unreachable at 20\u201360 Hz with a per-agent Python loop. The document offers no budget (agents \u00d7 neighbors \u00d7 tick rate) to test against.\n- **Under-specified options:** \"may be naive O(n\u00b2) or a simple spatial hash\" and \"SoA ... needs validation\" defer the two decisions this architecture exists to make.",
+   "location": "project-documents/user/architecture/100-arch.behavior-engine.md#technical-considerations"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Subset-evaluable tick has no defined time or update semantics",
+   "description": "The \"Subset-evaluable tick\" principle promises variable-rate ticking at 1/4 or 1/16 rate but never says what timestep a skipped agent integrates with.\n- **If it uses `dt`:** the agent moves at 1/16 speed.\n- **If it uses `16\u00b7dt`:** this contradicts \"Fixed-timestep integration is essential for determinism\" and the stability concerns in the same section.\n- **If inactive agents coast or are interpolated:** something must own that step. 300-arch mentions \"interpolated positions\" but neither document assigns it.\n- **Update ordering:** the document does not say whether active agents read pre-tick or partially updated neighbor state (double-buffered vs in-place). That choice changes results and determinism.\n- **Signature gap:** a single scalar `dt` with an index subset cannot express mixed rates.",
+   "location": "project-documents/user/architecture/100-arch.behavior-engine.md#architectural-principles"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Agent state and \"forces, not decisions\" cannot express three of the five archetypes",
+   "description": "Agent state is defined as \"positions, velocities, profile indices\", and profiles are shared per-species data. The archetypes need per-agent data that neither holds.\n- **Territorial:** \"home-range attraction\" needs a per-agent home center.\n- **Herding:** \"leadership by experienced individuals\" needs a per-agent experience or leader attribute.\n- **Pack hunting:** \"target selection\" and the prototype's hunt/rest cycles need a persistent target ID and a timer. That is a per-agent state machine, which the principle forbids (\"rather than implementing behavioral state machines\").\n- **Inter-profile interactions:** the document admits a \"combinatorial dimension\" but gives no structure for it (for example a profile\u00d7profile interaction matrix). The \"no archetype-specific code paths\" goal is asserted, not designed.\n- **Missing extension point:** there is no extensible per-agent attribute-column mechanism, so slices 102\u2013104 will each change the state schema.",
+   "location": "project-documents/user/architecture/100-arch.behavior-engine.md#architectural-principles"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Swarm archetype requires writing to an environment declared read-only",
+   "description": "\"Swarm agents respond to environmental stigmergy (reinforced paths)\" requires agents to deposit into the environment. \"Environment as input surface\" makes the interface read-only, and the tick's only output is the agent state array. There is no output channel for deposits or events.\n- **Same gap for predation:** predation events that 300-arch expects to be \"behavior-driven\" have no way out of the tick either.\n- **Scope mismatch:** Design Goals claim five archetypes, but Anticipated Slices cover four and omit swarm and migration without saying so.",
+   "location": "project-documents/user/architecture/100-arch.behavior-engine.md#envisioned-state"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Environment query interface is named but never designed or sliced",
+   "description": "The engine \"queries environmental state ... through a read-only interface\", yet no anticipated slice defines it and nothing says it must be batch (sample N positions per call). A scalar per-agent `elevation(x, y)` would recreate the per-agent loop problem.\n- **Dimensionality:** spatial dimension is never stated. Terrain elevation implies 2.5D herds while starlings need 3D.\n- **World bounds:** boundary behavior (wrap, reflect, clamp) is absent, although bounds directly shape the spatial hash and the integration step.",
+   "location": "project-documents/user/architecture/100-arch.behavior-engine.md#anticipated-slices"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "Determinism goal is stronger than the design supports",
+   "description": "\"Tick determinism\" is claimed to enable multi-region agreement and replay, but three threats are unaddressed.\n- **Summation order:** floating-point force sums depend on neighbor order. Swapping brute force for a hash or KD-tree changes that order and breaks bit-identity, yet the slice plan (105) expects \"identical\" output.\n- **Randomness:** any stochastic force (wander, noise, target choice) needs a seeded RNG passed as explicit tick input. The document does not mention randomness.\n- **Cross-backend precision:** CPU float64 vs GPU float32 paths cannot agree bitwise, and the internal-precision decision is deferred.\n- **Missing definition:** the document should say whether determinism means bitwise on the same backend or tolerance-bounded, and should fix the neighbor ordering contract.",
+   "location": "project-documents/user/architecture/100-arch.behavior-engine.md#design-goals"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "Aggregates \"through the same neighbor query interface\" will not compose",
+   "description": "Neighbor queries return references into the agent arrays, and forces read those neighbors' positions, velocities and profiles. An aggregate (center of mass, dispersion, count) is not a row in those arrays and needs a different force law, such as count-weighted or extent-aware separation. Supporting it means changing the neighbor result type and every force kernel, which is the rearchitecting the extension point claims to avoid.",
+   "location": "project-documents/user/architecture/100-arch.behavior-engine.md#technical-considerations"
+  },
+  {
+   "i": 8,
+   "severity": "CONCERN",
+   "title": "Speculative scale constraints imposed on v1 without v1 benefit",
+   "description": "The concept says to start with \"elk herds, an apex predator\" in a single process. This document still binds v1 to 1M+ and multi-GPU tiers.\n- **Cut:** the \"GPU compute path\" hot-loop rules. \"No dynamic allocation\" is unachievable in NumPy, which allocates temporaries per expression, so the rule is unenforceable.\n- **Cut:** the \"zero-copy serialization path\" requirement.\n- **Defer:** the \"Aggregation interface support\" slice, which depends on unbuilt world-server machinery.\n- **Keep:** the optional subset argument, which is cheap, plus one batch-shaped neighbor contract.",
+   "location": "project-documents/user/architecture/100-arch.behavior-engine.md#technical-considerations"
+  },
+  {
+   "i": 9,
+   "severity": "CONCERN",
+   "title": "No failure-mode strategy for the tick",
+   "description": "The document never mentions error handling. This is a cross-cutting omission, so no single section applies. The concrete cases are:\n- **Coincident agents:** zero-distance pairs cause a divide-by-zero in separation.\n- **NaN/inf spread:** a bad value propagates through neighbor sums to the whole flock within a few ticks.\n- **Bad indices:** out-of-range `profile_indices` or active indices.\n- **Empty neighborhoods:** agents with no neighbors in range.\n\nProject conventions require explicit failure with no silent fallbacks. The architecture should say whether the tick validates inputs, where it does so, and what it raises.",
+   "location": "unverified"
+  },
+  {
+   "i": 10,
+   "severity": "NOTE",
+   "title": "Broken and inconsistent cross-references",
+   "description": "Related Work links to `200-arch.world-server-foundation.md`, which does not exist. The actual file is `300-arch.worldserver-foundation.md`, and the Overview already calls it \"300-arch\". The \"BulkForce pattern\" is used as an established term but is not defined anywhere in the document.",
+   "location": "project-documents/user/architecture/100-arch.behavior-engine.md#related-work"
+  }
+ ]
+}

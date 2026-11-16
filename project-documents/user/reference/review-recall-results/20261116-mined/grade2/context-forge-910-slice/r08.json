@@ -1,0 +1,61 @@
+{
+ "review": "r08",
+ "findings": [
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Acceptance grep cannot reach zero as written",
+   "description": "Success criterion 1 requires zero matches in the six swept files for the literal grep. The grep also matches things the design keeps on purpose: `SliceStatus.status`'s `'complete'` in `types.ts` (excluded by TD-3) and the `frontmatterSchema.ts` sites (excluded by TD-2). It also matches a comment in `ConsistencyChecker.ts` that lists the three `inferredStatus` literals. The 36-site count does not cover comments, so no step sweeps that comment. The walkthrough (lines 147-152) expects a non-zero residual of about 11, which contradicts \"zero\". The `types.ts:[3-6]:` filter hard-codes line numbers and breaks on any edit above line 6. Fix: define the check as an explicit allowlist of expected residual matches per file, decide whether comments are swept, and drop the line-number filter.",
+   "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md:135"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Sweep boundary stops at core, and one outside comparison is unaddressed",
+   "description": "The design says no consumer changes are needed outside `packages/core`. A repo-wide search for the same four literals finds a bare comparison in the CLI package on the slice-status field (`init.slices[].status === 'complete'`). That field is typed as plain `string`, inherited from `DocSummary.status`, so the compiler does not check it and the doc never mentions it. The Value section's goal of one compiler-checked definition (line 23) does not hold for this site. Either sweep it (which requires typing that field as `NormalizedStatus`, a change outside the six files) or list it under Excluded with a reason. Confirm whether that field carries only normalized values before choosing.",
+   "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md:84"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Inventory counts do not reconcile with the code",
+   "description": "The per-file counts feed the ~65 total and the acceptance check, and several don't hold:\n- `types.ts` is listed as 5 swept \"of 8 total; 4 are the STATUS definition\". Eight minus four leaves four, one of which is the excluded `SliceStatus` literal, so three remain, not five. The walkthrough (line 151) also says four `SliceStatus.status` sites, but that union has one matching literal.\n- `statusNormalizer.ts` lists 13 value sites. A search finds 14 value-side map entries (lines 5-18). Two quoted keys (`'in-progress'`, `'not-started'`) also match the pattern, so the \"keys stay literal\" rule needs to be stated per entry.\n- `ProjectModelBuilder.ts` is counted as 0. The count holds for code, but a comment at line 179 contains a matching literal that is not mentioned.\n- `ConsistencyChecker.ts`'s comment with three literals is not in the 36-site count.\nFix: generate the inventory once with a single command, list counts per file including comments, and reuse that list in the walkthrough.",
+   "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md:33-41"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Step 1's coupling rationale is incorrect",
+   "description": "Step 1 says retyping `inferredStatus` alone would leave `taskFileParser.ts`'s bare-string assignments failing to compile, so the two must land together. That is wrong. `'complete'` is assignable to `NormalizedStatus`, so the unswept parser still compiles. Sweeping the parser first also compiles, because `STATUS.Complete` has the literal type `'complete'`, which fits the current union. TD-1 (line 98) itself calls the unretyped option \"technically sound.\" The coupling is therefore not required. The steps can land as separate commits, which fits 900's standard that items can be reverted without touching each other (Guidelines, line 39). Fix: split step 1 into a retype change and a parser sweep, or state the real reason they must be paired.",
+   "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md:87"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "Design is heavier than a mechanical sweep needs",
+   "description": "900 asks for a \"lighter-weight\" design for maintenance slices. This one is 166 lines for a six-file literal-to-constant sweep. Cut or consolidate:\n- TD-2 and TD-3 (lines 100-106) restate the Excluded bullets (lines 47 and 49) almost verbatim. Keep the reasoning in one place.\n- Site counts appear in four places: the scope table, the component table, the migration steps, and the walkthrough. Keep them in the scope table only.\n- The Component Structure table (lines 70-78) repeats the six-file list from the scope table.\n- The Value section (lines 21-23) restates the Overview's goal. Fold it into the Overview.\n- \"Patterns and Conventions\" (lines 110-114) restates the scope (\"no new abstractions\").\n- Walkthrough step 2 (temporary typo, then revert, lines 153-154) is a manual demonstration; the build already fails on a typo. Cut it. Step 4 (live `cf` output diff, lines 160-165) duplicates the regression suite unless the suite does not cover CLI output. Justify it or cut it.\n\nThe mechanism is right; the document is roughly twice the size it needs.",
+   "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md:21-23"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "Deferred items have no named destination",
+   "description": "Two items are deferred to \"other slices\" without naming a slice or issue: unifying `frontmatterSchema.ts`'s vocabulary (TD-2) and splitting `ConsistencyChecker.ts` (1320 lines, against the ~300-line guideline, line 52). 900 assigns tech debt and module-boundary refactoring to this initiative and has no completion criteria, so a deferral with no home is effectively lost. The requirement left unmet is 900's Scope (\"Tech debt\", \"improving module boundaries\"). Fix: name a maintenance slice index or a tracked issue for each deferred item.",
+   "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md:126-129"
+  },
+  {
+   "i": 8,
+   "severity": "NOTE",
+   "title": "Post-912 counts rest on an undeclared dependency",
+   "description": "The counts are described as \"post-912\" (line 29), but `dependencies:` lists only 241. Slice 912 is `status: complete`, so nothing blocks now, but the counts are a snapshot of 912's output. Declare 912 in the frontmatter, or re-baseline the counts when the slice starts.",
+   "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md:6"
+  },
+  {
+   "i": 9,
+   "severity": "NOTE",
+   "title": "The retype has an in-repo precedent and an unchecked consumer claim",
+   "description": "Two other `inferredStatus` fields in `types.ts` (lines 276 and 321) already use `NormalizedStatus`. Citing them would support TD-1. TD-1 says widening has \"no behavioral effect on any consumer\" but does not list the consumers. The field is read in core and in the CLI. The build and test steps would catch an exhaustive-switch break, so the claim is checkable. The doc should name the build as that check.",
+   "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md:96-98"
+  }
+ ]
+}

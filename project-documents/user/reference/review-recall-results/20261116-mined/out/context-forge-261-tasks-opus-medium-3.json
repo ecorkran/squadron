@@ -1,0 +1,207 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Renderer tests don't cover \"every outcome\"",
+      "description": "The slice's Technical Requirements ask for `renderAdoptionFacts` tests covering \"every outcome\" (`project-documents/user/slices/261-slice.detection-and-adoption-state.md:336`). Task 8T only tests `brownfield`, `adoption-in-progress` and `NOT_EVALUATED`. It has no case for `greenfield`, `already-planned` or `adoption-closed`. Yet Task 8 requires an exhaustive `never` switch, so those branches will have rendering code that no test runs. Add one `it.each` row for each remaining `AdoptionOutcome` kind, asserting that the outcome bullet names it. This is cheap and matches the criterion as written.",
+      "file_ref": null,
+      "category": "test-coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:173-176"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "No test checks how the missing-guide error reaches the CLI and MCP callers",
+      "description": "The Functional criterion says: \"A guide without the profile or prompt: `cf build` exits non-zero with the `AdoptionError` message; `context_build` returns it as an error\" (slice line 333). Three tasks test the error inside core:\n- Task 9T: the resolver throws.\n- Task 10T: the integrator rethrows.\n- Task 12 #12: the pipeline rejects.\n\nNo automated test checks what the two callers do with it. The `cf build` side is covered only by manual walkthrough step 4 in Task 15. The `context_build` error result is not checked anywhere: walkthrough step 5 covers only parity and `template_preview`. Task 11 already edits `build.test.ts` and `contextTools.test.ts`, so add one assertion to each:\n- the mocked pipeline rejects with `AdoptionError`, so `cf build` exits non-zero through `handleError`\n- the same rejection makes `context_build` return an error result containing the message",
+      "file_ref": null,
+      "category": "test-coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:217-223"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The Task 15C commit would hold only notes and check-offs",
+      "description": "Task 15 runs checks and the walkthrough, then \"Record each step's outcome under this task\". It also says \"Any defect is fixed in its own commit\", so 15C (`docs: record slice 261 verification walkthrough`) is left with nothing but walkthrough notes and checkboxes in the task file. CLAUDE.md says: \"Never make a commit that only checks boxes or only adds notes.\" Remove the 15C marker. Instead, include the recorded outcomes in the last defect-fix commit, or in the next real commit if there are no defects. Separately, 14C is a whole commit for a single README row. Merging Task 14 into the 13C commit would remove one granular marker. That part is optional.",
+      "file_ref": null,
+      "category": "commit-cadence",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:259-269"
+    },
+    {
+      "severity": "NOTE",
+      "title": "No timing or load test for the sub-second detection target",
+      "description": "The slice restates an NFR: detection adds under one second to a Phase 0 build. There is no `tests/load/` task. D2 deliberately chose to have tests check the walk's caps (`MAX_WALK_ENTRIES`, early exit at the line threshold) rather than timings. The task file's Context Summary explains this and points to the Task 3T cap tests. This is a design decision, not a planning gap, and with no load test there is no CI gating to wire up.",
+      "file_ref": null,
+      "category": "nfr",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:38"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`detection/` now imports from `adoption/`",
+      "description": "In Task 3, `detection/sourceVolume.ts` imports `BROWNFIELD_MIN_SOURCE_LINES` from `adoption/adoptionOutcome.ts`. Tasks 3 and 6 import `AdoptionError` from `adoption/contracts.ts`. So the \"facts only\" module depends on the \"policy\" module. The design requires this: D1 puts the threshold in one place, and D2 makes the walk throw `AdoptionError`. Task 7 prevents a runtime cycle by using `import type` for `SourceVolume`. Implementers should know this direction is intended.",
+      "file_ref": null,
+      "category": "architecture",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:85"
+    },
+    {
+      "severity": "PASS",
+      "title": "Functional success criteria trace to integration fixtures",
+      "description": "Task 12's 13 fixtures cover these scenarios:\n- empty and scaffold-only repos\n- brownfield and shallow clone\n- monorepo, including root CI\n- concept-only and planned repos\n- resume\n- overrides in both directions, re-detection, and an invalid value (tested in Task 1T)\n- `Phase 2` with state `in_progress`\n- the explicit `brownfield-adoption` instruction\n- a guide without the profile\n- `template_preview` in read-only mode\n\nThe \"no source walk\" part of the planned case is checked by Task 9T's spy on `measureSourceVolume`.",
+      "file_ref": null,
+      "category": "coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:229-245"
+    },
+    {
+      "severity": "PASS",
+      "title": "Technical and integration requirements covered",
+      "description": "- Unit tests for `measureSourceVolume`, `readHistory`, `presentPaths`, `findPlanningArtifacts` and `decideOutcome` match the slice's list item by item, including the symlink, entry-cap, `EACCES`, shallow-clone, subdirectory-scoping and timeout cases.\n- Task 9T covers the selection table, guide-check-before-write ordering, write failure, the read-only mode and the explicit-instruction path.\n- Task 13 is the CLI/MCP parity test.\n- Task 11 updates callers with an explicit `adoptionStateWrites`.\n- Task 8 isolates `renderSquadronFact()` so slice 262 can replace it.\n- Task 15 step 1 checks that planned projects build byte-identical prompts.",
+      "file_ref": null,
+      "category": "coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:93-200"
+    },
+    {
+      "severity": "PASS",
+      "title": "Sequencing and file references hold up",
+      "description": "- `contracts.ts` and `AdoptionError` (Task 2) exist before anything that uses them (Tasks 3, 6, 9).\n- The threshold constant is created in Task 3 and extended in Task 7.\n- The resolver (Task 9) comes before integrator wiring (Task 10), and Task 11 updates the callers.\n- No circular dependencies.\n\nTwo task-file claims check out against the code:\n- `detection/index.js` is already exported only from `packages/core/src/node.ts:58`, so adding the new detection exports there keeps the browser-safe split.\n- The legacy `'phase 1: concept'` lookup that Task 1T tests exists at `packages/core/src/schema/projectSchema.ts:141`.\n\nApart from 15C, the commit markers sit at tested, working points.",
+      "file_ref": null,
+      "category": "sequencing",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:52-225"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "test-coverage",
+      "raw_category": null,
+      "summary": "Renderer tests don't cover \"every outcome\"",
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:173-176",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "test-coverage",
+      "raw_category": null,
+      "summary": "No test checks how the missing-guide error reaches the CLI and MCP callers",
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:217-223",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "commit-cadence",
+      "raw_category": null,
+      "summary": "The Task 15C commit would hold only notes and check-offs",
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:259-269",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "note",
+      "category": "nfr",
+      "raw_category": null,
+      "summary": "No timing or load test for the sub-second detection target",
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:38",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "architecture",
+      "raw_category": null,
+      "summary": "`detection/` now imports from `adoption/`",
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:85",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "pass",
+      "category": "coverage",
+      "raw_category": null,
+      "summary": "Functional success criteria trace to integration fixtures",
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:229-245",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "pass",
+      "category": "coverage",
+      "raw_category": null,
+      "summary": "Technical and integration requirements covered",
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:93-200",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "pass",
+      "category": "sequencing",
+      "raw_category": null,
+      "summary": "Sequencing and file references hold up",
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:52-225",
+      "location_verified": true
+    }
+  ],
+  "template_name": "tasks",
+  "input_files": {
+    "input": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md",
+    "against": "project-documents/user/slices/261-slice.detection-and-adoption-state.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/context-forge-261-tasks"
+  },
+  "timestamp": "2026-11-16T14:04:57.111772",
+  "model": "claude-opus-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 3,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-opus-5-5",
+  "answering_models": [
+    "claude-opus-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 8,
+    "in_fences": 0,
+    "in_section": 8,
+    "surviving": 8
+  },
+  "effort": "medium",
+  "profile": "sdk",
+  "turns": 4,
+  "prompt_tokens": 249100,
+  "cached_tokens": 245137,
+  "cache_write_tokens": 3957,
+  "completion_tokens": 6310,
+  "reasoning_tokens": null,
+  "duration_seconds": 69.91905525000766,
+  "cost_usd": 0.20763929999999997,
+  "cost_basis": "provider"
+}

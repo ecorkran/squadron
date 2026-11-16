@@ -1,0 +1,54 @@
+{
+ "review": "r01",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Commit markers are checkboxes and sit after every task group",
+   "description": "All eight commit points are written as `- [ ] Commit: ...` checkbox sub-items (lines 99, 125, 164, 185, 221, 254, 296, 351), not plain `**Commit**:` lines. Task 9.3's \"commit remaining changes\" has no marker or message at all.\n\nThey also follow every top-level task, and the early ones are not working points:\n- **After Task 1:** `concept` is recognized but routes to an empty section shell.\n- **After Tasks 2\u20136:** the flow has preconditions or an interview but no output conventions, so it cannot write a valid document.\n\nThe flow is first runnable after Task 7 and first tested after Task 8. Convert the markers to plain lines and reduce them to about three: after Task 7 (flow fully authored), after 8.6 (walkthrough passed, generated concept included), and after Task 9 (close-out).",
+   "location": "project-documents/user/tasks/363-tasks.concept-generation.md:99"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Walkthrough does not verify SC4, SC8 refill, or SC10 on the written document",
+   "description": "Three criteria are authored into the skill text but never checked against output:\n- **SC4 (dropped topics appear nowhere):** Task 4.1 states the rule, but neither 8.1 nor 8.2 checks the generated document for why-now, audience-evolution, or methodology content or gap markers. The decline run in 8.2 is where a spurious gap marker is most likely.\n- **SC8 (mechanical refillability for augment):** 8.4 checks default-stop, the dated append, and byte-identity of populated sections. It never shows that a section holding exactly a `[GAP: ...]` marker gets filled. The 8.1 document has few or no such sections; the 8.2 scratch document has them and is the natural target.\n- **SC10 (per-section sourcing over the full outcome set; every `[INFERRED]` sentence satisfies the rule):** 8.1 only confirms the engagement-questions and inferred-claims lines exist. It does not check one outcome per section, or each `[INFERRED]` sentence against the rule authored in 7.1.\n\nAdd these as check lines inside 8.1, 8.2 and 8.4; no new tasks are needed.",
+   "location": "project-documents/user/tasks/363-tasks.concept-generation.md:304-336"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Selector edit and cross-reference fix touch the same paragraph but are split across Tasks 1 and 7",
+   "description": "The existing argument handling and the sentence \"The concept flow and the initiative-candidates flow are slices 363 and 364\" are adjacent lines inside `## Flow: Comprehension Analysis`. Task 1.1 rewrites the first and Task 7.4 fixes the second six tasks later.\n\n- Between the Task 1 and Task 7 commits, the skill says `concept` is recognized and, in the next sentence, that the concept flow is a future slice.\n- 7.4's success criterion \"no other comprehension-flow text changed\" cannot hold as written, because 1.1 has already edited argument handling inside that section.\n\nMerge 7.4 into 1.1. Reword the criterion to name the two permitted edits in that section: the selector paragraph and the cross-reference sentence.",
+   "location": "commands/analysis/understand.md:392-393"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Verification tasks duplicate Task 0.2 or the preceding task's own success line",
+   "description": "For a single-file markdown slice rated 3/5, several of the seven verify tasks add no evidence:\n- **6.3** re-runs the same `grep -c '^## User-Provided Concept'` and guide-readable check that 0.2 already ran.\n- **2.2** re-confirms `project.name` is `squadron-ai` and the guide path, both from 0.2. Only the `cf get` name resolution is new; move that one line into 0.2.\n- **1.2 and 4.2** re-read text just written against the same design lines the authoring task's Success line already requires (\"table matches the design row-for-row\"). Fold them into 1.1 and 4.1.\n\nKeep 3.4 (executes the selections against the real graph) and 5.3 (byte-identical question diff, which SC2 needs). Task 9.3's `uv run ruff format .` is also redundant: 8.6 already ran `--check`, and no Python changes in this slice.",
+   "location": "project-documents/user/tasks/363-tasks.concept-generation.md:120-124"
+  },
+  {
+   "i": 4,
+   "severity": "NOTE",
+   "title": "Task 8.1 depends on the PM being live, which the design does not require",
+   "description": "The design's walkthrough step 3 says only \"answer both engagement questions with real answers\". The task file adds a PM-live requirement and a pre-framing notice. Tasks 8.4 and 8.6 depend on 8.1's document and session, so the walkthrough tail and its commit cannot complete without the PM. The task file should say who supplies the answers if the PM is not present, or state that 8.1 is marked `BLOCKED:` in that case.",
+   "location": "project-documents/user/tasks/363-tasks.concept-generation.md:48-53"
+  },
+  {
+   "i": 5,
+   "severity": "NOTE",
+   "title": "Task 0.1 asserts the integration target instead of reading it",
+   "description": "\"Integration branch is unset; target is `main`\" is hardcoded, and the branch is created from `main`. CLAUDE.md requires reading `cf config get git.integration_branch` before starting work. Replace the assertion with the read.",
+   "location": "project-documents/user/tasks/363-tasks.concept-generation.md:60-62"
+  },
+  {
+   "i": 6,
+   "severity": "NOTE",
+   "title": "Some failure and absence paths are authored but not exercised",
+   "description": "These match the design's own draft walkthrough, so they are not gaps against it:\n- 8.3 exercises only the renamed-heading failure; guide-absent and tree-absent (SC7), the no-registration stop (precondition 3) and the no-README fallback are never run.\n- \"Absence of a signal is an observation, not a gap\" (SC3) cannot be observed on squadron, where every signal is present.\n- SC12 (\"a concept a PM would edit rather than discard\") has no recorded check.\n\nThe 8.2 scratch tree could cover no-README and no-`tests/` cheaply by deleting those paths before the run.",
+   "location": "project-documents/user/tasks/363-tasks.concept-generation.md:326-330"
+  }
+ ]
+}

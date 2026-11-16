@@ -1,0 +1,33 @@
+{
+ "case": "context-forge-214-tasks",
+ "flaws": [
+  {
+   "id": "F1",
+   "text": "Design Success Criteria say a missing, non-regular or **unreadable** file, and a missing or **unreadable** template, each exit 2. Task 3 implements th",
+   "hits": {
+    "r01": [
+     3
+    ],
+    "r02": [
+     1
+    ],
+    "r03": [
+     1
+    ],
+    "r05": [
+     5
+    ],
+    "r06": [
+     2
+    ],
+    "r07": [
+     6
+    ],
+    "r08": [
+     2
+    ]
+   }
+  }
+ ],
+ "note": "r03, r05 and r07 note the gap but call it acceptable; counted as hits since they name the untested unreadable file/template defect and suggest the chmod test. r04 never mentions it."
+}

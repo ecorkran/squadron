@@ -1,0 +1,68 @@
+{
+ "review": "r02",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "The audit vocabulary does not fit code-review findings, and nothing validates the fit before the write-path change",
+   "description": "\"Normalize categories, not severities\" maps review categories onto `AuditCategory`, but that enum (`src/squadron/metrology/models.py:119-145`) names tech-debt dimensions of a whole codebase: `architectural-decay`, `consistency-rot`, `documentation-drift`, and so on. Code review grades a diff.\n\n- **No home for the main review classes.** Correctness and logic bugs, spec or scope deviation, and naming have no category. They will land in `other`, which 323 defines as \"load-bearing, not a dumping ground\".\n- **Engine-synthesized categories are not addressed.** `merge-step` (`review/task_gate.py:25`), `review-coverage` (`review/coverage.py:7`) and `tooling` (`review/git_utils.py:170`) are emitted by code, not by the model. The document does not say whether they are ingested, mapped or excluded.\n- **The document's own example is outside the vocabulary.** Design Goals cites \"error-handling findings: 4 from review, 2 from audit\"; the enum value is `error-handling-observability`. `error-handling` is the string the current review prompt suggests (`review/review_client.py:80`).\n- **The mismatch is deferred, not designed for.** Non-Goals says a poor fit is \"a finding to report\", yet capability (b), the rollup, and 420's scoring all rest on the fit. Add a read-side mapping of existing review files as the first step of the normalization slice, with a stated `other`-share threshold that decides whether a review-specific vocabulary is needed.",
+   "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md:55"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Write-time categorization edits a shared review prompt; blast radius and dependencies are understated",
+   "description": "- **The category instruction is shared across templates.** It is injected centrally in `review/review_client.py:77-85`, while `arch.yaml` carries its own category list. The document says \"code-review findings\" in one place and \"review templates\" in another, and never says which templates change or how the shared injection becomes template-specific.\n- **A prompt edit may lapse 322 graduations.** `JudgeConfigId.template_content_hash` is the comparability key, and `GraduatedConfig` \"lapses on a prompt/model edit\" (`models.py:106-110`). I did not confirm whether the injected text is part of that hash; the document needs to state whether it is, and the consequence if so.\n- **The declared dependencies are incomplete.** Frontmatter lists `[100, 320]`, but the change touches the review result models and parser that 300 extended, and the persistence seams that 380 and slices 916/917 change.\n- **The \"third copy\" is avoidable.** The document accepts a third hand-maintained copy of the vocabulary plus an extended sync test. Because the category instruction is built in Python, it can be rendered from `AuditCategory` at prompt-build time. Only the audit skill markdown is a true cross-process copy.",
+   "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md:91"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Measuring a commit is under-specified, and per-slice before/after cannot be derived as described",
+   "description": "- **No mechanism for measuring a commit other than HEAD.** \"A snapshot measures a commit\" and \"a slice's before and after is the snapshot at its fork point against the snapshot at its merge\" require measuring arbitrary historical commits. That needs a checkout or export, plus that commit's config and dependency environment; none is described. The only alternative is automatic capture at fork and merge, which Technical Considerations leaves optional and no anticipated slice owns.\n- **Fork point is not recoverable from git topology.** Project rules merge with plain `git merge {branch}`. After a fast-forward there is no merge commit, and the merge-base of the slice branch and the target is the branch tip.\n- **The subtraction attributes other work to the slice.** Planning and `fix:` commits land directly on the target while a slice is open. \"Merge snapshot minus fork snapshot\" on the target includes them. The before/after must be the slice branch tip against its fork commit, with the fork SHA recorded when the branch is created.\n- **\"Doesn't modify the measured repository\" conflicts with the tools.** Ruff, pyright, pytest and coverage write caches and data files into the tree. The audit already needed a porcelain exemption for its own output (`metrology/audit.py:296-331`). A snapshot that dirties the tree then trips its own dirty-tree rule on the next run. The document needs to say where tools run (scratch export or redirected cache directories).\n- **\"Refused or recorded with a dirty marker\" is two behaviours.** The document does not pick one or say what selects between them.",
+   "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md:49"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "The determinism goal is false for type-error counts and coverage as specified",
+   "description": "Design Goals says every snapshot metric \"gives the same value on the same commit with the same tool versions\".\n\n- **Type-error counts depend on the environment.** They vary with the resolved dependency environment (installed packages, stubs, interpreter version), not only the checker version. A brownfield repo measured without its dependencies installed produces an inflated count that looks like a valid measurement.\n- **Coverage depends on a test run.** That brings flakiness, platform and environment into the number.\n- **The snapshot identity omits environment.** It lists \"project, commit, language, tool versions, rule set and exclusions\", so two snapshots flagged comparable may not be. Either record an environment identity (lockfile hash, interpreter, whether dependencies were resolved) or place these metrics outside the deterministic guarantee.\n- **The dependency-install question is left to a slice.** It decides whether type counts mean anything on adopted projects, so it is an architecture-level decision.",
+   "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md:33"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "\"Limits come from the project\" has no config source and conflicts with \"cheap to start measuring\"",
+   "description": "- **No config surface exists.** Limits and exclusions come from \"limits the project declares in its own config\", but Current State says the limits exist only as prose in CLAUDE.md. The `metrology.*` keys in `src/squadron/config/keys.py` contain no limit or exclusion key. The document names no file, key or schema.\n- **Brownfield baselines will have no limit metric.** The design goal says a baseline needs no edits to the project's config. Combined with \"does not count violations against a squadron default\", every adopted project reports \"no limits set\". The plan's \"file and function length against the project's limits\" is then never delivered for 440.\n- **Squadron's own limit definition is not a tool default.** \"~50 lines excluding whitespace\" is a counting rule the adapter contract must define; otherwise the first self-measurement is disputed.",
+   "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md:53"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Store reuse is asserted without addressing keying, idempotency or scan cost",
+   "description": "- **The store has no keys.** \"The record keys on project and commit SHA\" does not match the implementation. Record ids are minted (`{prefix}-{date}-{uuid8}`), and every query is glob, load and validate of every file (`store.py:176-189`).\n- **Snapshot identity is undefined.** A commit re-measured under a new tool version, rule set or exclusion set is a distinct valid measurement. The key is therefore the commit plus the full instrument identity, not project and commit. The document does not say whether a re-run replaces or accumulates.\n- **Review ingest has no idempotency rule.** Review files are overwritten on re-run (`JudgeResultRef` docstring, `models.py:43-47`). Re-ingest will either duplicate findings or leave stale ones. Whether a finding is its own record or inline in a per-review record is not decided.\n- **Scan cost grows with the new record types.** Per-commit snapshots plus review records will far outnumber today's records, and each report across three sources rescans the whole directory. If the snapshot payload holds per-file or per-function detail, the files are large. Payload granularity is unspecified.\n- **The envelope gains more untyped siblings.** `MetrologyRecord` would go from six optional payloads to eight or more, under a free `str` discriminator with no check that the payload matches `record_type`.\n- **The store is per-user and per-machine.** A baseline taken on one machine is invisible elsewhere. That is relevant to \"comparable over time\" and to how 440 and CF read the baseline.",
+   "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md:47"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "Per-language adapter framework is heavier than the plan requires",
+   "description": "The initiative plan says \"Tools must be language-agnostic, because brownfield projects are not Python.\" The architecture instead specifies a pluggable per-language adapter contract, with a second-language slice whose stated purpose is \"proving the contract wasn't Python-shaped\".\n\n- **Cut the per-language framework for three metrics.** The document concedes agnostic tools exist for duplication and line counts, and multi-language analyzers also cover complexity and function length. One agnostic measurement path covers those metrics for every language and removes the cross-adapter definition problem the document raises.\n- **Keep per-language plumbing only where unavoidable.** Lint and type counts are tool-specific. They can be a thin \"run command, parse count\" entry per tool, not a full adapter contract.\n- **Cut the dual rule set.** \"A snapshot may record either or both\" rule sets doubles the lint and type work and requires squadron to curate a reference rule set per language. The plan asks for one (\"the full rule set\"). Defer the reference set until a cross-project comparison is requested.\n- **Defer the second-language slice.** 440 is not started; schedule the slice when 440 names a target language.",
+   "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md:83"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "Optional pipeline capture has no owner and no async or failure design",
+   "description": "- **No slice owns it.** Automatic capture at slice boundaries is described as optional and is not in Anticipated Slices, yet per-slice rollup depends on those snapshots existing.\n- **Blocking work in an async executor.** A snapshot runs external analyzers, and possibly a test suite, for seconds to minutes. Under the project's Python rules that must be an async subprocess with a timeout, not a synchronous call. The document does not mention it.\n- **The failure rule is incomplete.** \"Must never fail the pipeline step\u2026 recorded as absent\" does not say what is recorded when the snapshot hangs or the store write itself fails. It also does not say whether a fully failed snapshot writes an all-absent record that a trend report then has to skip.",
+   "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md:95"
+  },
+  {
+   "i": 8,
+   "severity": "NOTE",
+   "title": "Report comparability rules are left implicit",
+   "description": "Reports \"refuse to diff across a tool change without flagging it\", which reads as both refuse and flag. A trend over months will cross tool upgrades, rule-set edits and exclusion changes. Without a stated rule (break the series, re-measure old commits, or annotate), \"over-time\" reports degrade into disconnected segments. Audit runs and review findings also attach to different commits than snapshots; the join rule for a per-slice row across the three sources is not given.",
+   "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md:59"
+  }
+ ]
+}

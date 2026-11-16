@@ -1,0 +1,68 @@
+{
+ "review": "r08",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "The S=3 candidate count is wrong, so the expected gain is overstated",
+   "description": "Line 58 says \"With S=3 alone: candidates loaded drops to ~5000\" and \"With both: candidates loaded ~555\". With `cell_size = r/3`, a 7\u00d77 scan covers 49 cells \u00d7 ~555 agents, which is about **27,000** candidates. That is (2S+1)\u00b2/S\u00b2 = 5.4 r\u00b2 of area, against 9 r\u00b2 at S=1, so only about 1.65\u00d7 fewer. The source analysis in `148-notes.rediagnosis.md` (lines 108\u2013111) gives this correct figure. The slice doc misquotes it.\n\nThis matters for planning. Almost all of the expected gain comes from early exit. In dense regions subdivision adds little on top, because the cap is usually reached inside the first cell scanned. Fix line 58 so the A2/A3 expectations and the gate setting `S=3` are based on the right numbers. Also say what S=3 is expected to add once early exit is in place. If the answer is \"little,\" consider defaulting gate runs to S=1 and keeping subdivision as a measured option.",
+   "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:58"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Step 3 cannot separate the two interventions",
+   "description": "Two pairs of commands in Step 3 are identical: \"Baseline (counter-gating)\" and \"Early exit only\" both use `--subdivision-factor 1`, and \"Subdivision only\" and \"Both\" both use `--subdivision-factor 3`. The design adds the `break` unconditionally (lines 36\u201346) and defines no early-exit switch. So on this slice's code, the \"Baseline \u2026 should reproduce slice 145 ~38 TPS\" run will not reproduce slice 145.\n\nThe lighter fix is to drop the four-way comparison. Measure the baseline once on the slice 145 commit, or use the recorded 38 TPS from `145-notes.fused-tick-measurements.md`. Then run S=1 and S=3 with early exit. Adding an early-exit switch only to support a comparison run is configuration that nothing else would use.",
+   "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:158-178"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "`cell_size` and `S` can disagree, and a mismatch silently drops neighbors",
+   "description": "The diagram lists `cell_size (= query_radius / S)` and `subdivision_factor S` as two separate `BenchConfig` fields. Line 80 says the harness \"reads [cell_size] from config.\" If both can be set independently, a config like `cell_size=16.7, S=1` scans only \u00b11 cell of 16.7 units. Neighbors between about 16.7 and 50 units away are never seen, and nothing reports an error. That breaks the claim on line 56 that the \"correct neighborhood is preserved.\"\n\nThe validation block on lines 69\u201376 checks `S` alone. Either compute `cell_size = query_radius / S` in one place and remove it as a separate input (preferred, single source of truth), or add a config-time check that `cell_size * S >= query_radius` and raise on failure. Do not rely on the defaults being consistent.",
+   "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:80-92"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "No test checks that the (2S+1)\u00b2 scan covers the same neighborhood",
+   "description": "The only correctness gates for subdivision are A1 (the existing slice 145 parity tests, which run at S=1) and A4 (statistical parity within 20%). A bug in the generalized loop could pass a 20% tolerance on mean speed and mean nearest-neighbor distance. Examples are an off-by-one like `range(-S, S)`, or an error converting cell coordinates near boundaries at the smaller cell size. The design already keeps the uncapped path (`max_neighbors = 0`, line 46), which makes a deterministic test cheap: in uncapped mode, S=1 and S=3 must find the same set of neighbors within radius, so forces should match to floating-point accumulation tolerance. Add this as a criterion so line 56's claim is actually tested.",
+   "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:114-128"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "The design doesn't say how `S` reaches the production engine (slice 146)",
+   "description": "Line 116 justifies A3 (\u2265100 TPS) as headroom \"before slice 146 wires the GPU tick into the production engine.\" Line 111 calls `S` a bench configuration input and says 146 is unblocked. The default is S=1. If `subdivision_factor` exists only in `BenchConfig` and the `--subdivision-factor` CLI flag, the live server gets S=1. The headroom measured at S=3 then does not apply to the path that must meet the Tier 2 NFR (60 TPS at N=50k on the live world server).\n\nState where `subdivision_factor` lives: in a backend or engine config that both the bench harness and the slice 146 production path read, or explicitly bench-only with 146 owning the plumbing. Also state which S value the A3 headroom claim applies to in production.",
+   "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:108-116"
+  },
+  {
+   "i": 8,
+   "severity": "NOTE",
+   "title": "Name the S upper bound as a constant",
+   "description": "The literal `8` appears in both the comparison and the error message. Define it once as a named constant, following the project rule on comparison values. Also note that `isinstance(True, int)` is true in Python, so `S=True` would pass validation as 1.",
+   "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:72-75"
+  },
+  {
+   "i": 9,
+   "severity": "NOTE",
+   "title": "Scan order biases first-k-found neighbors toward one corner",
+   "description": "Scanning starts at `(drow, dcol) = (-S, -S)`. In dense regions the cap fills from cells on the \u2212x/\u2212y side, so the accepted neighbor set is lopsided. Slice 145 already has this bias at S=1, so it isn't new here. The A4 metrics (mean speed, mean nearest-neighbor distance) would not detect a directional drift. Worth one sentence of acknowledgement. Fixing it belongs with the distance-ranked swap (A7), not this slice.",
+   "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:60-65"
+  },
+  {
+   "i": 10,
+   "severity": "NOTE",
+   "title": "The `break` was only tested on Metal; cite that test",
+   "description": "Line 29 says Quadrants supports `break` in inner loops but not the outermost parallel loop, without citing evidence. `145-notes.phase-2-risk-poc.md` \u00a72.1 confirmed that an inner-loop `break` compiles and runs correctly, but only on Metal. Cite that note and treat the CUDA build as the first check during implementation, since CUDA is the gate target.",
+   "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:29"
+  },
+  {
+   "i": 11,
+   "severity": "NOTE",
+   "title": "The plan's 7-neighbor benchmark point isn't mentioned",
+   "description": "The slice plan entry calls \"the 7-neighbor operating point \u2026 a benchmark target.\" The design's gate config uses only `max_neighbors=32`. One extra run at `max_neighbors=7`, with no gate attached, would cover it. Otherwise, say explicitly that it is deferred.",
+   "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:128"
+  }
+ ]
+}

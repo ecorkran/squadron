@@ -1,0 +1,297 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Premise cites 148 but leaves conflicting 148 and 145 text unreconciled",
+      "description": "The real basis is slice 148's re-diagnosis (`148-notes.rediagnosis.md`) and Phase 2 envelope (`148-notes.envelope-measurement.md`). Tiling is ruled out (K = 1.146, BLS does not fire) and p99 occupancy is about 5,000 at N=50k. The slice does not cite these notes, and its frontmatter lists only 145. Slice 148's design doc still says \"candidate count isn't the lever\" (148 lines 149\u2013150), citing the 145 density sweep (145 lines 271\u2013278).\n\nThat sweep changed global density, not local occupancy. The envelope shows p99 is driven by formation (3,949 at 900\u00d7900 versus 5,137 at 756\u00d7756; 184 for uniform placement), so the sweep may never have tested candidate count. Settle it by reporting p99 at each sweep point. If p99 fell about 9\u00d7 and TPS stayed flat, the candidate model is refuted. If p99 barely moved, the sweep is silent and the premise rests on the envelope. Either way, list the 148 notes as dependencies, state that 148's design text is superseded, and recheck the plan's \"Risk: Low\" rating for 149.",
+      "file_ref": null,
+      "category": "premise",
+      "raw_category": null,
+      "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:17"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Throughput arithmetic misquotes the rediagnosis and conflates visits with accepts",
+      "description": "Line 58 says S=3 alone drops candidates to about 5,000, and both together to about 555. The rediagnosis has the right figure: 49 cells \u00d7 555 \u2248 27,000 candidates (148 notes lines 108\u2013111). Under this doc's geometry, scanned area goes from 9R\u00b2 to (7R/3)\u00b2 \u2248 5.4R\u00b2, a reduction of about 1.65\u00d7, not 9\u00d7.\n\nThe early exit also does not reduce visits to 32, which is the accepted count. Visits \u2248 32 \u00f7 (in-radius fraction of visited candidates). Assuming uniform occupancy, that fraction is \u03c0/9 \u2248 0.35 at S=1 (about 90 visits) and 9\u03c0/49 \u2248 0.58 at S=3 (about 55 visits). Subdivision therefore adds about 1.7\u00d7 on the early-exit path and does not compose \"multiplicatively.\" Use the occupancy-weighted mean scan length, not p99. Recompute the expected gain with stated assumptions, and measure Intervention 1 alone first so Intervention 2 is justified by data. Both interventions stay in scope.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:52-58"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Option A moves the stopping decision out of the seam the plan names and weakens A7",
+      "description": "The parent plan (140-slices.simulation-scaling.md:50) says both interventions \"use the `getNeighbors` seam.\" Option A places the break in the caller, so the stopping decision leaves the seam (line 99 makes the seam unreachable once the break fires). The cap test now lives in two places, the seam's accept check and the caller's `k_found >= max_neighbors` (line 40), which duplicates logic.\n\nThe larger cost is A7. Slice 145 requires that a distance-ranked swap stay local to the seam (145 lines 357\u2013359). The rediagnosis says distance-ranked selection \"naturally enables early exit\" (lines 130\u2013131). That holds only if candidates arrive in distance order, and cell order does not provide that. A7 therefore needs the innermost break removed, which is a kernel-body change. Option B is rejected for destroying \"the A7 swap point prematurely\" (line 34), but under Option A the seam no longer makes the stopping decision either. State the seam's contract after 149 and what A7 must change. Use one name: this doc says `get_neighbors_first_k`, while 145 uses `getNeighbors` and `should_include_neighbor`.",
+      "file_ref": null,
+      "category": "design-boundary",
+      "raw_category": null,
+      "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:31-36"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Break feasibility and warp cost are asserted, not measured",
+      "description": "(a) Slice 145's R1 (lines 363\u2013368) required a prototype to verify break support, with counter-gating as the named fallback. Slice 145's design text says the counter \"stops the inner neighbor loop\" (lines 203\u2013205), but 149 reports that the shipped kernel counter-gates, which is the R1 fallback. 149 asserts the innermost break works without citing a prototype. Record the R1 outcome, and make the fallback explicit and observable rather than silent.\n\n(b) The warp argument compares per-thread savings. In SIMT a warp runs until its slowest lane finishes, so one fringe agent without a full cap holds the other 31 lanes to a full scan. \"Orders of magnitude larger than any divergence penalty\" is not measured. Replace it with the warp-time model and name fringe agents as the measured risk.\n\n(c) The break exits only the innermost loop. The `drow`/`dcol` loops keep visiting the remaining cells, each breaking immediately. That is correct, but state it, since it sets the residual per-agent cost (9 cells at S=1, 49 at S=3).",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:27-29"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Cell size, S and query radius are unchecked inputs; the S ceiling is mis-justified",
+      "description": "Neighbors are found only if \u00b1S cells of size `cell_size` span the largest query radius, which requires `cell_size \u2264 R_max / S`. The doc passes `cell_size` and `S` as separate inputs (lines 80, 90\u201397) and validates only S's range (lines 69\u201376). `cell_size = 16` with `S = 1` silently misses neighbors beyond 16 units, with no error or metric. The project rules prohibit that silent-failure pattern. Specify:\n- The backend derives `cell_size` once from R_max and S. Slice 145 sets cell size to `max_query_radius` across profiles (145 Pass 1), and the 148 envelope measured it that way. This doc's scalar `query_radius` is wrong for multi-profile runs.\n- A check or test asserting `S \u00d7 cell_size \u2265 R_max`.\n- `max_neighbors` is per profile in 145's table (145 line 126). The scalar in the pseudocode (line 40) should say so.\n- The S ceiling of 8 is justified by grid memory (line 78). Grid cell count scales with S\u00b2, and at N=50k it is about 14,600 cells at S=8 versus 256 at S=1 on the envelope's world, which is small. If a ceiling stays, justify it by scan cost (289 cell visits per agent at S=8, 49 at S=3) and define it once as a constant. `8` currently appears in the check and the message (lines 74\u201375).",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:69-80"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "\"Slice 146 is unblocked\" misstates the dependency; production configuration has no owner",
+      "description": "The plan lists 146's only dependency as 145, so 149 does not block 146, and the sentence implies the reverse. The real gaps:\n- 146 replaces the engine tick with the production driver and needs `cell_size` and `S` from engine config. This doc places both only in `BenchConfig` (lines 50\u201354, 80), so production has no owner, and the production default `S` is not stated.\n- Line 80 says `setup()` is unchanged externally, yet lines 90\u201392 store `S` on the backend as a new input. Either `setup()` gains a parameter or `S` comes from config. If the backend reads `BenchConfig`, the dependency points the wrong way.\n- Slice 148's disposition removes its tiled kernel before merge, so 146 chooses between the 145 kernel and 149's change. Say that 149 changes the canonical kernel rather than adding a variant. No 146 slice doc exists in this tree, so this was checked against the plan's description.",
+      "file_ref": null,
+      "category": "integration",
+      "raw_category": null,
+      "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:108-111"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Plan-assigned 7-neighbor benchmark is dropped",
+      "description": "The parent plan's 149 entry (140-slices.simulation-scaling.md:50) says \"the 7-neighbor operating point is a benchmark target,\" and the rediagnosis proposes it (lines 91\u201397). This doc never mentions it, and the gate uses `max_neighbors=32` only (line 128). Dropping it changes scope. Add a `max_neighbors=7` run to the gate table or get the plan amended. The run also tests the design: the gain scales with candidates \u00f7 max_neighbors, so early exit pays most here. First-k-found at 7 takes the first seven hits in scan order, which starts at the (\u2212S, \u2212S) cell. The 20% statistical check may not detect that directional bias, so this run tests whether it matters physically.",
+      "file_ref": null,
+      "category": "scope",
+      "raw_category": null,
+      "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:128"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Verification walkthrough cannot produce the baseline or the ablation",
+      "description": "Step 3 has two identical command pairs: lines 162\u2013163 match 166\u2013167, and 170\u2013171 match 174\u2013175. No switch selects break versus counter-gating, so the \"baseline (should reproduce ~38 TPS)\" and \"early exit only\" rows cannot be run from this design. A2 also needs a baseline, either a git ref or a toggle, and the doc specifies neither. In addition:\n- The commands use `scripts/bench.py --config` and `--subdivision-factor`. Slices 145 and 148 use `python -m migratory.bench.cli --workload`. Align with that, or state the change.\n- Step 2 claims \"no regression at N=10k\" without pinning S. S=3 visits 49 cells per agent at any density, which is overhead with no gain when sparse. Pin S for that run and state the expected result.\n- Step 4 relies on `TI_PRINT_KERNEL_STATS=1 or equivalent`, which is unverified. Slice 148 uses `qd.profiler` output; use that.",
+      "file_ref": null,
+      "category": "verification",
+      "raw_category": null,
+      "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:160-176"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Overweight for an Effort 2/5 slice",
+      "description": "Cut or compress:\n- The warp paragraph (line 27): replace with the one-line measured risk from the finding above.\n- The Option A/B discussion (lines 31\u201336): a two-line decision once the seam contract is stated.\n- The component diagram (lines 84\u2013100) restates the kernel loop and the \"No changes\" list. Keep only the interface contract.\n- The S ceiling discussion (lines 74\u201378), unless re-justified as above.\n- Verification steps 1 and 5 repeat A1 and A4. Use one table that maps each criterion to its command.\n\nKeep the intervention code (lines 38\u201344 and 62\u201365), the validation error (lines 71\u201376), and the gate table (lines 118\u2013124).",
+      "file_ref": null,
+      "category": "proportionality",
+      "raw_category": null,
+      "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Early exit at S=1 can be tested bit-exact; S>1 changes the accepted set",
+      "description": "At S=1, early exit accepts exactly the neighbors counter-gating accepts: the first 32 in-radius candidates in scan order. The design can therefore require bit-identity with slice 145 output, which is much sharper than the 20% statistical check. At S>1 the scanned set and order change, so the accepted set changes. \"Correct neighborhood is preserved\" (line 56) holds only when the cap does not bind, and at the gate's operating point it binds. Describe S as a selection-rule change, and add a deterministic reference test: brute-force first-32 in the 7\u00d77 order, compared against kernel output.",
+      "file_ref": null,
+      "category": "verification",
+      "raw_category": null,
+      "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:56"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Tier 2 has no closing slice in the plan as written",
+      "description": "Tier 2 is defined as 140\u2013146 plus wire work (line 74), which omits 147\u2013149. Plan entry 148 is still marked [x] with its original goal, \"Close the Tier 2 gap\" (line 48), and records no outcome, even though the rediagnosis made it a negative result and passed the job to 149. Record 148's outcome in the plan and add 149 to the Tier 2 definition. This is a plan-level gap that this slice cannot resolve alone.",
+      "file_ref": null,
+      "category": "traceability",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/140-slices.simulation-scaling.md:74"
+    },
+    {
+      "severity": "PASS",
+      "title": "Tier 2 NFR restated with target and gate values",
+      "description": "The Tier 2 target is restated with N (50k), hardware (CUDA), and gate values (\u22655\u00d7 force_total, \u2265100 TPS, 20% parity). These match the plan's 149 exit criteria (line 50). Fix the source citation: line 116 attributes \"60 TPS at N=50k\" to the architecture document, which states 60 TPS only for the 2M end state (140-arch.simulation-scaling.md:18). The 50k figure appears in plan entries 145 (line 42) and 148 (line 48).",
+      "file_ref": null,
+      "category": "nfr",
+      "raw_category": null,
+      "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:116-124"
+    },
+    {
+      "severity": "PASS",
+      "title": "Dependencies and boundaries match the architecture",
+      "description": "The 145 dependency matches the plan and the frontmatter. The kernel this design edits is the 145 kernel that slice 148 leaves on main. TickResult and world-server wiring are untouched, as the architecture requires. The fused kernel stays outside `SpatialQuery`/`BulkForce`, which the architecture's Architectural Principles allow. The S range check fails explicitly at config load.",
+      "file_ref": null,
+      "category": "design-boundary",
+      "raw_category": null,
+      "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:102-106"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "premise",
+      "raw_category": null,
+      "summary": "Premise cites 148 but leaves conflicting 148 and 145 text unreconciled",
+      "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:17",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Throughput arithmetic misquotes the rediagnosis and conflates visits with accepts",
+      "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:52-58",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "design-boundary",
+      "raw_category": null,
+      "summary": "Option A moves the stopping decision out of the seam the plan names and weakens A7",
+      "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:31-36",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Break feasibility and warp cost are asserted, not measured",
+      "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:27-29",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Cell size, S and query radius are unchecked inputs; the S ceiling is mis-justified",
+      "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:69-80",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "integration",
+      "raw_category": null,
+      "summary": "\"Slice 146 is unblocked\" misstates the dependency; production configuration has no owner",
+      "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:108-111",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "concern",
+      "category": "scope",
+      "raw_category": null,
+      "summary": "Plan-assigned 7-neighbor benchmark is dropped",
+      "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:128",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "concern",
+      "category": "verification",
+      "raw_category": null,
+      "summary": "Verification walkthrough cannot produce the baseline or the ablation",
+      "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:160-176",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "concern",
+      "category": "proportionality",
+      "raw_category": null,
+      "summary": "Overweight for an Effort 2/5 slice",
+      "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md",
+      "location_verified": null
+    },
+    {
+      "id": "F010",
+      "severity": "note",
+      "category": "verification",
+      "raw_category": null,
+      "summary": "Early exit at S=1 can be tested bit-exact; S>1 changes the accepted set",
+      "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:56",
+      "location_verified": true
+    },
+    {
+      "id": "F011",
+      "severity": "note",
+      "category": "traceability",
+      "raw_category": null,
+      "summary": "Tier 2 has no closing slice in the plan as written",
+      "location": "project-documents/user/architecture/140-slices.simulation-scaling.md:74",
+      "location_verified": true
+    },
+    {
+      "id": "F012",
+      "severity": "pass",
+      "category": "nfr",
+      "raw_category": null,
+      "summary": "Tier 2 NFR restated with target and gate values",
+      "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:116-124",
+      "location_verified": true
+    },
+    {
+      "id": "F013",
+      "severity": "pass",
+      "category": "design-boundary",
+      "raw_category": null,
+      "summary": "Dependencies and boundaries match the architecture",
+      "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:102-106",
+      "location_verified": true
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md",
+    "against": "project-documents/user/architecture/140-slices.simulation-scaling.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/migratory-149-slice"
+  },
+  "timestamp": "2026-11-16T13:01:49.040478",
+  "model": "claude-haiku-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 11,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-haiku-5-5",
+  "answering_models": [
+    "claude-haiku-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 13,
+    "in_fences": 0,
+    "in_section": 13,
+    "surviving": 13
+  },
+  "effort": "xhigh",
+  "profile": "sdk",
+  "turns": 12,
+  "prompt_tokens": 819533,
+  "cached_tokens": 592468,
+  "cache_write_tokens": 227053,
+  "completion_tokens": 113340,
+  "reasoning_tokens": null,
+  "duration_seconds": 493.5079941251315,
+  "cost_usd": 0.39473456000000007,
+  "cost_basis": "provider"
+}

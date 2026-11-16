@@ -1,0 +1,68 @@
+{
+ "review": "r05",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Timeouts do not cover runtime start, login start, or logout",
+   "description": "Line 82 says the startup hang \"is already bounded by `codex.turn_timeout_s`\". D7 (line 107) and the failure table (line 125) apply that timeout to `thread.run` only. `AsyncCodex.__aenter__` (spawn and `initialize`) and `thread_start` run before it, so a hang there on the review path has no bound and no table row. Three more paths are unbounded:\n- Login start (`login_chatgpt()` / `login_chatgpt_device_code()`). `codex.login_timeout_s` covers only `handle.wait()`.\n- `sq auth logout`, which spawns a runtime (line 82) but has no timeout in D7.\n- Ctrl-C mid-login. D7 (line 111) says the handle is cancelled, but no row asserts an observable signal.\n\nFix: wrap start, `thread_start` and `thread.run` in the single `asyncio.timeout(codex.turn_timeout_s)`. Put logout and login start under `codex.account_timeout_s`. Add a row for each with its WARNING or `ProviderError` signal. The key count stays the same.",
+   "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:82"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Empty-response case bypasses the slice 931 empty-turn contract",
+   "description": "D8 raises a plain `ProviderError` when a completed turn has no text. The review pipeline catches `EmptyFinalTurnError` specifically on the first turn: it folds the empty turn's telemetry into the capture and allows one recovery turn (slice 931 D7; contract at 931 lines 152 and 362). A plain `ProviderError` skips all of that and is reported as an ordinary failure. Either raise `EmptyFinalTurnError` so Codex joins the OpenAI handling, or state in D8 that Codex opts out of the recovery turn and why.",
+   "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:114"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "API-key fallback contradicts the profile's exclusion and the HLD auth table",
+   "description": "Line 42 excludes API-key use from `openai-oauth` (\"API-key users keep the `openai` profile\"). Line 232 keeps the `OPENAI_API_KEY` fallback in `OAuthFileStrategy` if the probe \"works\". That would let `openai-oauth` report \"authenticated\" from an API key, the same variable the HLD assigns to the OpenAI provider (`100-arch.orchestration-v2.md`, Authentication Patterns, OpenAI row). Walkthrough step 6 (line 217) has to unset the key to avoid this. Line 232 calls the key-only case a silent-fallback path, yet keeps it in the \"works\" branch. Decide now rather than by probe: remove the key fallback from `OAuthFileStrategy` (`is_valid`, `active_source`, `get_credentials`, `setup_hint`) whatever the runtime does. The probe then only documents runtime behavior.",
+   "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:232"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Doctor row reaches into the Codex provider module, contradicting D9",
+   "description": "D9 says the doctor row \"goes through the same two abstractions rather than around them\" and that the hint \"has one source\". But the row's detail comes from calling `resolve_codex_runtime()` directly (lines 112 and 172). The CLI doctor check therefore depends on a Codex-specific module function, against the project's \"program to interfaces\" rule. Line 139 also says the hint is defined \"once in `runtime.py`\", while line 112 says it comes from `missing_extra_hint()`. Fix: have `ExtraRequirement` return a typed status (installed, version, runtime source) so doctor consumes only the Protocol. Or narrow D9 to call doctor a Codex-specific diagnostic and drop the \"two abstractions\" claim.",
+   "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:112"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Overweight prose and a CLI surface the plan does not ask for",
+   "description": "Cut candidates:\n- Overview (15-28) and Value (23-28) restate the plan entry. Keep one short paragraph.\n- \"Relationship to the architecture's auth model\" (88-90) restates the HLD. Keep one sentence that points to it.\n- \"Provides to Other Slices\" (178-181) names reuse that no planned slice consumes. The frontmatter (line 7) already says so. Delete the bullets.\n- `--timeout SECONDS` on `sq auth login` (lines 108, 149). The plan doesn't ask for it, and `codex.login_timeout_s` already covers the case. Cut it unless the PM wants the flag.\n\nKeep the `InteractiveLogin` and `ExtraRequirement` Protocols, since each has a CLI consumer.",
+   "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:15-28"
+  },
+  {
+   "i": 5,
+   "severity": "NOTE",
+   "title": "D8 turn-status checks and empty-response rejection are not in the plan entry",
+   "description": "Plan line 79 assigns effort, usage, and the `Sandbox`/`ApprovalMode` enums. It does not assign the turn-status checks or the rejection of empty responses. Both change current behavior: the `final_response or \"\"` fallback becomes an error. The change is defensible, but record it in the plan entry or commit it as a fix under the fix rules.",
+   "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:114"
+  },
+  {
+   "i": 6,
+   "severity": "NOTE",
+   "title": "Slice 931 is satisfied but missing from the parent plan",
+   "description": "The frontmatter (line 6) and Prerequisites (line 50) list slice 931. The plan entry (`project-documents/user/architecture/100-slices.orchestration-v2.md:79`) says `Dependencies: [128]`. 931 is `status: complete`, and the `core/usage.py` types and `applies_effort` that the design uses are in place, so nothing is blocked. Add 931 to the plan entry so the plan matches the design.",
+   "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:6"
+  },
+  {
+   "i": 7,
+   "severity": "NOTE",
+   "title": "Failure-path telemetry is not stated for Codex errors",
+   "description": "Slice 931 requires any `ProviderError` leaving an agent to carry a `RunTelemetry` snapshot in `telemetry`. The failure table raises `ProviderError` for timeouts, transport closures and failed turns but does not say what telemetry they carry. Codex runs one turn per message, so the likely value is \"no completed turns\" and should be stated in one sentence in Patterns and Conventions, so the failure artifact doesn't guess.",
+   "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:120-135"
+  },
+  {
+   "i": 8,
+   "severity": "NOTE",
+   "title": "Authentication Patterns table has no openai-oauth row",
+   "description": "Line 89 says the architecture text \"stays accurate\". The generic sentence is accurate, and the design adds no unification. But the table has no row for `openai-oauth`, and its OpenAI row describes only the API-key path. The gap predates this slice, but this slice adds the file-based login path, so add the row in the docs step rather than leave the table stale.",
+   "location": "project-documents/user/architecture/100-arch.orchestration-v2.md#authentication-patterns"
+  }
+ ]
+}

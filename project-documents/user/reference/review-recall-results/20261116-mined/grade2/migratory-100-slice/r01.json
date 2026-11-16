@@ -1,0 +1,103 @@
+{
+ "review": "r01",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "FAIL",
+   "title": "BulkForce contract is list-based, contrary to the architecture's array-in/array-out mandate",
+   "description": "The parent architecture requires the force interface to be \"bulk array-in/array-out operations with no Python-level per-agent branching, no dynamic allocation, and no callbacks into Python during the hot loop\" (100-arch.behavior-engine.md:99). The BulkForce protocol takes `neighbor_lists: list[NDArray]`, a ragged Python list with one array per agent (line 145). It takes `profiles: list[BehavioralProfile]`, a list of dataclass objects (line 146). It returns a newly allocated N\u00d72 array per force per tick (lines 148, 152). None of these is fixed-shape array-in/array-out, and a list of dataclasses cannot be dispatched to a GPU. Slices 101\u2013104 will all be written against this contract, so it has to change before they start.\n\nDirection: pass neighbors as a flat index array with offsets (CSR-style), pass profile parameters as arrays indexed by `profile_indices`, and specify whether output buffers are preallocated and reused.",
+   "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:141-152"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Neighbor discovery is a per-agent Python loop, and the no-loop requirement is narrowed",
+   "description": "Data Flow step 3 calls `query_radius` once per active agent. That is object-by-object iteration in the hot loop, which the architecture rules out (100-arch.behavior-engine.md:33). The architecture also says neighbor finding typically dominates tick cost (line 87). The slice's own requirement at line 247 limits the no-loop rule to \"force accumulation and integration,\" which leaves out the step that dominates cost.\n\nEither make the query batched (all active positions and radii in one call, returning CSR-style output), or restate the requirement to cover the query step and name the slice that closes the gap.",
+   "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:88"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Per-agent `Force` protocol has no consumer and contradicts the tick signature",
+   "description": "The per-agent `Force` protocol is described as \"used for testing, reference implementations\" (line 124). The text also says the tick loop \"prefers the bulk variant when available\" (line 152). But `tick()` accepts only `forces: list[BulkForce]` (line 185). The success criterion at line 248 requires placeholder forces to \"exercise both the `Force` and `BulkForce` protocol paths.\" Nothing connects `Force` to `tick()`, so that criterion cannot be met as written.\n\nRecommend cutting the per-agent `Force` protocol from this slice and dropping the line 248 wording. The plan entry for 100 (100-slices.behavior-engine.md:17) does not require it. Keeping it adds a second force path that 101\u2013104 would have to keep in sync. If the per-agent form is still wanted for reference tests, make it a test helper rather than part of the engine interface.",
+   "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:124-136"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Inactive-agent integration is described two incompatible ways",
+   "description": "Line 152 says the bulk force output is zero for inactive agents, so that \"integration step [is] simple (add force to velocity for all).\" Line 215 says integration applies only to active agents, via `state.velocities[active_indices] += ...`. If integration runs over all agents as line 152 describes, the clamp and `position += velocity * dt` move inactive agents that have nonzero velocity. That breaks the success criterion at line 241: \"all others are unchanged.\"\n\nDelete the line 152 phrasing and keep one approach. Index-restricted integration (line 215) is the correct one.",
+   "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:152"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "`tick()` return contract conflicts with the parent architecture and the slice's own scope",
+   "description": "The signature returns `None` and mutates state in place (lines 187, 191, 91). The included-scope list says the tick should \"return updated state\" (line 39). The parent architecture describes the engine as \"stateless between ticks ... feed in state, get back state\" (100-arch.behavior-engine.md:70) and says the tick returns the updated state array (line 68). The concept says \"keep the tick function pure\" (001-concept.migratory.md:79).\n\nIn-place mutation may be a deliberate hot-loop choice, but this slice does not record it as a deviation from two parent documents. Either return the state (in-place plus return), or record the deviation explicitly and have the PM amend the architecture.",
+   "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:187"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Environment input surface is absent, and the \"tick used as-is\" claim does not hold",
+   "description": "The parent architecture makes environment a read-only input surface (100-arch.behavior-engine.md:47) and has the engine receive \"environmental context\" each tick (line 64). Neither `tick()` (lines 180\u2013187) nor the Force and BulkForce protocols accept environment. Deferring environment content to later is reasonable. But line 225 says the tick is \"used as-is\" and that \"behavioral slices add forces; they don't modify the tick loop.\"\n\nSlices 106 and 107 depend on the Environment Layer (100-slices.behavior-engine.md:47\u201348), so the tick signature will change or the claim is false. Either reserve a typed, empty environment parameter now, or remove the \"as-is\" claim and state that the signature is expected to change when the Environment Layer arrives.",
+   "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:225"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "Engine-owned precision conversion is excluded, reversing the parent architecture's assignment",
+   "description": "The parent architecture says the engine \"should define its internal precision and provide an efficient conversion path at the serialization boundary\" (100-arch.behavior-engine.md:95). The slice keeps float64 internally (line 100). It excludes the conversion, saying it is \"a world server concern\" (lines 49, 100). No slice in the plan (101\u2013108) picks up a conversion path, and the world-server architecture that would own it is not in this checkout (see NOTE below). As written, no document assigns this requirement.\n\nEither add a small conversion method to `AgentState` in this slice, or have the PM amend the architecture's ownership. Record which one in the slice.",
+   "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:49"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "NFR not restated; the slice's scale target is narrower than the architecture's, and brute-force `build()` holds N\u00b2 memory",
+   "description": "The parent architecture sets the efficiency goal as \"tens of thousands of agents at full behavioral fidelity on a single CPU process\" (100-arch.behavior-engine.md:33). This slice touches the tick and neighbor path, so the NFR must be restated here with its target. Instead, line 173 says brute force is \"acceptable for the hundreds-of-agents scale this slice targets.\" The concept says the naive check \"works for hundreds of agents\" (001-concept.migratory.md:77), so the slice matches the concept. It does not match the architecture's later target, and the doc never names the slice that closes the gap (105, per 100-slices.behavior-engine.md:34).\n\nThe brute-force `build()` also \"computes all pairwise distances,\" which stores an N\u00d7N matrix. That is about 0.8 GB of float64 at 10,000 agents and about 20 GB at 50,000. Storing positions in `build()` and computing distances per query gives O(n) memory with the same per-tick time when all agents are active.\n\nRestate the NFR, the scale this slice validates, and the owning slice. Drop the N\u00d7N precompute.",
+   "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:173"
+  },
+  {
+   "i": 8,
+   "severity": "CONCERN",
+   "title": "SpatialQuery contract leaves ordering, self-inclusion, and boundary undefined; slice 105 depends on them",
+   "description": "The protocol says only \"Return indices of all agents within radius\" (lines 165\u2013169). It does not say:\n- whether the querying agent is returned (the query takes a position, not an index, so self cannot be excluded by identity);\n- whether the radius boundary is `<` or `<=`;\n- what order the indices come back in.\n\nThese choices change force sums and therefore output bits. Slice 105 requires that \"behavioral output is identical before and after the swap\" (100-slices.behavior-engine.md:34). A spatial hash cannot meet that unless slice 100 fixes a canonical order (for example ascending index), a boundary rule, and a summation order.\n\nThe determinism criterion at line 240 is satisfied by repeated calls within one process. That does not test the cross-run agreement the architecture states as a goal (\"regions must agree,\" 100-arch.behavior-engine.md:31). Specify these rules in the 100 contract now.",
+   "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:158-171"
+  },
+  {
+   "i": 9,
+   "severity": "CONCERN",
+   "title": "`active_indices` validation and `AgentState` lifecycle are under-specified; duplicate indices fail silently",
+   "description": "With `state.velocities[active_indices] += ...` (line 215), a repeated index is applied only once, so duplicates in `active_indices` produce a silently wrong state. The design does not validate:\n- indices (out of range, duplicates);\n- `dt` (non-positive or non-finite);\n- profile indices against the profile list.\n\nProject rules require explicit failure here.\n\nThe lifecycle is also undefined. `add`/`remove` are described only as \"resize arrays\" (line 98), with no signatures. The doc does not say whether removal shifts or swaps indices. That matters because any caller holding an active subset is invalidated, and the architecture says the caller chooses that subset (100-arch.behavior-engine.md:49). `AgentState.create(n=100, profiles=[profile])` appears in the verification walkthrough (line 275) but is never defined.\n\nSpecify the validation rules and the index-stability contract.",
+   "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:186"
+  },
+  {
+   "i": 10,
+   "severity": "CONCERN",
+   "title": "`accelerations` array and force/mass/clamp semantics are undefined",
+   "description": "`accelerations` (N\u00d72) is part of the state (line 96), but no step reads or writes it. Integration uses `velocity_new = velocity + force * dt` (line 208), which implies unit mass with force treated as acceleration. Either define the relationship and where `accelerations` is written, or drop the array.\n\nThe clamp is written as `clamp(velocity_new, max_speed)` (line 209). That could mean a magnitude clamp or a per-component clamp, and for 2D movement those give different motion. State which one.",
+   "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:96"
+  },
+  {
+   "i": 11,
+   "severity": "CONCERN",
+   "title": "Integration contract omits dependent slices 106 and 108",
+   "description": "The frontmatter `interfaces` lists 101\u2013105. The plan lists 106 and 108 as depending directly on (100) (100-slices.behavior-engine.md:47, 49). \"Provides to Other Slices\" (lines 219\u2013226) omits them too.\n\nSlice 108 needs aggregate entities evaluated \"through the spatial query interface\" (100-slices.behavior-engine.md:49; 100-arch.behavior-engine.md:115). The neighbor return is indices into `AgentState` rows (line 165), and the Force `neighbors` argument is typed as indices (line 132). Both assume every neighbor is an agent row. The plan only requires that the interfaces \"not preclude\" aggregates (100-slices.behavior-engine.md:43), so this is not necessarily a blocker. The contract should still say how a non-row neighbor would be represented.\n\nAdd 106 and 108 to `interfaces`, and state how aggregate neighbors fit the neighbor contract.",
+   "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:7"
+  },
+  {
+   "i": 12,
+   "severity": "NOTE",
+   "title": "Integration section is indented four spaces, so it renders as a code block",
+   "description": "Lines 205\u2013215 are indented four spaces after a blank line. The \"Integration: Semi-Implicit Euler\" heading and the formula render as literal code, not as a section. Dedent the block.",
+   "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:205-215"
+  },
+  {
+   "i": 13,
+   "severity": "NOTE",
+   "title": "Referenced world-server architecture is not in this checkout",
+   "description": "`200-arch.world-server-foundation.md` is cited by the parent architecture (Related Work) and by the slice plan (Scaling context, 100-slices.behavior-engine.md:43). A search of the worktree and the main repo found no such file. I relied on the architecture's summary of its scaling tiers. Any claim that depends on the world-server doc's NFRs, or on the world server owning persistence and the Float32 boundary, is unverified here.",
+   "location": "project-documents/user/architecture/100-arch.behavior-engine.md#related-work"
+  }
+ ]
+}

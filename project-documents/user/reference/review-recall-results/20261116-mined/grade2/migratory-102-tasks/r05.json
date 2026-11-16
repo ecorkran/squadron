@@ -1,0 +1,54 @@
+{
+ "review": "r05",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Vectorization requirement has no task coverage",
+   "description": "The slice's Technical Requirements say \"Both forces are vectorized within each agent's neighborhood \u2014 no nested Python loops.\" No task mentions this. The task steps actually point the other way:\n- Task 3.1 (lines 84-88) says \"For each active agent: compute speed\u2026\". MomentumForce has no neighbor dependence, so it can be done as one array operation (`np.linalg.norm(velocities[idx], axis=1)` with a mask for near-zero speed).\n- Task 4.1 (line 118) gives the formula as `sum(velocity[i] * leadership[i]) / sum(leadership)`. That indexed form invites a junior implementer to write an inner loop over neighbors.\n\nFix: add a step to 3.1 and 4.1 that states the constraint. In 4.1, write the formula as an array expression, for example `w = state.leadership[nbrs]; (w[:, None] * state.velocities[nbrs]).sum(0) / w.sum()`.",
+   "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:84-88"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Convergence assertion is too weak to show the herd converges on the leaders' heading",
+   "description": "The success criterion is that \"the herd's mean heading converges toward the leaders' initial heading.\" Task 5.2 only asserts that the mean heading has a positive x-component. With 45 of 50 agents on random velocities, the starting mean heading has roughly even odds of already having a positive x-component. A fixed seed makes the test repeatable, but it can still pass without any leadership effect. Fix it in one of two ways:\n- Assert that the final mean heading angle is within a stated tolerance of east, or that the mean unit-heading x-component is above a stated threshold.\n- Assert that the eastward component at the end is greater than at tick 0.",
+   "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:152-153"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "LeadershipForce tests cannot detect a missing normalization step",
+   "description": "The criterion \"Each force produces the correct output for hand-constructed inputs\" is only partly tested:\n- The known-geometry test (line 126) uses leadership values 0.1 and 0.9, which sum to exactly 1.0. Dividing by `sum(leadership)` therefore changes nothing. The test also only checks that the force \"biases toward\" agent 1.\n- The uniform-leadership test (line 127) says \"should be similar to plain velocity averaging (like AlignmentForce direction)\". That checks direction only, and is too vague for a junior implementer.\n\nIf the implementer leaves out the division by `sum(leadership)`, both tests still pass. Fix:\n- In the known-geometry test, assert the exact value `result[2] \u2248 [0.9, 0.1]`.\n- Change the uniform test to use leadership values that do not sum to 1, for example all 0.5. Then assert the exact mean of the neighbor velocities minus the agent's velocity.",
+   "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:126-127"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Commit markers are checkbox tasks, and the final commit has nothing to commit",
+   "description": "Commits are written as checkbox items (1.3, 2.3, 3.3, 4.3, 5.4, 6.3) instead of plain `**Commit**:` lines. They are placed at sensible tested points, after each section's tests pass. The problem is format: a commit written as a checkbox becomes a task that gets checked off after the commit has already been made.\n\nTask 6.3 (lines 180-182) is worse. It commits \"any remaining changes\" as `docs: complete slice 102`, after a section that only runs verification. The only remaining change would be the check-offs themselves, which makes it the bookkeeping-only commit that project rules forbid.\n\nFix: replace 1.3, 2.3, 3.3, 4.3 and 5.4 with plain `**Commit**: <message>` lines, and remove 6.3.",
+   "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:48-49"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Section 6 repeats checks done earlier",
+   "description": "- Task 6.2 re-checks `isinstance(..., BulkForce)`. That is already verified in 3.1 and 4.1 and tested in 3.2 and 4.2.\n- Task 6.1 runs the full suite, which 2.2 and each section's verify step already do.\n\nCut 6.2. Either fold 6.1 into the 5.x commit point as a final full-suite run, or keep 6.1 alone and drop the rest of Section 6.",
+   "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:171-182"
+  },
+  {
+   "i": 5,
+   "severity": "NOTE",
+   "title": "Task 5.1 overlaps with 5.2",
+   "description": "Task 5.1 is a smoke test: it checks that five forces run through `tick()` without error. Its line \"Set some agents to high leadership \u2026 to confirm forces interact correctly\" has no measurable pass condition. Task 5.2 runs the same five-force `tick()` path with a real assertion. Consider dropping the vague step, or merging 5.1 into 5.2.",
+   "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:141-145"
+  },
+  {
+   "i": 6,
+   "severity": "NOTE",
+   "title": "Epsilon should be a named constant",
+   "description": "Lines 86 and 117 each write the epsilon inline as \"e.g. 1e-10\". Project rules say not to scatter hard-coded constants. Tell the implementer to define one module-level constant in `herding.py` and use it in both forces.",
+   "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:86"
+  }
+ ]
+}

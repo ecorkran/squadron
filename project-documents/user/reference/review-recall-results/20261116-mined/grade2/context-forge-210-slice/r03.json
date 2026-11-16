@@ -1,0 +1,61 @@
+{
+ "review": "r03",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Source of Copilot output is `.claude/`, a hidden dependency on Claude setup",
+   "description": "The file layout says each Copilot file comes from `.claude/rules/*.md` or `.claude/skills/*.md`. Two other parts of the design contradict that:\n- The design decision at line 69 says compilation runs in guide scripts \"that understand the project-documents layout\", which means the guide-side rule sources.\n- Line 55 says the Copilot target never touches `.claude/`.\n\nThe slice exists for a user who has left Claude. For that user, `cf init --ide copilot` on a fresh directory installs the guides and then runs `setup-ide copilot`. No `.claude/rules/` or `.claude/skills/` folder exists at that point, so if the script reads from there it produces empty or missing output. That breaks success criterion 2 in the slice plan (end-to-end on a fresh directory). The design should name where rules come from, and where skills come from (the guide submodule? `packages/cli/commands/`?). It should also say that the Copilot target works without the Claude target having run.",
+   "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:36-49"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "The guides script's contract and the translation rules are not specified, and nothing tests them",
+   "description": "The design hands the main deliverable (rules, frontmatter and skills translation) to `scripts/setup-ide copilot` but describes it in one line (line 114). Missing pieces:\n- **Input forms.** The slice plan says the translator \"must handle both forms\" of `paths`. The design shows only the multi-line YAML list. It does not cover the inline list form (`paths: [\"a\",\"b\"]`) or a single string. Lenient parsing is a project rule.\n- **Commas inside globs.** `applyTo` separates patterns with commas, so joining `paths` entries with commas breaks brace globs that are common in Claude rules. For example, `src/**/*.{ts,tsx}` becomes `src/**/*.{ts` and `tsx}`. The design needs a rule for this, such as expanding braces before joining.\n- **Prompt file frontmatter.** The slice plan lists the fields `name`, `description`, `argument-hint`, `agent`, `model` and `tools`. The design never says how skill frontmatter maps onto them.\n- **Always-on vs scoped.** Line 83 adds an `applyTo: \"**\"` default but then says files without `paths` never become split instruction files. So the default never applies; the design should either drop it or say when it is used.\n- **Script output contract.** It does not say which files the script writes, that it adds the managed marker to every output file, or what exit codes it returns.\n- **Tests.** The Test Coverage section (lines 121-129) tests only the CLI side. The slice plan's criterion \"Path\u2192applyTo translation correctly converts\u2026\" has no test, and the design does not say where translation tests would live (CF or the guide repo).",
+   "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:71-83"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Overwrite check covers only 2 of the 4 output locations",
+   "description": "Step 4 checks for the managed marker only in `.github/copilot-instructions.md` and `AGENTS.md`. The script also writes `.github/instructions/*.instructions.md` and `.github/prompts/*.prompt.md`. Those folders often already hold files the user wrote, such as their own `commit.prompt.md`. Any user file whose name matches generated output would be overwritten with no prompt and no backup. That breaks the slice plan's \"first-run warns before overwriting unmanaged user content\".\n\nSmaller gaps in the same area:\n- The helper has two names: `isManagedCopilot(filePath)` at line 29 and `isManagedCopilotFiles(projectPath)` at line 109.\n- The design does not say what happens when the user declines the prompt: abort the whole run, or skip only that file.\n- It does not say whether managed files left behind after a source rule is deleted get removed, both at the project root and when copying to worktrees.",
+   "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:98-100"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Failure modes of the script call and worktree copying are not listed",
+   "description": "The design calls itself the \"highest-risk coupling\" (line 133) but gives only \"will fail at the script step with a clear error\". It does not say who produces that error or what it says. Cases with no stated handling:\n- **Version mismatch.** A newer CLI paired with older installed guides that have no `copilot` case. The design should say how this is detected (for example, a check for the `copilot` case or a minimum guide version) and what the user is told, such as `cf guides update`.\n- **Script fails partway.** Some `.github/` files are written and others are not. Does propagation to worktrees still run? Is the user told the output is incomplete?\n- **Copy to one worktree fails.** Does the run keep going with a warning or abort?\n\nEach case needs explicit handling that the user can see.",
+   "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:101-102"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "The same always-on content is written to two files that VS Code loads together",
+   "description": "The design writes identical compiled content to both `.github/copilot-instructions.md` and `AGENTS.md`. The referenced tool guide (`tool-guides/copilot-vscode/setup-ide.md:26`) says both files are \"always-on in workspace chat\". So VS Code would load every always-on rule twice. In a project that also ran Claude setup it would load them three times, because VS Code also reads `CLAUDE.md`. That wastes context and works against the design's own reason for this decision, which is to avoid ordering problems between instruction files.\n\nThe slice plan names both files, so keep both, but stop duplicating the content. Two options:\n- Put the full content in one file and make the other a short pointer to it.\n- State that the duplication was checked and is acceptable.",
+   "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:59-61"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Two items the slice plan assigns to this slice are missing",
+   "description": "- **Tool guide reference.** One of the slice plan's success criteria requires the slice design to reference `project-documents/user/tool-guides/copilot-vscode/setup-ide.md` and to decide whether to promote it to a published tool guide. The design never mentions that file.\n- **Custom agents mapping.** The slice plan's mapping table says to \"document mapping\" for `.claude/agents/*.md` \u2192 Copilot custom agents. The design says the mapping will be documented (line 54) but never documents it.\n\nAdd both. Each is a few lines.",
+   "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md#technical-scope"
+  },
+  {
+   "i": 6,
+   "severity": "NOTE",
+   "title": "Architecture still names Cursor as the second IDE target",
+   "description": "The architecture's IDE strategy section (also lines 86 and 262) says \"Cursor support is the next priority\". The slice plan, updated 20260411, put Copilot ahead of Cursor, and the architecture document was not updated (its dateUpdated is still 20260314). The architecture does allow this (\"Additional IDEs can be added as `setup-ide` gains support\"), so this is not a conflict. The architecture's IDE strategy section should still be updated to match.",
+   "location": "project-documents/user/architecture/200-arch.developer-onboarding.md:131"
+  },
+  {
+   "i": 7,
+   "severity": "NOTE",
+   "title": "Onboarding time target not restated",
+   "description": "The architecture's main goal is \"from `npm install` to useful context output in under two minutes\". `cf init --ide copilot` is on that path. The extra cost of the Copilot step is small, so this is low risk, but one line restating the target would close the gap.",
+   "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md"
+  }
+ ]
+}

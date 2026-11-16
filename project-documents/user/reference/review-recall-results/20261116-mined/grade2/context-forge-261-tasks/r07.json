@@ -1,0 +1,96 @@
+{
+ "review": "r07",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Sub-second performance target has no timing or load test",
+   "description": "The design restates \"detection adds under one second to a Phase 0 build on a local disk\" (slice design line 167). Line 38 says there is no timing or load test, because the `tests/load/` tier \"is a rule in `rules/python.md`\". The breakdown is right that the rule is Python-named. But the rule's trigger is event-loop, concurrency and budget risk (`python.md:57`), and D2 itself says the walk must not block the MCP event loop. The caps tests bound the work but never measure time. Either add a load or timing task for a large tree at the caps, plus a CI gating task for it, or record a PM-approved waiver in the slice. The only `tests/load` reference in the worktree is that python rule.",
+   "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:38"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Commit points are checkbox items, not `**Commit**:` markers",
+   "description": "The ten commit points (lines 78, 105, 131, 148, 178, 202, 225, 251, 257, 269) are `- [ ]` checkboxes. The convention is plain `**Commit**:` lines, never checkboxes, and the order is implement, then task-checker, then commit. A box for a commit cannot be checked inside the commit it triggers, so either the commit ships an unchecked box or a change lands after it. Convert each to a plain `**Commit**: feat(core): ...` line under its group's last task. The cadence itself is correct.",
+   "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:78"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Detection's source walk imports the policy threshold from `adoption/`",
+   "description": "Task 3 has `detection/sourceVolume.ts` import `BROWNFIELD_MIN_SOURCE_LINES` from `adoption/adoptionOutcome.ts` as its stop threshold. The design says detection is \"facts only, no policy\" and thresholds live in `adoption/` (slice design line 106). Now `adoption/adoptionOutcome.ts` depends on detection's `SourceVolume` type and detection depends on adoption, a two-way dependency that Task 7 handles only with `import type`. Pass the threshold in instead: `measureSourceVolume(root, { stopAtLines })`, with the resolver supplying the constant. `contracts.ts` imports nothing, so importing `AdoptionError` from it is fine.",
+   "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:85"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Walkthrough step 1 hardcodes `main` and uses a worktree git may refuse",
+   "description": "The step builds `/tmp/before.md` from `main` through `git worktree add` of `main`. Two problems. First, the Git Rules say to read the target from `cf config get git.integration_branch` and never infer it, and that key exists in this repo. Second, `git worktree add <path> main` fails when `main` is checked out in another worktree, including the primary tree. Read the target first and use `git worktree add --detach <path> <target>`. The design's walkthrough (line 352) makes the same `main` assumption; the task inherits it.",
+   "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:262"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Missing-profile error is not tested through `context_build` or the `cf build` exit code",
+   "description": "Design line 333 requires `cf build` to exit non-zero and `context_build` to return the `AdoptionError` as an error. Automated tests stop at the integrator and pipeline (Task 10T, Task 12 #12). Task 11's `contextTools.test.ts` assertions cover only the `stateWrites` argument. The CLI exit is checked only manually in walkthrough step 4, and no task covers the MCP error result. Add to Task 11: a stub pipeline that rejects with `AdoptionError` makes the tool return an error result carrying the message, and a `build.test.ts` case for the non-zero exit.",
+   "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:222"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Renderer tests skip three of the five outcomes",
+   "description": "Technical Requirements (design line 336) require `renderAdoptionFacts` tests for \"every outcome\". Task 8T covers brownfield, adoption-in-progress and `NOT_EVALUATED` only. Add greenfield, already-planned and adoption-closed (both `complete` and `declined`). Task 8 also specifies that state `''` renders as unset, but 8T does not test it.",
+   "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:174"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "The root for history and present-path facts is left implicit in the resolver",
+   "description": "D5 (design line 200) says every fact uses `checkoutPath`, and only the guide check uses `projectPath`. Step 6 names `recognizeCi(checkoutPath)` but not the root for `readHistory` or `presentPaths`. A worktree build could pass `projectPath` by mistake. No test in 9T uses `projectPath` different from `checkoutPath`. Name `checkoutPath` for every fact and add one 9T case that splits the two paths.",
+   "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:189"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "Write-failure test omits the \"state unchanged\" assertion",
+   "description": "Technical Requirements name \"D9's write failure (`AdoptionError`, state unchanged)\" (design line 336). Task 9T asserts only the error and its remedies. After the failed write, read `adoption.state` back and expect `''`.",
+   "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:199"
+  },
+  {
+   "i": 8,
+   "severity": "NOTE",
+   "title": "Walkthrough step 2 names no public repository",
+   "description": "The step clones \"a real public codebase over 2000 lines\" without naming one, so the run is not repeatable. Name one repository with a commit SHA and record both in the walkthrough.",
+   "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:263"
+  },
+  {
+   "i": 9,
+   "severity": "NOTE",
+   "title": "Task 2 adds an `AdoptionError` trigger that D9 does not list",
+   "description": "D9 (design line 246) says `AdoptionError` covers three failures. Task 2 adds a fourth: a hand-edited `adoption.state` outside the enum. That fits the no-silent-fallback rule, so keep it, but add it to D9's list.",
+   "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:67"
+  },
+  {
+   "i": 10,
+   "severity": "NOTE",
+   "title": "Optional resolver and `projectPath` guard can silently produce the concept prompt",
+   "description": "Task 10 makes the resolver `= null` and calls it only \"when the resolver and `project.projectPath` are set\". An integrator built without a resolver, or a Phase 0 build without `projectPath`, quietly gets the concept prompt, which the core rules forbid as a silent fallback. The required `createContextPipeline` option covers production wiring. Consider failing explicitly when a Phase 0 build has no `projectPath`.",
+   "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:206"
+  },
+  {
+   "i": 11,
+   "severity": "NOTE",
+   "title": "The ENOENT-mid-walk skip has no test",
+   "description": "D2 (design line 171) makes ENOENT during the walk \"not present\". Task 3 implements it, but Task 3T tests only the non-ENOENT throw. Add one test that mocks `lstat` to return ENOENT for one entry and asserts the walk skips it.",
+   "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:89"
+  },
+  {
+   "i": 12,
+   "severity": "NOTE",
+   "title": "Task granularity is proportionate, with two small cuts",
+   "description": "One task file is the right size for this slice. Task 4 and Task 5 share commit 5C, and Task 7 and Task 8 share commit 8C, so each pair could merge into one task. Drop the legacy `resolvePhaseValue('phase 1: concept')` assertion at line 61, since no criterion needs it. Converting the commit checkboxes also removes ten items.",
+   "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md"
+  }
+ ]
+}

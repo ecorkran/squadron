@@ -1,0 +1,68 @@
+{
+ "review": "r02",
+ "findings": [
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Task 3.1's \"match `_branch_for`\" can push a `codehost` import into `review/`",
+   "description": "Task 3.1 says a detached HEAD in `review/git_utils.py#current_branch` should \"Match `github_cli._branch_for`'s existing behavior\". That behavior is to raise `TargetUnresolvableError`, which is a `codehost` exception. `review/git_utils.py` imports nothing from `codehost` today (only `squadron.core`), and the import-boundary test the slice keeps (D6) forbids `review/` importing `codehost/`. A junior implementer who copies the behavior literally will either break `test_import_boundaries.py` or trip it and have to improvise.\n\n**Fix:** Name the exception explicitly. Use a `review`-local exception (or `ValueError`) in `current_branch`, and have `pr/` or the CLI translate it into the refusal message. Then say \"match the *message and condition*\", not the exception type.",
+   "location": "src/squadron/codehost/github_cli.py:187-191"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "The dry-run equality criterion cannot hold across two live invocations, and Task 16.2 step 5 will fail",
+   "description": "The slice's criterion \"`--dry-run` title and body equal what the next real run creates\" is supported only by binding the body once to one variable (D8). That binding guarantees equality *within one process*. `sq pr create --dry-run` and a later `sq pr create` are two processes making two separate model calls. The model-written prose, and on non-slice branches the model-written title, will differ.\n\n- Task 13.2 passes only because the composer is faked and deterministic.\n- Task 16.2 tells the implementer to run walkthrough step 5 live and expect `/tmp/dry.txt` to match the created PR. It won't.\n\n**Fix:** Either restate the criterion as \"dry-run and real paths render the same bound object in one invocation\" (the structural guarantee Task 13 actually provides), with step 5 limited to comparing the deterministic blocks and headings. Or add a way to replay a dry-run body (for example `--body-file`), which would be new scope. As written, the implementer will hit a contradiction during the live step.",
+   "location": "project-documents/user/slices/385-slice.create-a-pr-with-a-good-message.md:613-621"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Task 5.1 contradicts itself on an unreachable `cf`, and the fallback is silent",
+   "description": "The bolded instruction is \"**Do not degrade an unreachable `cf` to a default base**\". The very next clause says that when `cf` is unavailable \"the chain proceeds to the host default\". Task 5.2 then locks in \"`cf` unavailable \u2192 host default, no raise\".\n\nThis is the silent retargeting that D1 exists to prevent. On this initiative, with `git.integration_branch = squadron-pr`, a `cf` outage makes a real (non-dry-run) `sq pr create` open the PR against `main`. Nothing warns the operator beyond the printed `source=host-default` line, which appears just before the write. The project rule \"Never use silent fallback values\" applies.\n\n**Fix:** Resolve the wording one of two ways:\n- Make `cf`-unavailable a refusal, since `cf` is how the integration branch is known.\n- At minimum, require a WARNING naming the `cf` failure and assert it in 5.2.\n\nEither way, delete the contradictory bold line.",
+   "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:122"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Task 11.1 doesn't say how prose is requested per section",
+   "description": "D4 says explicitly: \"The body is not one model response parsed into sections. Squadron emits the headings and requests prose per section.\" Task 11.1 never says whether that means one model call per section, or one call whose response is split. It also never says what the prompt contains (only `PrFacts`, and which facts go to which section).\n\nInstead, it says \"The model's own headings, if it emits any, are discarded\", and Task 11.2 tests a response \"containing its own `##` headings\". Both read as a single parsed response, which contradicts D4.\n\nThe choice matters:\n- It decides token cost: up to three prose calls, since two sections may be no-input.\n- It decides what Task 12's presence check can actually catch.\n- It decides how Task 10's composer is called.\n\n**Fix:** Add one sub-item that fixes the call shape and the prompt inputs per section.",
+   "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:257-264"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Task 16.4 tells the implementer to check off skipped items, which falsifies this slice's own PR body",
+   "description": "\"**Mark any dropped or skipped item above `[x]` before closing**\" turns unfinished work into checked items. This slice's whole output reads checkbox state: checked items become \"How it was verified\" and unchecked items become \"Known gaps\" (D4). If the slice's own task file is fed to `sq pr create` (walkthrough step 1), skipped work would be presented as verified. That breaks the traceability rule the slice implements.\n\n**Fix:** Leave skipped items unchecked with a note, or use a distinct marker the parser treats as neither state.",
+   "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:371"
+  },
+  {
+   "i": 6,
+   "severity": "NOTE",
+   "title": "No task computes the local head sha that Task 6 needs",
+   "description": "`check_head_pushed` takes `local_sha` (Task 6.1). Neither Task 3's helpers nor Task 13.1's orchestration list says where it comes from. The pattern exists (`run_git([\"rev-parse\", \"HEAD\"])` in `persistence.py`), but `git_utils` doesn't expose it as a public helper. Name the source in Task 13.1, or add a third helper to Task 3.",
+   "location": "src/squadron/review/persistence.py:143"
+  },
+  {
+   "i": 7,
+   "severity": "NOTE",
+   "title": "Nothing implements the identity precondition outside the command",
+   "description": "`identify_operator` appears only in Task 13.1's ordering (\"preconditions (identity, then pushed)\") and Task 13.2's test. Task 6 covers only the push checks. That's workable for something this small, but stating that 13.1 owns the call, with its `CodeHostError` handling, would stop the implementer from looking for it in `preconditions.py`.",
+   "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:298"
+  },
+  {
+   "i": 8,
+   "severity": "NOTE",
+   "title": "Task 4.2 mostly repeats Task 4.1's success criterion",
+   "description": "Task 4.2's real criterion, \"existing `sq pr show` tests pass unchanged\", is already Task 4.1's success line. Only the `resolve_locator` per-target assertion is new. Merge it into 4.1. Otherwise the task count and detail fit the slice's size.",
+   "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:102-105"
+  },
+  {
+   "i": 9,
+   "severity": "NOTE",
+   "title": "Task 16.4 contains a PM-confirmation step and a merge",
+   "description": "\"Ask the Project Manager how they want it run\" is a confirmation gate that no named rule requires. \"Merge \u2026 into `squadron-pr`\" puts Phase 7 work into the Phase 6 task file. The worktree's CLAUDE.md tolerates merging when work is done, but the parent project's rules say never to write a merge as a task. Both are optional to keep, and neither blocks the plan.",
+   "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:372-373"
+  }
+ ]
+}

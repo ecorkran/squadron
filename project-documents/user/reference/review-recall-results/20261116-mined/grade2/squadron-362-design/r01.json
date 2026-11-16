@@ -1,0 +1,47 @@
+{
+ "review": "r01",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "The file-level selector moves away from the architecture's allow-list, and the doc contradicts itself on which form it uses",
+   "description": "The architecture defines file-level nodes as a closed set of nine types (`360-arch\u2026md:108-110`). Line 151 says the selector \"becomes an explicit type allow-list\". Lines 155-158 then specify an exclusion filter (`.type != \"function\" and .type != \"class\"`) and say it is \"stated as an exclusion rather than an allow-list deliberately\". An implementer can't tell which one is binding.\n\nThe exclusion form also weakens the read discipline. If upstream adds a new sub-file type (for example `method`, `interface` or `variable`), that type gets through the filter. Such nodes would very likely carry a `filePath`, so the drift guard on line 160-161 (\"surviving this filter but carrying no `filePath`\") would not catch them. Hundreds of sub-file nodes could then enter context without any warning. This is the exact case the read discipline exists to prevent, and the \"Upstream contract drift\" risk (line 447) says it is expected.\n\n**Fix:** Use the architecture's nine-type allow-list. Report any node type outside both the allow-list and `{function, class}` as upstream drift, which keeps the visibility the exclusion was meant to give. Then fix line 151 and Success Criterion 5 to match.",
+   "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:151-161"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Resolving function/class edge endpoints conflicts with the rule that function/class nodes are never read",
+   "description": "Section 6 says \"Function- and class-level edge endpoints are resolved to their owning file's layer rather than dropped\". Success Criterion 9 (line 333) says \"no function- or class-level node is read\", and the architecture says function and class nodes \"are not read\". The design doesn't say how an endpoint gets mapped to its owning file. There are two options:\n- Look up the node's `filePath`, which reads function/class nodes.\n- Parse the type-prefixed `id` (`function:path:name`). This depends on an ID format the architecture describes but that nothing validates.\n\nThe design names neither, so the implementer has to pick one and may break the read discipline. It also doesn't say what happens when an endpoint can't be resolved.\n\n**Fix:** Pick one mechanism. ID-prefix parsing done inside `jq` keeps node data out of context. State how unresolvable endpoints are handled (count them and report as drift), and change Criterion 9 to allow the chosen mechanism. Alternatively, limit Section 6 to file-level endpoints and drop the cross-function resolution, which the slice plan does not require.",
+   "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:218-220"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "\"Closing observations\" bring back untraced prose, and the example given is itself not derivable",
+   "description": "The `[INFERRED]` governance section allows every section to end with a pattern-reading sentence. The example given is \"complexity concentrates in the seams where squadron meets an external SDK\". No graph field in the hotspot table records \"external SDK\", so the example fails the design's own test (\"derivable from the table directly above it\"). The same document's rule against fabricated claims (line 186-189) and the architecture's \"Never fabricate intent\" goal both rule it out.\n\nThis text is going into a skill prompt, which makes the example a hallucination trap under the project's own CLAUDE.md rule: a model will copy its style.\n\n**Fix:** Cut closing observations. This is the lighter option and the slice plan doesn't ask for them. If they stay, limit them to quantitative restatements of the data (counts, shares, the top layer) and use an example that really is derivable.",
+   "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:245-250"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "`.understandignore` reporting rules contradict each other",
+   "description": "Line 234 says \"An all-comments file (this repo's current state has 17 active lines) is reported as 'defaults only'\". A file with 17 active lines is not all-comments, and the Verified graph facts table (line 108) confirms 17 active lines. The mapping table (line 180) also sends an unreadable or missing coverage file to a `[GAP: ...]`. But a missing `.understandignore` is a normal upstream state (defaults), just like an all-comments one. The design should say whether absence means a gap or \"defaults only\".\n\n**Fix:** Fix the parenthetical: this repo should report 17 patterns. Then state that an absent file and an all-comments file are both reported as \"defaults only\", and that a gap marker is used only when the file exists but can't be read.",
+   "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:232-235"
+  },
+  {
+   "i": 4,
+   "severity": "NOTE",
+   "title": "The dependency-ordering tie-break is underspecified",
+   "description": "\"Descending count, ties by `weight`\" doesn't say how per-edge `weight` is combined across an inter-layer pair (sum, mean or max). Name the combination so that two runs on the same graph produce the same order.",
+   "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:179"
+  },
+  {
+   "i": 5,
+   "severity": "NOTE",
+   "title": "\"Retain the document unchanged\" conflicts with adding a cross-reference line",
+   "description": "The decision heading says \"retain the document unchanged\", but lines 278-280 and Criterion 11 add a line to it. The edit is small and doesn't go against the architecture, which only requires the document to be retained and not superseded. Changing the heading to say \"unchanged apart from a cross-reference\" would remove the contradiction.",
+   "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:258"
+  }
+ ]
+}

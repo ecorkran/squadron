@@ -1,0 +1,96 @@
+{
+ "review": "r02",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "FAIL",
+   "title": "Padded neighbor array scales as agents \u00d7 max-neighbors, which breaks the parent's scale target",
+   "description": "The padded width is the maximum neighbor count across all agents (line 82). Line 17 says counts grow \"to near-n\" under clustering, so the index array approaches n\u00d7n in the regime this slice targets. Using the design's own 80 KB figure at n=100 (line 146), the index array is about 800 MB at 10K agents. Each force's gathered `(n, k, 2)` float64 temporary is about 1.6 GB at 10K, and about 3.2 GB and 6.4 GB at 20K. The architecture targets \"tens of thousands of agents \u2026 on a single CPU process\" (`100-arch.behavior-engine.md:36`). The design places memory concerns at \"100K+\" (line 148).\n\nThe CSR and COO rejections rest on premises that do not hold in NumPy. `np.bincount(weights=\u2026)` is a fast weighted scatter-add that avoids `np.add.at`. `np.add.reduceat` over flat offsets gives segmented sums without scipy. The GPU-readiness argument (lines 27, 180) justifies the layout with a tier the architecture places at 1M+ (`100-arch.behavior-engine.md:102`).\n\nRemedy: store neighbor pairs in a flat form and reduce with `bincount` or `reduceat`. State a memory bound at the target tier. Specify how per-tick allocation is handled, since the architecture asks for caller-provided or reused buffers (`100-arch.behavior-engine.md:88`).",
+   "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:140-148"
+  },
+  {
+   "i": 1,
+   "severity": "FAIL",
+   "title": "Weight building is a per-agent Python loop, violating the design's defining constraint",
+   "description": "Line 133 builds per-agent weights with a list comprehension over `profile_indices[eval_indices]`, running once per force call in each of the five forces. Line 136 describes it as a loop \"over n agents\" and accepts it. This contradicts line 198 (\"No Python-level per-agent loops in any `BulkForce.__call__`\u2026 the defining constraint\") and the architecture's index-based lookup requirement (`100-arch.behavior-engine.md:102`). The design's own grep check (line 223) would match this line.\n\nThis is an unmeasured estimate, but if all five forces build weights this way, the cost is on the order of 10 ms per tick at 20K agents.\n\nRemedy: build one weight table per profile (O(P), where P is the profile count) and gather it with `profile_indices`. The per-profile loop is then not over agents.",
+   "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:127-136"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Residual per-agent loops contradict the \"eliminates entirely\" claim, and the root cause is unmeasured",
+   "description": "Line 23 says vectorization \"eliminates the Python loop overhead entirely\", and the plan entry promises O(1) Python overhead (`100-slices.behavior-engine.md:37`). Line 101 keeps the per-agent `query_radius` loop in `tick.py`. The builder in step 3 is described as \"a single pass to pad, mask, and self-exclude\" with no vectorization strategy. If it iterates agents in Python, that is a third per-agent loop on the tick path.\n\nThe clustering dependence fits the force-loop attribution, since brute-force query cost does not depend on neighbor count. But no per-phase timing confirms it. The architecture asks for metrics to diagnose the bottleneck (`300-arch.worldserver-foundation.md:93`), and the existing `TickMetrics` records only total tick time (`301-slice.tick-loop-and-timing.md:111`).\n\nRemedy: record a per-phase baseline (query, build, forces, integrate) at 100 agents and at the target scale before implementation. State the builder's approach and reword line 23 to match what is actually removed.",
+   "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:23"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "The parent scale NFR is not restated, and verification is qualitative",
+   "description": "This slice changes the force hot loop, whose parent NFR is \"tens of thousands of agents at full behavioral fidelity on a single CPU process\" (`100-arch.behavior-engine.md:36`). The design restates only a 100-agent scenario and \"should stay within the 50ms budget\" (line 215), with no measurable criterion.\n\nRemedy: restate the NFR with a stated agent count and a measurable pass condition, such as `TickMetrics.overrun_count` over a fixed tick horizon. Add a run at the target scale.",
+   "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:211-215"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "No slice owns the batch spatial query",
+   "description": "Line 45 pushes vectorizing the per-agent spatial query loop to slice 105. Line 184 says `build_neighbor_data()` is the integration point \"when slice 105 introduces a batch query.\" The 105 plan entry says only \"behind the existing query interface\" (`100-slices.behavior-engine.md:34`), with no batch variant. No 105 slice design exists in the project. The architecture says the batch-query variant \"will be defined during slice design\" (`100-arch.behavior-engine.md:48`), so that item has no owner.\n\nRemedy: either name the batch interface in this slice's design or add it to 105's plan entry before 109 depends on it.",
+   "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:182-184"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Integration with slice 103 is unsequenced, and 103's tasks hard-code the old signature",
+   "description": "The frontmatter lists 103 as an interface, and line 178 says predator-prey forces will consume `NeighborData`. The 103 task file already specifies `FlightForce` and `PursuitForce` with `neighbor_lists` (`103-tasks.predator-prey-dynamics.md:17` and `:98`). The design does not say whether 103 lands first (then 109 must migrate two more classes) or after (then 103's tasks must change), or who owns that migration.\n\nRemedy: state the order and the migration owner in this design.",
+   "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:7"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "`NeighborData` cannot represent heterogeneous neighbors such as aggregates",
+   "description": "`NeighborData` is defined as indices into the agent arrays only. The architecture requires neighbor interfaces to accommodate heterogeneous neighbor types from the start, \"or aggregate support will require a breaking change\" (`100-arch.behavior-engine.md:100`). Aggregates (slice 108) have centroid, heading, dispersion and count rather than position and velocity. This slice is already making the `BulkForce` protocol break, and the design does not say how aggregates fit.\n\nRemedy: either state that 108 will add a second neighbor kind and accept a later break, or shape `NeighborData` now (for example, a kind tag or separate aggregate arrays).",
+   "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:68-84"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "Padding with -1 silently aliases the last agent in every gather",
+   "description": "Line 80 says padded entries are \"never dereferenced thanks to mask.\" But the gather at line 111 indexes every entry first. NumPy accepts -1 as a valid index, so padding silently reads agent N-1, and the later mask is the only thing hiding it. Any force that uses `indices` before masking will silently use a wrong neighbor. This conflicts with the project's rule against silent fallback values (`CLAUDE.md`, Core Principles).\n\nRemedy: gather with `np.where(mask, indices, 0)` and then mask, or validate indices in the builder. Correct line 80.",
+   "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:80"
+  },
+  {
+   "i": 8,
+   "severity": "CONCERN",
+   "title": "An empty active subset is not handled",
+   "description": "The edge-case list at line 193 and the test list at line 259 omit an empty active set. Unless guarded, a NumPy `max` over zero agents raises. The architecture requires the tick to accept subsets (`100-arch.behavior-engine.md:52`), and variable-rate ticking can produce ticks with no due agents.\n\nRemedy: specify the result for an empty subset (an empty `(0, 2)` force array, for example) and add a test for it.",
+   "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:193"
+  },
+  {
+   "i": 9,
+   "severity": "CONCERN",
+   "title": "Equivalence tolerance and horizon are unspecified, and the tolerance is at risk",
+   "description": "The per-force test uses `atol=1e-12` (line 258). The integration test (line 260) compares positions and velocities \"after N ticks\" with no N and no tolerance. Changing the summation order (padded masked sum versus loop) produces ULP-level differences. Flocking dynamics can amplify those over many ticks, so the N-tick match may fail for reasons unrelated to bugs. The Risk section lists only SeparationForce complexity (line 231). The change in outputs also bears on the determinism goal (`100-arch.behavior-engine.md:34`) and should be stated.\n\nRemedy: state N and the tolerance. Use a tight comparison over a short horizon and a statistical comparison over longer horizons.",
+   "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:256-260"
+  },
+  {
+   "i": 10,
+   "severity": "CONCERN",
+   "title": "Permanent loop reference implementations duplicate the logic being replaced",
+   "description": "The mitigation (line 236) and the testing strategy (line 258) keep loop-based reference implementations of all five forces in the test module, and the whole-tick comparison (line 260) needs the old code too. That duplicates the logic this slice exists to replace.\n\nRemedy: capture golden outputs once from the pre-change code, using fixed seeds, check them in, and delete the loops. `mask` is also a pure function of `counts` (line 81). Keeping both invites disagreement, so keep only `counts` and derive the mask where it is used.",
+   "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:236"
+  },
+  {
+   "i": 11,
+   "severity": "NOTE",
+   "title": "MomentumForce is grouped as neighbor-dependent, and the naming is inconsistent",
+   "description": "Line 35 and the success criterion at line 190 call MomentumForce one of \"five neighbor-dependent forces.\" Line 125 says it does not use neighbors. The document also uses `eval_indices` (lines 88, 96, 129) and `active_indices` (lines 97, 193) for the same concept.",
+   "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:35"
+  },
+  {
+   "i": 12,
+   "severity": "NOTE",
+   "title": "The query contract differs from the architecture's minimal contract",
+   "description": "Line 60 says `query_radius` returns indices, unchanged. The architecture's minimal contract includes squared distances (`100-arch.behavior-engine.md:48`). `SeparationForce` needs distances (line 123), so `NeighborData` could carry them rather than recomputing. Reconcile with the architecture's contract or record the deviation.",
+   "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:60"
+  }
+ ]
+}

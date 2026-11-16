@@ -1,0 +1,89 @@
+{
+ "review": "r08",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "FAIL",
+   "title": "Option A `MomentumForce` is negated `VelocityDrag` and does not resist turning",
+   "description": "The formula `force = current_heading * momentum_weight * speed` equals `velocity * momentum_weight`. `VelocityDrag` computes `-drag * velocity` (`src/migratory/engine/forces.py:74-95`), so `MomentumForce(w)` is `VelocityDrag(-w)`. It pushes each agent along its current velocity and does not oppose heading changes. A force along the current velocity does not counter a perpendicular flocking force; it only adds speed along the existing heading. `integrate` adds `force * dt` and then clamps to `max_speed` (`src/migratory/engine/integration.py:42-43`). With the herding profile (w=0.03, dt=0.05), speed grows by a factor of 1.0015 per tick, about 1.57\u00d7 over 300 ticks, before clamping. The slice's rationale (\"herds resist turning\", slice lines 171-176) does not follow from this formula.\n\nTasks 3.1 (line 88) and 3.2 (lines 96-98) would pin the speed-up: the test expects `[3.0, 0.0]` and checks direction. No test checks turn resistance. Section 5 could pass because agents accelerate to max speed, not because of corridor behavior. The slice also keeps a stale `MomentumForce` description (lines 134-146) with a heading-change formula that contradicts the Option A decision.\n\nOptions for the PM: (a) keep the speed-up, rewrite the rationale and tests to match; (b) add a prior-heading field so the force can damp turning, which reverses the stateless rationale; (c) drop `MomentumForce` from slice 102 and leave corridor behavior to slice 107. I lean toward (c) as the smallest change that avoids shipping a mislabeled force.",
+   "location": "project-documents/user/slices/102-slice.herding-and-leadership.md:157-158"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Vectorization requirement has no task step or check",
+   "description": "The slice requires both forces to be vectorized within each neighborhood, with no nested Python loops (slice lines 395-396). No task step or verification states or checks this. Tasks 3.1 and 4.1 say \"For each active agent\" and then give formulas such as `sum(velocity[i] * leadership[i])` (line 118). The existing flocking forces use one loop over agents with numpy inside (`src/migratory/engine/flocking.py:30-44`), and the tasks could follow that. A junior could still write an inner loop over neighbors. Add a step to 3.1 and 4.1 that requires numpy array operations over the neighbor index array, with no Python loop over neighbors, and a review check for it.",
+   "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:113-120"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Corridor movement is in scope but untested",
+   "description": "The Included list promises an integration test for \"directional bias and corridor movement.\" Task 5.2 checks only the sign of the final mean heading. No task measures persistence over time, such as path straightness or heading correlation across ticks. Add a persistence metric to 5.2, or remove \"corridor movement\" from Included.",
+   "location": "project-documents/user/slices/102-slice.herding-and-leadership.md:54"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Force input conventions are not stated",
+   "description": "Every existing `BulkForce` follows two conventions that the tasks omit:\n- The profile is looked up per agent: `profile = profiles[state.profile_indices[agent_idx]]`. Tasks 3.1 (line 88) and 4.1 (line 119) write `profile.momentum_weight` and `profile.leadership_weight` with no lookup.\n- `neighbor_lists` is aligned with the active-index order. The code reads `neighbor_lists[list_idx]` for `agent_idx` from `enumerate(eval_indices)`, not `neighbor_lists[agent_idx]`. Task 4.1 line 114 says \"Filter self from neighbors\" without naming the index. With an active subset, using `agent_idx` gives a wrong neighbor list or an IndexError.\n\nThe slice walkthrough examples pass length-N lists with `active_indices=None`, where both indices agree, so they do not catch this. State both conventions in 3.1 and 4.1 and point to `flocking.py`.",
+   "location": "src/migratory/engine/flocking.py:30-37"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Section 5 assertions cannot be implemented as written",
+   "description": "Task 5.3 asserts the difference is \"statistically measurable\" and then gives an OR of two inequalities: lower heading variance, or a larger eastward mean. No statistical test or threshold is defined, and one seed per arm is not a statistic. The OR lets either metric pass. The criterion (slice lines 403-405) asks for statistically different movement. Name one metric (for example, mean resultant length of unit headings), run a fixed seed list (five seeds, for instance), and assert a stated margin on the mean across seeds.\n\nTask 5.2 (lines 152-153) asserts a positive x-component of \"mean heading,\" which is undefined. It is unclear whether this means the mean of unit vectors or the mean angle. It also has no baseline, while the criterion (slice lines 389-391) requires heading to converge toward the leaders' initial heading. Define the statistic and compare against the `leadership_weight=0` run from 5.3, or against the leaders' heading with a stated tolerance.",
+   "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:161"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "No typecheck gate",
+   "description": "The migratory worktree's Python rules (`project-documents/user/reference/review-recall-results/20261116-mined/wt/migratory-102-tasks/.claude/rules/python.md`, Static Analysis) require strict mypy or pyright with a zero-error policy. The task file runs only pytest. Add a strict pyright or mypy run to 6.1 and to the verify steps of Sections 3 and 4.",
+   "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:171-174"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "Branch target conflicts with the integration-branch rule",
+   "description": "The frontmatter says \"Branch to be created from main.\" The squadron CLAUDE.md says the target is `cf config get git.integration_branch`, or `main` if that is empty, and never to infer it. The bug-fix rules say the same. If the key is set, this line forks from the wrong base. The worktree's own CLAUDE.md copy also says to branch from `main`, so the PM should confirm which rule governs this checkout. Replace the sentence with \"Branch from the target (`cf config get git.integration_branch`, or main if empty).\"",
+   "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:7"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "Task file is overweight and its commit steps are unclear",
+   "description": "The file has 19 numbered tasks, six of them commit tasks (lines 48-49, 73-74, 103-104, 134-135, 164-165, 180-182), for two force classes and two field additions across several test files. Suggested cuts:\n- Replace the five section commits with `**Commit**:` marker lines (plain lines, no checkbox) at the same points, or fold them into each section's last step. A checkbox on a commit step cannot be checked inside the commit it creates.\n- Delete 6.2. Protocol conformance is already asserted at lines 91, 95, 122, and 125.\n- Drop the duplicate verify at line 38 (covered by line 41) and at line 61 (covered by line 65).\n- Replace line 181 (\"Git add any remaining changes\") with an explicit file list. As written it can commit unrelated files, or a commit that only checks boxes, which the commit rule forbids.",
+   "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md"
+  },
+  {
+   "i": 8,
+   "severity": "NOTE",
+   "title": "Epsilon is duplicated and the leadership default is silent",
+   "description": "Lines 86 and 117 each set an epsilon (\"e.g. 1e-10\") in a different force. The worktree CLAUDE.md says to avoid duplicated constants. Tell the implementer to define one constant in `herding.py` and reference it.\n\nLine 36 adds `leadership: float = 0.0` to `add_agent()`, and `create()` zero-fills leadership (slice lines 223-225). A caller who forgets to set leadership then gets a herd with no leadership signal, and no error. The worktree CLAUDE.md prohibits silent fallback values. The slice justifies the choice, so the PM should confirm it. The [0, 1] range (slice line 212) is not enforced or tested anywhere. Decide whether `add_agent` should reject out-of-range values.",
+   "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:86"
+  },
+  {
+   "i": 9,
+   "severity": "NOTE",
+   "title": "Test 4.2 uses vague tolerances where an exact check exists",
+   "description": "Line 127 says the uniform-leadership result should be \"similar\" to velocity averaging, and line 126 says \"biases toward.\" Neither has a tolerance. With uniform leadership, `LeadershipForce` computes `(mean_velocity - v) * weight` over the same neighbors. That is exactly `AlignmentForce`'s formula (`src/migratory/engine/flocking.py:121-125`). The test can therefore assert exact equality between `LeadershipForce(leadership_weight=w)` and `AlignmentForce(alignment_weight=w)` on the same state. For line 126, assert the sign of each component for the geometry the test sets up.",
+   "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:127"
+  },
+  {
+   "i": 10,
+   "severity": "NOTE",
+   "title": "A load-test tier may apply, and the slice does not require one",
+   "description": "The squadron Python rules require at least one `tests/load/` test for code on the simulation path, with CI gating. The herding forces run inside `tick()`. The migratory worktree's `python.md` has no such tier, and the slice does not restate a performance NFR, so the slice itself does not require a load task. It is unverified whether the squadron rule governs this project. The PM should confirm. If it does, add a `tests/load` task for `tick()` with all five forces and a CI wiring task that gates on it.",
+   "location": "/Users/manta/source/repos/manta/squadron/.claude/rules/python.md"
+  },
+  {
+   "i": 11,
+   "severity": "NOTE",
+   "title": "Test-setup steps name files instead of searching, and omit `tick()` arguments",
+   "description": "Line 45 names three files for direct `AgentState` construction and says they \"should work without changes.\" The constructor gains a required `leadership` argument (line 34), so every direct `AgentState(...)` call breaks. Replace the file list with a search for `AgentState(` across `tests/`, as 2.2 already does for `BehavioralProfile`. Tasks 5.1-5.3 (lines 143-161) call `tick()` but do not name its arguments: `state, profiles, spatial: SpatialQuery, dt, forces, active_indices` (`src/migratory/engine/tick.py:13-19`). They also do not say which `SpatialQuery` to use; the slice names `BruteForceQuery`. Point the implementer to the construction pattern in `tests/test_tick.py`.",
+   "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:45"
+  }
+ ]
+}

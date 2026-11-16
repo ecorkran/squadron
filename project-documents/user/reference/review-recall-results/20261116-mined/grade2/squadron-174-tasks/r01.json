@@ -1,0 +1,110 @@
+{
+ "review": "r01",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Success criterion \"no per-run warnings\" conflicts with the kept unreadable-file WARNING",
+   "description": "The design's success criterion (slice design :502) says `sq runs list` prints no per-run warnings. Task 21 (:295) keeps the per-file \"Skipping unreadable state file\" WARNING, and the walkthrough (design :567) confirms the junk file still logs it. Task 25's success line says \"no per-run warnings print\", which cannot hold for a runs directory containing an unreadable file. Narrow the criterion in the design and in Task 25 to \"no per-run unavailable-pipeline warnings\", and name the unreadable-file WARNING as the exception.",
+   "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md:345"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Task 29 header contradicts its own sub-item on the return type",
+   "description": "The header says `resolve_pipeline(name) -> PipelineInfo`. The sub-item at :383 says it returns `PipelineLocation(name, source, path)`, which the design requires (design :393\u2013394) so that `show` works on pipelines that fail validation. A junior following the header would parse the file during resolution, which the design forbids. Fix the header to `-> PipelineLocation`, and make the sub-item a checkbox. This drift comes from restating design content in the task file, so expect more of it.",
+   "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md:380"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Restated listing NFR has no load test or CI gate",
+   "description": "The slice restates `sq runs list --all` under 1 s with a few hundred run files as a functional requirement (also :644). `tests/load/` already exists, with four load tests, so the convention is established. The breakdown has no `tests/load/` task and no CI gate. The only timing check is hand-run walkthrough step 8 (task :511\u2013516). The NFR is advisory, per 199, so this does not block. Still, add a `tests/load/` task with a generous bound and a CI wiring task, or record an explicit exemption in the design.",
+   "location": "project-documents/user/slices/174-slice.run-liveness-stall-bounds-pruning-and-readable-listings.md:506"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Live verification has no owner, and Task 42 is checked off anyway",
+   "description": "Walkthrough steps 6\u20137 cover the live `kill -9` \u2192 `orphaned` / exit 8 criterion (design :489) and the real foreground stall (design :492\u2013495). Phase 6 tested them only with fixtures and fakes. The blocker is environmental: `sq run` refuses inside a Claude Code session. Task 42 is checked with \"steps 6\u20137 not run\", and no item tracks the gap. Split out a live-verification item, write `BLOCKED: needs a plain terminal with credentials; sq run refuses inside a Claude Code session`, and leave it unchecked.",
+   "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md:511"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "No caller step logs the run-id for an unknown liveness result",
+   "description": "The design's error table (slice design :373) requires \"WARNING naming run and PID\" when the process check is unknown. Task 9 puts the run-id in \"the caller that has it\", but no caller task (19, 21, 22, 33) adds that log. The run-id WARNING may never be emitted. Add the step to Tasks 19 and 21, or to whichever caller holds the run-id.",
+   "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md:141"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "No test asserts the observable outcome of a progress-write defect",
+   "description": "The design's error table (slice design :363) says a non-I/O exception in `step_started` or `item_started` propagates and the run is finalized `failed`. Task 12 asserts only that the exception propagates. The review rules require at least one test per failure mode that asserts the observable signal. Task 14's CLI test covers finalization on the three SDK paths, not this failure. Add a test where the recorder raises a non-I/O error and the run ends `failed`.",
+   "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md:185"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "Task 38 bundles too many behaviours for one junior pass",
+   "description": "Task 38 covers the option surface, `--status` validation, the `--older-than` parser and usage errors, preview rendering, `--yes` deletion, exit-code rules (1 for refusals, 2 for usage), and the \"`--yes` never implied\" guard. Split it into 38a (argument parsing, validation and duration parsing, with tests) and 38b (preview, `--yes`, exit codes, with tests). Each then keeps the test-with pattern.",
+   "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md:462"
+  },
+  {
+   "i": 7,
+   "severity": "NOTE",
+   "title": "Task 8 names two different test locations",
+   "description": "Lines 129\u2013131 say the tests go in `tests/test_config.py` and `tests/pipeline/test_state.py`, then \"Tests live in tests/config/test_keys.py\". Keep one path.",
+   "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md:129"
+  },
+  {
+   "i": 8,
+   "severity": "NOTE",
+   "title": "Task 11 bundles owner writes and progress writes",
+   "description": "Task 11 covers `init_run(owner=)`, `claim`, `heartbeat`, and four recorder writes, each with failure handling. Splitting it into owner writes and progress writes would match how Task 12 tests them. This is lower priority than Task 38.",
+   "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md:159"
+  },
+  {
+   "i": 9,
+   "severity": "NOTE",
+   "title": "Task 16 omits the spike's fresh-iterator requirement",
+   "description": "The design risk section (slice design :619) says the drain \"must read through a fresh iterator, because the timed-out one is closed by the cancellation\". Task 16 says only \"drain with `_read_turn(...)`\". Its success line defers to the spike findings, but a junior would not see the constraint without reading the risk section. Add a step: read the drain through a new iterator, not the timed-out one.",
+   "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md:236"
+  },
+  {
+   "i": 10,
+   "severity": "NOTE",
+   "title": "Task 37 changes the design's failure case without updating the design",
+   "description": "The design (slice design :531) specifies an \"unwritable directory\". Task 37 substitutes a directory placed where the state file should be. The note's reason is sound: an unwritable directory would also block the other run's deletes. Record the change in the design so the contract matches the test.",
+   "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md:459"
+  },
+  {
+   "i": 11,
+   "severity": "NOTE",
+   "title": "Issue closure is in the design but deferred in the task",
+   "description": "Design step 8 says to close #190 and #165 in the docs-and-issues step. Task 41 (:503\u2013504) defers closure to Phase 7 after the merge. Deferring is correct, since closing before merge would be premature, but no task in this file owns it. Update the design to match, and name who closes the issues in Phase 7.",
+   "location": "project-documents/user/slices/174-slice.run-liveness-stall-bounds-pruning-and-readable-listings.md:638"
+  },
+  {
+   "i": 12,
+   "severity": "NOTE",
+   "title": "Commit steps are checkboxes, some sub-items lack checkboxes, and two messages are not imperative",
+   "description": "Commit points are written as checkbox items (`- [x] Commit:`) rather than plain `**Commit**:` lines. A checked commit item sits inside the commit it records, so it is checked before that commit exists. Sub-items at :131, :383, :459, :502, :510 and :516 have no checkbox. Messages at :286 (\"sq runs wait exits 8 \u2026\") and :372 (\"plain aligned sq pipelines list \u2026\") are not imperative. Commit placement itself is good: 16 commits, each after its tests pass.",
+   "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md:111"
+  },
+  {
+   "i": 13,
+   "severity": "NOTE",
+   "title": "Projected state is stale against the completed status",
+   "description": "`projectState` says \"not yet implemented\", and `dateUpdated` predates the walkthrough. Frontmatter `status: complete` and every checkbox are marked done. Update `projectState` so a reader or agent does not restart the work.",
+   "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md:7"
+  },
+  {
+   "i": 14,
+   "severity": "NOTE",
+   "title": "Two process tasks could merge; the task count is otherwise proportionate",
+   "description": "42 tasks in one file of about 520 lines is proportionate to a slice with five components, and a split into several files would not help. Tasks 1 (create branch) and 3 (baseline tests) are both setup and could be one task. Task 41 (one issue) could fold into Task 40 or 42.",
+   "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md:38"
+  }
+ ]
+}

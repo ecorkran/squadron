@@ -1,0 +1,110 @@
+{
+ "review": "r03",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "FAIL",
+   "title": "Task 16.4 writes the slice merge as a task",
+   "description": "The git rules say never to write a merge or push as a task, sub-item, or success criterion in a task file. The merge belongs to Phase 7 and happens only after code review passes. Delete the \"Merge `385-slice...` into `squadron-pr`\" bullet.",
+   "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:373"
+  },
+  {
+   "i": 1,
+   "severity": "FAIL",
+   "title": "Task 5.1 contradicts itself on an unreachable `cf`",
+   "description": "The bullet opens \"Do not degrade an unreachable `cf` to a default base,\" then says that when `cf` is unavailable \"the key is treated as unset and the chain proceeds to the host default.\" That is the degradation the heading forbids. The slice design has the same contradiction (slice design lines 239\u2013244). In practice the PR silently targets `main` on the repository this initiative configures, which is the outcome D1 exists to prevent and which breaks the no-silent-fallback rule. Pick one behavior before Task 5 is built. The likely answer is that an unreachable `cf` raises a classified error and `--base` is the operator's override.",
+   "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:122"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "The success criterion and Task 6.2 disagree on the push refusals",
+   "description": "The criterion says a sha mismatch \"fails the same way with the same command\" as a missing branch. D2 and Task 6.2 (line 149, \"the two refusals name different commands\") make them different: `git push -u` versus `git push`. Task 6.2 follows D2, but a verifier will check the criterion as written. Reword the criterion to \"names the push command for that case.\"",
+   "location": "project-documents/user/slices/385-slice.create-a-pr-with-a-good-message.md:545-546"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "The model-call failure is caught with the wrong handler shape",
+   "description": "Task 10.1 has the composer catch broadly and convert the failure to a non-zero exit, and calls this a \"process-boundary handler.\" The composer is a library function the CLI calls, not the top-level process boundary. Under the exception rules, the fit is option (a): log with `logger.exception` and re-raise, and let the command's top-level handler produce exit 1. Narrow the caught types where the provider's failure modes are known.",
+   "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:221"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "No CLI-level test covers \"model failure exits non-zero and creates nothing\"",
+   "description": "The technical criterion (slice design line 562) requires a provider failure to exit non-zero, log at ERROR, and create nothing. Task 10.2 checks this only at composer level, where an exit code cannot be observed. Task 13.2 has no composition-failure case, and Task 14.1's matrix covers the five host calls but not the model path (D8, F008). Add a CLI test with a faked composer that raises: exit 1, an ERROR log, and zero writes.",
+   "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:308-325"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "It is unresolved whether the body takes one model call or one per section",
+   "description": "The data flow (line 194) says \"one-shot model call.\" D4 (lines 337\u2013338) says squadron \"requests prose per section.\" Task 10.1 defines one call, and Task 11.1 does not say which applies. The choice changes token cost, the number of failure points in D8, and what the fake composer must return. Choose one and state it in Task 11.1.",
+   "location": "project-documents/user/slices/385-slice.create-a-pr-with-a-good-message.md:337-338"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "An empty commit range is assumed impossible, and the title fallback would crash on it",
+   "description": "Task 7.1 says commits are \"always present \u2014 an empty range is impossible, since a PR with no commits cannot be opened.\" That is an assumption, not a check. Running `sq pr create` while checked out on the target branch gives base == head, so `base..head` is empty. Task 10a.1 then falls back to \"the first commit's subject,\" which does not exist. Add an explicit refusal that names the empty range, with a test in Task 7.2 or 13.2.",
+   "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:158"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "The input and facts contracts are underspecified",
+   "description": "`PrInputs` is never defined, so Tasks 7\u20139 cannot agree on its fields. `gather_inputs` has no signature, and Task 8.1 elides `find_latest_in_range_review(...)` (line 176). Task 9.1 requires the review's verdict in `PrFacts`, but no task reads it; Task 8.1 reads only `reviewedSha`. The verdict is the `verdict:` frontmatter key (`src/squadron/review/resolution_evidence.py:136` reads it). \"Newest in the range\" (line 180) also has no ordering rule. Define `PrInputs`, both signatures, the verdict read, and the ordering.",
+   "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:198"
+  },
+  {
+   "i": 8,
+   "severity": "CONCERN",
+   "title": "\"The first task file\" conflicts with the design's \"task files\"",
+   "description": "The design says `resolve_slice_info` returns the design and the task files, and that their checkboxes feed the body (slice design line 186, \"design, tasks \u2192 checked/unchecked\"). Task 7.1 says to read \"the first task file.\" The order is undefined, and any file after the first is silently dropped. Either aggregate over all task files in a stated order, or state why one file is correct.",
+   "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:159"
+  },
+  {
+   "i": 9,
+   "severity": "CONCERN",
+   "title": "The dry-run/real equality test is specified as output comparison, not structure",
+   "description": "The design's Testing section (slice design lines 672\u2013673) requires asserting that the body object is bound once and passed to both paths, \"rather than comparing two separately composed strings.\" Task 13.2 says \"dry-run output equals the body the next real run sends,\" which an implementer can satisfy by comparing two separate compositions. Rewrite the case to check the shared binding, and include the title.",
+   "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:309"
+  },
+  {
+   "i": 10,
+   "severity": "CONCERN",
+   "title": "The title parser has no real-design fixture, and real H1s carry suffixes the rule keeps",
+   "description": "Task 10a.1 strips the `Slice Design: ` prefix, and Task 10a.2 tests only synthetic H1s. The project's parser rules require a fixture from the real format. Real designs in `project-documents/user/slices/` include `# Slice Design: Dispatch Action (145)` and `# Slice Design: \\`sq review code\\` \u2014 Slice Implementation Review`. The task does not say whether the index suffix or inline code is kept, so a PR title could carry \"(145)\" or backticks. H1 line positions also vary across real files (lines 11\u201335), so the parser must scan the document, not read a fixed line. Add a fixture from a real design and state how these cases are handled.",
+   "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:239"
+  },
+  {
+   "i": 11,
+   "severity": "CONCERN",
+   "title": "The `--profile` and `--model` defaults are unspecified",
+   "description": "Task 10.1 says the composer takes `profile: str` \"exactly as the CLI flags supply them,\" and Task 10.2 says `model=None` passes through. Nothing says what happens when `--profile` is omitted. The review commands define `--profile` in `src/squadron/cli/commands/review.py:735`. Specify the same source. Do not hard-code a default in the command, per the no-magic-defaults rule.",
+   "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:217"
+  },
+  {
+   "i": 12,
+   "severity": "CONCERN",
+   "title": "\"Filled\" needs a delimiter the check can use",
+   "description": "Task 12.1 says \"filled\" means non-empty after stripping whitespace \"and the squadron-written deterministic block,\" and \"not solely a restatement of the heading.\" Nothing says how the check locates the deterministic block in the assembled body, or what counts as a restatement. Those two behaviors decide whether the gate passes, so name the delimiter (for example, a marker line squadron writes) and the restatement test.",
+   "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:280"
+  },
+  {
+   "i": 13,
+   "severity": "NOTE",
+   "title": "The title length bound is ambiguous at exactly 72",
+   "description": "The task says \"under 72 characters\" and tests 60 (accepted) and 100 (fallback), but not 72. State whether 72 is accepted.",
+   "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:241"
+  },
+  {
+   "i": 14,
+   "severity": "NOTE",
+   "title": "Some test subtasks are thin enough to merge",
+   "description": "The file has 16 top-level tasks and about 33 subtasks. Several test subtasks are effort 1 (1.2, 3.2, 4.2, 9.2, 15.1). No task is too large. Tasks 4 and 15.1 could fold into neighboring tasks without losing coverage. This is optional.",
+   "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md"
+  }
+ ]
+}

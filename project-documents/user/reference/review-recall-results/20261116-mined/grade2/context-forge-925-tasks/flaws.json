@@ -1,0 +1,14 @@
+{
+ "case": "context-forge-925-tasks",
+ "kind": "tasks",
+ "flaws": [
+  {
+   "id": "F1",
+   "text": "The design's Success Criteria say \"A project whose shared config has `guide.git_strategy: manual` installs as tarball with the same warning\" (a `cf guides install` behavior). Task 7 implements the config-path warning print; Task 6(b) checks it only in core (`GuideManager.test.ts`, \"the alias is reported\"), and Task 8's CLI test covers the `--strategy manual` flag path only. No task asserts the CLI prints the warning for the config-sourced case. **VALID** (minor, `coverage`): the tests leave out a branch the parent criterion names. Needs: doc (design plus tasks). **Raised by the original review (F002, note)**; the response added the case."
+  },
+  {
+   "id": "F2",
+   "text": "Task 20 puts the CLI `ensureGuideReady` call for `prompt.ts` \"before the read\" at \"~lines 60 and 116\". In `prompt.ts` at `25ef4d74` the `get` action reads the prompt file first through `resolvePhaseInput(phase, opPath)` at line 114 (`phaseShorthand.ts:22` opens `PROMPT_FILE_RELATIVE_PATH` for `P<n>` inputs), before line 116; placing the call at 116 leaves `cf prompt get P3` reading an uninitialized checkout, the exact failure #80 describes. The grep hit in `phaseShorthand.ts` is also not in the task's listed call sites. **VALID** (minor): the task's anchor contradicts the code. Needs: code. Medium confidence: the task's \"every non-test hit\" wording leaves room to catch it; the final code at `b99cc35c` carries a comment saying the ensure call must precede shorthand resolution."
+  }
+ ]
+}

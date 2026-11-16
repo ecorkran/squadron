@@ -1,0 +1,33 @@
+{
+ "review": "r02",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Commit points are checkbox tasks, and the last two are conditional",
+   "description": "Tasks 2C, 3C, 4C, 5C and 6C are `- [ ]` checkbox items, not plain `**Commit**:` lines. This has three practical consequences:\n\n- **Final check-offs have no commit.** 5C and 6C run \"only if Task N changed files\". When neither fires, the check-offs for Tasks 5 and 6 are either left uncommitted or need a boxes-only commit. Task 6's own success line (132) requires \"working tree clean after commit\", which then cannot be met.\n- **Commit messages can mislabel the change.** Task 5 may fix a parity bug in code and add a test, but 5C's message is `docs: record slice 214 parity sweep results`. A lint fix in Task 6 would land under `docs: add cf validate design to command reference`.\n- **Lint runs only after all three `feat` commits.** `pnpm lint` first appears in Task 6, so 2C, 3C and 4C are tested but not linted.\n\nSuggested fix:\n- Replace 2C, 3C and 4C with plain `**Commit**: feat(...)` lines.\n- Merge 5C and 6C into one unconditional plain marker after Task 6, with the type chosen by what actually changed.\n- Add `pnpm lint` to the Success lines of Tasks 2T, 3T and 4T.",
+   "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md:126-134"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Exit-2 criterion is only partly tested",
+   "description": "The slice's exit-2 requirement (slice design line 171) says each listed case must exit 2 with a stderr message and empty stdout, including under `--json`. Task 4T's exit-2 bullet covers no arguments, a nonexistent path, a valid file before a missing one, and a missing template. The rest are thinner:\n\n- **Non-regular file (directory):** tested in Task 3T (line 91) as a core error type only, not for exit code or empty stdout.\n- **Template with no required headings:** same, core level only. This is the case the design relies on to \"fail loudly\" if the guide changes its marker.\n- **Unreadable file and unreadable template:** no test at any level, although Task 3 implements the readable check.\n\nSuggested fix:\n- Add the directory argument and a marker-less template to the 4T exit-2 bullet; the worktree fixture already used in 4T makes the latter cheap.\n- Add one unreadable-file case to 3T using `chmod 0o000`, skipped when running as root or on Windows.",
+   "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md:113"
+  },
+  {
+   "i": 2,
+   "severity": "NOTE",
+   "title": "Task 0 hard-codes `main` and stops if an integration branch is set",
+   "description": "The branch rule is to fork from whatever `cf config get git.integration_branch` returns, or `main` if empty. The task instead expects empty, hard-codes `main` in the checkout command, and stops for the Project Manager otherwise. No named rule requires that stop. Reword it to create the branch from the value read.",
+   "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md:37-38"
+  },
+  {
+   "i": 3,
+   "severity": "NOTE",
+   "title": "Task 1 could merge into Task 2",
+   "description": "Task 1 is a one-line constant with its own build check. The design's Development Approach step 1 groups it with the pure validator. Merging is optional and not a problem as written.",
+   "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md:41-44"
+  }
+ ]
+}

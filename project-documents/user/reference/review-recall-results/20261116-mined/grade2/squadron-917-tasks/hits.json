@@ -1,0 +1,16 @@
+{
+ "case": "squadron-917-tasks",
+ "flaws": [
+  {
+   "id": "F1",
+   "text": "Task 5.2 specifies `_count_lines(root, resolved) -> int | None` that \"return[s] `None` with a WARNING\" for the outside-root, directory, over-cap and `",
+   "hits": {}
+  },
+  {
+   "id": "F2",
+   "text": "Task 4.6 says call `save_provider_failure` \"using `slice_info` when present, else the step-name/index\", but Task 4.2's writer takes `slice_info` as a ",
+   "hits": {}
+  }
+ ],
+ "note": "All eight reviews contain a single identical finding (merge step at line 251 in a task file); it names neither the _count_lines/None-WARNING contradiction (F1) nor the slice_info-optional mismatch between tasks 4.2 and 4.6 (F2), so no hits."
+}

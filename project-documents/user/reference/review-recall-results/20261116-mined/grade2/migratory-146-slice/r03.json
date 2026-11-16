@@ -1,0 +1,61 @@
+{
+ "review": "r03",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "FAIL",
+   "title": "Bounds sync-back is wrong for REFLECT and has nothing to sync for SOFT",
+   "description": "The slice plan assigns this slice \"bounds policy (sync-back \u2026 for wrap/reflect/soft)\". The design syncs positions only (`notify_positions_modified`, `upload_positions`), which is correct for WRAP alone.\n\n- **REFLECT:** the existing enforcement clamps positions and flips outward velocities. The flipped velocities are never uploaded, so the GPU keeps the outward velocity and agents pin to the wall instead of bouncing. A4 (\"finite, in-bounds\") would still pass, hiding the defect.\n- **SOFT:** the existing enforcement is a no-op for SOFT; containment comes from a repulsor force in the server-built force list. The GPU branch never uses `self._forces`, so there is nothing to sync and nothing contains the agents. The statement \"same sync-back pattern\" (line 209) is factually wrong, and A4 for `soft` cannot be met.\n\nFix: upload velocities as well for REFLECT (one `notify_state_modified(positions, velocities)`), and state how SOFT is delivered on GPU (in-kernel repulsor term, or reject `soft` + `quadrants` at config parse).",
+   "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:203-213"
+  },
+  {
+   "i": 1,
+   "severity": "FAIL",
+   "title": "Spawn/despawn re-upload reads from state the GPU path never updates",
+   "description": "The CPU tick mutates `entity_manager.state` in place, so that state is authoritative. On the GPU path, results exist only in GPU fields and the returned `TickResult`; the design never says the entity manager's arrays are written back. `sync_from_entity_manager()` then re-uploads that stale state on any count change. The effect is that one spawn or despawn resets every agent to its startup position and velocity.\n\nThree related gaps:\n- **Field capacity:** `setup_from_server()` sizes fields from `entity_manager.count` (line 143). Quadrants fields are fixed-size, so growth past the initial count has no defined behaviour. The entity manager already has a configured capacity to allocate against.\n- **Change detection:** comparing counts misses a spawn plus a despawn in the same tick, and despawn shifts indices. The design also makes a query on the entity manager depend on when `step()` was last called. A generation counter bumped on mutation is simpler and correct.\n- **Stale bounds upload:** a pending `_positions_dirty` array of the old length is not reconciled with a re-upload in the same tick.\n\nFix: name the authoritative state owner on the GPU path (write-back each tick, or download before re-upload) and specify the ordering.",
+   "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:168-201"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "GPU path silently drops the production force list and environment effects",
+   "description": "The GPU branch ignores `self._forces` and `self._spatial`. The production force list is config-driven: it includes the bounds repulsor and, when `interactions` is configured, flight/pursuit forces. The slice 145 fused kernel inlines a fixed set of 7 forces.\n\nWith `quadrants` as the default, any config using interactions (or other forces outside the fused set) changes behaviour with no error or log. That violates the project's \"no silent fallback\" principle and breaks A2's \"visually identical\" claim. The design also does not say whether anything `environment.pre_tick` changes reaches the GPU, given the profile table is uploaded once.\n\nFix: enumerate which configured forces the fused tick covers, and fail at startup (or warn and select `cpu`) when the config needs one it does not.",
+   "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:171-183"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "`_select_arch()` does not deliver the fallback the plan and A7 promise",
+   "description": "The slice plan says \"if neither is detected it warns and falls back to `qd.cpu`\", and A7 says \"a host with no Metal and no CUDA starts successfully\". The function branches only on `platform.system()`. A Linux host without CUDA gets `qd.cuda`, and Open Notes (line 382) says the resulting `qd.init()` failure exits the server.\n\nThe plan itself records \"CPU fallback (Linux, no Metal)\" hosts under slice 147, so this is the common no-GPU case. Because `quadrants` is the default, those hosts break out of the box. The fallback only triggers on platforms that are neither Darwin nor Linux.\n\nFix: detect availability (attempt init or probe, then warn and fall back), or narrow A7 and the plan wording. The two descriptions of `arch` also disagree: line 224 lists `\"metal\" | \"cuda\" | \"cpu\"`, line 252 lists only `\"cuda\"` or `\"metal\"`.",
+   "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:98-117"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Internal contradictions on defaults, bench changes and server changes",
+   "description": "- **Bench harness:** out-of-scope says \"any changes to the bench harness\" (line 40) and line 301 says the bench backends \"are not changed\". The Files Changed table moves `GpuAgentState` out of the bench package and edits `quadrants_fused_backend.py` (lines 294\u2013296). A5 (\"bench tests pass without modification\") holds only if no test imports the old module path. Either state that a re-export is left behind or relax A5.\n- **Default backend:** the \"CPU default (no GPU)\" walkthrough (lines 358\u2013362) says removing the `compute:` block yields the CPU path. The default is `quadrants` (lines 33, 61, A1, test 1).\n- **Server file:** line 29 says `server.py` is unchanged; lines 229\u2013254 and 293 change it. Only the tick call site is unchanged, and the scope bullet should say that.\n- **Entity manager file:** the Files Changed table lists an `entity_manager.py` module; the entity manager lives in a differently named module in the server package.",
+   "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:286-301"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Test plan does not cover the success criteria and is self-contradictory",
+   "description": "- **Coverage:** A7 (fallback warning) has no test, though the project's failure-mode rule requires one asserting the observable signal. A4 names four policies; only WRAP is tested. Neither REFLECT bounce behaviour nor state continuity across a spawn is asserted, and those are the two FAIL findings above.\n- **Contradictions:** \"All tests are CPU-only\" conflicts with \"skip if GPU not available\" and \"run on Metal/CUDA\". Test 6 asserts a method \"is called\", which needs a spy, against \"no mock\".\n- **Isolation:** Open Notes says a second `qd.init()` in one process is undefined behaviour, yet tests 5\u20138 each call `setup()`. The mechanism is left as \"either/or\"; pick one (subprocess per test, or a session-scoped driver fixture).\n- **TPS gate:** the test does not fix `subdivision_factor`, bounds policy or density. The plan records 38 TPS at 50k for slice 145 and \u2265100 TPS only with slice 149's S=3, and the default here is S=1. State the config under which \u226560 TPS is asserted.",
+   "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:303-320"
+  },
+  {
+   "i": 6,
+   "severity": "NOTE",
+   "title": "Dependencies understate what the slice consumes",
+   "description": "Frontmatter lists only 145, matching the plan entry. The design exposes `subdivision_factor` (slice 149) and its TPS gate relies on the 148/149 gains. Adding 149 would make the real dependency visible.",
+   "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:12-13"
+  },
+  {
+   "i": 7,
+   "severity": "NOTE",
+   "title": "Precision wording in the slice plan is stale, not the slice",
+   "description": "The f32-internal / f64-at-boundary contract matches the slice 145 design. The plan's post-shipping notes under 143/144 still say 145 uses f64 on CUDA. No change is needed here; the plan notes should be corrected.",
+   "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:150"
+  }
+ ]
+}

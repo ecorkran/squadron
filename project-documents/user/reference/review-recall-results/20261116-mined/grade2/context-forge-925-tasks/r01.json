@@ -1,0 +1,75 @@
+{
+ "review": "r01",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Task 13/14 rely on a `/timed out/i` pattern that does not exist",
+   "description": "Task 13 says the timeout message gets remediation text because \"the `/timed out/i` pattern already matches\". `NETWORK_ERROR_PATTERNS` actually contains `/connection timed out/i` and `/etimedout/i`. A message like \"git \u2026 timed out after 60 seconds\" matches neither, so `withNetworkErrorHint` returns it unchanged.\n\nTask 14 then asserts the message contains `GUIDE_OFFLINE_REMEDIATION`, which will fail. The design (D10) carries the same error.\n\nFix: Task 13 needs an explicit step to add a timeout pattern to `NETWORK_ERROR_PATTERNS`, or to word the message so an existing pattern matches.",
+   "location": "packages/core/src/guides/gitExec.ts:20-30"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Task 15/17 leave the D10 timeout unwired and untested",
+   "description": "Task 15 contradicts itself. It gives the signature `init(operationPath: string)` and says it runs with `{ timeoutMs: GUIDE_INIT_TIMEOUT_MS }`, then says the timeout is passed \"as an `init()` option\" so `sync()` stays unbounded. The signature has no options parameter and the default is not stated.\n\nTask 17 calls `SubmoduleStrategy.init(operationPath)` with no option. If the default is unbounded, auto-init inside `cf build` and the MCP tools is unbounded and D10 is unmet.\n\nNo test catches this: Tasks 16 and 18 never assert that the auto-init path passes a timeout or that `sync()` does not.\n\nFix: state the signature and default in Task 15, have Task 17 pass the timeout explicitly, and add one assertion for each path.",
+   "location": "packages/core/src/guides/strategies/SubmoduleStrategy.ts:127"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Task 11 makes `detect()` throw, widening failure beyond the design",
+   "description": "The design's data flow puts the `'error'` \u2192 throw inside `ensureCheckout()`. Task 11 moves it into `detect()`, which is also called by `cf guides info`, `guide_status`, `setup-ide`, install and update. Any `git submodule status` failure would now fail those status commands, where every other git call in `detect()` degrades to `null`.\n\nIt also breaks existing tests. The task file notes that `GuideDetector.test.ts` mocks the filesystem; a mocked submodule case would now run real `git submodule status` against a non-repo, get `'error'`, and throw. No step in Task 11 or 12 updates the mocked suites in core, CLI or MCP, and Task 11's success criterion runs no tests.\n\nFix: either keep `detect()` non-throwing and throw in `ensureCheckout()` as designed, or add a step to mock `checkSyncStatus` in the existing suites.",
+   "location": "packages/core/src/guides/GuideDetector.ts:64-102"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Task 26 (and Task 7) break the omitted-flag path",
+   "description": "Task 26 says to pass `normalizeGuideMethod(opts.strategy)` into `guidesInstallAction`. `--strategy` is optional and `init.ts:118` currently calls `guidesInstallAction(cwd)` with no options. Followed literally, plain `cf init` would call `normalizeGuideMethod(undefined)`, which Tasks 1 and 2 define as throwing.\n\nTask 7 has the same wording for `guides.ts:125`. Neither Task 8 nor Task 27 includes a no-flag case.\n\nFix: say \"normalize only when provided; undefined falls through to config\", and add a no-flag test.\n\nThe alias check and stderr warning are also specified separately in `guides.ts` (Task 7) and `init.ts` (Task 26). Put them once in `guidesInstallAction`, taking the raw string, so they are not duplicated.",
+   "location": "packages/cli/src/commands/init.ts:118"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Task 5 does not cover the no-`configManager` branch",
+   "description": "`resolveStrategy()` returns the `'submodule'` literal at line 196 both when the config read fails and when `this.configManager` is undefined. Task 5 says to delete the literal because \"no fallback branch is needed\", which only holds when a config manager exists. `resolveSource()` has the same shape at lines 170-182.\n\nFix: state what happens without a config manager (read `ConfigKeys['guide.git_strategy'].default` directly, or make the manager required), and add that case to Task 6.\n\nTask 5 also leaves the return shape open (\"choose one \u2026 e.g.\"). Tasks 6 and 7 depend on it, so pin it in the task.",
+   "location": "packages/core/src/guides/GuideManager.ts:185-197"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Task 7 adds a third `'manual'` literal that fails Task 32's own grep",
+   "description": "The technical criterion is \"no `'manual'` literal outside the alias table and enum\". Task 7 hard-codes `['submodule', 'clone', 'tarball', 'manual']` in the MCP zod enum, duplicating the `ConfigKeys` list. Task 32 then asks to confirm the criterion, which that literal fails.\n\nFix: build the zod enum from the canonical method list plus the keys of `GUIDE_METHOD_DEPRECATED_ALIASES`, and state the grep's expected hits consistently across Tasks 3, 7 and 32.",
+   "location": "packages/mcp-server/src/tools/guideTools.ts"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "Commit markers are embedded in checkbox sub-items",
+   "description": "All commit points are written as \"Success criteria: \u2026 Commit: `\u2026`\" inside checkbox lines (Tasks 4, 6, 8, 12, 14, 16, 18, 21, 23, 24, 27, 29, 31), so checking the box conflates verification with committing. Placement is good: each sits after a test task at a working point.\n\nFix: move each to a plain `**Commit**:` line after the task.\n\nTask 32's success criterion also includes \"PM reviews before merge to `main`\". That is a process gate, not a verifiable criterion; drop it.",
+   "location": "project-documents/user/tasks/925-tasks.guide-install-robustness.md:99-100"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "Several tasks are too granular or not independently completable",
+   "description": "- **Task 10 into 11:** Task 10's success criterion is \"typecheck passes once Task 11 populates the field\", so it cannot be completed alone.\n- **Task 1 into 3:** Task 1 deliberately leaves core failing typecheck until Task 3.\n- **Tasks 28+29 and 30+31:** each is an effort-1 pair that can be one task.\n\nThat brings 32 tasks to about 27 with no loss of coverage. The rest of the count is proportionate to a three-issue slice spanning core, CLI and MCP.",
+   "location": "project-documents/user/tasks/925-tasks.guide-install-robustness.md:176-195"
+  },
+  {
+   "i": 8,
+   "severity": "NOTE",
+   "title": "Config-path alias warning has no CLI or MCP test",
+   "description": "The criterion \"shared config has `guide.git_strategy: manual` \u2192 installs as tarball with the same warning\" is tested only in core (Task 6b, alias reported). Task 8 covers the flag path only. One CLI case asserting the stderr warning for the config path would close it. Task 7 also does not say whether MCP `guide_install` adds a notice for the config-sourced alias, which D5 implies.",
+   "location": "packages/cli/src/commands/guides.ts:80-87"
+  },
+  {
+   "i": 9,
+   "severity": "NOTE",
+   "title": "Task 20's enumerated call sites omit `phaseShorthand.ts`",
+   "description": "The grep Task 20 mandates will hit this file, which reads `PROMPT_FILE_RELATIVE_PATH`, and the \"cover every hit\" rule handles it. The explicit list (`build.ts`, `prompt.ts`, `setup-ide.ts`) does not name it, so add it to avoid a literal reading skipping it.",
+   "location": "packages/cli/src/utils/phaseShorthand.ts:22"
+  }
+ ]
+}

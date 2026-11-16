@@ -1,0 +1,171 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "Gates 3.2a and 3.7 cannot pass while tests of removed behaviour still exist",
+      "description": "Task 3.2a requires `pnpm --filter @context-forge/core test` to pass right after 3.1\u20133.2 stop rendering `Comprehension:` and `### Adoption Facts`. Two core tests still assert that output at that point:\n- **`pipeline-integration.test.ts:184`** expects `Comprehension: \u2026`, and lines 154\u2013173 expect probe facts in the prompt. This block is only deleted in 3.3.\n- **`adoptionBuild.integration.test.ts:99-103`** (`expectBrownfield`) expects the `### Adoption Facts` heading. This file is only deleted in 4.1.\n\nTask 3.7 requires `pnpm typecheck` and `pnpm -r test` to pass, and has the same problem. `adoptionBuild.integration.test.ts:68` still calls `createContextPipeline(dir, { adoptionStateWrites, squadronProbe })`, and its brownfield cases expect the swap that 3.3 removed.\n\nA junior implementer following the file literally hits a red gate with no instruction, or deletes tests out of order.\n\nFix:\n- Move the `pipeline-integration.test.ts` brownfield block deletion from 3.3 into 3.1/3.2.\n- Move the `adoptionBuild.integration.test.ts` deletion from 4.1 to before 3.2a.\n- State in 3.2a that `ContextIntegrator.test.ts` and `adoptionParity.test.ts` are unaffected at that point: the first uses a mock engine, the second is outside the core package.",
+      "file_ref": null,
+      "category": "sequencing",
+      "raw_category": null,
+      "location": "packages/core/tests/adoption/adoptionBuild.integration.test.ts:68"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Commit points are written as checkboxes, not `**Commit**:` marker lines",
+      "description": "Commits appear as checkbox tasks or sub-items at 2.3 (line 79), 3.2a (101), 3.7 (134), 4.1\u20134.4 (148, 155, 163, 169), 5.1 (186) and 6.3 (206). The convention is a plain `**Commit**: \u2026` line, never a checkbox, so the implementer and task-checker recognise it as a marker and not as work to tick off.\n\nThe placement is sound: each sits at a compiling, tested point once the FAIL above is fixed. Convert them to plain marker lines and fold 2.3 and 3.2a into the preceding task.",
+      "file_ref": null,
+      "category": "format",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/268-tasks.pure-cf-build.md:79"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Check 6.2 says \"prints nothing\" but names an expected hit",
+      "description": "The grep includes `fileComprehension`, which will match the retained `COMPREHENSION_PROFILE_VARIABLE = 'fileComprehension'` at `packages/core/src/detection/comprehensionAnalysis.ts:15`. The exception is stated, but the success line \"all three checks are clean\" reads as a contradiction. Say \"prints only that line\".",
+      "file_ref": null,
+      "category": "clarity",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/268-tasks.pure-cf-build.md:198"
+    },
+    {
+      "severity": "PASS",
+      "title": "All success criteria trace to tasks",
+      "description": "- **No state read/write, detection or `sq` spawn:** 3.3\u20133.6, 4.x, 5.1 (snapshot and fake `sq` marker), 6.2 greps.\n- **Brownfield Phase 0 returns the concept prompt:** 5.1 and 6.3.\n- **Byte identity:** 2.1\u20132.2 captured before any edit, re-checked at 3.7 and 6.1.\n- **CLI/MCP parity:** 5.1.\n- **Guide warning preserved:** 3.5, 3.6 and 6.1.\n- **`services/` imports nothing from `adoption/` or `detection/`:** 3.3 and 6.2.\n- **No orphan exports:** 4.2 grep and 6.2 export audit.\n- **Lint, typecheck and tests:** 3.7 and 6.1. The missing format script is explained in the Context Summary.\n\nEvery Migration Plan row has a task. I found no scope creep, and no merge or push task.",
+      "file_ref": null,
+      "category": "coverage",
+      "raw_category": null,
+      "location": "project-documents/user/slices/268-slice.pure-cf-build.md:186-200"
+    },
+    {
+      "severity": "PASS",
+      "title": "Golden capture is correctly ordered and grounded",
+      "description": "Section 2 runs before any source edit and commits on its own, as D6 requires. The `design` instruction used for the planned case exists in the `brownfield-guide` fixture prompt (`##### design`, line 23). Time-dependent inputs are pinned.",
+      "file_ref": null,
+      "category": "sequencing",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/268-tasks.pure-cf-build.md:60-79"
+    },
+    {
+      "severity": "PASS",
+      "title": "Proportionality; no load test or CI wiring needed",
+      "description": "One task file with six sections fits a deletion slice that touches three packages. The two new tests are the ones D5 and D6 mandate. The slice restates no NFR, so no `tests/load/` task or CI gate is required.",
+      "file_ref": null,
+      "category": "proportionality",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/268-tasks.pure-cf-build.md"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "sequencing",
+      "raw_category": null,
+      "summary": "Gates 3.2a and 3.7 cannot pass while tests of removed behaviour still exist",
+      "location": "packages/core/tests/adoption/adoptionBuild.integration.test.ts:68",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "format",
+      "raw_category": null,
+      "summary": "Commit points are written as checkboxes, not `**Commit**:` marker lines",
+      "location": "project-documents/user/tasks/268-tasks.pure-cf-build.md:79",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "note",
+      "category": "clarity",
+      "raw_category": null,
+      "summary": "Check 6.2 says \"prints nothing\" but names an expected hit",
+      "location": "project-documents/user/tasks/268-tasks.pure-cf-build.md:198",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "pass",
+      "category": "coverage",
+      "raw_category": null,
+      "summary": "All success criteria trace to tasks",
+      "location": "project-documents/user/slices/268-slice.pure-cf-build.md:186-200",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "pass",
+      "category": "sequencing",
+      "raw_category": null,
+      "summary": "Golden capture is correctly ordered and grounded",
+      "location": "project-documents/user/tasks/268-tasks.pure-cf-build.md:60-79",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "pass",
+      "category": "proportionality",
+      "raw_category": null,
+      "summary": "Proportionality; no load test or CI wiring needed",
+      "location": "project-documents/user/tasks/268-tasks.pure-cf-build.md",
+      "location_verified": null
+    }
+  ],
+  "template_name": "tasks",
+  "input_files": {
+    "input": "project-documents/user/tasks/268-tasks.pure-cf-build.md",
+    "against": "project-documents/user/slices/268-slice.pure-cf-build.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/context-forge-268-tasks"
+  },
+  "timestamp": "2026-11-16T12:13:07.506286",
+  "model": "claude-fable-5-2",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 10,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-fable-5-2",
+  "answering_models": [
+    "claude-fable-5-2"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 6,
+    "in_fences": 0,
+    "in_section": 6,
+    "surviving": 6
+  },
+  "effort": "medium",
+  "profile": "sdk",
+  "turns": 11,
+  "prompt_tokens": 360816,
+  "cached_tokens": 224510,
+  "cache_write_tokens": 136296,
+  "completion_tokens": 6862,
+  "reasoning_tokens": null,
+  "duration_seconds": 66.49127612495795,
+  "cost_usd": 2.5009306999999996,
+  "cost_basis": "provider"
+}

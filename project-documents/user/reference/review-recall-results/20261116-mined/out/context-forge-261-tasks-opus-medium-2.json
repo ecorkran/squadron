@@ -1,0 +1,207 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "PASS",
+      "title": "Functional success criteria are all covered by Task 12's fixtures",
+      "description": "Each Functional Requirement in the slice (`261-slice...md:322-333`) has a numbered fixture in Task 12:\n- empty and scaffold-only (1, 2)\n- brownfield with the state persisted (3), shallow clone (4), monorepo scoping with root CI (5), concept-only (6), planned (7)\n- resume (8), overrides and re-detect (9), `Phase 2` on an `in_progress` project (10)\n- explicit `brownfield-adoption` (11), guide without the profile (12), the read-only `template_preview` path (13)\n\nTask 1T covers \"invalid values are rejected by `cf config set`\". \"No source walk is performed\" for planned projects is checked in Task 9T with a spy on `measureSourceVolume`. The byte-identical check for planned projects is in Task 15 (walkthrough step 1) and Task 10T (\"not selected \u2192 output identical\").",
+      "file_ref": null,
+      "category": "coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:229-245"
+    },
+    {
+      "severity": "PASS",
+      "title": "Order of tasks and imports",
+      "description": "- `contracts.ts` (Task 2) comes before every file that throws `AdoptionError` (Tasks 3, 6, 9).\n- Defining `ADOPTION_STATES` in `ConfigKeys.ts` avoids the `ConfigManager` import cycle.\n- `import type SourceVolume` (Task 7) avoids a runtime cycle between `adoption/` and `detection/`.\n- `BROWNFIELD_MIN_SOURCE_LINES` is set up in Task 3 so the threshold is written in one place, as D1 requires.\n- Task 6 reuses the initiative-plan regex without taking on `resolveInitiativePlanPath`'s swallowed errors, so D6's \"other read errors throw\" holds.\n\nThere are no circular dependencies between tasks.",
+      "file_ref": null,
+      "category": "sequencing",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:32-36"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Commit markers are checkboxes, and Task 15C commits only notes",
+      "description": "Every commit marker (2C, 3C, 5C, 6C, 8C, 9C, 11C, 13C, 14C, 15C) is written as a checkbox item (`- [ ] **Task 2C: Commit** \u2014 ...`). Commit markers must be plain `**Commit**:` lines, never checkboxes. If they stay as checkboxes, the task-checker will tick them, and those ticks become stray edits.\n\nTask 15C (`docs: record slice 261 verification walkthrough`) commits only the walkthrough results recorded under Task 15. Any defect found there is committed separately (line 266), so when nothing is found, 15C is a notes-only commit. Project rules forbid a commit that only adds notes or checks boxes.\n\nFix:\n- Rewrite each marker as a plain line, e.g. `**Commit**: feat(core): add adoption.state config key and state helpers`.\n- Merge 14C and 15C into one commit after Task 15, so the README change and the walkthrough record go in together.\n\nWhere the markers sit (after tested pairs, about 9 commits) is fine.",
+      "file_ref": null,
+      "category": "process",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:269"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Building the parity test on two directory copies can fail for the wrong reason",
+      "description": "Task 13 builds \"from identical copies\" in two different temp directories and asserts the prompt strings are identical. Two problems:\n- D5 says CI paths in the facts are absolute, so any CI file in the fixture makes the two outputs differ by directory path.\n- The project-registration step (following `mcpIntegration.test.ts`) may put a different project path or name into the output.\n\nThe two copies are needed only because a `persist` build writes `in_progress`, which changes the second build's result. A simpler setup avoids both problems: use one directory and reset `adoption.state` to `\"\"` between the two builds (or delete the `[adoption]` table). The step should also say the fixture must not depend on paths, or name the fields to normalize before comparing.",
+      "file_ref": null,
+      "category": "test-design",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:247-249"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Renderer tests skip three outcome kinds the slice requires",
+      "description": "The slice's Technical Requirements ask for tests of `renderAdoptionFacts` with \"every outcome\" (`261-slice...md:336`). Task 8T tests only `brownfield`, `adoption-in-progress` and `NOT_EVALUATED`. It leaves out `greenfield`, `already-planned` and `adoption-closed`. Task 8 requires the renderer to switch on every kind with a `never` check, so those branches exist but have no tests.\n\nFix: add one `it.each` over all five `AdoptionOutcome` kinds plus `NOT_EVALUATED`, asserting that each renders an outcome bullet that is not empty.",
+      "file_ref": null,
+      "category": "coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:173-176"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "No test that `context_build` returns the `AdoptionError` as an error result",
+      "description": "The slice criterion says \"`context_build` returns it as an error\" (`261-slice...md:333`). The tasks cover only these parts of it:\n- Task 10T checks that `generateContextFromProject` rejects.\n- Task 12 #12 checks that the pipeline rejects.\n- Walkthrough step 4 (Task 15) checks `cf build` by hand.\n\nNothing checks the MCP side. `contextTools.ts` wraps its handlers in `catch` \u2192 `errorResult` (`packages/mcp-server/src/tools/contextTools.ts:10-11`), so it probably works already, but Task 11 changes that call path and nothing guards it.\n\nFix: add one assertion to Task 11's `contextTools.test.ts` work. A mocked pipeline that throws `AdoptionError` should give `isError: true`, with the error message as the text.",
+      "file_ref": null,
+      "category": "coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:222"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Task 2 adds an `AdoptionError` case the design does not list",
+      "description": "`readAdoptionState` throws `AdoptionError` when a hand-edited value is not in `ADOPTION_STATES`. D9 lists three `AdoptionError` cases (missing profile or prompt, a walk that can't finish, a failed write), and this would be a fourth. It matches the project's no-silent-fallback rule, and the extra test in Task 2T is small. It is worth adding one line to the design so the error catalogue stays complete for 263 and 264.",
+      "file_ref": null,
+      "category": "scope",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:67"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Proportionality is acceptable",
+      "description": "There are 16 task pairs in one file, which fits a slice with about 10 new source files and the build integration. The test tasks follow the slice's own Technical Requirements list item by item, with no extras. The detailed steps (constant names, function splits, `it.skipIf` for permission tests) come from the design or project rules rather than new choices. The file correctly omits a `tests/load/` task: D2 says tests assert the caps, not timings, and the load tier does not apply to this TypeScript repo.",
+      "file_ref": null,
+      "category": "proportionality",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "pass",
+      "category": "coverage",
+      "raw_category": null,
+      "summary": "Functional success criteria are all covered by Task 12's fixtures",
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:229-245",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "pass",
+      "category": "sequencing",
+      "raw_category": null,
+      "summary": "Order of tasks and imports",
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:32-36",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "process",
+      "raw_category": null,
+      "summary": "Commit markers are checkboxes, and Task 15C commits only notes",
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:269",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "test-design",
+      "raw_category": null,
+      "summary": "Building the parity test on two directory copies can fail for the wrong reason",
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:247-249",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "coverage",
+      "raw_category": null,
+      "summary": "Renderer tests skip three outcome kinds the slice requires",
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:173-176",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "coverage",
+      "raw_category": null,
+      "summary": "No test that `context_build` returns the `AdoptionError` as an error result",
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:222",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "note",
+      "category": "scope",
+      "raw_category": null,
+      "summary": "Task 2 adds an `AdoptionError` case the design does not list",
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:67",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "note",
+      "category": "proportionality",
+      "raw_category": null,
+      "summary": "Proportionality is acceptable",
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md",
+      "location_verified": null
+    }
+  ],
+  "template_name": "tasks",
+  "input_files": {
+    "input": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md",
+    "against": "project-documents/user/slices/261-slice.detection-and-adoption-state.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/context-forge-261-tasks"
+  },
+  "timestamp": "2026-11-16T13:05:20.401692",
+  "model": "claude-opus-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 6,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-opus-5-5",
+  "answering_models": [
+    "claude-opus-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 8,
+    "in_fences": 0,
+    "in_section": 8,
+    "surviving": 8
+  },
+  "effort": "medium",
+  "profile": "sdk",
+  "turns": 7,
+  "prompt_tokens": 362451,
+  "cached_tokens": 273621,
+  "cache_write_tokens": 88822,
+  "completion_tokens": 6672,
+  "reasoning_tokens": null,
+  "duration_seconds": 71.49871187494136,
+  "cost_usd": 0.8995041,
+  "cost_basis": "provider"
+}

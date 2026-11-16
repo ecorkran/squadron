@@ -1,0 +1,207 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Commit markers are written as checkbox items, not plain `**Commit**:` lines",
+      "description": "Tasks 2C, 3C, 4C, 5C and 6C (lines 71, 94, 117, 126, 134) are written as `- [ ] **Task NC: Commit** \u2014 ...`. Commit markers must be plain `**Commit**: <message>` lines, never checkboxes. With a checkbox, each commit has to be followed by another edit to tick that box. That edit either goes into the next task's commit or becomes a commit that only ticks boxes, which project rules forbid (\"Never make a commit that only checks boxes or only adds notes\"). The markers are in the right places: after a tested unit for 2/2T, 3/3T and 4/4T, plus the conditional ones after 5 and 6. Only the format needs changing, for example `**Commit**: feat(core): add slice design heading validator`. The conditional wording for 5C and 6C can stay as plain text.",
+      "file_ref": null,
+      "category": "task-format",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md:71"
+    },
+    {
+      "severity": "PASS",
+      "title": "Functional success criteria are all covered",
+      "description": "- PASS on existing designs: Task 4T real-design run, Task 5 parity sweep.\n- FAIL with `missing:` lines: Tasks 3T and 4T.\n- doctype failure: Tasks 3T and 4T, including the quoted `docType` leniency.\n- Multiple files in order with exit 1: Tasks 3T and 4T.\n- Exit-2 cases with empty stdout in both modes, including valid-file-then-missing and the `cf guides update` message: Tasks 3T and 4T.\n- `--json` contract: Task 4T.\n- Template read from the worktree's own guide: Task 4T.",
+      "file_ref": null,
+      "category": "coverage",
+      "raw_category": null,
+      "location": "project-documents/user/slices/214-slice.native-slice-design-validation.md:166-173"
+    },
+    {
+      "severity": "PASS",
+      "title": "Technical success criteria are all covered",
+      "description": "- Normalization and matching unit tests (case, whitespace, comments, parentheticals, placeholder prefix, level mismatch, fenced headings, CRLF): Task 2T.\n- Real-template test checking `## Overview` and `### Verification Walkthrough`: Task 3T.\n- Real slice designs including 214: Task 4T.\n- Build, lint, full suite and the ~300-line limit: Task 6.\n\nThe integration requirement (the guide repoints its references) is guide-side and correctly left as a post-release item in the Context Summary.",
+      "file_ref": null,
+      "category": "coverage",
+      "raw_category": null,
+      "location": "project-documents/user/slices/214-slice.native-slice-design-validation.md:176-183"
+    },
+    {
+      "severity": "PASS",
+      "title": "Sequencing, test-with pattern and proportionality",
+      "description": "- The order is: constant \u2192 pure validator \u2192 file layer (uses Task 2's functions) \u2192 CLI (uses Tasks 1 and 3) \u2192 walkthrough \u2192 docs. There are no circular dependencies.\n- Each test task immediately follows its implementation task.\n- There are three source files and three test files, matching the design's component list.\n- Steps restate design decisions and do not add new ones.\n- No NFR is stated, so no load test or CI gating is needed.",
+      "file_ref": null,
+      "category": "sequencing",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md:36-134"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Task 0 hard-codes `main` instead of using the resolved target",
+      "description": "The git rules make the branch fork from `{target}`, where target is `cf config get git.integration_branch` or `main` if that is empty. Task 0 hard-codes `main` and stops if the value is set. Wording it as `git checkout -b 214-slice.native-slice-design-validation {target}` follows the rule directly and removes the need to stop.",
+      "file_ref": null,
+      "category": "workflow",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md:37-38"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Path handling between the CLI and core is not pinned down",
+      "description": "Task 3's result uses \"`path` as given\", and Task 4 prints \"paths exactly as given\". Neither task says whether the CLI passes raw arguments to core or paths resolved against the checkout or `--project`. If the CLI resolves them first, the printed paths would no longer match the contract. Task 4T's `FAIL <path>` assertions would catch this, but one line in Task 4 would prevent it: \"pass the arguments to core unchanged; resolve only the template path.\"",
+      "file_ref": null,
+      "category": "clarity",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md:100-101"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Template with no required headings is only tested in core, not through the CLI",
+      "description": "Task 3T checks that a template with no markers throws `SliceDesignValidationError`. Task 4T checks exit 2 with empty stdout only for the missing-template case. Both go through the same `handleError(err, 2)` path, so the risk is low. Adding a no-markers template fixture to the Task 4T exit-2 list would cover this success criterion end to end at small cost.",
+      "file_ref": null,
+      "category": "test-coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md:113"
+    },
+    {
+      "severity": "NOTE",
+      "title": "It is unclear whether the \"original heading text\" includes the `#` markers",
+      "description": "Task 2 says `RequiredHeading` keeps \"original heading text for messages\", but not whether that is the full trimmed line (`## Value`) or just the text (`Value`). The output contract (`missing: ## Value`) and the assertions in Tasks 3T and 4T need the full line. Stating that in Task 2 avoids having to rework it after the tests fail.",
+      "file_ref": null,
+      "category": "clarity",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md:48"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "task-format",
+      "raw_category": null,
+      "summary": "Commit markers are written as checkbox items, not plain `**Commit**:` lines",
+      "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md:71",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "pass",
+      "category": "coverage",
+      "raw_category": null,
+      "summary": "Functional success criteria are all covered",
+      "location": "project-documents/user/slices/214-slice.native-slice-design-validation.md:166-173",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "pass",
+      "category": "coverage",
+      "raw_category": null,
+      "summary": "Technical success criteria are all covered",
+      "location": "project-documents/user/slices/214-slice.native-slice-design-validation.md:176-183",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "pass",
+      "category": "sequencing",
+      "raw_category": null,
+      "summary": "Sequencing, test-with pattern and proportionality",
+      "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md:36-134",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "workflow",
+      "raw_category": null,
+      "summary": "Task 0 hard-codes `main` instead of using the resolved target",
+      "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md:37-38",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "clarity",
+      "raw_category": null,
+      "summary": "Path handling between the CLI and core is not pinned down",
+      "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md:100-101",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "note",
+      "category": "test-coverage",
+      "raw_category": null,
+      "summary": "Template with no required headings is only tested in core, not through the CLI",
+      "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md:113",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "note",
+      "category": "clarity",
+      "raw_category": null,
+      "summary": "It is unclear whether the \"original heading text\" includes the `#` markers",
+      "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md:48",
+      "location_verified": true
+    }
+  ],
+  "template_name": "tasks",
+  "input_files": {
+    "input": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md",
+    "against": "project-documents/user/slices/214-slice.native-slice-design-validation.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/context-forge-214-tasks"
+  },
+  "timestamp": "2026-11-16T12:22:29.158780",
+  "model": "claude-opus-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 2,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-opus-5-5",
+  "answering_models": [
+    "claude-opus-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 8,
+    "in_fences": 0,
+    "in_section": 8,
+    "surviving": 8
+  },
+  "effort": "high",
+  "profile": "sdk",
+  "turns": 3,
+  "prompt_tokens": 114936,
+  "cached_tokens": 29992,
+  "cache_write_tokens": 84940,
+  "completion_tokens": 5083,
+  "reasoning_tokens": null,
+  "duration_seconds": 53.27411229186691,
+  "cost_usd": 0.7878586999999999,
+  "cost_basis": "provider"
+}

@@ -1,0 +1,89 @@
+{
+ "review": "r06",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Index allocation contradicts itself and spends slots on documents that should be updated in place",
+   "description": "The document gives three different rules for document numbering:\n- **Resolved Design Decisions (L332-333):** \"in the 940-949 reserved range. No new convention.\"\n- **Output Conventions (L254-258):** \"Overflow into 950+ is sanctioned \u2026 remaining slots in the 900 band.\"\n- **Output Conventions (L244-245):** \"no change to `file-naming-conventions.md`.\"\n\nUsing 950+ for analysis documents *is* a change to the naming convention. It also runs into a band that is already allocated: the project's standing fixes slice is 990, and it used to be 944, which is inside this very range.\n\nThe root cause is the rule \"incrementing per run like the tech-debt-audit series.\" That rule fits audits, where each run is an independent sample. It does not fit the other two outputs:\n- An overview restates the *current* plan. Each new run makes the previous overview wrong.\n- A comprehension analysis of the same codebase replaces the earlier one.\n\nGiving each run a new index burns the 7 remaining slots quickly and leaves several contradictory overviews in `user/analysis/`. Recommendation: give `overview` and `codebase-comprehension` one stable index each and regenerate them in place, with git history as the record. Then delete the overflow paragraph, since the 940-949 range is enough.",
+   "location": "project-documents/user/architecture/360-arch.document-intelligence.md:249-258"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Capability 2 interviews the PM for content, but the design says the client document is \"derived, not authored\"",
+   "description": "- **Design Goals (L51-52):** the client document \"restates existing approved artifacts \u2026 It is not a place where new claims about the project appear.\"\n- **Translation rules (L234):** \"Every claim traces to an input artifact.\"\n- **Inputs (L197-198):** when the concept is missing, the skill \"sources purpose from the initiative plan plus interview.\" The document also calls this \"the common case \u2026 the tested path.\"\n\nOn that main path, interview answers become claims in a stakeholder-facing document with no approved artifact behind them. Pick one approach:\n- If the concept is missing, send the PM to Capability 1 (or a concept step) first and keep (b) strictly derived; or\n- Write the interview answers into a durable artifact (for example a concept draft) before the overview cites them.",
+   "location": "project-documents/user/architecture/360-arch.document-intelligence.md#capability-2-planning-artifacts--client-facing-document"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "The \"audience emphasis\" decision contradicts itself",
+   "description": "- **Translation rules:** \"Emphasis is a generation parameter.\"\n- **Resolved Design Decisions (L328-331):** \"one neutral document \u2026 An emphasis parameter is added only if real use demonstrates the need.\"\n\nThe slice designer can't tell whether `/sq:overview` takes an emphasis argument. Delete the sentence in Translation rules.",
+   "location": "project-documents/user/architecture/360-arch.document-intelligence.md:238-239"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "The translation example breaks the \"status is honest\" rule, and the status source in the plan is contradictory",
+   "description": "**The example:** \"Weighted review convergence with decay-based finding dismissal\" becomes \"automated review that converges without human babysitting.\" That is initiative 180, which is `Status: not_started` in `001-initiative-plan.squadron.md`. The rewrite presents a planned feature as an existing capability, which is exactly what \"Status is honest\" forbids. A model will copy this example, so it is a hallucination trap in the very prompt the skill will be built from.\n\n**The status field:** the document says Status comes from \"Initiative statuses,\" but the real input disagrees with itself:\n- 100 and 140 are checked `[x]` but say `Status: in_progress`.\n- 340 is `[x]` with no `Status:` field at all.\n\nThe architecture has to say which signal wins (checkbox or `Status:`) and what to do when a status is missing. Following the project's no-silent-fallback rule, a missing status should be flagged for the PM, not guessed. Also replace the example with one that keeps tense and status honest.",
+   "location": "project-documents/user/architecture/360-arch.document-intelligence.md#translation-rules"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Grepping the graph won't work, and the graph doesn't contain some fields the design reads from it",
+   "description": "**Grep doesn't work on this file.** The read rule is \"Grep for the needed section before reading; never load the whole file.\" `knowledge-graph.json` is generated JSON and may well be minified or have very long lines. If so, a grep match returns the whole line, which is most of the file. Grep also can't filter `nodes[]` by `type`, and it can't join `edges[]` to file-level node IDs. Both are needed for \"entry points\" and \"dependency observations\" (L153).\n\n**The graph lacks some inputs.** The Interview scope table (L168) says Initial Technical Direction comes from the graph's \"languages, frameworks, dependencies.\" The graph shape given at L94-99 has no language or framework fields; the closest is the optional `languageNotes` on each node.\n\n**Fix:** name a structured extraction mechanism. Options are a `jq` recipe or a small `sq` helper that emits a compact projection (project, layers, tour, file-level nodes, and file-to-file edges). Then fix the table to list only fields the graph actually has. This is the hard part of Capability 1, and right now it is left to \"the LLM will figure it out.\"",
+   "location": "project-documents/user/architecture/360-arch.document-intelligence.md:107-110"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Tracking `meta.json` guarantees a permanent staleness warning; \"commit distance\" can fail; provenance isn't defined",
+   "description": "**Permanent warning.** The hygiene section keeps `meta.json` tracked (L186-188). The plugin writes `gitCommitHash` = HEAD at analysis time. Committing the regenerated `meta.json` creates a new commit, so `gitCommitHash != HEAD` from then on. Every run warns \"stale,\" and the warning becomes noise, which defeats its stated purpose of catching the \"genuine failure mode.\"\n\n**Distance can fail.** Computing commit distance fails when the recorded hash is unreachable (a rebase or amend, a shallow clone, or analysis done on another branch). Uncommitted changes, which are the most common real drift, aren't detected at all.\n\n**Fix:**\n- Compare the analyzed hash against the tree, not HEAD. For example, ignore commits that only touch `.understand-anything/`, or use `git diff --stat <hash>` with the graph directory excluded.\n- Define what to do when the hash is unreachable: say so explicitly, never treat it as \"fresh.\"\n- Define \"provenance.\" No frontmatter field or document section is specified for it, and the frontmatter gate validates fields.",
+   "location": "project-documents/user/architecture/360-arch.document-intelligence.md:130-135"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "Leaves `intermediate/` dirty, tracks a large generated file, and makes the plugin a precondition even when the graph is committed",
+   "description": "**Untracked leftovers.** The single ignore entry is `.understand-anything/.trash-*/`. `intermediate/scan-result.json` (L89) is neither ignored nor in the \"Not ignored / tracked\" list, so it shows up as untracked after every run. That breaks the \"Leave the working tree clean\" goal. Decide which it is.\n\n**Large file in git.** The document says the graph \"is large\" (L107) yet tracks `knowledge-graph.json`. Every `/understand` run rewrites it, which adds churn and history bloat in client repos. That is a load-bearing decision with only one sentence of justification.\n\n**Wrong precondition.** Because the graph is tracked, a teammate who clones the repo has a valid graph without the plugin installed. Flow step 1 still requires \"Verify the plugin is installed.\" A markdown skill has no reliable way to check that, and consumption doesn't need it. Only refreshing a stale graph does. Make graph presence the only hard precondition.",
+   "location": "project-documents/user/architecture/360-arch.document-intelligence.md#working-tree-hygiene"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "No policy for existing files: the protected concept section and an existing initiative plan",
+   "description": "Capability 1 writes `000-concept.{project}.md` and puts interview responses in **User-Provided Concept**, a section the project says must never be modified. The document doesn't say what happens when:\n- **A concept already exists.** Does the skill overwrite it, refuse, or write only Refined Concept? Re-running would rewrite that protected section.\n- **An initiative plan already exists.** Squadron's own repo has one. The document doesn't say where confirmed \"initiative-plan candidates\" go: a new `001` file, appended to the existing plan, or a separate analysis document.\n\nThere is also a semantic problem. User-Provided Concept holds the user's own words, while an interview transcript is Q&A that the skill prompted. Calling the transcript that section blurs the convention the section exists to protect. Specify the behaviour for each existing file, and say where interview answers go.",
+   "location": "project-documents/user/architecture/360-arch.document-intelligence.md#outputs"
+  },
+  {
+   "i": 8,
+   "severity": "CONCERN",
+   "title": "The placement rationale for (a) contradicts the rationale used for (b)",
+   "description": "Capability (b) is kept out of the analysis dispatcher because \"nothing about it audits a codebase, so routing it through the analysis dispatcher would make that dispatcher's name inaccurate.\"\n\nCapability (a)'s main outputs are a concept and initiative-plan candidates, which are planning documents. The skill is also first-party squadron logic, while the `analysis` pack is the opt-in container for forked external skills (`tech-debt-audit`). So putting (a) in the pack:\n- hides a core planning capability behind `sq skills install analysis`, and\n- applies the opposite of the reasoning used for (b).\n\nThe naming has a similar gap. The document itself says `/understand` is \"descriptive\" and squadron's skill is \"prescriptive,\" with \"no functional overlap.\" That argues against sharing the name. Choose one placement principle and apply it to both capabilities.",
+   "location": "project-documents/user/architecture/360-arch.document-intelligence.md#delivery"
+  },
+  {
+   "i": 9,
+   "severity": "CONCERN",
+   "title": "No version guard on the upstream graph format",
+   "description": "The contract is written against v2.8.1 of a plugin the document calls \"actively developed.\" Nothing checks that the graph matches that version. If a field is renamed or a node type changes, the skill produces a confidently wrong or empty concept with no error, which is a silent failure under the project's fail-fast rule.\n\n**Fix:** have the precondition step check the required top-level keys (`project`, `nodes`, `edges`, `layers`, `tour`) and record the plugin or graph version in provenance. If the shape is wrong, stop with an explicit error.",
+   "location": "project-documents/user/architecture/360-arch.document-intelligence.md#the-understand-anything-output-contract"
+  },
+  {
+   "i": 10,
+   "severity": "NOTE",
+   "title": "Dependency [100] doesn't match the delivery plan",
+   "description": "Dependencies lists \"[100] \u2014 CLI command registration for any command surface.\" Delivery says \"no installer, manifest, or CLI change.\" Both capabilities ship as command markdown. Either remove [100] or name the CLI surface it stands for. If the extraction helper from the grep finding is adopted, [100] becomes real and should say so.",
+   "location": "project-documents/user/architecture/360-arch.document-intelligence.md#dependencies"
+  },
+  {
+   "i": 11,
+   "severity": "NOTE",
+   "title": "Frontmatter status for generated documents isn't chosen",
+   "description": "The document lists the allowed enum values but doesn't pick one per output (concept draft, comprehension analysis, overview). The existing audit `942-analysis.tech-debt-audit.md` uses `status: not_started` for a finished audit, so this is already being guessed inconsistently. State the value for each output.",
+   "location": "project-documents/user/architecture/360-arch.document-intelligence.md:260-261"
+  }
+ ]
+}

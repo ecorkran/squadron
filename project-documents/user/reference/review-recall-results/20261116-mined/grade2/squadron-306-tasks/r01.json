@@ -1,0 +1,54 @@
+{
+ "review": "r01",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "FAIL",
+   "title": "T12 guards `save_review_file`, but `sq review code` writes through `save_review_result`",
+   "description": "The unmet criteria are \"Re-running `sq review code <N>` over an edited review file archives the prior content and warns\" and the F003 fail-closed criterion.\n\n- **Where the write happens:** every CLI review command calls `save_review_result` (`src/squadron/cli/commands/review.py:451,523,610,746`), which calls `path.write_text(...)` directly at lines 300 and 303. It never goes through `save_review_file`.\n- **Pipeline path:** the pipeline action also prefers `save_review_result` when slice info is available (`src/squadron/pipeline/actions/review.py:255`). `save_review_file` is only its fallback (line 272).\n- **Consequence:** T12/T13 as written would pass their tests while the walkthrough's step 7 still silently destroys the hand note.\n- **Existing test:** `tests/cli/test_review_save.py:117` (`testsave_review_result_overwrites_existing`) covers the unguarded overwrite and is not mentioned.\n\nFix: have T12 extract one archive-then-write helper used by both `save_review_file` and `save_review_result`. T12 must also state the abort behaviour for `save_review_result`, which returns `Path`, not `Path | None`. T13 needs a test through `save_review_result` and an update to the existing overwrite test.",
+   "location": "src/squadron/review/persistence.py:291-312"
+  },
+  {
+   "i": 1,
+   "severity": "FAIL",
+   "title": "T3 and T5 instruct a review\u2192pipeline import, inverting the F002 dependency direction",
+   "description": "The unmet requirement is the design's \"Dependency direction (review F002)\": no review \u2194 pipeline package cycle.\n\n- **T3:** it keeps `verification.py`'s `RoundDiff` import from `pipeline.actions.findings_addressed.screens` after the move and calls this \"the pipeline\u2192review direction\". Once `verification.py` lives in `review/addressed/`, that import is review\u2192pipeline.\n- **T5:** `judge.py:21` has the same `RoundDiff` import and `judge_residue_core` takes `diff`, so the extracted core has the same problem. T5 does not mention it.\n- **Cycle:** `screens.py:15` imports the models that T1 moves to `review/addressed/`, so the two packages would import each other.\n- **Runtime risk:** importing `...findings_addressed.screens` executes the package `__init__`, which imports every sibling. Once T7 populates `review/addressed/__init__.py`, this is a likely circular-import failure.\n\nFix: add a step relocating `RoundDiff` (the data shape only) into `review/addressed/`, with `screens.py` importing it from there. File 2's T21 has the same issue: it imports `RoundDiff` and `screen_byte_identical` from the pipeline package into `review/resolution.py`.",
+   "location": "src/squadron/pipeline/actions/findings_addressed/verification.py:17"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "T6's \"pass unchanged, else stop\" cannot hold after the T5 extraction",
+   "description": "Both judge test files patch `squadron.pipeline.actions.findings_addressed.judge.run_review_with_profile` (also `tests/pipeline/test_findings_addressed_e2e.py:27`). After T5 the transport call lives in `review/addressed/judge.py`, so that patch no longer intercepts it. The tests will fail or reach the real transport.\n\nT6 tells the implementer to stop and reconcile with the design if any test needed rewriting, which would trigger a false stop. T5 should name the patch-target update as an expected mechanical edit, and T6 should narrow \"unchanged\" to assertions and fixtures.",
+   "location": "tests/pipeline/test_findings_addressed_judge.py:32"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "T14 (cf archive-scanning check) is sequenced after Part D's commit",
+   "description": "The design's Phase 5 note requires this check \"sequenced before Part D lands \u2014 it is a go/no-go on the archive filename scheme.\" The file places it after T12/T13 and after T13's `fix:` commit. It compensates with \"do not mark T12 done\" prose in two places, which leaves a commit marker sitting at a point where T12 is, by the file's own rule, incomplete.\n\nFix: move the check ahead of T12 and delete the two \"gates T12 in practice\" bullets.",
+   "location": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-1.md:275-296"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "T10 underspecifies the two persistence paths it wires",
+   "description": "T10 gives the junior implementer no answer on two points:\n\n- **Working directory:** T10 writes `run_git([\"rev-parse\", \"HEAD\"], cwd=...)` for `save_review_result`, but that function has no `cwd` parameter (only `reviews_dir`). The task must say where the directory comes from.\n- **Pipeline call sites:** the pipeline action has two write paths: `save_review_result` at line 255 and `format_review_markdown` + `save_review_file` at lines 265-272. If `save_review_result` stamps internally, only the fallback at 265 needs explicit wiring. T10 should say which sites change, so the SHA is resolved in one place.\n\nT11's \"whichever is more directly testable\" then leaves one of the two paths in the criterion (\"from both the CLI and the pipeline persistence paths\") untested. It should require one test per path.",
+   "location": "src/squadron/pipeline/actions/review.py:255-272"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Part 0 is over-split for a mechanical move",
+   "description": "Part 0 spends eight tasks and four commits on a relocation the design calls mechanical.\n\n- **Merge T1\u2013T4:** T1/T2 (move `models.py`) and T3/T4 (move `parsing.py`, `verification.py`) are the same operation with the same grep and the same verification command. Make them one move task and one verify task.\n- **Fold T7/T8 into the extraction pair:** T7's `__all__` changes are part of making those moves importable.\n\nThat brings Part 0 to four tasks and two commits with no loss of coverage.",
+   "location": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-1.md:76-184"
+  },
+  {
+   "i": 6,
+   "severity": "NOTE",
+   "title": "Commit markers are at working points but not in the `**Commit**:` form",
+   "description": "Markers are written as `- Commit: ...` list items under verify/test tasks. Placement is sound (each follows a passing verification, none are checkboxes). The form should be a plain `**Commit**:` line so the implementer's commit-cadence rule recognises them.",
+   "location": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-1.md:99"
+  }
+ ]
+}

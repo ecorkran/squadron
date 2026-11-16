@@ -1,0 +1,47 @@
+{
+ "review": "r07",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Logout path, and login before `wait()`, have no failure-mode handling",
+   "description": "`sq auth logout` spawns the runtime and calls `AsyncCodex.logout()` (line 82 confirms the spawn), but none of the three D7 timeouts covers it. The Failure Modes table has rows for turn, `account()` and login `wait()`, and nothing for logout hang, logout SDK error, or logout when not logged in.\n\nThe login timeout also covers only `handle.wait()` (lines 84, 108). Runtime start plus the `login_chatgpt()` / `login_chatgpt_device_code()` call that produces the handle is unbounded.\n\n`sq auth login/logout openai-oauth` without the extra is not stated either. The success criterion at line 190 (\"any `openai-oauth` use exits with \u2026 the exact install command\") implies it, but the Login data flow never passes through `resolve_codex_runtime()`.\n\nFix:\n- Reuse `codex.account_timeout_s` for logout and for login's pre-`wait()` phase; no fourth key is needed.\n- Add table rows for logout hang and logout SDK error, each exiting non-zero with a message.\n- State that `login.py` calls `resolve_codex_runtime()` first.",
+   "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:103-111"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Post-timeout agent state and the interrupt mechanism are unspecified",
+   "description": "The timeout rows say \"cancel the turn\" and \"Turn handle interrupted and `shutdown()` still runs in `finally`\". Interfaces Required (line 54) lists only `AsyncThread.run(...) \u2192 TurnResult`, with no turn handle or interrupt call. The design therefore relies on an SDK surface it has not inspected, or on asyncio cancellation of `run()` stopping the server-side turn, which is unverified.\n\nThe transport-closed row explicitly clears `_codex`/`_thread`; the timeout row does not. `CodexAgent` reuses its lazy client and thread across messages (line 82), so after a timeout the next message may land on a thread with a turn still in progress.\n\n\"`shutdown()` in `finally`\" is also ambiguous. If it means the agent's own `finally`, it contradicts the once-per-agent client reuse.\n\nFix:\n- Name the SDK call used to interrupt, or state that the client is torn down and `_codex`/`_thread` reset on timeout, as for transport-closed. Teardown is the simpler option.\n- Say whose `finally` runs `shutdown()`.",
+   "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:125-129"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "`resolve_codex_runtime()` contract does not support its doctor and model-list consumers as described",
+   "description": "Two gaps in the shared resolver that D9 leans on:\n\n1. **Two failures, one signal.** The resolver raises `ProviderError` for \"package not importable\" and for \"no bundled binary and none on PATH\" (lines 80, 122-123). `missing_extra_hint()` must return the install command only for the first, and `sq model list` renders it as `(needs [codex] extra)`. With the package installed and no binary, the implementer must either show a wrong marker or discriminate by message text. The design should give the resolver a typed outcome, such as a distinct exception subclass or a `source` value for \"package missing\".\n\n2. **Version has no source.** D9 says the doctor row's package version comes from `resolve_codex_runtime()`, and that doctor does no import probing of its own. `CodexRuntime` is defined as `(source, path|None)` (line 63), with no version field. Either add `version` to `CodexRuntime` or say where doctor gets it.\n\nBoth gaps affect the plan's Part B requirements (doctor row with package/binary/login state, model-list marker).",
+   "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:112"
+  },
+  {
+   "i": 3,
+   "severity": "NOTE",
+   "title": "Version upper bound is both decided and undecided",
+   "description": "D1 (line 97) writes `openai-codex>=0.159.3,<1`, while Special Considerations says the cap \"is not decided here \u2026 PM to say\". The design should pick one and delete the open question. On a 0.x SDK whose surface moves between minors, `<1` gives little protection anyway; the real-types test at line 200 is the actual guard.",
+   "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:231"
+  },
+  {
+   "i": 4,
+   "severity": "NOTE",
+   "title": "`--timeout` flag duplicates `codex.login_timeout_s`",
+   "description": "The slice plan asks for `--device-code` only. `sq auth login --timeout` is a second way to set a value that already has a config key, and no requirement uses it. It can be cut, which also removes the `timeout` parameter's CLI plumbing. The rest of the design is proportionate to a 3/5 slice: two one-implementer Protocols are the lightest way to meet the plan's \"capability, not a profile-name check\" requirement and slice 128's ban on string dispatch.",
+   "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:149"
+  },
+  {
+   "i": 5,
+   "severity": "NOTE",
+   "title": "Step 0 verification procedure is loosely specified",
+   "description": "Resolving the `OPENAI_API_KEY` fallback in-slice is right, since leaving it would be a silent-fallback path in an edited file. The procedure (\"a throwaway `CODEX_HOME`-style location only if the runtime supports one; otherwise a machine without a login\") leaves the mechanism to discovery. The design should state whether the runtime supports a relocatable home, so the task is executable without moving the developer's real `auth.json`.",
+   "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:232"
+  }
+ ]
+}

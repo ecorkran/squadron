@@ -1,0 +1,68 @@
+{
+ "review": "r04",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "FAIL",
+   "title": "Commit 3.2a is not at a green point",
+   "description": "Task 3.2a requires `pnpm --filter @context-forge/core test` to pass. That runs `vitest run` over `tests/**` (`packages/core/vitest.config.ts:5`), so every core test file runs. Two tests still assert output that 3.1 and 3.2 remove:\n- `packages/core/tests/pipeline-integration.test.ts:184` expects `Comprehension: \u2026` in the output. 3.1 removes that line. This case sits in the `probeReturning` block, which 3.3 deletes.\n- `packages/core/tests/adoption/adoptionBuild.integration.test.ts:102` expects `### Adoption Facts`. 3.2 removes that section. The file is deleted only in 4.1.\n\nThe 3.2a commit therefore fails its own check. Line 85's \"everything compiles\" holds only for typecheck. Fix: delete the probe block and the whole `adoptionBuild.integration.test.ts` in 3.1\u20133.2, or fold 3.1\u20133.2a into the 3.7 commit.",
+   "location": "project-documents/user/tasks/268-tasks.pure-cf-build.md:99"
+  },
+  {
+   "i": 1,
+   "severity": "FAIL",
+   "title": "The 3.7 gate fails because adoptionBuild.integration.test.ts survives until 4.1",
+   "description": "Task 3.3's test list (lines 106\u2013108) omits this file. It calls `createContextPipeline(dir, { adoptionStateWrites, squadronProbe })` at line 68 and expects brownfield output in cases 3, 11 and 13 (lines 120, 221, 235). Once 3.3 removes the seam, those cases fail. The file is deleted only in 4.1 (line 144), after the 3.7 commit, so 3.7's `pnpm -r test` (lines 132\u2013133) cannot pass. `pnpm typecheck` won't catch it, because core's typecheck uses `tsconfig.json`, which includes only `src/**/*` (`packages/core/tsconfig.json:20`). The failure appears only at test run. Fix: delete this file in the same step as the FAIL above, or add it to 3.3's list.",
+   "location": "packages/core/tests/adoption/adoptionBuild.integration.test.ts:68"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Commit points are checkbox items, not `**Commit**:` markers",
+   "description": "The commits are written as checkboxes at lines 79, 101, 134, 148, 155, 163, 169, 186 and 206. The project convention is a plain `**Commit**:` line that is not a checkbox. As a checkbox, a commit cannot be checked before it exists, so its check-off cannot go into that commit. Convert each to a plain `**Commit**:` line with its message.",
+   "location": "project-documents/user/tasks/268-tasks.pure-cf-build.md:79"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Per-task checks run against a stale core build after 3.7",
+   "description": "`packages/core/package.json:13` maps `./node` to `dist/`, and line 87 says cli and mcp-server typecheck against that dist. No task rebuilds core between 3.7 and 6.1. So the cli and mcp typecheck in 4.1\u20134.4, and the purity test in 5.1 (which imports `@context-forge/core/node`), run against the 3.7 build rather than the current source. The package configs contain no vitest alias that redirects core to `src`. Line 140's \"leaves the workspace compiling\" therefore isn't demonstrated. Fix: add `pnpm --filter @context-forge/core build` before the typecheck and test steps in 4.1\u20134.4 and 5.1. The project rule is to build after all changes.",
+   "location": "project-documents/user/tasks/268-tasks.pure-cf-build.md:140"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "The 6.2 export audit cannot be satisfied for symbols the design keeps",
+   "description": "The audit requires each remaining export to have a consumer listed under Interfaces Required, or to belong to `history`, `comprehensionAnalysis` or `adoptionOutcome`. Several kept symbols match neither rule:\n- `AdoptionError` is kept (line 39). It is used by `packages/core/src/detection/sourceVolume.ts:8` and `planningArtifacts.ts:5`.\n- `readAdoptionState` and `ADOPTION_STATES` are kept (line 158). `readAdoptionState` is used by `packages/core/src/introspection/adoptionNavigation.ts:4`.\n\nA junior AI following the audit literally cannot confirm these, and may remove them. Fix: name the keep-set explicitly, using the kept list on line 39, and keep the \"remove only if only deleted code used\" test.",
+   "location": "project-documents/user/tasks/268-tasks.pure-cf-build.md:200"
+  },
+  {
+   "i": 5,
+   "severity": "NOTE",
+   "title": "The 3.3 seam-change window is described inconsistently",
+   "description": "Line 87 says that between 3.4 and 3.6 only mcp-server typecheck fails, and that cli passes once 3.5 is done. After 3.4's core rebuild (line 116), `packages/cli/src/commands/build.ts:84` still passes two arguments to a one-argument `createContextPipeline`, so cli typecheck also fails until 3.5. Correct the expectation.",
+   "location": "project-documents/user/tasks/268-tasks.pure-cf-build.md:87"
+  },
+  {
+   "i": 6,
+   "severity": "NOTE",
+   "title": "The 3.6 \"update its caller\" step needs no edit",
+   "description": "Line 125 says to \"update its caller in the server setup\". The production caller, `src/index.ts:40`, already calls `registerContextTools(server)` with no options, so it needs no change. The only caller that passes options is `tests/helpers/integrationSetup.ts:41`, which 3.6 already covers. Say so explicitly.",
+   "location": "packages/mcp-server/src/index.ts:40"
+  },
+  {
+   "i": 7,
+   "severity": "NOTE",
+   "title": "The golden set does not exercise the removed code for planned projects",
+   "description": "The criterion names greenfield, already-planned and later-phase builds. D6 and tasks 2.1\u20132.2 cover greenfield at Phase 0 and a planned project at Phase 4. The Phase 4 case never reaches the resolver's detection, because `packages/core/src/adoption/adoptionResolver.ts:167` returns early for non-concept phases. Its byte-identity therefore holds trivially. The only planned-project case that runs the removed code is a planned project at Phase 0. The task follows D6 exactly, so this is a design-level choice. Consider adding a planned-at-Phase-0 golden case.",
+   "location": "project-documents/user/slices/268-slice.pure-cf-build.md:190"
+  },
+  {
+   "i": 8,
+   "severity": "NOTE",
+   "title": "The purity mutation check is not in the design",
+   "description": "Line 185 asks for a temporary `writeFileSync` to confirm the snapshot assertion fails, then a revert. D5 and the success criteria do not require this. It is a reasonable check for a purity test, but it adds an edit-and-revert step that can be left in place. Keep it or drop it.",
+   "location": "project-documents/user/tasks/268-tasks.pure-cf-build.md:185"
+  }
+ ]
+}

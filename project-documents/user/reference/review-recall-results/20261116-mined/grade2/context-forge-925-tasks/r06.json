@@ -1,0 +1,61 @@
+{
+ "review": "r06",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "The commits at Task 4 and Task 6 leave the MCP package failing typecheck",
+   "description": "Task 3 narrows `GuideMethod` to `'submodule' | 'clone' | 'tarball'`. `guideTools.ts` still has `z.enum(['submodule', 'clone', 'manual'])` at line 101 and passes that value to `manager.install(strategy, source)` at line 116. That is a type error in `@context-forge/mcp-server` until Task 7. Task 5 also changes what `resolveStrategy()`/`install()` return, which can break CLI callers. Yet Task 4 commits `refactor(core): rename\u2026` and Task 6 commits `fix(core): \u2026` after running only the core suite. That breaks the rule that commits sit at working, tested points.\n**Fix:** pick one:\n- Merge the commits at Task 4 and Task 6 into one commit after Task 8, with a monorepo-wide typecheck and test run as its success criterion.\n- Move the minimal `guideTools.ts` enum and narrowing change into Task 3, and have the Task 4 and Task 6 success criteria run `pnpm -r typecheck`.",
+   "location": "packages/mcp-server/src/tools/guideTools.ts:100-116"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Task 17 appends `GUIDE_OFFLINE_REMEDIATION` a second time",
+   "description": "`withNetworkErrorHint()` already appends `GUIDE_OFFLINE_REMEDIATION` when an error message matches a network pattern (line 48). Task 13 routes the timeout through that function, and Task 14 asserts that the `gitExec` rejection already contains `GUIDE_OFFLINE_REMEDIATION`. Task 17 then tells the implementer to \"rethrow with `GUIDE_OFFLINE_REMEDIATION` appended (mirror `setup-ide.ts:113`)\". So for timeouts and network failures, the user would see the remediation text twice. Task 18 only asserts that the text is present, so the duplicate would pass the tests. (`setup-ide.ts:114` is a different case: there it adds context to its own message, not to a `gitExec` error.)\n**Fix:** state which layer owns the remediation text. Either Task 17 appends it only when the message doesn't already contain it, or it relies on `gitExec` and appends nothing. Add a Task 18 assertion that the text appears exactly once.",
+   "location": "packages/core/src/guides/gitExec.ts:42-48"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Task 15 contradicts itself about where the timeout is set",
+   "description": "The first bullet gives the signature `init(operationPath: string)` and says it always runs with `{ timeoutMs: GUIDE_INIT_TIMEOUT_MS }`. The second bullet says `sync()` calls `init()` \"without the timeout: pass the timeout as an `init()` option\". Those can't both be true: if `init()` always applies the timeout, `sync()` becomes time-bounded, which breaks D10. If the timeout is an option, the signature is wrong and `ensureCheckout()` (Task 17) has to pass it. A junior implementer can't tell which one is intended.\n**Fix:** state one signature, e.g. `init(operationPath, opts?: { timeoutMs?: number })`. Say that `ensureCheckout()` passes `GUIDE_INIT_TIMEOUT_MS` and `sync()` passes nothing. Add a Task 16 or Task 18 check that the auto-init path passes the timeout.",
+   "location": "unverified"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "The CLI warning for `manual` in the config file is never tested",
+   "description": "One success criterion reads: \"A project whose shared config has `guide.git_strategy: manual` installs as tarball with the same warning.\" Task 6(b) only checks that core *reports* the alias. Task 7 adds the CLI code that prints the warning for the config case. Task 8 tests only the `--strategy manual` flag. Nothing checks that the config-file case actually prints a warning to stderr.\n**Fix:** add a case to Task 8 where the shared config sets `guide.git_strategy: manual` and `cf guides install` is run with no flag. Assert that the install uses tarball and that the deprecation line appears on stderr only.",
+   "location": "unverified"
+  },
+  {
+   "i": 4,
+   "severity": "NOTE",
+   "title": "The alias warning is printed in two command files",
+   "description": "Task 7 prints the deprecation warning in the `guides install` action. Task 26 repeats the same normalize-then-warn step in `init.ts`. That is two copies of the same wording. Have Task 7 export one small helper, e.g. `normalizeStrategyFlag(raw)`, and have Task 26 call it.",
+   "location": "unverified"
+  },
+  {
+   "i": 5,
+   "severity": "NOTE",
+   "title": "It's unclear where `operationPath` gets resolved",
+   "description": "Task 17 says `ensureCheckout()` resolves `operationPath` the same way `getGuideContext()` does. Task 19 passes `operationPath` into `ensureGuideReady()`. Task 22 (MCP) doesn't say how the MCP tools get it. Pick one owner: either the caller resolves it and passes it in, or `ensureCheckout()` resolves it internally. Then say so in Tasks 17, 19 and 22.",
+   "location": "unverified"
+  },
+  {
+   "i": 6,
+   "severity": "NOTE",
+   "title": "Task 27's `.gitmodules` check is meaningless if `guidesInstallAction` is mocked",
+   "description": "Task 27 asserts both that `guidesInstallAction` is called with `tarball` and that no `.gitmodules` file is created. If the test mocks `guidesInstallAction`, the second check passes no matter what. Either assert only the arguments passed through, or run a real tarball install into a temp directory. The walkthrough in Task 32 covers the real end-to-end case either way.",
+   "location": "unverified"
+  },
+  {
+   "i": 7,
+   "severity": "NOTE",
+   "title": "Commit markers are inline text, not plain `**Commit**:` lines, and Task 32 mentions a merge",
+   "description": "The commit points are written as \"Commit: `\u2026`\" inside checkbox items. The convention is a plain `**Commit**:` line, never a checkbox. The commit points themselves are in sensible places, apart from the problem with Task 4 and Task 6 above. Task 32's \"PM reviews before merge to `main`\" is a merge/approval step, which the project rules say not to put in a task file. Drop it.",
+   "location": "project-documents/user/tasks/925-tasks.guide-install-robustness.md"
+  }
+ ]
+}

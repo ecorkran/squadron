@@ -1,0 +1,40 @@
+{
+ "review": "r06",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Renderer tests don't cover \"every outcome\"",
+   "description": "The slice's Technical Requirements ask for `renderAdoptionFacts` tests covering \"every outcome\" (`project-documents/user/slices/261-slice.detection-and-adoption-state.md:336`). Task 8T only tests `brownfield`, `adoption-in-progress` and `NOT_EVALUATED`. It has no case for `greenfield`, `already-planned` or `adoption-closed`. Yet Task 8 requires an exhaustive `never` switch, so those branches will have rendering code that no test runs. Add one `it.each` row for each remaining `AdoptionOutcome` kind, asserting that the outcome bullet names it. This is cheap and matches the criterion as written.",
+   "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:173-176"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "No test checks how the missing-guide error reaches the CLI and MCP callers",
+   "description": "The Functional criterion says: \"A guide without the profile or prompt: `cf build` exits non-zero with the `AdoptionError` message; `context_build` returns it as an error\" (slice line 333). Three tasks test the error inside core:\n- Task 9T: the resolver throws.\n- Task 10T: the integrator rethrows.\n- Task 12 #12: the pipeline rejects.\n\nNo automated test checks what the two callers do with it. The `cf build` side is covered only by manual walkthrough step 4 in Task 15. The `context_build` error result is not checked anywhere: walkthrough step 5 covers only parity and `template_preview`. Task 11 already edits `build.test.ts` and `contextTools.test.ts`, so add one assertion to each:\n- the mocked pipeline rejects with `AdoptionError`, so `cf build` exits non-zero through `handleError`\n- the same rejection makes `context_build` return an error result containing the message",
+   "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:217-223"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "The Task 15C commit would hold only notes and check-offs",
+   "description": "Task 15 runs checks and the walkthrough, then \"Record each step's outcome under this task\". It also says \"Any defect is fixed in its own commit\", so 15C (`docs: record slice 261 verification walkthrough`) is left with nothing but walkthrough notes and checkboxes in the task file. CLAUDE.md says: \"Never make a commit that only checks boxes or only adds notes.\" Remove the 15C marker. Instead, include the recorded outcomes in the last defect-fix commit, or in the next real commit if there are no defects. Separately, 14C is a whole commit for a single README row. Merging Task 14 into the 13C commit would remove one granular marker. That part is optional.",
+   "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:259-269"
+  },
+  {
+   "i": 3,
+   "severity": "NOTE",
+   "title": "No timing or load test for the sub-second detection target",
+   "description": "The slice restates an NFR: detection adds under one second to a Phase 0 build. There is no `tests/load/` task. D2 deliberately chose to have tests check the walk's caps (`MAX_WALK_ENTRIES`, early exit at the line threshold) rather than timings. The task file's Context Summary explains this and points to the Task 3T cap tests. This is a design decision, not a planning gap, and with no load test there is no CI gating to wire up.",
+   "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:38"
+  },
+  {
+   "i": 4,
+   "severity": "NOTE",
+   "title": "`detection/` now imports from `adoption/`",
+   "description": "In Task 3, `detection/sourceVolume.ts` imports `BROWNFIELD_MIN_SOURCE_LINES` from `adoption/adoptionOutcome.ts`. Tasks 3 and 6 import `AdoptionError` from `adoption/contracts.ts`. So the \"facts only\" module depends on the \"policy\" module. The design requires this: D1 puts the threshold in one place, and D2 makes the walk throw `AdoptionError`. Task 7 prevents a runtime cycle by using `import type` for `SourceVolume`. Implementers should know this direction is intended.",
+   "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:85"
+  }
+ ]
+}

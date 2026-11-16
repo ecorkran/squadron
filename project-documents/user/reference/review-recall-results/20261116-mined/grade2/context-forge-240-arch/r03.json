@@ -1,0 +1,110 @@
+{
+ "review": "r03",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "FAIL",
+   "title": "Three of the four configured transitions have no insertion point",
+   "description": "The config schema (lines 82\u201385) defines `pre-tasks` (reviewType `slice`), `pre-implementation` (`tasks`) and `pre-advance` (`code`). The only insertion point is between Priority 5 (`in-implementation`) and Priority 6 (`complete \u2192 advance`) (lines 113\u2013116). That point only fires after every task is checked, so:\n\n- `pre-tasks` is evaluated after the task breakdown and implementation it was meant to gate. Nothing in the cascade gates the `needs-design \u2192 needs-tasks` transition (`WorkflowNavigator.ts:212\u2013232` has no gate branch).\n- `pre-implementation` has no state at all. `deriveSliceStatus()` moves from `needs-tasks` to `in-implementation` as soon as the task file has items (`WorkflowNavigator.ts:470\u2013493`). The doc never says where to check.\n- `pending-review` is defined as \"tasks complete, review gate configured\" (line 106). Every configured gate collapses into one status at one point, and the doc never says which gate produced a given `pending-review`.\n\nEither v1 implements only `pre-advance` and rejects the other keys at config load, or the doc specifies an evaluation point for each transition and a status shape that names the pending transition.",
+   "location": "project-documents/user/architecture/240-arch.review-aware-workflow-gating.md#gate-insertion-point"
+  },
+  {
+   "i": 1,
+   "severity": "FAIL",
+   "title": "\"Lexicographically last filename\" is not recency and can deadlock on `review-failed`",
+   "description": "Line 133 says the gate takes the last filename, \"most recent by sort order.\" The filenames are `NNN-review.{reviewType}.{slug}.md` (line 131), so sort order is slug order, not time. Concrete failure: a code review `210-review.code.judge-run.md` returns FAIL. The developer reruns the review and saves it as `210-review.code.2nd-run.md`. `2nd-run` sorts before `judge-run`, so the FAIL file stays \"last\" and the gate stays on `review-failed` (blocked). Reconciliation is \"above CF's layer\" (line 109), so CF has no way out short of renaming files. The existing `documentDetector.ts` takes the first match (`sliceMatches[0]`, line 64). The doc picks the opposite end without saying why.\n\nFix: select by a recency value the artifact carries (for example `dateUpdated` in frontmatter), and state whether a rerun overwrites the file or creates a new one.",
+   "location": "project-documents/user/architecture/240-arch.review-aware-workflow-gating.md#review-artifact-discovery"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "One `review` slot cannot represent per-type reviews",
+   "description": "Lines 129\u2013131 add one `review` slot to `DocumentDetectionResult`. The doc doesn't give its shape. Existing slots are per document kind (`sliceDesign: string | null`, `taskFile: string[] | null`). The gate needs lookup by reviewType (`arch`, `slice`, `tasks`, `code`), and the config assumes up to four reviews per slice (lines 82\u201385). `detectDocuments(projectPath, sliceIndex)` (`documentDetector.ts:46\u201349`) has no reviewType parameter, so one slot holds at most one of the four. The `pre-slice-plan` arch review is keyed by initiative index (`NNN-review.arch.*`, line 141), but the detector is keyed by slice index.\n\nAlso, `ConsistencyChecker.ts:857` already includes `reviews` in `DOC_SCAN_DIRS`, so Rule 12 already validates these files. The doc doesn't mention the overlap.\n\nFix: add a `detectReviews(projectPath, index)` returning a map keyed by reviewType, and state the index semantics for initiative-level reviews.",
+   "location": "project-documents/user/architecture/240-arch.review-aware-workflow-gating.md#review-artifact-discovery"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Verdict and policy vocabulary is inconsistent and undefined at the edges",
+   "description": "- `review_unknown_as` values: line 75 gives default `\"fail\"`, line 147 uses `\"concern\"`, and line 106 says `pending-review` arises when \"review_unknown_as treats it as pending,\" which is not a value the doc defines.\n- `review_threshold`: only `concerns` and `pass` appear (lines 74, 82\u201385). Line 95 says CONCERNS clears \"if threshold = concerns or lower,\" which assumes an ordering that is never defined. The meaning of `threshold = \"fail\"` is unstated.\n- Verdict case: `parseFrontmatter` returns raw strings (`frontmatterParser.ts:29\u201339`) and the doc never says matching is case-sensitive or normalized. A `verdict: pass` falls outside `{PASS, CONCERNS, FAIL, UNKNOWN}`, becomes UNKNOWN (line 98), and under the default policy blocks a passing review. `ConsistencyChecker` already lowercases status values (`:316`, `:409`), so pick one rule.\n- Hard-coded values: the rationale at line 124 hard-codes `'concerns'`, and line 118 hard-codes `(type: code)` for every gate, though threshold and reviewType are per-gate. This is the scattered-comparison-value pattern CLAUDE.md prohibits.\n\nFix: define the verdict, threshold and policy sets once (as `as const` objects per the TypeScript rules), write the ordering as a table, and render rationale from resolved values.",
+   "location": "project-documents/user/architecture/240-arch.review-aware-workflow-gating.md#verdict-handling"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Gate output has no structured fields, and the doc's \"stable vocabulary\" doesn't exist",
+   "description": "Line 32 says runners can act on statuses \"without parsing recommendation strings,\" and line 20 says Amoeba \"consumes the same gate output.\" But the gate's only output is a `NextAction` with `recommendation: \"review\" | \"blocked\"` plus prose rationale (lines 118, 124). A consumer needs the reviewType to run, the artifact that failed, and the verdict and threshold that produced the decision. Today all of that is in prose, and the prose is wrong exactly where it matters (fixed `(type: code)`, and `FAIL` text for a parse failure that line 149 says must name the parse failure).\n\nThe bare tokens also break the existing convention. Every current `recommendation` is a sentence (`WorkflowNavigator.ts:214\u2013219`, \"Create slice design (Phase 4)\"). The \"stable vocabulary\" Amoeba depends on (line 173) is not in the code. Line 42 says `workflow_next` returns a `pending-review` recommendation, but line 118 returns `review`.\n\nFix: add optional structured fields to `NextAction` (for example `gate: { transition, reviewType, verdict, threshold }`), keep `recommendation` as prose, and define the machine values once. Adding an optional field is compatible with line 173's constraint on the return type.",
+   "location": "project-documents/user/architecture/240-arch.review-aware-workflow-gating.md#gate-insertion-point"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "The frontmatter reader cannot report why a review was unreadable, contrary to the doc's own rule",
+   "description": "Line 149 requires that a malformed or unreadable review be treated as UNKNOWN and that the rationale \"names the parse failure explicitly.\" `parseFrontmatter()` (`frontmatterParser.ts:9\u201349`) returns `{ found: false, data: {} }` for a missing file, a permission error, unclosed frontmatter, and any thrown error (`catch { return empty; }`, lines 46\u201347). The gate cannot tell \"no review\" (line 40, unreviewed) from \"unreadable\" (line 149). That is the silent-fallback pattern the project prohibits. The claim that the gate reuses this machinery (Overview, line 22) doesn't hold for the failure path.\n\nTwo more problems with the reader:\n- It flattens YAML. Indentation is discarded (`stripped = lines[i].trim()`, line 22), so a nested `criteria: {correctness: 0.8}` appears as a top-level `correctness` key. A nested key named `verdict` or `score` overwrites the top-level value, since the last write wins (line 39). \"Opaque, preserved\" (line 46) is not true of this reader.\n- Every value is a string (`FrontmatterData = [key: string]: string`, `types.ts:41\u201343`). `score` (float or null) must be parsed, range-checked, and `\"None\"`/`\"null\"` mapped to absent. Under the TypeScript rules that needs a narrowing step, not an `as`.\n\nFix: define a discriminated read result (`absent | unreadable | malformed | parsed{verdict, score}`), a reader that returns errors instead of `found: false`, and tests that use a real Squadron review file as the fixture.",
+   "location": "project-documents/user/architecture/240-arch.review-aware-workflow-gating.md#technical-considerations"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "`pre-slice-plan` is accepted in v1 and does nothing",
+   "description": "Line 82 puts `pre-slice-plan` in the v1 config example. Line 141 says v1 \"implements only the four slice-level transitions.\" Lines 22 and 82\u201385 name three slice-level transitions (`pre-tasks`, `pre-implementation`, `pre-advance`), so \"four\" is wrong. Whatever the count, a v1 config that accepts `pre-slice-plan` and skips it is the silent pass the doc forbids (line 48).\n\nFix: v1 config validation rejects `pre-slice-plan` with an explicit \"not implemented\" error, and the key comes out of the example until slice 4.",
+   "location": "project-documents/user/architecture/240-arch.review-aware-workflow-gating.md#initiative-level-gating-v1-deferred"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "The plan checkbox has three meanings, and nothing sets it when a review passes",
+   "description": "- The `task-vs-plan` rule (`ConsistencyChecker.ts:266\u2013283`) makes the plan checkbox a fixable \"tasks complete \u21d2 checked\" correction. Under `workflow.auto_fix`, the box is checked before any review exists. The new rule (line 137) then warns \"complete in plan but review absent\" about a state auto-fix produced.\n- Priority 6 chooses its target with `entries.find((e) => !e.isChecked)` (`WorkflowNavigator.ts:250`). When the gate clears and the current slice's box is still unchecked (the default, since `auto_fix` is false, `ConfigKeys.ts:31\u201335`), and it is the first unchecked entry (the normal serial case), P6 recommends `cf set slice <current>`, the slice just reviewed. This already happens today when tasks are complete but the box is not. The doc's pass path runs through this same branch and says nothing about it. Nothing in the design checks the box on pass, and P6 does not exclude the current index.\n- The new consistency rule uses the plan checkbox as its trigger, while the navigator uses derived task status. They can disagree (box checked, tasks incomplete). Two implementations will drift.\n\nFix: make \"complete\" mean tasks done, keep review as a separate gate that never reads the checkbox, make P6 exclude the current index, and have the consistency rule call the same evaluator the navigator uses.",
+   "location": "project-documents/user/architecture/240-arch.review-aware-workflow-gating.md#consistencychecker-rule"
+  },
+  {
+   "i": 8,
+   "severity": "CONCERN",
+   "title": "`workflow.auto_advance` has no consumer, so the precedence claim cannot be checked",
+   "description": "Line 153 says auto_advance is \"a consumer-layer concern. No special interaction logic is needed; the gate naturally takes precedence.\" In the repository, `workflow.auto_advance` is defined at `ConfigKeys.ts:26\u201330` and referenced nowhere else except a key-listing test (`ConfigManager.test.ts:205`). No code acts on it.\n\nSo the doc relies on a consumer that does not exist. \"The gate wins because the recommendation changes\" holds only for a consumer that reads `recommendation`. A consumer that acts on the description (\"when current is complete,\" `ConfigKeys.ts:29`) or on plan checkboxes bypasses the gate. The input note (line 81) asked the architecture to define precedence explicitly. This doc declines to.\n\nFix: state that auto_advance is inert in CF, require that any advancing consumer act only on a `review`/`blocked`-aware field, and add a test that a failing gate suppresses advance.",
+   "location": "project-documents/user/architecture/240-arch.review-aware-workflow-gating.md#technical-considerations"
+  },
+  {
+   "i": 9,
+   "severity": "CONCERN",
+   "title": "`WorkflowNavigator` has no config access, and four call sites build it with no arguments",
+   "description": "Line 34 says both surfaces inherit the gate \"without per-surface work.\" The gate needs `review_enabled`, the threshold and the per-gate table, resolved through the project \u2192 user \u2192 default chain the doc relies on. `WorkflowNavigator` is stateless with no constructor (`WorkflowNavigator.ts:48`). It imports `detectDocuments` and `parseTaskFile` directly (lines 11\u201313) rather than through the `IArtifactIntrospector` boundary that `ConsistencyChecker` uses (`ConsistencyChecker.ts:35\u201337`). Four sites call `new WorkflowNavigator()` with no arguments: `workflowTools.ts:154`, `workflowTools.ts:200`, `status.ts:119`, `next.ts:26`.\n\nAdding a config dependency either adds an optional constructor argument with a default (a hidden fallback the project prohibits) or changes all four sites. The doc chooses neither. `cf status` and the MCP status tool also call `getStatus()`, which needs the same config to show `pending-review`.\n\nFix: inject a config-reader interface into the navigator, pass it explicitly from all four sites, and say so in the doc.",
+   "location": "project-documents/user/architecture/240-arch.review-aware-workflow-gating.md#design-goals"
+  },
+  {
+   "i": 10,
+   "severity": "CONCERN",
+   "title": "The gate is being added to the largest function in the largest file",
+   "description": "`getNext()` spans lines 83\u2013300 (about 218 lines) against the ~50-line guideline. `WorkflowNavigator.ts` is 561 lines against ~300. The doc adds a branch, the `pending-review`/`review-failed` derivation in `deriveSliceStatus()`, review discovery, verdict evaluation and a rationale template to this class. Line 151 says the same change should renumber the whole cascade. That mixes a refactor with a behavior change in one diff.\n\nFix: extract a pure `ReviewGate` (input: parsed review read result and resolved policy; output: a discriminated outcome), a locator port for discovery, and named cascade stages. Do the stage refactor first as a separate behavior-preserving commit, then add the gate.",
+   "location": "project-documents/user/architecture/240-arch.review-aware-workflow-gating.md#gate-insertion-point"
+  },
+  {
+   "i": 11,
+   "severity": "CONCERN",
+   "title": "Nothing ties a PASS to the work it reviewed",
+   "description": "The gate is artifact-presence based (line 40). No rule ties a review to the task state or code revision it judged. A PASS clears the gate after tasks are reopened, edited, or changed after review. Reviews are keyed by slice index only, so a review of an earlier change to that slice clears a later one.\n\nFix: record the reviewed revision (task-file `dateUpdated` or a commit SHA) in the review and compare on read, or state that a PASS is permanent and why that is acceptable. The doc does neither.",
+   "location": "project-documents/user/architecture/240-arch.review-aware-workflow-gating.md#verdict-handling"
+  },
+  {
+   "i": 12,
+   "severity": "CONCERN",
+   "title": "Proportionality: v1 carries policy axes and fields nothing consumes",
+   "description": "The doc calls v1 \"verdict-only and conservative\" (line 36, line 100). It still carries:\n\n- Per-transition `threshold` overrides (lines 82\u201385). One global rule is enough for v1.\n- `review_unknown_as` (lines 75, 97, 147). Line 147 admits \"the same UNKNOWN artifact can pass or block depending on the threshold.\" That is two knobs for one decision. Pick one fixed UNKNOWN rule.\n- `score` read and stored (line 100) with no consumer until Squadron 301.\n- `criteria`/`provenance` \"preserved for downstream tools\" (line 46). CF has no consumer for them, its reader cannot preserve them (see the frontmatter finding), and a promise to preserve unread fields cannot be tested.\n- Worktree-scoped review policy (line 171). Defer it until a second project needs it.\n\nKeep `workflow.review_enabled`, a reviewType map for the transitions actually implemented, one verdict rule, and the outputs. That removes roughly half the config surface the doc describes.",
+   "location": "project-documents/user/architecture/240-arch.review-aware-workflow-gating.md#design-goals"
+  },
+  {
+   "i": 13,
+   "severity": "CONCERN",
+   "title": "Cross-references and the \"no interface changes\" claim don't match the code or the referenced docs",
+   "description": "- Line 171 says 180 \"established worktree-scoped config resolution\" and that review keys should use \"the resolution chain 180 introduced.\" 180 defines project resolution only (`--project` \u2192 CWD \u2192 `default_project` \u2192 error, 180 line 69) and no config resolution. 160's config chain (160 line 92) has no worktree tier. The reference is unsupported.\n- Line 167 says 240 \"is purely additive ... no 160 interfaces change.\" 240 changes `SliceStatus` (`types.ts:254\u2013263`), `DocumentDetectionResult` (`types.ts:67\u201373`), and `ConfigKeyDefinition` if the nested-table option is chosen. The MCP status tool description enumerates the status values (`workflowTools.ts:128`) and goes stale. Behavior is additive; the types are not.",
+   "location": "project-documents/user/architecture/240-arch.review-aware-workflow-gating.md#related-work"
+  },
+  {
+   "i": 14,
+   "severity": "NOTE",
+   "title": "Minor naming and metadata inconsistencies",
+   "description": "- Line 109 says `review-failed` is \"distinct from `in-progress`.\" No such status exists. The value is `in-implementation` (`types.ts:257`).\n- Line 104 calls `SliceStatus` an enum. It is a string-literal union on an interface (`types.ts:254\u2013263`). Name it as a union, or follow the `as const` rule.\n- Frontmatter `riskLevel: low` (line 11). This change edits the state machine both CLI and MCP call (four call sites), a shared config interface, and a cross-project contract. The related 160 and 180 docs are both rated medium.",
+   "location": "project-documents/user/architecture/240-arch.review-aware-workflow-gating.md#slice-status-extension"
+  }
+ ]
+}

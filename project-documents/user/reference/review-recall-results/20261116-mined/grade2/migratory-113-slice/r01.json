@@ -1,0 +1,82 @@
+{
+ "review": "r01",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Bit-exact integration test conflicts with grid neighbor-order non-determinism",
+   "description": "Implementation step 5 requires \"bit-exact position equality against brute-force-only over N ticks\", with a mocked density sequence that runs both backends. But line 431 (and slice 105 line 100) says the grid's neighbor order within a row may differ from brute force. The CSR forces sum each row with `np.add.reduceat`, so a different order changes the floating-point result. `apply_neighbor_cap`'s `argpartition` can also break ties differently depending on order. Line 359 already hedges with \"modulo documented determinism caveats\". As written, the test either fails or forces someone to change `HashGridQuery`, which line 343 rules out. The test should assert either per-tick neighbor-set equality or position equality within a tolerance. Bit-exactness can only be claimed for the brute-only segments.",
+   "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:421"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "The `record_density` hook in `tick.py` is not needed; the wrapper already sees `counts`",
+   "description": "`AdaptiveSpatial.query_radius_batch` already returns `counts`. Before `exclude_self`, each agent's count is its filtered count plus one, because an agent is always within its own radius. So the wrapper can record the mean itself (`counts.mean() - 1`, or simply set the threshold against the raw count) without any change to `tick.py`. That removes the `hasattr` duck-typing guard, which is a hidden dependency: the core tick loop probes for a method that no protocol declares. It also removes step 4 of the implementation order, the guard tests (line 344), and the \"only change to the tick hot path\" requirement (line 342). The signal stays pre-cap, as the slice plan requires, and the claim at lines 253\u2013254 that the dispatcher is invisible to upstream code would then actually hold.",
+   "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:145-164"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "`initial_backend` is said to be configurable but the config never exposes it",
+   "description": "Line 301 says \"Make it configurable \u2026 so an operator running a scattered-start scenario can choose grid-first\", and Risk line 400 talks about an operator setting `initial_backend: grid`. However, `SpatialConfig` (lines 171\u2013176) has no such field, and `_build_spatial` hardcodes `initial_backend=\"brute\"` (line 238). The slice plan entry does not require this knob. The fix is either to drop the operator-facing claims (simplest) or to add the field with validation.",
+   "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:301"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Backend identifiers are bare strings with defaults repeated in two layers",
+   "description": "`\"adaptive\" | \"grid\" | \"brute\"` are compared in `_validate_spatial`, in `_build_spatial` and in the dispatcher's `initial_backend`. CLAUDE.md requires comparison values to be defined once, as an enum or constant. The dispatcher constructor also sets its own defaults (`hysteresis_band=0.0`, `initial_backend=\"brute\"`), while `SpatialConfig` sets `hysteresis_band=2.0`. That contradicts line 136 (\"a reasonable default lives in the config layer rather than hardcoded in the dispatcher\") and the rule against magic defaults. The constructor arguments should be required, and a single `SpatialBackend` enum should be used.",
+   "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:82-90"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Unhandled failure modes in the density signal and validation",
+   "description": "- **Empty active set:** `counts.sum() / n_active` with `n_active == 0` gives a division by zero (NaN with NumPy). Every comparison with NaN is false, so the dispatcher silently stays on its current backend. Slice 105 lines 268\u2013273 show that zero-entity configs exist. The design should state what happens (for example, skip recording and keep the current backend) and include a unit test for it.\n- **Band at least as wide as the threshold:** validation (lines 198\u2013202) only checks `t > 0` and `h >= 0`. If `h >= t`, then `m < t - h` can never be true, so brute \u2192 grid never fires and adaptive mode quietly becomes brute-only. Validation should require `h < t`.",
+   "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:116"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Verification depends on switch logging that the design never specifies",
+   "description": "Walkthrough step 5 checks \"the `grid_selected` count in the dispatcher's log output\" and checks that `brute_selected` dominates. Step 4 checks \"the ratio of ticks served by grid vs. brute\". The Architecture section defines no logging, counters or accessor for these. Each backend switch is the dispatcher's main observable event, and the review rules require that it be observable. The design should specify a log line at INFO level on each switch, showing old and new backend plus `m`, `t` and `h`, and/or per-backend tick counters. The unit tests should assert this output.",
+   "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:377-379"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "The default threshold rationale contradicts itself",
+   "description": "Line 210 calculates about 132 mean neighbors for N=3100 spread uniformly across the 300\u00d7300 world, which selects brute. Line 211 then says that in the expansion phase, when agents are \"spread uniformly across the whole world\", the mean falls below 10 and grid is selected. Those two statements describe the same distribution. If the expansion phase only gets sparse because soft bounds let agents spread beyond 300\u00d7300, the design should say so and estimate the density for that case. Otherwise the default of `10.0` may never select grid in the step-5 scenario. That would undercut the \"strictly >=\" TPS criterion (line 380) and the slice's main value claim.",
+   "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:210-211"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "\"Full suite under each backend\" is underspecified and overstated",
+   "description": "The success criteria require all 652 tests to pass under all three backends. The pinning mechanism is left as \"an implementation detail\" (line 359), and the Testing Strategy (line 432) only parametrizes three end-to-end test files. Tests that construct `BruteForceQuery()` directly do not go through `server.py`, so pinning cannot affect them. That makes the claim at line 352 (\"Tests that previously ran against `BruteForceQuery()` now run against `AdaptiveSpatial`\") inaccurate. The criterion should be narrowed to the parametrized end-to-end set, and the pinning mechanism should be named, e.g. the pytest fixture from line 432.",
+   "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:335"
+  },
+  {
+   "i": 8,
+   "severity": "NOTE",
+   "title": "Inaccurate reasoning about switch spikes and cache warmth",
+   "description": "`HashGridQuery.build()` already runs counting-sort on every tick in grid mode, so the first build after a switch costs the same as any other grid tick. There is no extra spike. The paragraph, and the related risk at line 398, can be cut or corrected. Line 278's brute-force cost of \"`n\u00b2 / 2`\" also disagrees with line 120's `n_active \u00d7 n`.",
+   "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:439"
+  },
+  {
+   "i": 9,
+   "severity": "NOTE",
+   "title": "Frontmatter dependencies omit 105 and 112",
+   "description": "The body consumes slice 105's `HashGridQuery` and slice 112's pre-cap/post-cap ordering, but `dependencies:` lists only 100, 110 and 111, matching the slice plan. This is informational. Separately, once 113 ships, the slice plan's 105 entry, still marked deferred, should be updated to show that the grid is active behind the dispatcher.",
+   "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:6"
+  },
+  {
+   "i": 10,
+   "severity": "NOTE",
+   "title": "Carried-forward cell-size fallback",
+   "description": "The `max(world.width, world.height)` fallback when there are no profiles moves from `server.py` into a helper unchanged. Slice 105 documents that no queries run in that case, so this does not break the no-silent-fallback rule in practice. The helper's docstring should say why the fallback is safe.",
+   "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:217"
+  }
+ ]
+}

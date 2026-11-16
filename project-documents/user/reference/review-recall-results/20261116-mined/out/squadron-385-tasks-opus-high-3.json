@@ -1,0 +1,243 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "The design file's text is never read, so the \"why\" prose and the D4a title have no input",
+      "description": "Task 7.1 resolves the design *path* and reads only the task file. Task 9.1 (lines 197-202) gives `PrFacts` only \"the slice design path\". Two consumers need the design's *content*:\n- D4's \"Why\" row says its input is the \"slice design, else commits\". With only a path, the model has no design text to write \"why\" from. It will either restate the commits or invent a reason, which breaks the traceability rule Task 9 cites.\n- Task 10a.1 builds the title from the design's `# Slice Design: {name}` H1. No task reads that H1 or passes it into `PrFacts`.\n\nThis leaves unmet the success criterion \"on a resolved slice branch the title is the slice's human name\", and D4's \"why\" input. Fix: have Task 7.1 read the design file, with the same WARNING-on-unreadable handling it already gives the task file. Have Task 9.1 carry the design text (or the excerpt the prompt uses) and the parsed H1 name. Add a 7.2 case for an unreadable design file.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:156-162"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "An empty commit range is called impossible but never checked, so it fails after the model call",
+      "description": "Task 7.1 says commits are \"Always present \u2014 an empty range is impossible here, since a PR with no commits cannot be opened.\" Nothing enforces this:\n- Task 3.2 makes `commits_in_range` return `[]` for an empty range.\n- Task 13.1's ordered pipeline has no step that refuses an empty range.\n\nIf head is pushed and equal to base, the command gathers inputs, spends tokens on the model call, and then gets a 422 from `open_pull_request`. That breaks D8's \"every refusal decidable without a model happens before the model call\". It also breaks D4's \"What changed \u2026 never \u2014 commits always exist\", and the first-commit-subject fallback in Task 10a has no subject to fall back to. Fix: Task 7.1 (or 13.1) should raise on an empty range before composition. Add a test to 7.2 or 13.2 asserting the composer is never called in that case.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:158"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Which ref stands for `base` in the commit range and the review scan is not specified",
+      "description": "`select_base` returns a *host* branch name, for example `main` from `default_branch` or the confirmed integration branch. Task 3.1 runs `git log base..head` and Task 8.1 runs `git rev-list <base>..<head>` with that bare name. Neither says to resolve it against the remote (`<remote>/<base>`) or to make sure the ref is present and current:\n- If the local branch is stale, the range includes commits already merged upstream. Their reviews then count as \"in range\", which is exactly the merged-ancestor case D7 and success criterion 3 exist to exclude.\n- If the local branch is missing, git refuses and the command fails.\n\nFix: Task 3.1 or 7.1 should say which ref the range uses. The remote-tracking ref of the locator's remote is the natural choice, since Task 6 already queries that remote. Then add a 3.2 or 8.2 case where the local base lags the remote.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:80"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The dry-run equality test compares two runs instead of checking the shared binding the design asks for",
+      "description": "Task 13.2 tests \"dry-run output equals the body the next real run sends\". The slice's Testing section says the opposite: \"asserts the body object is bound once and passed to both paths, structurally, rather than comparing two separately composed strings.\" With a deterministic fake composer, comparing two runs passes even if the paths compose separately, so the test proves nothing. It also checks only the body, but the success criterion and D4a cover the title too. Fix: assert that the exact title and body objects handed to the dry-run printer are the ones passed to `open_pull_request`, for example by spying on both sinks within one code path.",
+      "file_ref": null,
+      "category": "testing",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:309"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Task 13 never says where `head` and `local_sha` come from",
+      "description": "`check_head_pushed` requires `head` and `local_sha` (Task 6.1). Task 13.1's ordered pipeline mentions neither `current_branch` (Task 3) nor a `rev-parse HEAD` call. `git_utils._resolve_rev` exists but is private. Add one line to 13.1 naming both calls, and say whether 3.1 makes a public head-sha helper.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:298"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Task 6 and the slice's success criterion disagree on the push command",
+      "description": "The slice's success criterion says a sha mismatch \"fails the same way with the same command\". D2 says the two cases need different fixes (`git push -u` and `git push`). Task 6.2 follows D2: \"the two refusals name different commands.\" The task is right. The success criterion in the slice design should be reworded so the closing check at 16.2 does not flag it.",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:149"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Stale cross-references in the Task 1 and Task 2 headers",
+      "description": "Task 1 says `parse_slice_branch` is \"needed by Task 9\", and Task 2 (line 55) says \"needed by Tasks 9 and 10\". Task 7.1 is the actual consumer of both. These look like leftovers from renumbering and could send an implementer to the wrong place.",
+      "file_ref": null,
+      "category": "documentation",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:37"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Task 16.4 says to check off skipped items",
+      "description": "\"Mark any dropped or skipped item above `[x]`\" makes an unfinished item look done. Annotate it instead, e.g. `[x] \u2026 \u2014 skipped: <reason>`, so the visualizer reads correctly and the record shows what was skipped.",
+      "file_ref": null,
+      "category": "process",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:371"
+    },
+    {
+      "severity": "PASS",
+      "title": "Success criteria coverage",
+      "description": "Every criterion maps to a task:\n- Section contract and slice-branch body: 7, 9, 11\n- Unplanned path: 11.2, 16.2 step 4\n- Merged-ancestor exclusion: 8.2\n- Integration branch absent or present: 5.2, 13.1\n- Push preconditions: 6\n- Presence check with zero writes: 12.2, 13.2\n- Title: 10a\n- Identity refusal: 13.2, 14\n- Timeouts at all five call sites: 14\n- Provider failure: 10.2\n- Import boundary: 15.1\n- Checkbox parser on real input: 2.2\n- `summary_oneshot` docstring: 15.2\n- Lint and type gates: 16.1\n- Live creation: 16.2",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md"
+    },
+    {
+      "severity": "PASS",
+      "title": "Sequencing, sizing and proportionality",
+      "description": "There are no circular dependencies. The pure parsers come first and the CLI wiring comes last. Tasks that refuse without a model call come before the composer. The effort estimates (1\u20133) are reasonable, and the task count fits a slice that adds seven new modules. Task 14 is a standalone test task that correctly follows Task 13. No task is scope creep: Tasks 4 and 15 trace to D6 and D3.",
+      "file_ref": null,
+      "category": "structure",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "The design file's text is never read, so the \"why\" prose and the D4a title have no input",
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:156-162",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "An empty commit range is called impossible but never checked, so it fails after the model call",
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:158",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Which ref stands for `base` in the commit range and the review scan is not specified",
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:80",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "testing",
+      "raw_category": null,
+      "summary": "The dry-run equality test compares two runs instead of checking the shared binding the design asks for",
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:309",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "Task 13 never says where `head` and `local_sha` come from",
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:298",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "Task 6 and the slice's success criterion disagree on the push command",
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:149",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "note",
+      "category": "documentation",
+      "raw_category": null,
+      "summary": "Stale cross-references in the Task 1 and Task 2 headers",
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:37",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "note",
+      "category": "process",
+      "raw_category": null,
+      "summary": "Task 16.4 says to check off skipped items",
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:371",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "pass",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "Success criteria coverage",
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md",
+      "location_verified": null
+    },
+    {
+      "id": "F010",
+      "severity": "pass",
+      "category": "structure",
+      "raw_category": null,
+      "summary": "Sequencing, sizing and proportionality",
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md",
+      "location_verified": null
+    }
+  ],
+  "template_name": "tasks",
+  "input_files": {
+    "input": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md",
+    "against": "project-documents/user/slices/385-slice.create-a-pr-with-a-good-message.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/squadron-385-tasks"
+  },
+  "timestamp": "2026-11-16T13:23:06.816641",
+  "model": "claude-opus-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 6,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-opus-5-5",
+  "answering_models": [
+    "claude-opus-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 10,
+    "in_fences": 0,
+    "in_section": 10,
+    "surviving": 10
+  },
+  "effort": "high",
+  "profile": "sdk",
+  "turns": 7,
+  "prompt_tokens": 358180,
+  "cached_tokens": 260923,
+  "cache_write_tokens": 97247,
+  "completion_tokens": 8030,
+  "reasoning_tokens": null,
+  "duration_seconds": 84.15234924992546,
+  "cost_usd": 0.9912795,
+  "cost_basis": "provider"
+}

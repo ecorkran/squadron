@@ -1,0 +1,75 @@
+{
+ "review": "r07",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Task 2.2's real-file assertion cannot pass on either named fixture",
+   "description": "Task 2.2 requires the real-file test to assert \"both groups are non-empty\", using this task file or `384-tasks.post-findings-to-the-pr.md`.\n- **384 file:** it has 166 checkbox items and zero unchecked, so the unchecked group is empty.\n- **This file:** it has 206 items, all unchecked, so the checked group is empty today. After Task 16.4 marks everything `[x]`, the unchecked group is empty instead.\n- **Count check:** \"counts sum to the file's checkbox count\" has no independent source for that count except a second parser.\n\nFix: assert on the total against a pinned number, or copy a frozen snapshot of a real task file with mixed states into `tests/pr/fixtures/`. This still satisfies the slice criterion of a fixture in the real production format.",
+   "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:67"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Task 3.1 steers `current_branch` toward an import-boundary violation",
+   "description": "Task 3.1 puts `current_branch` in `src/squadron/review/git_utils.py` and says to \"match `github_cli._branch_for`'s existing behavior\" on detached HEAD. That behavior raises `TargetUnresolvableError`, which lives in `codehost/errors.py`. `tests/codehost/test_import_boundaries.py:27` forbids `review/` from importing `squadron.codehost` (only `codehost.models` is exempt). An implementer following the task literally breaks the guard that Task 15.1 extends.\n\nThe task must name the exception `current_branch` raises (a `review`-side or builtin type). Task 13.1 must say where the command turns it into the refusal and exit 1. Task 13.2 has no detached-HEAD case; add one.",
+   "location": "src/squadron/codehost/errors.py:95"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Task 6 does not say how an `ls-remote` timeout becomes a `CodeHostError`, which Task 14 requires",
+   "description": "`ProcessTimedOutError` is a plain `Exception` in `core`, not a `CodeHostError`. The `gh` calls get translated inside the adapter (`github_cli.py:493`), but Task 6.1 runs `git ls-remote` directly on the runner from `pr/preconditions.py`. Task 14.1 then requires all five call sites to exit through `except CodeHostError` \u2192 `render_code_host_error`.\n\nTask 6.1 says only \"raising on refusal\". It should name the error types for all three cases: timeout, non-zero exit, and \"no matching ref\". Otherwise Task 14 fails at the fifth site and the fix lands in a test-only task. Task 6.1's signature also has no runner parameter; state that it uses `host.runner`, as `pr.py:51` does.",
+   "location": "src/squadron/core/process_runner.py:49"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "`PrInputs`, the review record, and the slice design's content are never specified",
+   "description": "Three linked gaps sit across Tasks 7\u201311:\n- **`PrInputs`:** Task 9.1 consumes it, but no task defines its fields. Task 7.1 builds \"the commit and slice halves of `gather_inputs`\" and Task 8.1's return type is `(...)`.\n- **Verdict:** `PrFacts` carries the review verdict, and D4 writes it under \"review provenance\". Task 8.1 reads only `reviewedSha`; nothing extracts the verdict.\n- **Design content:** `PrFacts` carries only the slice design *path*, and the model gets facts with no tools. D4's \"Why\" section is fed by the slice design, and Task 10a needs its H1. No task reads the design file's text, so \"Why\" cannot be written from the design as the first functional criterion requires.\n\nFix: define `PrInputs` and the review record (path, verdict, reviewed sha) in Task 7.1/8.1. State which task loads the design text and how it reaches the composer.",
+   "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:156-199"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "The prompt and the model-call shape for the body are unspecified",
+   "description": "The slice scope lists \"the section contract, the prompt, and the presence-and-filled check\". No task writes the prompt. D4 says the body \"is not one model response parsed into sections\" and that squadron \"requests prose per section\". Task 11.1 does not say whether that means one call per section or one call with delimited output. The first makes up to five model calls and changes token cost and test shape.\n\nTask 11.1's \"the model's own headings, if it emits any, are discarded\" implies splitting a response, which reads against D4. Task 11.1 should state the call count, what each call receives, and where the prompt text lives.",
+   "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:257-264"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Provider-failure and printed-base criteria have no command-level test",
+   "description": "- **Provider failure:** the criterion is \"exits non-zero, logs at ERROR, and creates nothing\". Task 10.2 tests it in `tests/pr/test_body.py` against a fake provider, where there is no host and no exit code to observe. Task 13.2 has no composer-raises case.\n- **Exit mechanism:** Task 10.1 says the failure \"becomes a non-zero exit\" without saying whether `pr/body.py` raises `typer.Exit` or raises a typed error the command maps. The first puts CLI concerns in the package D6 keeps free of them.\n- **Printed base:** the criterion that \"the printed source says so\" is implemented in Task 13.1, but no test asserts the base and source appear on stderr.\n- **Redundant item:** Task 12.2's \"assert the failure path creates nothing \u2014 no host call is made\" is not observable on a pure check function. Task 13.2 already covers it; drop it from 12.2.\n\nFix: add both cases to Task 13.2 and name the composer's error type in Task 10.1.",
+   "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:221-229"
+  },
+  {
+   "i": 6,
+   "severity": "NOTE",
+   "title": "Task cross-references in the Context Summary are wrong",
+   "description": "Task 1 says it is \"needed by Task 9\" and Task 2 \"needed by Tasks 9 and 10\". The actual consumer of both is Task 7.1 (input gathering). Order is unaffected.",
+   "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:37"
+  },
+  {
+   "i": 7,
+   "severity": "NOTE",
+   "title": "Task 5.1's `cf`-unavailable bullet contradicts itself",
+   "description": "The bold lead says \"Do not degrade an unreachable `cf` to a default base\". The next sentence says to treat the key as unset and proceed to the host default. Task 5.2 settles it (\"`cf` unavailable \u2192 host default, no raise\"), and the wording mirrors D1. Reword the lead. Consider a WARNING on that path, since it silently changes a write target.",
+   "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:122"
+  },
+  {
+   "i": 8,
+   "severity": "NOTE",
+   "title": "Slice criterion and D2 disagree on the push command; the tasks follow D2",
+   "description": "The functional criterion says a sha-mismatched branch \"fails the same way with the same command\". D2 and Task 6 specify different commands (`git push -u` versus `git push`), and Task 6.2's success line requires them to differ. The tasks are internally consistent; the slice criterion should be corrected.",
+   "location": "project-documents/user/slices/385-slice.create-a-pr-with-a-good-message.md:545-546"
+  },
+  {
+   "i": 9,
+   "severity": "NOTE",
+   "title": "Task 16.4 contains a wait-on-Project-Manager step",
+   "description": "\"Ask the Project Manager how they want it run\" is a confirmation gate inside a task item. If no named rule requires it, replace it with the concrete review command.",
+   "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:372"
+  }
+ ]
+}

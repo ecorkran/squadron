@@ -1,0 +1,61 @@
+{
+ "review": "r03",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Profile-weight list comprehension adds back a per-agent Python loop inside `BulkForce.__call__`",
+   "description": "The design says each force builds its weights with `np.array([profiles[pi].cohesion_weight for pi in state.profile_indices[eval_indices]])`, which loops over every active agent. Two other lines of the same doc rule this out:\n- Line 198 calls \"No Python-level per-agent loops in any `BulkForce.__call__` implementation\" *the defining constraint*.\n- The verification grep at lines 222-224 (`for.*eval_indices`) would match this line, so the slice's own check would fail.\n\nThe fix is simpler than what is written. Build a per-profile table by looping over `profiles` (P entries, not n agents), e.g. `w = np.array([p.cohesion_weight for p in profiles])`, then gather with `w[state.profile_indices[eval_indices]]`. This also removes the \"precompute per tick if needed\" hedge at line 136. Specify this pattern once as a shared helper so all five forces use it (DRY).",
+   "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:129-136"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Padded layout does O(n \u00d7 max_k) work, and the doc understates when memory starts to matter",
+   "description": "The architecture's design goal is \"tens of thousands of agents at full behavioral fidelity on a single CPU process\" (100-arch, Design Goals). The padded array is sized by the *maximum* neighbor count across all agents (line 82). So one dense cluster widens every row, and the gathered `(n_active, max_neighbors, 2)` float64 tensor grows as n\u00b2. In the clustering case this slice exists to fix (k \u2192 n), n = 10K gives about 1.6 GB for the gathered positions alone, plus about 0.8 GB for `indices`.\n\nThe doc instead says memory matters only at \"100K+\" (line 148), and says CSR has \"no benefit at n <= 10K\" (line 144). The claim that cost stays bounded \"regardless of agent count or clustering density\" (line 19) holds for Python overhead only, not for array work or memory.\n\nThe shape also changes every tick, which works against two things in the architecture: the per-tick allocation / caller-provided buffer consideration (100-arch, Technical Considerations), and the \"uniform tensor shape\" GPU argument at line 146.\n\nNo redesign is needed for this slice's 100-agent target. But the doc should:\n- state the working range the padded layout is designed for\n- correct the 100K+ claim\n- record the n\u00b2 clustered worst case as a known limit, behind the `NeighborData` interface it already mentions",
+   "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:142-148"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "`build_neighbor_data()` is under-specified and may just move the per-agent loop into the builder",
+   "description": "The builder is described only as \"a single pass to pad, mask, and self-exclude\" (line 101). It also says \"when copying query results into the padded array for agent `i`, skip the entry\u2026\" (line 88), which reads as a per-agent Python loop with per-agent filtering. That is the same pattern being removed from the forces. The no-loop requirement (line 198) and the grep (lines 222-224) cover only `flocking.py` and `herding.py`, so a looping builder would pass every check.\n\nSpecify the vectorized construction, for example:\n1. concatenate the raw lists\n2. build a row-id array with `np.repeat(arange, lengths)`\n3. drop entries where `idx == eval_indices[row]`\n4. compute column positions from the cumulative counts\n5. fill `indices` with one fancy-index assignment\n\nAlso add `neighbors.py` to the no-loop success criterion.",
+   "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:86-101"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Declared interface with slice 103 is broken by this change, and no plan reconciles it",
+   "description": "The frontmatter lists `103-predator-prey-dynamics` under `interfaces`, and \"Provides to Other Slices\" says future forces \"(predator-prey, territorial) consume this instead of raw lists.\" Slice 103 is `not_started`, and its design (103-slice) conflicts with 109 in three places:\n- It explicitly says \"No changes to tick()\" and \"Forces receive the same `(state, neighbor_lists, profiles, active_indices)` arguments.\"\n- Its sketches loop per agent and filter self inline (`neighbors[neighbors != agent_idx]`).\n- It lists \"Forces perform self-exclusion\" as a functional requirement and \"one Python loop over active agents\" as a technical requirement.\n\nLine 194 of 109 says self-exclusion moves to the builder, which directly contradicts 103's requirement. 109 names neither the impact nor who updates 103's design and task file (103-tasks also targets `neighbor_lists`).\n\nAdd an integration note covering three things:\n- which slice lands first\n- that 103's design must switch to `NeighborData`, drop per-force self-exclusion, and follow the gather-mask-reduce pattern (including a vectorized interaction-matrix lookup)\n- that worldserver docs showing the old signature (e.g. 304's illustrative `TerrainResistance.__call__(state, neighbor_lists, \u2026)`) are now outdated",
+   "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:176-180"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "The live no-overrun criterion depends on the query loop, which this slice defers to a 105 scope that 105's plan entry doesn't include",
+   "description": "Lines 45, 101 and 184 assign \"vectorizing the spatial query loop\" and \"batch query\" to slice 105. The slice-plan entry for 105 says only \"Replace the brute-force neighbor query with a spatial hash grid behind the existing query interface.\" It contains no batch-query or loop-vectorization work. The deferral therefore has no owner.\n\nThis matters because the architecture names neighbor query cost as the usual dominant tick cost (100-arch, \"Neighbor query cost dominance\"). Step 2 keeps n Python-level `query_radius` calls against `BruteForceQuery`. Yet verification step 2 (lines 211-215) expects ticks to stay within 50 ms after this slice alone.\n\nThe doc gives no profiling breakdown showing that force loops, rather than the query loop, account for the roughly 10-15 ms overrun. Do one of the following:\n- include a profile split (query vs. forces) supporting the claim, or\n- loosen the live criterion to \"force-phase time no longer scales with k\"\n\nSeparately, either get the batch-query item added to 105's plan entry or record it as unowned future work.",
+   "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:43-45"
+  },
+  {
+   "i": 5,
+   "severity": "NOTE",
+   "title": "Padding indices are dereferenced, not skipped",
+   "description": "Line 80 says the `-1` padding is \"never dereferenced thanks to `mask`.\" But the cohesion pattern (lines 111-114) gathers `state.positions[neighbor_data.indices]`, which wraps `-1` to the last row and only zeroes it afterwards. That is correct as long as the masking happens before any reduction. Fix the wording so implementers don't assume the gathered values are clean. Separation in particular must apply the mask before computing inverse-square terms, or garbage distances from padded slots will reach the math.",
+   "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:79-81"
+  },
+  {
+   "i": 6,
+   "severity": "NOTE",
+   "title": "Multi-tick equivalence test may be flaky",
+   "description": "Single-call equivalence at `atol=1e-12` is sound, because summation order differs between padded-axis sums and per-subset means. But comparing positions/velocities \"after N ticks\" in a flocking system amplifies ULP-level differences. Bound N to a small value or use a looser tolerance for the integration test, so the test cannot fail on legitimate output. Pre-slice replay logs (307) will also no longer reproduce bit-for-bit; one line acknowledging this would help.",
+   "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:260"
+  },
+  {
+   "i": 7,
+   "severity": "NOTE",
+   "title": "`counts` and `mask` are redundant",
+   "description": "Each can be derived from the other (`mask = arange(max_k) < counts[:, None]`). Keeping both costs little, but the builder must keep them consistent and tests must cover it. If one is dropped, prefer keeping `mask`, because every reduction uses it, and derive `counts` with `mask.sum(1)` where a divisor is needed.",
+   "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:71-77"
+  }
+ ]
+}

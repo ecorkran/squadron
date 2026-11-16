@@ -1,0 +1,243 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "PASS",
+      "title": "All 14 slice success criteria map to tasks",
+      "description": "- **SC1\u20135:** Tasks 1.1\u20131.4. The round-trip test is in 1.4. `config_to_yaml` already handles StrEnum through `_serialize_for_yaml` (`src/migratory_server/config.py:657-669`), so no extra implementation task is needed.\n- **SC6\u20139:** Tasks 2.1\u20132.3.\n- **SC10:** Task 3.2, plus the mock test in 3.4.\n- **SC11:** Task 3.4.\n- **SC12:** Tasks 4.1\u20134.2.\n- **SC13:** Tasks 3.5 and 5.1.\n- **SC14:** Task 5.2.\n\nThe startup log line (Task 3.3) and the CHANGELOG entry (Task 5.4) are not scope creep. Both trace to the slice's Verification Walkthrough step 4 and the project's release practice. The slice states no NFR, so no load test or CI gating task is needed.",
+      "file_ref": null,
+      "category": "coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Commit markers are checkboxes, each inside its own \"Commit\" task",
+      "description": "Commit markers must be plain `**Commit**:` lines, never checkboxes. Here each commit is a separate task (1.5, 2.4, 3.6, 4.3, 5.5) holding checkbox items (`- [ ] git add \u2026`, `- [ ] **Commit:** \u2026`). The same pattern repeats at lines 176-179, 246-249, 283-286 and 322-325.\n\nFix: remove the five Commit tasks and put one plain line `**Commit**: feat: \u2026` at the end of Tasks 1.4, 2.3, 3.5, 4.2 and 5.4. The marker positions are already at sensible working points, so only the format needs to change.",
+      "file_ref": null,
+      "category": "process",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:93-96"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Section 4 commits config changes without re-running the test suite",
+      "description": "Tasks 4.1 and 4.2 switch `config/default.yaml` and `config/test.yaml` to `wrap`, but the only check is a `python -c` load. `tests/conftest.py` and other tests may read these shipped configs, and the first full `pytest` run after the change is in Task 5.1, after the commit.\n\nFix: add `pytest` to Task 4.2 before the commit marker, or merge Section 4 into Section 3 before the 3.5 regression run.",
+      "file_ref": null,
+      "category": "sequencing",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:269-286"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Walkthrough Step 8 can leave `test.yaml` violating SC12",
+      "description": "Step 8 says to \"restore `config/test.yaml` to whichever policy you want to keep (recommend `wrap`)\". SC12 requires `test.yaml` to use `policy: wrap`. If the implementer leaves it on `reflect` or `open` after Steps 6\u20137, the committed state fails the criterion.\n\nFix: change Step 8 to \"restore `policy: wrap` in `config/test.yaml`\".",
+      "file_ref": null,
+      "category": "coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:306"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Task 1.3 allows a literal tuple of the policy values",
+      "description": "The step offers \"`sorted(p.value for p in BoundsPolicy)` or a literal tuple\". A literal tuple copies the enum values into a second place, which breaks the project rule that comparison values are defined once. Adding a variant (such as the planned `SOFT` policy) would then mean editing two places.\n\nFix: require the list to be built from `BoundsPolicy` and drop the literal-tuple option.",
+      "file_ref": null,
+      "category": "maintainability",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:73"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Task 1.1 would add a duplicate import",
+      "description": "`from enum import StrEnum` is already imported, and `_serialize_for_yaml` uses it. Task 1.1 says to add it, which would create a duplicate import that ruff flags. Change the step to \"confirm `StrEnum` is imported\". The line hints are also out of date: the task says \"line 25\" for `WorldBoundsConfig` (it is at line 47) and \"around line 156\" for `_validate_world_bounds` (it is at line 180).",
+      "file_ref": null,
+      "category": "accuracy",
+      "raw_category": null,
+      "location": "src/migratory_server/config.py:7"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Task 3.2's \"zero import-time overhead\" contradicts the Notes section",
+      "description": "Task 3.2 asks the implementer to confirm \"zero import-time \u2026 overhead\" on the `OPEN` path. But the same task makes the import unconditional, and the Notes at line 329 say the import is not avoided. Reword the step to \"no function call or array slicing on the `OPEN` path\".",
+      "file_ref": null,
+      "category": "accuracy",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:209"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Making `world_bounds` required breaks about 23 test call sites",
+      "description": "I found 21 `SimulationManager(` constructions in `tests/test_simulation.py`, plus `tests/test_force_builder.py:201` and `tests/test_repulsor_integration.py:53`. Task 3.5 names `test_clients.py`, which does not construct `SimulationManager` directly, and does not name `test_repulsor_integration.py`. Its \"or any other file\" wording still covers it.\n\nSuggestion: say in Task 3.4 to add one shared fixture or helper for a `WorldBoundsConfig`, so the implementer doesn't hand-edit around 23 constructor calls separately.",
+      "file_ref": null,
+      "category": "scope",
+      "raw_category": null,
+      "location": "tests/test_simulation.py:137"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Unit test matrix can be trimmed slightly",
+      "description": "- The parametrized dispatch test (line 171) repeats what the per-policy tests already prove. Cut it.\n- `test_open_is_noop_positions` and `test_open_is_noop_velocities` can be merged into one test.\n\nThe rest of the matrix matches what the slice asks for (edge-exact, single overshoot, multi-width overshoot).",
+      "file_ref": null,
+      "category": "proportionality",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:150-171"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Frontmatter says `status: complete` while every box is unchecked",
+      "description": "The task file is marked complete, but none of its checkboxes are ticked. Task 5.3 is the step that sets this status, so the frontmatter should be `not-started` or `in-progress` until then. The source tree already contains the slice's code (`src/migratory_server/simulation.py:10-11` imports `apply_bounds_policy` and `BoundsPolicy`), so the checkboxes are what's out of date.",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:9"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "pass",
+      "category": "coverage",
+      "raw_category": null,
+      "summary": "All 14 slice success criteria map to tasks",
+      "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "process",
+      "raw_category": null,
+      "summary": "Commit markers are checkboxes, each inside its own \"Commit\" task",
+      "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:93-96",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "sequencing",
+      "raw_category": null,
+      "summary": "Section 4 commits config changes without re-running the test suite",
+      "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:269-286",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "coverage",
+      "raw_category": null,
+      "summary": "Walkthrough Step 8 can leave `test.yaml` violating SC12",
+      "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:306",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "maintainability",
+      "raw_category": null,
+      "summary": "Task 1.3 allows a literal tuple of the policy values",
+      "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:73",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "accuracy",
+      "raw_category": null,
+      "summary": "Task 1.1 would add a duplicate import",
+      "location": "src/migratory_server/config.py:7",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "note",
+      "category": "accuracy",
+      "raw_category": null,
+      "summary": "Task 3.2's \"zero import-time overhead\" contradicts the Notes section",
+      "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:209",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "note",
+      "category": "scope",
+      "raw_category": null,
+      "summary": "Making `world_bounds` required breaks about 23 test call sites",
+      "location": "tests/test_simulation.py:137",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "note",
+      "category": "proportionality",
+      "raw_category": null,
+      "summary": "Unit test matrix can be trimmed slightly",
+      "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:150-171",
+      "location_verified": true
+    },
+    {
+      "id": "F010",
+      "severity": "note",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "Frontmatter says `status: complete` while every box is unchecked",
+      "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:9",
+      "location_verified": true
+    }
+  ],
+  "template_name": "tasks",
+  "input_files": {
+    "input": "project-documents/user/tasks/313-tasks.world-bounds-policy.md",
+    "against": "project-documents/user/slices/313-slice.world-bounds-policy.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/migratory-313-tasks"
+  },
+  "timestamp": "2026-11-16T13:08:52.937415",
+  "model": "claude-opus-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 7,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-opus-5-5",
+  "answering_models": [
+    "claude-opus-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 10,
+    "in_fences": 0,
+    "in_section": 10,
+    "surviving": 10
+  },
+  "effort": "medium",
+  "profile": "sdk",
+  "turns": 8,
+  "prompt_tokens": 497744,
+  "cached_tokens": 417666,
+  "cache_write_tokens": 80066,
+  "completion_tokens": 6001,
+  "reasoning_tokens": null,
+  "duration_seconds": 65.23891183384694,
+  "cost_usd": 0.8445917,
+  "cost_basis": "provider"
+}

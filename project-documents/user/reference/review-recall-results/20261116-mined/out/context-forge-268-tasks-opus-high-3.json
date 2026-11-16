@@ -1,0 +1,189 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "The 3.2a commit gate fails: three surviving tests assert the output that 3.1 and 3.2 remove",
+      "description": "Task 3.2a requires `pnpm --filter @context-forge/core test` to pass after 3.1 removes the `Comprehension:` line and 3.2 removes the Adoption Facts section. The task file says these steps \"only stop rendering fields that still exist, so everything compiles\". That is true for compilation, but these tests still assert the removed output when they run:\n- `packages/core/tests/pipeline-integration.test.ts:184` expects `Comprehension: ${COMPREHENSION}` in the build output. Task 3.3 deletes this block, but 3.3 runs after the 3.2a commit.\n- `packages/core/tests/adoption/adoptionBuild.integration.test.ts:102` expects `### Adoption Facts` (`FACTS_HEADING`). Task 4.1 deletes this file.\n- `packages/mcp-server/tests/integration/adoptionParity.test.ts:116` expects `Comprehension: ${COMPREHENSION_DOC}`. Task 3.6 deletes this file. The 3.2a gate does not run the MCP tests, so it would not even catch this; the commit would leave the MCP tests red.\n\nFix: either drop the separate 3.2a commit and fold 3.1\u20133.2 into the 3.7 commit, or move these deletions into 3.1/3.2: the `brownfield build with an injected squadron probe` block, `adoptionBuild.integration.test.ts`, and `adoptionParity.test.ts`.",
+      "file_ref": null,
+      "category": "sequencing",
+      "raw_category": null,
+      "location": "packages/core/tests/pipeline-integration.test.ts:177-185"
+    },
+    {
+      "severity": "FAIL",
+      "title": "The 3.3 and 3.7 gates fail because `adoptionBuild.integration.test.ts` is not deleted until 4.1",
+      "description": "After 3.3 removes the hook, this file still calls `createContextPipeline(dir, { adoptionStateWrites, squadronProbe })`. Core's tsconfig includes only `src/**/*`, so typecheck will not flag the extra argument. Vitest still runs the file, though, and its assertions describe the removed behaviour:\n- the brownfield prompt is selected and the facts heading is present (lines 100\u2013102)\n- `adoption.state` becomes `in_progress` (lines 123 and 209)\n- `AdoptionError` is rethrown (line 231)\n\nTask 3.7 requires `pnpm -r test` to pass, and the 3.3 notes say brownfield behaviour is only covered again in section 5. This file is only deleted in 4.1, so 3.7 cannot go green. Fix: move the deletion of `adoptionBuild.integration.test.ts` from 4.1 into 3.3, next to the `pipeline-integration` brownfield deletions.",
+      "file_ref": null,
+      "category": "sequencing",
+      "raw_category": null,
+      "location": "packages/core/tests/adoption/adoptionBuild.integration.test.ts:68"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Commit points are written as checkbox items, not plain `**Commit**:` lines",
+      "description": "Every commit step is a checkbox: `- [ ] **2.3 Commit**`, `- [ ] **3.2a Commit the render removal**` (line 99), `- [ ] Commit: \u2026` in 3.7 (line 134), 4.1\u20134.4, 5.1 and 6.3. The project rules say:\n- Commit markers are plain `**Commit**:` lines, never checkboxes.\n- Commit only at `**Commit**:` markers. A file with none commits at the end of each top-level task.\n- Never make a commit that only checks boxes.\n\nAs written, the file has no real markers. A literal reading gives one commit per top-level section, which contradicts the per-task commits that sections 3 and 4 spell out. And ticking a \"Commit\" checkbox after committing leaves a change that would need a box-only commit.\n\nFix: replace each commit checkbox with a plain `**Commit**: <message>` line, placed after the task's success checks. The placements themselves are good: they sit after 2.2, 3.7 (moved per the findings above), 4.1, 4.2, 4.3, 4.4, 5.1 and, if needed, 6.3.",
+      "file_ref": null,
+      "category": "task-structure",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/268-tasks.pure-cf-build.md:79"
+    },
+    {
+      "severity": "PASS",
+      "title": "Every success criterion maps to a task",
+      "description": "- **No `adoption.state` read/write, no detection, no `sq` spawn:** 3.3, 4.1\u20134.4, plus the fake-`sq` marker and snapshot checks in 5.1.\n- **Brownfield Phase 0 returns the concept prompt and writes nothing:** 5.1, with two states on the CLI path and both MCP tools.\n- **Byte identity:** golden files captured before any edit in 2.1\u20132.2, re-checked in 3.7 and 6.1.\n- **CLI/MCP parity:** the parity check in 5.1.\n- **`MIN_GUIDE_VERSION` warning kept:** 3.5 and 3.6 keep the tests; 6.1 checks the named tests (both names exist in `cli/tests/commands/build.test.ts` and `mcp-server/tests/contextTools.test.ts`).\n- **`services/` imports nothing from `adoption/` or `detection/`:** 3.3 and 6.2.\n- **No orphan exports beyond the three retained modules:** the export audit in 6.2.\n- **Format/lint/typecheck/tests pass:** 6.1.\n- **Verification Walkthrough:** 6.3.\n- **D2 explicit-key behaviour:** 5.1.\n\nNo task falls outside the slice's scope.",
+      "file_ref": null,
+      "category": "coverage",
+      "raw_category": null,
+      "location": "project-documents/user/slices/268-slice.pure-cf-build.md:186-217"
+    },
+    {
+      "severity": "PASS",
+      "title": "The remaining order matches the design and holds up",
+      "description": "- The golden capture comes first, as D6 and Special Considerations require.\n- The 3.4 \u2192 core build \u2192 3.5/3.6 handoff for `dist/` typechecking is spelled out.\n- 4.2 can safely remove `SquadronProbe` and the `ProbeOutcome` import before 4.4. `detection/squadronProbe.ts` defines its own `ProbeOutcome` and does not import `SquadronProbe`; the other users (`adoptionFacts.ts`, `adoptionResolver.ts`) are gone after 4.1.\n- 4.3 removes the `adoption-completed` variant only after its producers are deleted in 4.1.\n- 5.1 reads the deleted parity test back with `git show {target}:\u2026`, which still works after the deletion in 3.6.",
+      "file_ref": null,
+      "category": "sequencing",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/268-tasks.pure-cf-build.md:138-169"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Some code-gone greps run twice",
+      "description": "6.2 repeats the `services/` import grep from 3.3 and overlaps the per-task greps in 4.2\u20134.4. That costs little and the final sweep is reasonable. Otherwise the size fits an effort-2 slice: about 17 tasks in one file, and only one new test file beyond the golden test.",
+      "file_ref": null,
+      "category": "proportionality",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/268-tasks.pure-cf-build.md:197-201"
+    },
+    {
+      "severity": "PASS",
+      "title": "No NFR, so no load-test or CI wiring task is needed",
+      "description": "The slice states no non-functional requirement, so it does not need a `tests/load/` task or a CI gating task.",
+      "file_ref": null,
+      "category": "nfr",
+      "raw_category": null,
+      "location": "project-documents/user/slices/268-slice.pure-cf-build.md:186-200"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "sequencing",
+      "raw_category": null,
+      "summary": "The 3.2a commit gate fails: three surviving tests assert the output that 3.1 and 3.2 remove",
+      "location": "packages/core/tests/pipeline-integration.test.ts:177-185",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "fail",
+      "category": "sequencing",
+      "raw_category": null,
+      "summary": "The 3.3 and 3.7 gates fail because `adoptionBuild.integration.test.ts` is not deleted until 4.1",
+      "location": "packages/core/tests/adoption/adoptionBuild.integration.test.ts:68",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "task-structure",
+      "raw_category": null,
+      "summary": "Commit points are written as checkbox items, not plain `**Commit**:` lines",
+      "location": "project-documents/user/tasks/268-tasks.pure-cf-build.md:79",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "pass",
+      "category": "coverage",
+      "raw_category": null,
+      "summary": "Every success criterion maps to a task",
+      "location": "project-documents/user/slices/268-slice.pure-cf-build.md:186-217",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "pass",
+      "category": "sequencing",
+      "raw_category": null,
+      "summary": "The remaining order matches the design and holds up",
+      "location": "project-documents/user/tasks/268-tasks.pure-cf-build.md:138-169",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "proportionality",
+      "raw_category": null,
+      "summary": "Some code-gone greps run twice",
+      "location": "project-documents/user/tasks/268-tasks.pure-cf-build.md:197-201",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "pass",
+      "category": "nfr",
+      "raw_category": null,
+      "summary": "No NFR, so no load-test or CI wiring task is needed",
+      "location": "project-documents/user/slices/268-slice.pure-cf-build.md:186-200",
+      "location_verified": true
+    }
+  ],
+  "template_name": "tasks",
+  "input_files": {
+    "input": "project-documents/user/tasks/268-tasks.pure-cf-build.md",
+    "against": "project-documents/user/slices/268-slice.pure-cf-build.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/context-forge-268-tasks"
+  },
+  "timestamp": "2026-11-16T13:24:59.137254",
+  "model": "claude-opus-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 11,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-opus-5-5",
+  "answering_models": [
+    "claude-opus-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 7,
+    "in_fences": 0,
+    "in_section": 7,
+    "surviving": 7
+  },
+  "effort": "high",
+  "profile": "sdk",
+  "turns": 12,
+  "prompt_tokens": 673818,
+  "cached_tokens": 582931,
+  "cache_write_tokens": 90871,
+  "completion_tokens": 8586,
+  "reasoning_tokens": null,
+  "duration_seconds": 92.0512480000034,
+  "cost_usd": 1.0160709,
+  "cost_basis": "provider"
+}

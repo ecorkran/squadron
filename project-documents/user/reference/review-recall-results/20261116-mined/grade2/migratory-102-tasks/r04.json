@@ -1,0 +1,82 @@
+{
+ "review": "r04",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "MomentumForce as specified does not resist turning",
+   "description": "The Option A formula `heading * speed * momentum_weight` equals `momentum_weight * velocity`. A force parallel to velocity cannot change direction by itself. It only scales speed, which is negative drag. Speed grows until the `max_speed` limit in `integrate()` stops it. The text at lines 153\u2013154 says the force \"resists any heading change\" and is \"a damping term on angular velocity\", and the formula does not do either. Task 3.1 (line 88) and the test in 3.2 (line 96, expected `[3.0, 0.0]` for velocity `[3.0, 0.0]`) encode this formula, so the tests would pass while the corridor effect is absent. Resolve the intended behavior before 3.1 starts. The slice's \"stateless\" constraint may need to change to get turn resistance. If the formula stays, state it as `velocity * momentum_weight` in 3.1, since the normalize-and-rescale round trip cancels out.",
+   "location": "project-documents/user/slices/102-slice.herding-and-leadership.md:158"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Convergence test asserts only the sign of mean heading, with no control",
+   "description": "Task 5.2 asserts a positive x-component of the final mean heading. The slice criterion (slice lines 389\u2013391) requires the herd's mean heading to converge toward the leaders' initial heading, which is east. A positive x-component does not show convergence, and it does not show that leaders caused it. A flocking-only population with random initial velocities can also end with a positive x-component. \"Mean heading\" is also undefined; averaging raw angles across \u00b1\u03c0 is wrong. Specify the mean of unit heading vectors, and assert both that its angle to `[1, 0]` is smaller than at the start and that it beats a control run on the same seed with `leadership_weight=0, momentum_weight=0`.",
+   "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:153"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Profile differentiation uses OR and no statistical test",
+   "description": "Task 5.3 passes if the herding heading variance is lower or the eastward component is higher. The slice requires \"statistically different movement patterns\" (slice lines 403\u2013405). Its walkthrough expects the herding run to show lower variance and eastward bias, and the flocking run to show no preference (slice lines 475\u2013476). With OR, the weaker effect alone passes the test. A single seed with no threshold is also not a statistical test. Change the assertion to require both metrics, state a margin, and run more than one seed.",
+   "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:161"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Vectorization requirement has no task or acceptance check",
+   "description": "The slice requires both forces to be vectorized within each agent's neighborhood with no nested Python loops (slice lines 395\u2013396). Tasks 3.1 and 4.1 describe per-agent iteration (\"For each active agent\") and never state the rule or check it. An implementer could loop over neighbors in Python and still pass every listed verification. Add the rule to 4.1 and 3.1 as an acceptance item, for example \"no Python loop over neighbors inside the per-agent loop\", and check it in review.",
+   "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:113"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "\"Corridor movement\" in Included scope has no asserting task",
+   "description": "The Included list says the integration test shows \"directional bias and corridor movement\". Task 5.2 asserts only directional bias (line 153). No task defines or asserts corridor movement. Either add a persistence metric to 5.2, such as the path straightness the slice names at line 405, or remove \"corridor movement\" from Included scope.",
+   "location": "project-documents/user/slices/102-slice.herding-and-leadership.md:54"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Per-agent profile lookup is undefined in the force steps",
+   "description": "Tasks 3.1 and 4.1 write `profile.momentum_weight` and `profile.leadership_weight` (line 119). But `__call__` receives a list `profiles`, and each agent's profile is selected through `state.profile_indices` (slice line 281). The tasks never say how to resolve agent i's profile. A junior implementer could use `profiles[0]` for every agent, which is silently wrong for mixed populations. Add `profile = profiles[state.profile_indices[i]]` to both steps.",
+   "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:88"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "Uniform-leadership test has no concrete assertion",
+   "description": "\"Result should be similar to plain velocity averaging\" gives no tolerance or expected value, so a junior cannot tell pass from fail. State the exact expectation computed from the inputs, for example \"with equal leadership L, the subject's force equals (mean of neighbor velocities \u2212 subject velocity) \u00d7 leadership_weight, checked with `np.allclose`\".",
+   "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:127"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "Task 5.1 is a non-asserting smoke test that 5.2 already covers",
+   "description": "Task 5.1 runs all five forces through `tick()` for 10 steps and says to \"confirm forces interact correctly\" without an assertion. Task 5.2 runs the same five-force setup for 300 steps with assertions, so any crash in 5.1 also fails 5.2. The slice's integration criterion (line 402) is the directional-bias check, which 5.2 provides. Fold 5.1 into 5.2, or give it a concrete assertion such as an N\u00d72 finite output.",
+   "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:143-144"
+  },
+  {
+   "i": 8,
+   "severity": "CONCERN",
+   "title": "Section 6 adds no code, and its final commit would contain only check-offs",
+   "description": "Section 6 changes no code. Task 6.2 repeats the `isinstance` checks already made in 3.1 (line 91) and 4.1 (line 122). Task 6.3 says \"Git add any remaining changes and commit\", but nothing remains to change, so the commit would contain only check-offs. CLAUDE.md forbids a commit that only checks boxes. Fold the Section 6 verification into the Section 5 commit, and drop 6.2 and the separate 6.3 commit.",
+   "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:181"
+  },
+  {
+   "i": 9,
+   "severity": "NOTE",
+   "title": "Own-leadership independence is a stated key behavior with no test",
+   "description": "Task 4.1 states that an agent's own leadership does not affect its own force (slice lines 123\u2013124). Task 4.2 has no test for it. It is not a listed success criterion, so this is a note. One assertion would cover it: same neighbors, change the subject's leadership, force unchanged.",
+   "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:120"
+  },
+  {
+   "i": 10,
+   "severity": "NOTE",
+   "title": "Task text hard-codes epsilon twice and a silent default",
+   "description": "Tasks 3.1 (line 86) and 4.1 (line 117) each give \"epsilon (e.g. 1e-10)\". CLAUDE.md asks for one named constant for values used in conditionals. Line 36 sets `leadership: float = 0.0` as a default, which CLAUDE.md's no-silent-fallback rule disfavors. Tell the implementer to define one epsilon constant in `herding.py` and reference it in both forces. Confirm with the Project Manager whether leadership should be a required argument.",
+   "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:36"
+  }
+ ]
+}

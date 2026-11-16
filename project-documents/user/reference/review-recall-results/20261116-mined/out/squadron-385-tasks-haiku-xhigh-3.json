@@ -1,0 +1,387 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "Task 16.4 writes the slice merge as a task",
+      "description": "The git rules say never to write a merge or push as a task, sub-item, or success criterion in a task file. The merge belongs to Phase 7 and happens only after code review passes. Delete the \"Merge `385-slice...` into `squadron-pr`\" bullet.",
+      "file_ref": null,
+      "category": "process-rule",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:373"
+    },
+    {
+      "severity": "FAIL",
+      "title": "Task 5.1 contradicts itself on an unreachable `cf`",
+      "description": "The bullet opens \"Do not degrade an unreachable `cf` to a default base,\" then says that when `cf` is unavailable \"the key is treated as unset and the chain proceeds to the host default.\" That is the degradation the heading forbids. The slice design has the same contradiction (slice design lines 239\u2013244). In practice the PR silently targets `main` on the repository this initiative configures, which is the outcome D1 exists to prevent and which breaks the no-silent-fallback rule. Pick one behavior before Task 5 is built. The likely answer is that an unreachable `cf` raises a classified error and `--base` is the operator's override.",
+      "file_ref": null,
+      "category": "spec-consistency",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:122"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The success criterion and Task 6.2 disagree on the push refusals",
+      "description": "The criterion says a sha mismatch \"fails the same way with the same command\" as a missing branch. D2 and Task 6.2 (line 149, \"the two refusals name different commands\") make them different: `git push -u` versus `git push`. Task 6.2 follows D2, but a verifier will check the criterion as written. Reword the criterion to \"names the push command for that case.\"",
+      "file_ref": null,
+      "category": "spec-consistency",
+      "raw_category": null,
+      "location": "project-documents/user/slices/385-slice.create-a-pr-with-a-good-message.md:545-546"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The model-call failure is caught with the wrong handler shape",
+      "description": "Task 10.1 has the composer catch broadly and convert the failure to a non-zero exit, and calls this a \"process-boundary handler.\" The composer is a library function the CLI calls, not the top-level process boundary. Under the exception rules, the fit is option (a): log with `logger.exception` and re-raise, and let the command's top-level handler produce exit 1. Narrow the caught types where the provider's failure modes are known.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:221"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "No CLI-level test covers \"model failure exits non-zero and creates nothing\"",
+      "description": "The technical criterion (slice design line 562) requires a provider failure to exit non-zero, log at ERROR, and create nothing. Task 10.2 checks this only at composer level, where an exit code cannot be observed. Task 13.2 has no composition-failure case, and Task 14.1's matrix covers the five host calls but not the model path (D8, F008). Add a CLI test with a faked composer that raises: exit 1, an ERROR log, and zero writes.",
+      "file_ref": null,
+      "category": "coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:308-325"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "It is unresolved whether the body takes one model call or one per section",
+      "description": "The data flow (line 194) says \"one-shot model call.\" D4 (lines 337\u2013338) says squadron \"requests prose per section.\" Task 10.1 defines one call, and Task 11.1 does not say which applies. The choice changes token cost, the number of failure points in D8, and what the fake composer must return. Choose one and state it in Task 11.1.",
+      "file_ref": null,
+      "category": "spec-consistency",
+      "raw_category": null,
+      "location": "project-documents/user/slices/385-slice.create-a-pr-with-a-good-message.md:337-338"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "An empty commit range is assumed impossible, and the title fallback would crash on it",
+      "description": "Task 7.1 says commits are \"always present \u2014 an empty range is impossible, since a PR with no commits cannot be opened.\" That is an assumption, not a check. Running `sq pr create` while checked out on the target branch gives base == head, so `base..head` is empty. Task 10a.1 then falls back to \"the first commit's subject,\" which does not exist. Add an explicit refusal that names the empty range, with a test in Task 7.2 or 13.2.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:158"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The input and facts contracts are underspecified",
+      "description": "`PrInputs` is never defined, so Tasks 7\u20139 cannot agree on its fields. `gather_inputs` has no signature, and Task 8.1 elides `find_latest_in_range_review(...)` (line 176). Task 9.1 requires the review's verdict in `PrFacts`, but no task reads it; Task 8.1 reads only `reviewedSha`. The verdict is the `verdict:` frontmatter key (`src/squadron/review/resolution_evidence.py:136` reads it). \"Newest in the range\" (line 180) also has no ordering rule. Define `PrInputs`, both signatures, the verdict read, and the ordering.",
+      "file_ref": null,
+      "category": "interface-contract",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:198"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "\"The first task file\" conflicts with the design's \"task files\"",
+      "description": "The design says `resolve_slice_info` returns the design and the task files, and that their checkboxes feed the body (slice design line 186, \"design, tasks \u2192 checked/unchecked\"). Task 7.1 says to read \"the first task file.\" The order is undefined, and any file after the first is silently dropped. Either aggregate over all task files in a stated order, or state why one file is correct.",
+      "file_ref": null,
+      "category": "spec-consistency",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:159"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The dry-run/real equality test is specified as output comparison, not structure",
+      "description": "The design's Testing section (slice design lines 672\u2013673) requires asserting that the body object is bound once and passed to both paths, \"rather than comparing two separately composed strings.\" Task 13.2 says \"dry-run output equals the body the next real run sends,\" which an implementer can satisfy by comparing two separate compositions. Rewrite the case to check the shared binding, and include the title.",
+      "file_ref": null,
+      "category": "testability",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:309"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The title parser has no real-design fixture, and real H1s carry suffixes the rule keeps",
+      "description": "Task 10a.1 strips the `Slice Design: ` prefix, and Task 10a.2 tests only synthetic H1s. The project's parser rules require a fixture from the real format. Real designs in `project-documents/user/slices/` include `# Slice Design: Dispatch Action (145)` and `# Slice Design: \\`sq review code\\` \u2014 Slice Implementation Review`. The task does not say whether the index suffix or inline code is kept, so a PR title could carry \"(145)\" or backticks. H1 line positions also vary across real files (lines 11\u201335), so the parser must scan the document, not read a fixed line. Add a fixture from a real design and state how these cases are handled.",
+      "file_ref": null,
+      "category": "parsing",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:239"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The `--profile` and `--model` defaults are unspecified",
+      "description": "Task 10.1 says the composer takes `profile: str` \"exactly as the CLI flags supply them,\" and Task 10.2 says `model=None` passes through. Nothing says what happens when `--profile` is omitted. The review commands define `--profile` in `src/squadron/cli/commands/review.py:735`. Specify the same source. Do not hard-code a default in the command, per the no-magic-defaults rule.",
+      "file_ref": null,
+      "category": "spec-consistency",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:217"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "\"Filled\" needs a delimiter the check can use",
+      "description": "Task 12.1 says \"filled\" means non-empty after stripping whitespace \"and the squadron-written deterministic block,\" and \"not solely a restatement of the heading.\" Nothing says how the check locates the deterministic block in the assembled body, or what counts as a restatement. Those two behaviors decide whether the gate passes, so name the delimiter (for example, a marker line squadron writes) and the restatement test.",
+      "file_ref": null,
+      "category": "testability",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:280"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The title length bound is ambiguous at exactly 72",
+      "description": "The task says \"under 72 characters\" and tests 60 (accepted) and 100 (fallback), but not 72. State whether 72 is accepted.",
+      "file_ref": null,
+      "category": "spec-consistency",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:241"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Some test subtasks are thin enough to merge",
+      "description": "The file has 16 top-level tasks and about 33 subtasks. Several test subtasks are effort 1 (1.2, 3.2, 4.2, 9.2, 15.1). No task is too large. Tasks 4 and 15.1 could fold into neighboring tasks without losing coverage. This is optional.",
+      "file_ref": null,
+      "category": "granularity",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md"
+    },
+    {
+      "severity": "PASS",
+      "title": "Success criteria are covered",
+      "description": "Each functional and technical criterion (slice design lines 532\u2013568) maps to at least one task, subject to the findings above. Examples: ancestor-review scoping (8.2), the integration-branch refusal (5.2), the presence check (12.2), the title rules (10a.2), the timeout matrix (14.1), the import boundary (15.1), the docstring correction (15.2), and the six-step walkthrough (16.2). Every task traces to a criterion or a design decision, so there is no scope creep.",
+      "file_ref": null,
+      "category": "coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md"
+    },
+    {
+      "severity": "PASS",
+      "title": "Sequencing and the test-with pattern are correct",
+      "description": "Every implementation task is followed directly by its test task. The order matches the design's Implementation Order (slice design lines 651\u2013661). Dependencies run forward only, with no cycles.",
+      "file_ref": null,
+      "category": "sequencing",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md"
+    },
+    {
+      "severity": "PASS",
+      "title": "The referenced code and the fixture file exist",
+      "description": "Confirmed by grep: `GIT_QUERY_TIMEOUT_SECONDS`, `HOST_COMMAND_TIMEOUT_SECONDS` (`src/squadron/codehost/github_cli.py:68`), `run_git`, `_branch_for`, `resolve_reviews_dir`, `read_frontmatter`, `resolve_slice_info`, `resolve_and_fetch_pull_request`, `render_code_host_error`, `run_review_with_profile`, `PullRequestCreationRejectedError`, and the four 381 host operations. The docstring text Task 15.2 quotes matches `src/squadron/pipeline/summary_oneshot.py:1`. The fixture file for Task 2.2, `project-documents/user/tasks/384-tasks.post-findings-to-the-pr.md`, exists.",
+      "file_ref": null,
+      "category": "verification",
+      "raw_category": null,
+      "location": "src/squadron/codehost/refs.py:28"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "process-rule",
+      "raw_category": null,
+      "summary": "Task 16.4 writes the slice merge as a task",
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:373",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "fail",
+      "category": "spec-consistency",
+      "raw_category": null,
+      "summary": "Task 5.1 contradicts itself on an unreachable `cf`",
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:122",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "spec-consistency",
+      "raw_category": null,
+      "summary": "The success criterion and Task 6.2 disagree on the push refusals",
+      "location": "project-documents/user/slices/385-slice.create-a-pr-with-a-good-message.md:545-546",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "The model-call failure is caught with the wrong handler shape",
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:221",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "coverage",
+      "raw_category": null,
+      "summary": "No CLI-level test covers \"model failure exits non-zero and creates nothing\"",
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:308-325",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "spec-consistency",
+      "raw_category": null,
+      "summary": "It is unresolved whether the body takes one model call or one per section",
+      "location": "project-documents/user/slices/385-slice.create-a-pr-with-a-good-message.md:337-338",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "An empty commit range is assumed impossible, and the title fallback would crash on it",
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:158",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "concern",
+      "category": "interface-contract",
+      "raw_category": null,
+      "summary": "The input and facts contracts are underspecified",
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:198",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "concern",
+      "category": "spec-consistency",
+      "raw_category": null,
+      "summary": "\"The first task file\" conflicts with the design's \"task files\"",
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:159",
+      "location_verified": true
+    },
+    {
+      "id": "F010",
+      "severity": "concern",
+      "category": "testability",
+      "raw_category": null,
+      "summary": "The dry-run/real equality test is specified as output comparison, not structure",
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:309",
+      "location_verified": true
+    },
+    {
+      "id": "F011",
+      "severity": "concern",
+      "category": "parsing",
+      "raw_category": null,
+      "summary": "The title parser has no real-design fixture, and real H1s carry suffixes the rule keeps",
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:239",
+      "location_verified": true
+    },
+    {
+      "id": "F012",
+      "severity": "concern",
+      "category": "spec-consistency",
+      "raw_category": null,
+      "summary": "The `--profile` and `--model` defaults are unspecified",
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:217",
+      "location_verified": true
+    },
+    {
+      "id": "F013",
+      "severity": "concern",
+      "category": "testability",
+      "raw_category": null,
+      "summary": "\"Filled\" needs a delimiter the check can use",
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:280",
+      "location_verified": true
+    },
+    {
+      "id": "F014",
+      "severity": "note",
+      "category": "spec-consistency",
+      "raw_category": null,
+      "summary": "The title length bound is ambiguous at exactly 72",
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:241",
+      "location_verified": true
+    },
+    {
+      "id": "F015",
+      "severity": "note",
+      "category": "granularity",
+      "raw_category": null,
+      "summary": "Some test subtasks are thin enough to merge",
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md",
+      "location_verified": null
+    },
+    {
+      "id": "F016",
+      "severity": "pass",
+      "category": "coverage",
+      "raw_category": null,
+      "summary": "Success criteria are covered",
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md",
+      "location_verified": null
+    },
+    {
+      "id": "F017",
+      "severity": "pass",
+      "category": "sequencing",
+      "raw_category": null,
+      "summary": "Sequencing and the test-with pattern are correct",
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md",
+      "location_verified": null
+    },
+    {
+      "id": "F018",
+      "severity": "pass",
+      "category": "verification",
+      "raw_category": null,
+      "summary": "The referenced code and the fixture file exist",
+      "location": "src/squadron/codehost/refs.py:28",
+      "location_verified": true
+    }
+  ],
+  "template_name": "tasks",
+  "input_files": {
+    "input": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md",
+    "against": "project-documents/user/slices/385-slice.create-a-pr-with-a-good-message.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/squadron-385-tasks"
+  },
+  "timestamp": "2026-11-16T13:42:17.497952",
+  "model": "claude-haiku-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 11,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-haiku-5-5",
+  "answering_models": [
+    "claude-haiku-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 18,
+    "in_fences": 0,
+    "in_section": 18,
+    "surviving": 18
+  },
+  "effort": "xhigh",
+  "profile": "sdk",
+  "turns": 12,
+  "prompt_tokens": 428963,
+  "cached_tokens": 279824,
+  "cache_write_tokens": 149131,
+  "completion_tokens": 48327,
+  "reasoning_tokens": null,
+  "duration_seconds": 210.4465783329215,
+  "cost_usd": 0.28271812,
+  "cost_basis": "provider"
+}

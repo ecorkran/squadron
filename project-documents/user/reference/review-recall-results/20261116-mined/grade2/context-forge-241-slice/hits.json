@@ -1,0 +1,27 @@
+{
+ "case": "context-forge-241-slice",
+ "flaws": [
+  {
+   "id": "F1",
+   "text": "Technical Scope says to \"Fill the reserved `LIFECYCLE: review-gate` branch in `getNext()`; route each boundary's gated status to `review` / `blocked`\"",
+   "hits": {
+    "r02": [
+     2
+    ],
+    "r05": [
+     2
+    ],
+    "r06": [
+     0
+    ],
+    "r07": [
+     2
+    ],
+    "r08": [
+     4
+    ]
+   }
+  }
+ ],
+ "note": "Counted only findings naming both that the arch gate cannot reach the reserved review-gate branch (guard/earlier cascade position) and the missing index; r01#1, r03#4 and r04#1 name the index/status gap but not the unreachable branch, so not counted. r06#0 is weaker on mechanism (says which branch is undefined, cites GUARD vs review-gate) but counted."
+}

@@ -1,0 +1,27 @@
+{
+ "case": "squadron-174-tasks",
+ "flaws": [
+  {
+   "id": "F1",
+   "text": "Task 22a asserts wall-clock `MAX_LISTING_S = 1.0` for `list_run_summaries`, while the parent design says \"The I/O-bounds test enforces the counts, and",
+   "hits": {
+    "r03": [
+     4
+    ],
+    "r05": [
+     2
+    ],
+    "r06": [
+     4
+    ],
+    "r07": [
+     5
+    ],
+    "r08": [
+     5
+    ]
+   }
+  }
+ ],
+ "note": "All five hits name the Task 22a time assertion vs design \"no assertion on time in tests\" contradiction; they recommend fixing the design sentence rather than deleting Task 22a, but identify the same defect. r04 finding 1 (step 8 timing dataset) is related but not counted."
+}

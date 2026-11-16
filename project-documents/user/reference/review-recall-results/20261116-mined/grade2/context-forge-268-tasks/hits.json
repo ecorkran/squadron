@@ -1,0 +1,47 @@
+{
+ "case": "context-forge-268-tasks",
+ "flaws": [
+  {
+   "id": "F1",
+   "text": "Task 3.2a requires `pnpm --filter @context-forge/core test` to pass after 3.1 and 3.2 (stop rendering `Comprehension:` and the Adoption Facts section)",
+   "hits": {
+    "r01": [
+     0
+    ],
+    "r02": [
+     0
+    ],
+    "r04": [
+     0
+    ],
+    "r05": [
+     0
+    ],
+    "r07": [
+     0
+    ],
+    "r08": [
+     0
+    ]
+   }
+  },
+  {
+   "id": "F2",
+   "text": "The note under heading 3 says \"Between 3.4 and 3.6, only `mcp-server` typecheck is expected to fail. `cli` passes once 3.5 is done.\" After 3.4 rebuild",
+   "hits": {
+    "r03": [
+     3
+    ],
+    "r04": [
+     5
+    ]
+   }
+  },
+  {
+   "id": "F3",
+   "text": "Design Success Criteria: \"No exported symbol remains that only the deleted code used\", with exceptions only for `history`, `comprehensionAnalysis` and",
+   "hits": {}
+  }
+ ],
+ "note": "F1: only findings naming the 3.2a gate failing count; r03 f0 and r08 f1 and r04 f1 cover only the 3.3/3.7 gate on adoptionBuild.integration.test.ts and were not counted. F3: r04 f4 critiques the 6.2 audit for other symbols (AdoptionError, readAdoptionState), not the orphaned measureSourceVolume, so no hit."
+}

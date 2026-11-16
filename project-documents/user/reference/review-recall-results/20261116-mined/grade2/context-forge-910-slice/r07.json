@@ -1,0 +1,33 @@
+{
+ "review": "r07",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "WorkflowNavigator's 3 \"NormalizedStatus\" sites are actually `SliceStatus.status`, which TD-3 excludes",
+   "description": "The table, the component list (line 75) and step 4 of the migration plan (line 90) say to sweep 3 `=== 'complete'` sites in `WorkflowNavigator.ts`. All three are `SliceStatus` values: two `slice.status === 'complete'` comparisons, where `slice` is a `SliceStatus`, and the `status: 'complete'` return in `deriveSliceStatus()`, which returns `Promise<SliceStatus>`. TD-3 (lines 104\u2013106) says `SliceStatus.status` is a separate lifecycle union and that rewriting it to `STATUS.Complete` would \"imply the two unions are related, which they aren't.\" The design contradicts itself. Because `STATUS.Complete` has the literal type `'complete'`, the compiler will not catch the mistake. Fix: drop `WorkflowNavigator.ts` from the sweep, or reverse TD-3 on purpose. Recount the totals either way.",
+   "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md:36"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "ConsistencyChecker `detail.value` fix payloads are not classified against TD-2's vocabulary split",
+   "description": "About 13 of the ConsistencyChecker literals are fix payloads of the form `detail: { key: 'status', value: 'in-progress' | 'complete' }`. They describe a value to write into the `status` frontmatter field. TD-2 (line 102) says frontmatter uses a different vocabulary: `VALID_STATUSES` is `not_started`/`in_progress`/`complete`/`deferred`/`deprecated`. The design treats all 36 sites as `NormalizedStatus` comparisons (\"`=== 'complete'` / `'in-progress'` comparisons across ~15 rule functions\") and never decides which vocabulary these payloads belong to. If they are frontmatter-bound, sweeping them to `STATUS.*` makes `NormalizedStatus` the official source for frontmatter writes. That is the same mixing of vocabularies TD-2 calls a correctness hazard, and it would hide any existing hyphen/underscore mismatch. Fix: split ConsistencyChecker sites into comparisons and fix payloads, name the payload consumer, and state in a TD which vocabulary the payloads use.",
+   "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md:33"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Literal-count success criterion is unattainable and per-file counts are inaccurate",
+   "description": "The zero-match grep at line 135 excludes only `introspection/types.ts:[3-6]:`. It would still match:\n- the excluded `SliceStatus` `'complete'` member in `types.ts`\n- the quoted alias keys `'in-progress'` and `'not-started'` in `statusNormalizer.ts`, which line 48 says must stay literal\n- the WorkflowNavigator `SliceStatus` sites\n- comment text such as the `'not-started'` mention in `ProjectModelBuilder.ts` and the `// 'complete' | 'in-progress' | 'not-started'` comment in ConsistencyChecker\n\nSeveral table counts also disagree with the source:\n- **statusNormalizer:** 14 value-side literals plus 2 quoted keys, not \"13 of 16; 3 are alias keys\".\n- **types.ts:** `inferredStatus` has 3 literals, not \"5 of 8\". The 8th match is the `SliceStatus` member.\n- **ProjectModelBuilder:** its only matching literal is in a comment, not `'unknown'`.\n\nThe before/after numbers in the walkthrough (lines 150\u2013151) depend on these counts. Fix: recount the sites, and write the success check as a per-file list of allowed lines (or one grep that excludes known allowed lines and comments) that actually returns zero matches when the sweep is done.",
+   "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md:135-151"
+  },
+  {
+   "i": 5,
+   "severity": "NOTE",
+   "title": "No new I/O paths or NFR-bearing paths",
+   "description": "This is an internal refactor with no new I/O, message types or public API changes, and the parent architecture states no NFRs. So the slice needs no failure-mode list and no NFR targets restated.",
+   "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md"
+  }
+ ]
+}

@@ -1,0 +1,40 @@
+{
+ "review": "r07",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Vectorization requirement has no task step or check",
+   "description": "The slice requires \"Both forces are vectorized within each agent's neighborhood \u2014 no nested Python loops\" (slice Technical Requirements, line 395). No step in 3.1 or 4.1 states this constraint and nothing verifies it. Task 4.1 writes the weighted average in index notation (`sum(velocity[i] * leadership[i]) / sum(leadership)`), which a junior implementer can read as an inner loop over neighbors. Add an explicit step to 4.1 (and 3.1) requiring NumPy array operations over the neighbor set with only the outer per-agent loop.",
+   "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:110-122"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Convergence assertion in 5.2 can pass without a working LeadershipForce",
+   "description": "The slice criterion is that \"the herd's mean heading converges toward the leaders' initial heading\". Task 5.2 asserts only that the final mean heading has a positive x-component.\n- **Already true at tick 0:** five leaders at `[4.0, 0.0]` among 50 agents give an expected mean x-velocity of about +0.4 before any tick runs.\n- **Likely holds without leadership:** the flocking forces should roughly preserve mean velocity, so the assertion would probably pass with `LeadershipForce` returning zeros.\n- **Ambiguous metric:** \"mean heading\" could mean the mean of velocities or the mean of unit headings.\n\nStrengthen it by measuring the non-leader agents only, or by asserting that eastward alignment increased relative to the initial state, and name the metric. Task 5.3 has a related weakness: the `or` between heading variance and eastward component lets the implementer pick whichever passes. Fix one primary metric.",
+   "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:147-154"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Commits are checkbox tasks, and 6.3 is an empty commit",
+   "description": "Commits appear as numbered checkbox tasks (1.3, 2.3, 3.3, 4.3, 5.4, 6.3) instead of plain `**Commit**:` lines. The placement is right: each sits after an implement-and-test pair, matching slice checkpoint 7. Convert 1.3 through 5.4 to plain marker lines. Task 6.3 (lines 180-182) should be removed: nothing is left to commit after 5.4, so it yields an empty or check-off-only commit, and its `docs:` type does not fit a code slice.",
+   "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:48-49"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Section 6 and task 5.1 carry redundant work",
+   "description": "- **6.2 (cut):** it repeats the protocol conformance check already done as verify steps in 3.1 and 4.1 and as permanent tests in 3.2 and 4.2.\n- **6.3 (cut):** see the commit finding above.\n- **6.1 (fold):** make the full-suite run the final verify step of Section 5, before its commit marker, and drop Section 6.\n- **5.1 (merge into 5.2):** the 10-agent, 10-step smoke run is subsumed by the 300-tick run of the same five forces. Its step \"Set some agents to high leadership ... to confirm forces interact correctly\" (line 144) has no defined assertion, so a junior implementer cannot tell when it is done.",
+   "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:169-182"
+  },
+  {
+   "i": 4,
+   "severity": "NOTE",
+   "title": "Epsilon appears as an inline example value in two tasks",
+   "description": "\"epsilon (e.g. 1e-10)\" appears in both 3.1 and 4.1 (line 117). Project conventions say to avoid hard-coded constants and duplicated values. Have 3.1 define one named module-level constant in `herding.py` and have 4.1 reuse it.",
+   "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:86"
+  }
+ ]
+}

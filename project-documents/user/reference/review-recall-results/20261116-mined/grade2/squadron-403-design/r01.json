@@ -1,0 +1,75 @@
+{
+ "review": "r01",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "FAIL",
+   "title": "Git failures in the range resolver are logged at INFO or not at all, and refusals read as \"no landing\"",
+   "description": "The row at line 164 maps a reflog read or merge search that returns `None` to an INFO line. The review rule requires each failure mode to be observable at WARNING or above. The reused helpers also leave cases the table doesn't name:\n- `_search_merge_commit` and `_find_slice_branch` return `None` when git ran and refused (non-zero return code, for example an unknown target ref). Neither logs. The resolver would then report `NO_LANDING` as a fact.\n- `run_git` logs only timeouts. A missing git binary returns `None` silently.\n\nIntegration Points line 327 says a `None` from `run_git` is never an answer. The reused helpers turn both `None` and refusals into the same \"not found\" value, which is an answer. `run_git`'s own docstring says callers must tell these apart. Fix: add a row for non-zero return codes, add a distinct git-error outcome to the resolver (not one of the five repo-state reasons), log at WARNING with the git args and return code, and add a caplog test.",
+   "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:164"
+  },
+  {
+   "i": 1,
+   "severity": "FAIL",
+   "title": "Concurrent writes can silently drop fast-forward landings that can't be recovered",
+   "description": "The row's signal is \"None\". `_write_atomic` makes the last write win, so one command's new landings disappear with no log. The design says a fast-forward landing is \"found again while its reflog lasts.\" Once the reflog expires, a lost landing is unrecoverable, which breaks Success Criterion 2 (line 333). \"Not supported\" is an acceptable limit only with a visible signal. Fix: compare the stored record at write time with the one read at the start of the command, and log WARNING naming any landings that would be lost. Add a test that interleaves two writes and asserts the warning.",
+   "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:166"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "The reuse of `_search_merge_commit` is understated; D1 needs a list, not one hash",
+   "description": "Lines 77 and 195 say the merge search gains only a `first_parent` flag. The existing helper runs `git log ... -1` and returns one hash, the newest. D1 requires every landing, oldest first, which the data flow at line 112 expresses as `git log --merges --first-parent --reverse --format=%H`. That is a list-returning query with a different return type. Under the existing signature, slices 172, 305 and 940 would resolve to only their newest landing, which is the D1 bug. Line 346 caps `git_utils` growth at \"the rename, the pattern function and the first_parent argument\", and that cap doesn't hold. Fix: name the new function or changed return type, state how `sq review code` keeps its `-1` behavior, and give `first_parent` an explicit default.",
+   "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:195"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "The adapter contract change in 403 contradicts the plan's ownership and reaches into 400 and 401",
+   "description": "The slice plan's 400 entry says 400 provides \"the adapter contract that 401 extends.\" Its 401 criteria say 401 needs \"no change to the record envelope or adapter contract beyond new enum members.\" 403 adds a required `AdapterContext.environment_root` (line 211) and a new rule that every adapter must follow (line 215). That changes 400's two adapters. The new required field also breaks direct constructions in 400's test suite, so \"the 400 tests pass unchanged\" at line 389 isn't true as written. The design discloses the change but doesn't reconcile it with the plan or with 400, which is complete. Decide explicitly: either amend 400 and the plan so the contract is 400's and 401 adopts it before it ships, or justify why 403 can own the change. Give the field a default only if the design says why a default is safe.",
+   "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:209-218"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "The 401 ordering is hedged, though 401 says it ships first",
+   "description": "Line 74 says that if 401 lands after 403 it inherits the rule, and if before, \"403 updates whatever of 401's code reads `ctx.repo_root`.\" The slice plan fixes the order 401, 402, 403, 404. The 401 doc says it \"ships before any consumer of snapshot records exists: 403 and 420 aren't built.\" So the \"before\" branch is the plan, and 403 would edit 401's unbuilt code. Make that a named dependency: list the 401 edits (or the 401 doc change) in 403's scope, and drop the conditional.",
+   "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:74"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "The editable-install mitigation can't detect the risk it names",
+   "description": "Line 380 says the in-place-equals-export test \"catches a mismatch at HEAD.\" At a clean HEAD the exported tree equals the live tree. If pyright resolved `import squadron` through the live editable install, the export would produce identical counts and the test would pass. The only check that could catch the leak is walkthrough step 4 (line 366), a manual run that asserts no values. Line 376 says landings are never corrected, so a wrong type count stored under an old SHA stays wrong. Fix: add an automated test that exports a non-HEAD commit whose source differs from the live tree, and asserts the exported count rather than the live one.",
+   "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:375-380"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "The store record is keyed by project, not target, so landings from different targets mix",
+   "description": "The `slice_ranges` record is one per `ProjectId` (the git remote). The Git rules say the target is per-config, and a worktree has its own `git.integration_branch`. Each landing carries `target_ref`, but the read path (`get_slice_ranges(project_id)`, merged at line 122) has no target filter. So `report slice N` in a checkout targeting `main` would show landings resolved on a worktree's integration branch as if they were on `main`. D2's \"resolve from a checkout whose target is that branch\" doesn't stop the mixing on read. Fix: filter reads by `target_ref`, or key the record by project and target, and state which. Add a test with two targets in one store.",
+   "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:169-176"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "Export runs repository-controlled code from any revision, which widens the trust boundary",
+   "description": "Line 396 says running the live checkout's tools on an older tree is \"the same trust boundary as 400's in-place snapshot.\" It isn't. An in-place snapshot runs the checkout the user already has. `--commit REV` accepts any revision the repository holds, including unmerged or fetched remote refs. The export then runs that revision's `eslint.config.*`, which is arbitrary JavaScript, with the live plugins. The parent plan decided only that a clean HEAD is measured read-only; it did not decide to run code from other commits. Fix: state the wider boundary in the design. Then choose between limiting exports to commits reachable from the target (or a named ref), or using the live ESLint config for exports, which loses rule-set change detection (D5). A disclosure in `docs/COMMANDS.md` doesn't change the boundary.",
+   "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:396"
+  },
+  {
+   "i": 8,
+   "severity": "CONCERN",
+   "title": "The design is larger than the 403 entry needs; name the cuts",
+   "description": "The plan rates 403 at effort 4/5. The design has ten decisions, about ten new modules, three reports and a CLI, a contract change, a lockfile gate, a comparability module with seven break kinds, and a cross-adapter conformance test. Most of it traces to plan criteria and should stay. Cut:\n- The Verification Walkthrough (lines 359-370) restates the success criteria and tests. Replace it with a pointer to the criteria.\n- The illustrative `report slice` block (lines 279-293) duplicates the API contract. Keep the field list only.\n- The limits partial-diff rule (D7, line 229) goes beyond the plan's rule of full identity match. Mark limit-dependent figures `limits_changed` with no delta, and drop the rule that still diffs distributions.\n\nKeep the three reports, the resolver, the export and the lockfile gate.",
+   "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:359-370"
+  },
+  {
+   "i": 9,
+   "severity": "NOTE",
+   "title": "The `--commit` path on a dirty tree needs its rationale stated",
+   "description": "The parent says \"a dirty tree is refused, never silently attributed to HEAD.\" Line 130 skips the clean-tree check for the export config. That is correct, because the export measures committed content and so isn't attributed to the working tree. One sentence in the design should say so, so the exception to the parent's rule is visible.",
+   "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:130"
+  }
+ ]
+}

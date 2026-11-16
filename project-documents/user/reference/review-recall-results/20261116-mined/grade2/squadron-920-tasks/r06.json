@@ -1,0 +1,54 @@
+{
+ "review": "r06",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Commits land broken or regressed states (Tasks 1, 6, 7, 9)",
+   "description": "- **Task 9 breaks the test suite.** Its commit deletes `install_rate_limit_parser_shim` while `tests/providers/sdk/test_agent.py:701-760` still imports and calls it in four shim tests. Those tests aren't deleted until Task 10, so the Task 9 commit has failing tests.\n- **Task 1 commits the silent failure the slice exists to prevent.** It raises the floor to 0.2.152 and commits while the old detection is still in place. At that version `rate_limit_event` parses natively, so the shim never sees a parse error. A `RateLimitEvent` then reaches `translate_sdk_message` and is dropped by `return []`. That is exactly the \"silent loss of backoff\" the slice calls high impact. The existing tests fabricate exceptions, so they stay green and hide it.\n- **Tasks 6 and 7 commit untested changes.** They change the retry gates and dispatch inspection. Meanwhile `test_sdk_session.py:196` and the `test_agent.py` backoff tests still raise `ClaudeSDKError(\"rate_limit_event...\")`. That passes only through the retained substring path, so these commits are green but nothing tests the new mechanism.\n\nFix: put the pin bump in the same commit as the re-key, or after it. Never commit the shim deletion separately from removing its tests.",
+   "location": "project-documents/user/tasks/920-tasks.claude-agent-sdk-upgrade-and-rate-limit-parser-shim-retirement.md:89"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Commit markers are checkboxes and come after nearly every task",
+   "description": "- **Wrong format.** Every commit is written as a checkbox item (`- [ ] Commit: ...`). Markers must be plain `**Commit**:` lines, not checkboxes.\n- **Too frequent, and at untested points.** There are 13 commits for a slice the design rates 3/5 effort. Tasks 2 and 4 commit implementation before their tests (Tasks 3 and 5). Task 13's \"format and lint pass\" commit may be empty, or it shows that earlier commits were never linted.\n\nSuggested commit points, about four in total:\n1. Classification helpers + tests (Tasks 2\u20133)\n2. Translation + test (Tasks 4\u20135)\n3. Re-key, shim deletion, pin bump and test rewrite together (Tasks 1, 6\u201311)\n4. Closeout (Task 16)",
+   "location": "project-documents/user/tasks/920-tasks.claude-agent-sdk-upgrade-and-rate-limit-parser-shim-retirement.md:28"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Tests are far from the code they test",
+   "description": "- **The core changes are tested late.** The load-bearing production changes are the agent re-key (Task 6), the session re-key (Task 7) and the exclusion set (Task 8). Their tests don't come until Tasks 10 and 11, after the shim deletion in Task 9.\n- **The highest-risk path waits longest.** The design flags the pipeline `dispatch` path as \"the most likely place for the slice to half-land\", yet Task 7 and its test (Task 11) are four tasks apart.\n\nFix: put each test task straight after its implementation (6\u219210, then 7 + 8\u219211), then Task 9.",
+   "location": "project-documents/user/tasks/920-tasks.claude-agent-sdk-upgrade-and-rate-limit-parser-shim-retirement.md:91-108"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Task 6 contradicts itself on what happens to informational events",
+   "description": "The sentence says to \"continue the loop without yielding it to the caller\" and also to \"let it flow to translation as normal\". These are opposites: in `_skip_unparseable`, an event only reaches translation if it is yielded.\n\nThe slice design is split the same way. D4 (slice line 264) says skip it, while the Data Flow (line 329) and D6 say it continues to translation. A junior implementer can't settle this.\n\nTask 7 (line 70) clearly lets it through to translation on the session path. Task 6 should state the same choice, which is to yield it so the D6 translation branch is reachable. Without that, the Task 4 branch is dead code on the agent paths.",
+   "location": "project-documents/user/tasks/920-tasks.claude-agent-sdk-upgrade-and-rate-limit-parser-shim-retirement.md:61"
+  },
+  {
+   "i": 4,
+   "severity": "NOTE",
+   "title": "SC3's WARNING and throttle count are not asserted on the session path",
+   "description": "- **SC3 requirement:** on all three paths, `RateLimitStats.throttles` goes up and a WARNING names the attempt number.\n- **Session path (Task 11):** asserts only `\"done\" in result` and `call_count == 3`.\n- **Agent paths (Task 10):** check stats but no task asserts the WARNING.\n\nFix: add a `throttles` assertion and a `caplog` WARNING check to the rewritten `test_dispatch_retries_on_rate_limit`. This matters because that path is the stated half-land risk.",
+   "location": "project-documents/user/tasks/920-tasks.claude-agent-sdk-upgrade-and-rate-limit-parser-shim-retirement.md:104"
+  },
+  {
+   "i": 5,
+   "severity": "NOTE",
+   "title": "SC7's substring path is covered only by a unit test",
+   "description": "- **What changes:** Task 10 turns every `ClaudeSDKError(\"rate_limit_event...\")` backoff test into a typed-event test.\n- **What remains:** the retained 429 substring path is tested only by the direct `_is_throttle` unit test in Task 3.\n\nThat is enough for SC7. Keeping one existing loop-level test on a plain `ClaudeSDKError` would also show that the gate replacement didn't drop the path.",
+   "location": "project-documents/user/tasks/920-tasks.claude-agent-sdk-upgrade-and-rate-limit-parser-shim-retirement.md:41"
+  },
+  {
+   "i": 6,
+   "severity": "NOTE",
+   "title": "Some tasks could be merged",
+   "description": "- **Task 12** only checks that two test files pass unmodified. It belongs in Task 13's regression sweep.\n- **Tasks 2/3 and 4/5** are small implement-then-test pairs that could each be one task.\n- **Result:** going from 16 to about 12 tasks loses no coverage.",
+   "location": "project-documents/user/tasks/920-tasks.claude-agent-sdk-upgrade-and-rate-limit-parser-shim-retirement.md:110-115"
+  }
+ ]
+}

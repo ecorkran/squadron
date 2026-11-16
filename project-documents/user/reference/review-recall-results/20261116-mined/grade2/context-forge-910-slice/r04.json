@@ -1,0 +1,33 @@
+{
+ "review": "r04",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "All 3 WorkflowNavigator sites are `SliceStatus.status`, which TD-3 excludes",
+   "description": "The doc lists 3 `WorkflowNavigator.ts` `=== 'complete'` checks to sweep (line 36, line 75, and step 4 at line 90). All three use the `SliceStatus.status` workflow-position union:\n- `slice.status === 'complete'` at two places, where `slice` is a `SliceStatus`.\n- `return { ...base, status: 'complete', taskProgress }`, which builds a `SliceStatus`.\n\nThe `NormalizedStatus` comparisons in that file (`nextDerived === STATUS.InProgress`, `taskResult.inferredStatus === STATUS.Complete`) already use `STATUS`. TD-3 (lines 104\u2013106) says that pointing `SliceStatus.status` at `STATUS.Complete` \"implies the two unions are related, which they aren't.\" Sweeping these sites would do exactly that. The compiler won't object, because the literal is assignable either way.\n\n**Fix:** move `WorkflowNavigator.ts` to the Excluded list with 0 sites, and fix the totals. Or, if consistency is wanted, add a separate `SLICE_STATUS` constant, but that is new scope and needs its own decision.",
+   "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md:36"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "ConsistencyChecker fix payloads (`detail: { key: 'status', value: ... }`) are not classified",
+   "description": "About 14 of the ConsistencyChecker literals are not comparisons. They are `detail.value` payloads, meaning status values that a fix writes back to frontmatter. The doc calls all 36 sites \"comparisons across ~15 rule functions\" and never deals with the vocabulary question that TD-2 raises for exactly this boundary: raw frontmatter tokens versus `NormalizedStatus`.\n\nIf these write-side values are tied to `STATUS`, then renaming a `NormalizedStatus` value would also silently change what gets written to disk. That would be an on-disk format change hidden inside a \"mechanical\" refactor.\n\n**Fix:** state on purpose whether written frontmatter values belong to `NormalizedStatus` (sweep them) or to the raw frontmatter vocabulary (exclude them, like `frontmatterSchema.ts`). Give the reason either way.",
+   "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md:33"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "The success-criterion grep and walkthrough counts can't verify the result",
+   "description": "- **Line 135:** `grep -roE` prints no line numbers, so the filter `grep -v 'introspection/types.ts:[3-6]:'` never matches anything. The `STATUS` definition lines will always appear in the output.\n- **Comments get counted:** the grep also catches literals in comments, e.g. `ConsistencyChecker.ts` `// 'complete' | 'in-progress' | 'not-started'` and comments in `ProjectModelBuilder.ts` and `WorkflowNavigator.ts`. \"Zero matches in the six swept files\" can't be met unless the doc says what happens to comments.\n- **Expected counts are wrong:** the doc expects `frontmatterSchema.ts` (3) and `SliceStatus.status` (4). The current code has 2 matching occurrences in `frontmatterSchema.ts` (`'complete'`, `'deprecated'`; the third is `'completed'`, which the regex doesn't match) and 1 in `SliceStatus.status`.\n- **Arithmetic doesn't add up:** \"Before: ~75\" doesn't equal 65 + 4 + 8. Line 35's \"5 (of 8 total; 4 are the STATUS definition)\" sums to 9.\n- **Line 35 is wrong:** `inferredStatus` is a single line with 3 literals, and TD-1 removes them by retyping, not by sweeping to `STATUS.*`.\n\n**Fix:** use `grep -rnoE` with a correct exclusion, and state the expected after-count per file. Recount once the WorkflowNavigator correction above is made.",
+   "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md:135-151"
+  },
+  {
+   "i": 6,
+   "severity": "NOTE",
+   "title": "No I/O paths or NFRs apply",
+   "description": "The slice adds no I/O paths or message types, and the parent architecture states no NFRs. So the failure-mode and NFR criteria don't apply.",
+   "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md"
+  }
+ ]
+}

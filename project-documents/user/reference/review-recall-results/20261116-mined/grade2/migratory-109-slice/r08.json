@@ -1,0 +1,47 @@
+{
+ "review": "r08",
+ "findings": [
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Profile-weight pattern contradicts the slice's own \"no per-agent loop\" criterion",
+   "description": "The prescribed weight construction, `np.array([profiles[pi].cohesion_weight for pi in state.profile_indices[eval_indices]])`, is a Python-level per-agent iteration inside every `BulkForce.__call__`. This conflicts in three places:\n- **Technical requirement (line 198):** \"No Python-level per-agent loops in any `BulkForce.__call__`\".\n- **Slice plan:** \"O(1) Python overhead regardless of agent count\".\n- **Its own verification (lines 220-225):** the grep `for.*eval_indices` would match this line, so the design fails step 4 as written.\n\nFix: build a per-profile table and gather from it, e.g. `np.array([p.cohesion_weight for p in profiles])[state.profile_indices[eval_indices]]`. That iterates over profiles, not agents, and matches the architecture's \"index-based dispatch / lookup tables\" direction. Drop the \"negligible at n=100 \u2026 precompute if needed\" caveat.",
+   "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:129-136"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Padded-array memory claim is wrong for the clustering case the slice targets",
+   "description": "The design says padding has no downside \"at n <= 10K\" and that memory matters at \"100K+\". But the slice's own premise is k \u2192 n under clustering, and `max_neighbors` is the per-tick maximum over all agents. At n = 10K fully clustered:\n- each gathered `(n_active, max_neighbors, 2)` float64 array is about 1.6 GB, allocated per force per tick;\n- `indices` adds about 800 MB and `mask` about 100 MB.\n\nThat is inside the architecture's \"tens of thousands of agents on a single CPU process\" target. It also runs against the architecture's notes on per-tick allocation and GC pressure. This does not require CSR now. The design should state the real bound (memory \u221d n_active \u00d7 max_neighbors, set by the densest agent) and the agent-count/density envelope this slice supports. It should also say what happens beyond that envelope, and that must be an explicit failure, not silent degradation.",
+   "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:140-148"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Enumerated force list hides an ordering dependency with slice 103 and other `BulkForce` implementers",
+   "description": "The plan requires \"all existing implementations and callers update in the same slice\", but the design hard-codes five neighbor forces plus three non-neighbor forces, and its loop-check grep covers only `flocking.py` and `herding.py`.\n- **Slice 103:** it is `not_started` and precedes 109 in the plan. Its design specifies `FlightForce` and `PursuitForce` as per-agent loops over `neighbor_lists`, with per-force self-exclusion and per-neighbor dict lookups. If 103 lands first, 109's scope and verification miss those forces. If 109 lands first, 103's design is stale against the new protocol and the builder-level self-exclusion.\n- **Slice 304:** its design shows an environment-aware force using the `neighbor_lists` signature, which is not in 109's list.\n\nThe design should state the intended order relative to 103 and define scope as \"every `BulkForce` implementer present at implementation time\", with the verification grep covering the engine force modules generally. The frontmatter lists 103 under `interfaces`, but the body never says what 103 must change.",
+   "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:33-47"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Equivalence criterion is under-specified against the tick-determinism goal",
+   "description": "Per-force equivalence is `np.allclose(atol=1e-12)`, meaning outputs are not bit-identical to the loop versions. The integration test then requires positions and velocities \"after N ticks match between old and new implementations\", with no tolerance and no N. Flocking amplifies last-bit differences, so this test is either flaky or forces an arbitrary tolerance at implementation time. Two things to state:\n- **Multi-tick test:** give the tolerance and N, or replace it with a single-tick comparison plus a repeat-run bit-identical check of the new implementation. The latter is what the architecture's tick-determinism goal actually requires.\n- **Replay compatibility:** results change at the last-bit level versus pre-slice runs. The world server architecture relies on deterministic re-simulation for replay, so logs recorded before this slice will not reproduce exactly.",
+   "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:256-260"
+  },
+  {
+   "i": 6,
+   "severity": "NOTE",
+   "title": "MomentumForce is labelled \"neighbor-dependent\" but uses no neighbors",
+   "description": "Lines 35 and 190 group `MomentumForce` with the \"five neighbor-dependent forces\", while lines 125 and 201 say it reads no neighbor data. Its inclusion is correct, since the plan names it and it has a per-agent loop. Reword to \"five loop-based forces\" so the task breakdown does not apply the gather-mask-reduce pattern to it.",
+   "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:35"
+  },
+  {
+   "i": 7,
+   "severity": "NOTE",
+   "title": "Tick-budget success is verified only by a manual run",
+   "description": "The slice's primary value is ticks staying within 50ms after clustering, but this appears only in the walkthrough (a run of 5+ minutes), not under Technical Requirements. Adding it as a stated criterion would tie the slice's success to the NFR it exists to fix. A suitable form: tick duration within budget at the default config in a fully clustered state.",
+   "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:211-215"
+  }
+ ]
+}

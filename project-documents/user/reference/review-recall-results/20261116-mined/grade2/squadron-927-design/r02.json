@@ -1,0 +1,33 @@
+{
+ "review": "r02",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "D6 would show \"Findings Not Parsed\" on reviews whose findings were parsed",
+   "description": "D6 makes the `fallback_used` notice render \"whenever `fallback_used` is set, after any findings\". The same change goes into `_display_terminal`, and the `cli/commands/review.py` row at line 75 says the same thing. But `fallback_used=True` does not mean \"findings not parsed\". Slice 919's derived-verdict path sets `fallback_used=True` and `verdictSource: derived` precisely when findings *were* parsed and only the `## Summary` verdict was missing. Under D6, every derived-verdict review, capped or not, would print a \"Findings Not Parsed\" notice under its real findings. That contradicts the artifact and changes output outside this slice's scope.\n\nThe case D6 is meant to protect is \"a PASS with `fallback_used=True`, verdict read, findings not\". As far as I can tell, today's parser can't produce it. The findings-mismatch path only fires for CONCERNS/FAIL with no findings. The only PASS that can carry `fallback_used=True` is a derived one, and that always has findings.\n\nFix: either drop D6 and SC7 (line 292) as handling a case that doesn't exist, or base the notice on whether the model's own findings list was empty, ignoring the synthetic finding (for example, check before `impose_diff_coverage` prepends it). Then add a regression test that a derived-verdict review renders no notice.",
+   "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:158-162"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "D9's id capture leaves out the `gemini` profile, which uses the OpenAI-compatible path",
+   "description": "D9 (line 185) and the Risk section (lines 359-363) rely on walkthrough step 6 to collect each profile's real `answering_models` before merge, so the strict equivalence rule doesn't flag false substitutions. Step 6 lists sdk, openai, openrouter and local. `gemini` is also a built-in profile on the OpenAI provider type: Google's OpenAI-compatible endpoint, the same code path as D8's `chunk.model`. Slice 906 lists it in the six-profile matrix.\n\nIf Gemini returns a slightly different id form than the one requested, every Gemini review would write `requestedModel` and log a WARNING. That breaks the slice plan's Part C requirement that \"an alias resolving to its own snapshot is not reported as a substitution\" (`900-slices\u2026md:443`). It also breaks D10's promise that `requestedModel` appearing means a real substitution.\n\nFix: add `gemini` to step 6 and to D9's list of profiles to capture. Also say what happens to a profile whose credentials aren't available at walkthrough time. It shouldn't silently go unchecked; record it as uncaptured in the DEVLOG.",
+   "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:348-353"
+  },
+  {
+   "i": 2,
+   "severity": "NOTE",
+   "title": "Handling of a missing `chunk.model` is assumed, not stated",
+   "description": "Line 58 treats `ChatCompletionChunk.model` as guaranteed on every chunk. The servers behind the `local` and `gemini` profiles are not OpenAI and may not follow that. D8 already handles an empty value (\"last non-empty\"), and D11 gives a well-defined \"not reported\" result for an empty list. One sentence would close the gap: an absent attribute counts the same as empty and leads to D11, never an exception. A stream cut off before the final Message is a provider failure, which D13 already covers.",
+   "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:58"
+  },
+  {
+   "i": 3,
+   "severity": "NOTE",
+   "title": "`aiModel` changes meaning in the cross-tool frontmatter contract",
+   "description": "Slice 911 calls review frontmatter a cross-tool contract with context-forge. D5 records a grep of context-forge for `verdictSource` readers, but nothing similar is recorded for `aiModel`. The design says its new meaning is \"the meaning its consumers assumed all along\" without that check. The metrology break for dated OpenAI judges is acknowledged at line 196. Recording a context-forge grep for `aiModel` would put the claim on the same footing as D5.",
+   "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:273-274"
+  }
+ ]
+}

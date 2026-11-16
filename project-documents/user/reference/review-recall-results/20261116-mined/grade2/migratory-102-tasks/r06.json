@@ -1,0 +1,54 @@
+{
+ "review": "r06",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Vectorization requirement has no task or acceptance check",
+   "description": "The slice's Technical Requirements say: \"Both forces are vectorized within each agent's neighborhood \u2014 no nested Python loops\" (slice line 395-396). Neither 3.1 nor 4.1 mentions it. Task 4.1 writes the weighted heading as `sum(velocity[i] * leadership[i]) / sum(leadership)`, which a junior implementer could easily code as a Python loop over neighbors. Add a step to 4.1 saying it must use NumPy fancy indexing, for example `(state.velocities[nbrs] * state.leadership[nbrs, None]).sum(axis=0) / state.leadership[nbrs].sum()`, with only the outer per-agent loop allowed. Add a matching step to 3.1, and make both checkable in review.",
+   "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:110-122"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Convergence and differentiation assertions are weaker than the slice requires",
+   "description": "- **5.2 (line 153):** it only asserts that the mean heading has a positive x-component. The slice criterion is that the mean heading \"converges toward the leaders' initial heading\" (slice line 391). Almost any small drift would pass this. Assert an angle threshold against `[1, 0]` instead, such as mean heading within \u00b130\u00b0 of east, or a minimum normalized eastward component.\n- **5.3 (lines 160-161):** it accepts \"lower heading variance **or** stronger eastward bias.\" The slice's Verification Walkthrough step 4 expects the herding run to show lower variance **and** an eastward bias, while the flocking run shows no directional preference. With \"or\", a run that satisfies only one condition still passes. Use \"and\", and name the metric and margin (for example, herding circular variance below flocking circular variance by a fixed delta). \"Statistically measurable\" needs a concrete threshold, or a junior implementer can't write the assertion.",
+   "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:147-162"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "LeadershipForce known-case test has no exact expected value",
+   "description": "The success criterion \"Each force produces the correct output for hand-constructed inputs\" calls for an exact check. Task 3.2 gives MomentumForce an exact expected value (`[3.0, 0.0]`), but 4.2 only says the force \"biases toward agent 1's heading.\" The value is easy to compute: weighted heading = (0.1\u00b7[0,1] + 0.9\u00b7[1,0]) / 1.0 = [0.9, 0.1]. Agent 2's velocity is zero, so the force is `[0.9, 0.1]` with `leadership_weight=1.0`. State that as the expected value. The uniform-leadership test (line 127) also only says \"similar to plain velocity averaging.\" With equal weights the result should equal the arithmetic mean of neighbor velocities minus the agent's velocity, so assert equality.",
+   "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:126-127"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Commit points are checkbox tasks, not `**Commit**:` markers",
+   "description": "Tasks 1.3, 2.3, 3.3, 4.3, 5.4 and 6.3 are `[ ]` checklist items. Commit markers must be plain `**Commit**:` lines, never checkboxes. The commit points themselves are well placed, each after a tested unit, so 1.3\u20135.4 only need converting to plain marker lines. Task 6.3 (lines 180-182) is different: it commits \"any remaining changes\" as `docs: complete slice 102`. After 5.4, the only remaining changes would be check-offs, which breaks \"never make a commit that only checks boxes.\" Remove 6.3.",
+   "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:48-49"
+  },
+  {
+   "i": 4,
+   "severity": "NOTE",
+   "title": "Section 6 repeats earlier checks",
+   "description": "Task 6.2 repeats the `isinstance` checks already in 3.1, 3.2, 4.1 and 4.2. Task 6.1's \"No warnings about missing fields or deprecated patterns\" can't be checked as written. Fold the full-suite run (6.1) into 5.4 as its verification step, and drop 6.2 and 6.3.",
+   "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:169-182"
+  },
+  {
+   "i": 5,
+   "severity": "NOTE",
+   "title": "MomentumForce formula reduces to `velocity * momentum_weight`",
+   "description": "`heading * speed * weight` is mathematically `velocity * weight`, and the epsilon guard returns zero in the same case where that product is already about zero. The steps follow the slice sketch as written, so this isn't a gap. The implementer could still use the simpler form with a vectorized operation over `active_indices`, which also meets the vectorization requirement for this force.",
+   "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:84-88"
+  },
+  {
+   "i": 6,
+   "severity": "NOTE",
+   "title": "Possible non-test `AgentState` constructor callers aren't checked",
+   "description": "Task 1.1 adds `leadership` to `__init__`. Task 1.2 only checks test files for direct constructor calls. If any code under `src/` (for example `create()` itself, or anything else that builds an `AgentState`) calls `__init__` directly, it would also need updating. Add a step to 1.1: search `src/` for `AgentState(` and update any callers.",
+   "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:34-45"
+  }
+ ]
+}

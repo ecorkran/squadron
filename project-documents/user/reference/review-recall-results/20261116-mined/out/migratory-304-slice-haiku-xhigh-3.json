@@ -1,0 +1,333 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "post_tick is skipped on zero-entity ticks",
+      "description": "The normative `step()` (lines 272\u2013288) copies the zero-entity early `return` from 303's `step()` (303 slice, line 259) and places it before `post_tick()`. With no entities, `pre_tick()` runs and `post_tick()` does not. `500-arch` (two-phase update, lines 54\u201358) requires the pair: `post_tick` must follow the engine tick, and the environment is immutable only between the two calls.\n\nThe design contradicts itself. Line 291 and Special Considerations line 408 both require `post_tick()` with zero entities. The sketch at lines 176\u2013191 is correct, so the document now holds two different `step()` definitions. Keep one `step()` that guards only `engine.tick()`, and add a zero-entity test that asserts `post_tick` is called.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "project-documents/user/slices/304-slice.environment-layer-integration.md:272-291"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Environment-to-engine and post-tick write contracts are not implemented",
+      "description": "Two architectural contracts are unmet, and the design does not say it is changing them.\n- `500-arch` (lines 52, 81) and the 500 slice (line 422) say the server passes the environment, or its `query` method, to `engine.tick()` as environmental context. The slice plan's 304 entry says the same, and 303 (line 313) expects 304 to \"add environment context to the tick.\" This design passes the environment only to `SimulationManager` and captures it in force constructors. That may be a sound choice because it avoids changing the engine signature, but it must be recorded as a deliberate change in `500-arch` and the plan.\n- The plan's 304 entry requires \"Handle post-tick environment writes.\" `500-arch` (lines 56, 83, 104) has `post_tick(trail_deposits, threat_mutations)` receive values the engine returns alongside agent state. Here `post_tick()` is called with no arguments (line 288), and no section says how deposits or mutations reach the server. Line 196 says post_tick applies \"agent-originated writes,\" but there is no data path for them. Specify the engine's return contract, or state that 505/506 own it and show the call site.",
+      "file_ref": null,
+      "category": "interface",
+      "raw_category": null,
+      "location": "project-documents/user/slices/304-slice.environment-layer-integration.md:200-216"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Environment-aware forces have no owner",
+      "description": "Line 46 assigns environment-aware forces to the \"behavior engine initiative (100).\" The 303 slice (line 44) assigns \"Environment-driven forces\" to 304. Initiative 100's slice plan (`100-slices`, lines 41\u201348) has no terrain, resource, or threat force slice. The only entries that mention the environment are swarm (106) and migration (107). Both documents exclude the forces, so nothing owns them, yet line 27 says this slice \"enables\" them. Name an owner and add the forces to that owner's plan entry, or remove the claim from line 27.",
+      "file_ref": null,
+      "category": "scope",
+      "raw_category": null,
+      "location": "project-documents/user/slices/304-slice.environment-layer-integration.md:46"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Plan-assigned grid and layer configuration is deferred",
+      "description": "The slice plan's 304 entry assigns \"seed, grid resolution, layer selection\" to this slice's YAML configuration, and `500-arch` (line 137) says the server expects those keys. The design keeps only `seed`. It excludes grid resolution and layer selection (line 48), with the rationale at line 153. Either add the keys now (for example, a reserved `environment` namespace that fails validation when these keys are set) or record in the plan that they moved. Line 153 also leaves the layer-config location open (\"likely under `simulation.environment.layers.*` ... or ... slice 507\"). That location becomes a public config surface in this slice, so decide it here.",
+      "file_ref": null,
+      "category": "scope",
+      "raw_category": null,
+      "location": "project-documents/user/slices/304-slice.environment-layer-integration.md:48"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Terrain summary in snapshots is deferred with no receiving slice",
+      "description": "The slice plan's 305 entry says \"Terrain summary in snapshots deferred to (304).\" Line 47 excludes it as future work and names no slice, so the assignment is dropped. Either include the summary, stating that it is empty until 501 registers terrain, or change the plan so that 501 owns it.",
+      "file_ref": null,
+      "category": "scope",
+      "raw_category": null,
+      "location": "project-documents/user/slices/304-slice.environment-layer-integration.md:47"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Seasonal parameter plumbing is speculative and mis-described",
+      "description": "The plan gives the seasonal value to 308 (\"seasonal cycle parameter (continuous 0\u20131 value advancing per tick)\"). This slice still adds a `seasonal_parameter` argument to `step()` (line 176), a `_seasonal_parameter` field that nothing reads or writes (line 119), and a literal `0.0` repeated at lines 39, 45, 103, 176, and 198. Line 198 calls 0.0 a \"mid-season\" environment, but on a 0\u20131 cycle 0.0 is an endpoint.\n\nKeep one named placeholder constant, pass it to `pre_tick` from one place, and drop the parameter and the field. The document should say that 308 replaces the constant. The frontmatter `interfaces` should also list 504 (seasonal interpretation), which consumes this value.",
+      "file_ref": null,
+      "category": "proportionality",
+      "raw_category": null,
+      "location": "project-documents/user/slices/304-slice.environment-layer-integration.md:198"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Optional environment contradicts itself and falls back silently",
+      "description": "The design says the environment is always present and avoids `None` checks. But `SimulationManager` takes `Environment | None = None` (line 263), and `step()` has two `is not None` branches (lines 273, 287). Skipping the lifecycle when no environment is passed is the silent fallback that CLAUDE.md forbids.\n\nThe backward-compatibility claim that existing tests \"continue to work without modification\" (line 410) contradicts lines 354 and 407, which say every `step()` call must change. Make `environment` a required constructor argument and update the tests that must change anyway.",
+      "file_ref": null,
+      "category": "architecture",
+      "raw_category": null,
+      "location": "project-documents/user/slices/304-slice.environment-layer-integration.md:218-220"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Environment seed silently defaults to 42",
+      "description": "The `environment` section is optional, and `seed` defaults to 42 (lines 149\u2013151, 231, 250). `300-arch` (line 47) describes the environment seed as \"explicit configuration, not hard-coded defaults.\" 303 (line 389) requires missing config to fail rather than fall back. Once layers 501+ use the seed, a config that omits it silently produces a fixed world. Require `environment.seed` in `default.yaml` and fail validation when it is absent. Keep the default out of the code path.",
+      "file_ref": null,
+      "category": "configuration",
+      "raw_category": null,
+      "location": "project-documents/user/slices/304-slice.environment-layer-integration.md:151"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "NFR for the tick path is not restated",
+      "description": "The slice adds two environment calls to the tick body. `300-arch` sets the tick budget at 20\u201360 Hz with overrun warnings (line 78) and an operating range of 10K\u201350K entities on one CPU (line 94). The Success Criteria (lines 341\u2013357) state no timing or overhead target. Restate the budget, and set a target for the empty-environment path that the 301 overrun metric can check at the low end of the entity range.",
+      "file_ref": null,
+      "category": "nfr",
+      "raw_category": null,
+      "location": "project-documents/user/slices/304-slice.environment-layer-integration.md:341-357"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Failure behavior of pre_tick and post_tick is undefined",
+      "description": "The design does not say what happens if `pre_tick` or `post_tick` raises. `500-arch` (line 66) makes invalid inputs raise `ValueError`, and layers can fail in other ways. Slice 301 defines no tick-body exception policy (lines 153, 170\u2013178). A failure could therefore leave the environment between pre and post, skip the engine tick, and stop the loop with no defined state. `300-arch` (line 45) requires defined error states and no silent failures.\n\nDefine the policy here, or point to where 301 defines it. A reasonable policy is to log at ERROR with `logger.exception`, stop the server cleanly, and test that signal.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/304-slice.environment-layer-integration.md:100-108"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Bounds ownership and the entity-bounds invariant are unstated",
+      "description": "Line 113 says the environment's bounds are \"shared with entity manager,\" but nothing wires that. 303 (line 283) passes the config's `world_bounds` directly to `EntityManager`, while this design converts the same config separately for the environment, creating two objects.\n\nThe larger problem is the invariant. The 500 contract raises `ValueError` for any out-of-bounds query position (500 slice, `Environment.query`), and boundary handling is a future event source (`300-arch`, line 88). The first environment-aware force will fail the whole batch when an agent drifts outside the bounds. Name the owner of that handoff and state the failure mode, or drop \"shared.\"",
+      "file_ref": null,
+      "category": "integration",
+      "raw_category": null,
+      "location": "project-documents/user/slices/304-slice.environment-layer-integration.md:113"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Overweight for a slice planned at effort 2/5",
+      "description": "Cut candidates:\n- The illustrative `TerrainResistance` block (lines 204\u2013214), which says \"not built here.\"\n- The tick-cycle restatement in Value (line 23), and the Data Flow section, which repeats the integration points.\n- The duplicate `step()` definition at lines 272\u2013288. Keep one definition (see the FAIL finding).\n- The unchanged-file tree (lines 68\u201378) and the \"Environment is Always Present\" rationale (lines 218\u2013220), which go away with the optional path.\n\nKeep the config field, the `SimulationManager` changes, the tick-body change, and the tests.",
+      "file_ref": null,
+      "category": "proportionality",
+      "raw_category": null,
+      "location": "project-documents/user/slices/304-slice.environment-layer-integration.md:204-214"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Architecture and plan text still describe the old tick cycle",
+      "description": "Line 23 says the tick cycle \"matches the architecture.\" The six-step cycle in `300-arch` (lines 59\u201366) has one environment step before behavior evaluation and no post-evaluation step. The slice plan's 304 entry still says `environment.update()`, and `500-arch` (lines 72, 137) already flags that. Once this design is accepted, update `300-arch` step 2 to show `pre_tick` and `post_tick`, and update the plan entry. Until then, the claim holds only against `500-arch`.",
+      "file_ref": null,
+      "category": "documentation",
+      "raw_category": null,
+      "location": "project-documents/user/slices/304-slice.environment-layer-integration.md:23"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Verification walkthrough contradicts the config change",
+      "description": "Step 2 runs `default.yaml` \"with environment section omitted,\" but lines 79\u201380 say this slice adds that section to `default.yaml`. Use a separate fixture for the omitted case. Also add a test that loads the real `default.yaml`, since CLAUDE.md requires a real-input test for any config parser that falls back to a default. Step 3 expects the server to load seed 12345, which nothing observes at runtime in this slice, so make it a unit-test assertion.",
+      "file_ref": null,
+      "category": "testing",
+      "raw_category": null,
+      "location": "project-documents/user/slices/304-slice.environment-layer-integration.md:368-373"
+    },
+    {
+      "severity": "PASS",
+      "title": "Dependency direction and the 500 interface are used as defined",
+      "description": "The server depends on the environment package, not the reverse. The `Environment(bounds, layers)`, `WorldBounds(origin_x, origin_y, extent_x, extent_y)`, and `pre_tick(tick_number, seasonal_parameter)` usages match the 500 slice (lines 33, 36, 274\u2013276). The 303 and 500 prerequisites are both marked complete, and `SimulationManager` is extended from the 303 design. The gaps are in the findings above.",
+      "file_ref": null,
+      "category": "architecture",
+      "raw_category": null,
+      "location": "project-documents/user/slices/304-slice.environment-layer-integration.md:52-62"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "post_tick is skipped on zero-entity ticks",
+      "location": "project-documents/user/slices/304-slice.environment-layer-integration.md:272-291",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "interface",
+      "raw_category": null,
+      "summary": "Environment-to-engine and post-tick write contracts are not implemented",
+      "location": "project-documents/user/slices/304-slice.environment-layer-integration.md:200-216",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "scope",
+      "raw_category": null,
+      "summary": "Environment-aware forces have no owner",
+      "location": "project-documents/user/slices/304-slice.environment-layer-integration.md:46",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "scope",
+      "raw_category": null,
+      "summary": "Plan-assigned grid and layer configuration is deferred",
+      "location": "project-documents/user/slices/304-slice.environment-layer-integration.md:48",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "scope",
+      "raw_category": null,
+      "summary": "Terrain summary in snapshots is deferred with no receiving slice",
+      "location": "project-documents/user/slices/304-slice.environment-layer-integration.md:47",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "proportionality",
+      "raw_category": null,
+      "summary": "Seasonal parameter plumbing is speculative and mis-described",
+      "location": "project-documents/user/slices/304-slice.environment-layer-integration.md:198",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "concern",
+      "category": "architecture",
+      "raw_category": null,
+      "summary": "Optional environment contradicts itself and falls back silently",
+      "location": "project-documents/user/slices/304-slice.environment-layer-integration.md:218-220",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "concern",
+      "category": "configuration",
+      "raw_category": null,
+      "summary": "Environment seed silently defaults to 42",
+      "location": "project-documents/user/slices/304-slice.environment-layer-integration.md:151",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "concern",
+      "category": "nfr",
+      "raw_category": null,
+      "summary": "NFR for the tick path is not restated",
+      "location": "project-documents/user/slices/304-slice.environment-layer-integration.md:341-357",
+      "location_verified": true
+    },
+    {
+      "id": "F010",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "Failure behavior of pre_tick and post_tick is undefined",
+      "location": "project-documents/user/slices/304-slice.environment-layer-integration.md:100-108",
+      "location_verified": true
+    },
+    {
+      "id": "F011",
+      "severity": "concern",
+      "category": "integration",
+      "raw_category": null,
+      "summary": "Bounds ownership and the entity-bounds invariant are unstated",
+      "location": "project-documents/user/slices/304-slice.environment-layer-integration.md:113",
+      "location_verified": true
+    },
+    {
+      "id": "F012",
+      "severity": "concern",
+      "category": "proportionality",
+      "raw_category": null,
+      "summary": "Overweight for a slice planned at effort 2/5",
+      "location": "project-documents/user/slices/304-slice.environment-layer-integration.md:204-214",
+      "location_verified": true
+    },
+    {
+      "id": "F013",
+      "severity": "note",
+      "category": "documentation",
+      "raw_category": null,
+      "summary": "Architecture and plan text still describe the old tick cycle",
+      "location": "project-documents/user/slices/304-slice.environment-layer-integration.md:23",
+      "location_verified": true
+    },
+    {
+      "id": "F014",
+      "severity": "note",
+      "category": "testing",
+      "raw_category": null,
+      "summary": "Verification walkthrough contradicts the config change",
+      "location": "project-documents/user/slices/304-slice.environment-layer-integration.md:368-373",
+      "location_verified": true
+    },
+    {
+      "id": "F015",
+      "severity": "pass",
+      "category": "architecture",
+      "raw_category": null,
+      "summary": "Dependency direction and the 500 interface are used as defined",
+      "location": "project-documents/user/slices/304-slice.environment-layer-integration.md:52-62",
+      "location_verified": true
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/304-slice.environment-layer-integration.md",
+    "against": "project-documents/user/architecture/300-slices.worldserver-foundation.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/migratory-304-slice"
+  },
+  "timestamp": "2026-11-16T14:00:29.374314",
+  "model": "claude-haiku-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 9,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-haiku-5-5",
+  "answering_models": [
+    "claude-haiku-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 15,
+    "in_fences": 0,
+    "in_section": 15,
+    "surviving": 15
+  },
+  "effort": "xhigh",
+  "profile": "sdk",
+  "turns": 10,
+  "prompt_tokens": 644371,
+  "cached_tokens": 490049,
+  "cache_write_tokens": 154310,
+  "completion_tokens": 67910,
+  "reasoning_tokens": null,
+  "duration_seconds": 288.9482309159357,
+  "cost_usd": 0.25583725,
+  "cost_basis": "provider"
+}

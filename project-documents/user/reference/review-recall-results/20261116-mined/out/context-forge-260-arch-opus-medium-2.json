@@ -1,0 +1,260 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "A half-finished adoption is classified as \"already planned\" and cannot be resumed",
+      "description": "The outcome rules (lines 75-77) say a repo is \"already planned\" once it holds an initiative plan, an architecture doc or a slice plan. The adoption flow (line 91) writes the concept, then the derived architecture, then the existing-state slice plan, in that order. Suppose a session dies after the architecture is written but before the slice plan. Detection now returns \"already planned\", and `sq onboard` step 2 (line 88) says \"adoption doesn't apply\". `cf next` then navigates it like any planned project. It will most likely recommend an ordinary slice-plan phase, and that slice plan will have no retroactive entries.\n\nThe original contract handled this with \"a re-run resumes from whatever artifacts exist\" (line 136). That behavior went away along with the adoption state, and nothing replaced it. The line-28 claim \"the files say whether a project is planned\" holds only if all three artifacts are written together.\n\nThe 271 report is the contract squadron will build against, so this needs settling before 271's design. Either:\n- tighten \"already planned\" so it requires a slice plan; or\n- have the report list which artifact types are present (concept, architecture, slice plan, retroactive entries), so `sq onboard` can tell \"partly adopted\" from \"planned\".",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md:73-81"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The opt-out is checked before \"already planned\", so a project that opted out stays greenfield forever",
+      "description": "The order is opt-out first, then already planned. A user who opts out goes through the greenfield phases and writes a concept, an architecture and a slice plan. That project still reports `greenfield` for good. `cf init`, `cf next` and `sq onboard` all read the same report (line 48). Any of them that treats `greenfield` as \"fresh project\" will be wrong for this project, which is the same mistake `detectFirstRunContext` makes today (line 59).\n\nThe opt-out only means something when no planning artifacts exist. Check \"already planned\" first, or limit the opt-out to choosing between brownfield and greenfield.",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md:75-77"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "cf finds the comprehension doc by squadron's filename, although `sq onboard` already knows its path",
+      "description": "Row (b) and line 50 have cf find squadron's doc by filename pattern (`{n}-analysis.codebase-comprehension.md`), `docType`, and \"squadron 361's provenance block\". That ties cf to squadron's naming scheme and document format. It is the only place cf depends on squadron, and it contradicts \"cf never \u2026 parses squadron output\" (line 50).\n\nUnder the amended flow, `sq onboard` writes the comprehension doc itself in step 3 and calls cf's prompt delivery in step 4 (lines 89-90). It can simply pass the path as an argument.\n\nThe filename lookup also leaves several failure cases undefined:\n- more than one `{n}-analysis.codebase-comprehension.md` after refreshes;\n- a stale doc left over from an earlier run;\n- a doc whose `docType` doesn't match.\n\nIf the primitive takes an explicit path instead, cf has no dependency on squadron at all, and these cases go away.",
+      "file_ref": null,
+      "category": "dependencies",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md:119"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The prompt-delivery primitive is underspecified and risks becoming a second `cf build`",
+      "description": "Line 136 defers \"how the profile's variables are delivered\" to slice 271. The `brownfield-adoption` profile is `[fileConcept, fileArch, fileSlicePlan, fileComprehension]`. To serve it, the primitive has to resolve the same context variables, profiles and template substitution that `ContextIntegrator` and `ContextTemplateEngine` handle for `cf build`.\n\nThat leaves two options:\n- duplicate that resolution logic, which breaks DRY; or\n- call into the build pipeline, which puts back the adoption branch that slice 268 removes.\n\nThe design should say which. A third option is to treat the adoption prompt as an ordinary `cf build` phase or profile that is selected explicitly, rather than by detection. That would keep `cf build` pure with no new primitive.\n\nIt is also unclear how one prompt covers concept, architecture and slice plan when normal navigation would send the agent to a phase-specific `cf build` after each artifact. This ties into the resume gap above.",
+      "file_ref": null,
+      "category": "feasibility",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md:136"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "No explanation of how `cf next` skips the initiative-plan phase for an adopted project",
+      "description": "The normal CF sequence is concept, initiative plan, architecture, slice plan. The adoption flow writes concept, architecture and slice plan, with no initiative plan (line 91, and Baseline artifacts on lines 96-100). The doc claims that \"`cf next` points at the first unbuilt slice\" because retroactive entries count as complete. It doesn't address whether the navigator or the `missing-artifact` rule will flag the missing initiative plan, or send the user back to that phase.\n\nLine 60 only says that `missing-artifact` tolerates plan entries without a design. Nothing says the parent chain may be missing a link. Either have adoption write a minimal initiative plan, or state the navigator and checker rule that allows a derived architecture with no initiative-plan parent.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md:102-104"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Superseded content contradicts the current design",
+      "description": "The amendment says the sections were \"rewritten to match\" (line 24). Several still describe removed behavior as if it were current:\n- **Guide release coupling (line 137):** says the fail-fast rule \"moves to the prompt-delivery primitive\", then still says \"`cf build` fails with a named error\" when the profile is missing.\n- **Dependencies (line 159):** names guide v0.22.2 as the minimum because it \"fixed the squadron-path gate\". That raw-probe gate is exactly what line 136 says goes away. It also cites the probe's `surfaces.<s>.concept`, which no longer exists. The real minimum is whatever release 272 picks.\n- **Row (c) (line 120):** \"CF writes the architecture doc on both paths\". There is now only one path, and the agent writes the doc, not cf.\n- **Anticipated Slices (lines 147-151):** still lists \"persisted adoption state\", \"`cf build` selecting the profile\" and \"adoption steps while in progress\" as the plan.\n- **Technical Considerations (line 135):** a full paragraph on the probe contract, kept \"for history\".\n\nAn architecture doc that mixes current and dead contracts leads slice designers to build against the wrong one. Move the history to the review file or a changelog, and keep this doc to the current design.",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md:131-160"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The responsibility table doesn't say who writes the concept",
+      "description": "The concept row says it is written \"from the comprehension doc and repo prose (squadron 363, or the guide's adoption prompt)\", with \"exactly one writer per run\". It doesn't say which one, or who decides. Step 5 of the flow (line 91) has the agent draft it from cf's adoption prompt. Squadron 363's concept flow is complete (line 63), and the guide added a 363 concept step in v0.22.1 (line 159).\n\nIf both are present, one `sq onboard` run could produce the concept either way. The prompt-delivery contract needs to know whether a 363 concept may already exist when it is called.\n\nRows (c) and (d) also say \"CF\" owns artifacts that cf no longer writes. Say plainly that cf owns the format, parsing and checker rules, and that the agent, driven by the guide prompt, writes the content.",
+      "file_ref": null,
+      "category": "abstraction",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md:125"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Building primitive 271(b) before its only consumer is designed",
+      "description": "`sq onboard` doesn't exist yet, and adoption is parked (line 33). The project-state report (271a) has users inside cf today: `cf init` and the one-line notice in `cf next`. Prompt delivery (271b) has no consumer until `sq onboard` is designed. Slice 271's own risk note says to \"confirm it with the sq session before design is final\".\n\nBuilding 271b now means freezing a cross-repo API that has no client, and it would probably change once `sq onboard` is designed. Defer 271b, together with the profile-delivery question, until `sq onboard`'s design is in hand. That would also settle the comprehension-path question above.",
+      "file_ref": null,
+      "category": "antipattern",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md:143"
+    },
+    {
+      "severity": "NOTE",
+      "title": "\"Set only by the adoption flow\" can't be enforced",
+      "description": "The adoption flow is now an agent editing markdown under a guide prompt, so cf can't tell who set the marker. The only real safeguard is the checker error raised when a retroactive entry has a design or task file. That catches misuse only after the process has been followed. An entry for unbuilt work marked retroactive with no design passes silently.\n\nRewrite the sentence to state the actual guarantee: the checker rule and review-gate skip semantics. Don't claim a provenance restriction cf can't check.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md:100"
+    },
+    {
+      "severity": "NOTE",
+      "title": "A \"one-time\" notice for old config values needs stored state",
+      "description": "Slice 269 (in `260-slices.brownfield-adoption.md`, not this doc) ignores old `in_progress` and `complete` values \"with a one-time notice\". Showing a notice only once means storing that it was shown, which is a second stored value. That conflicts with line 79: \"the only stored value is the opt-out\". Either show the notice every time until the key is cleared, or have the notice remove the old value itself.",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "unverified"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Frontmatter `relatedSlices` is empty",
+      "description": "`relatedSlices: []`, although slices 260\u2013274 exist and are referenced throughout the doc.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md:10"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "A half-finished adoption is classified as \"already planned\" and cannot be resumed",
+      "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md:73-81",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "The opt-out is checked before \"already planned\", so a project that opted out stays greenfield forever",
+      "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md:75-77",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "dependencies",
+      "raw_category": null,
+      "summary": "cf finds the comprehension doc by squadron's filename, although `sq onboard` already knows its path",
+      "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md:119",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "feasibility",
+      "raw_category": null,
+      "summary": "The prompt-delivery primitive is underspecified and risks becoming a second `cf build`",
+      "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md:136",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "No explanation of how `cf next` skips the initiative-plan phase for an adopted project",
+      "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md:102-104",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "Superseded content contradicts the current design",
+      "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md:131-160",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "concern",
+      "category": "abstraction",
+      "raw_category": null,
+      "summary": "The responsibility table doesn't say who writes the concept",
+      "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md:125",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "concern",
+      "category": "antipattern",
+      "raw_category": null,
+      "summary": "Building primitive 271(b) before its only consumer is designed",
+      "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md:143",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "note",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "\"Set only by the adoption flow\" can't be enforced",
+      "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md:100",
+      "location_verified": true
+    },
+    {
+      "id": "F010",
+      "severity": "note",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "A \"one-time\" notice for old config values needs stored state",
+      "location": "unverified",
+      "location_verified": null
+    },
+    {
+      "id": "F011",
+      "severity": "note",
+      "category": "other",
+      "raw_category": null,
+      "summary": "Frontmatter `relatedSlices` is empty",
+      "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md:10",
+      "location_verified": true
+    }
+  ],
+  "template_name": "arch",
+  "input_files": {
+    "input": "project-documents/user/architecture/260-arch.brownfield-adoption.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/context-forge-260-arch"
+  },
+  "timestamp": "2026-11-16T13:04:50.116995",
+  "model": "claude-opus-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 4,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-opus-5-5",
+  "answering_models": [
+    "claude-opus-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 11,
+    "in_fences": 0,
+    "in_section": 11,
+    "surviving": 11
+  },
+  "effort": "medium",
+  "profile": "sdk",
+  "turns": 5,
+  "prompt_tokens": 312510,
+  "cached_tokens": 237371,
+  "cache_write_tokens": 75131,
+  "completion_tokens": 8332,
+  "reasoning_tokens": null,
+  "duration_seconds": 90.61625008308329,
+  "cost_usd": 0.8159277,
+  "cost_basis": "provider"
+}

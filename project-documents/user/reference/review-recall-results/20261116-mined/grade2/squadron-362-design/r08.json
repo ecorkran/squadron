@@ -1,0 +1,68 @@
+{
+ "review": "r08",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "File-level selector replaces the architecture's node-type set with an exclusion",
+   "description": "The architecture defines file-level types as a nine-member named set and says function- and class-level nodes are not read (`360-arch`, Read discipline). The plan's 362 entry says to \"read only file-level node types\" (`360-slices`, 362 entry). Correction 2 instead uses `select(.type != \"function\" and .type != \"class\")`, which also reads any unrecognized type, including fine-grained types a future release might add. The design presents this as a fix, not as an architecture change.\n\nThe named set already covers the measured graph. The observed file-level types (`file`, `config`, `pipeline`) are all in it, so the architecture's allow-list yields the same 238 nodes. Recommend using the nine-type allow-list and reporting any node outside both the allow-list and the function/class exclusion as drift. That keeps the loud failure the architecture asks for on unknown types without reading fine-grained nodes. If the exclusion is kept, record it as an architecture amendment.",
+   "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:143-165"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Concept-section mapping that 363 depends on is missing",
+   "description": "The plan says 363 \"reuses the extraction mapping for Solution Approach and Initial Technical Direction\" (`360-slices`, 363 entry). The architecture's interview-scope table gives the concept-level sources: Solution Approach from `layers[]` and `tour[]` ordering; Initial Technical Direction from `project.languages`, `project.frameworks`, and `config` nodes; Development Approach from test/CI `config` nodes (`360-arch`, Interview scope).\n\nThis design's mapping (lines 172-180) is keyed on analysis sections, not concept sections. The Provides list (lines 299-301) names only project identity for Initial Technical Direction and layers/tour for Solution Approach. It gives no ordering rule, no config-node source, and nothing for Development Approach. Slice 363 would have to define these rows, which the plan assigns to 362. Add a concept-section mapping (sources, ordering, fallback for each of the five concept sections), or move that ownership to 363 and update the plan.",
+   "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:297-301"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Tour ordering is not used as the importance signal the plan assigns",
+   "description": "The plan's 362 entry says the mapping must define \"`tour[]` ordering as the signal for which components matter most\" (`360-slices`, 362 entry). The architecture calls tour ordering \"a strong signal for a concept's Solution Approach section\" (`360-arch`, output contract). This design maps `tour[]` only to a reading-order section (row 5; `tour[].description` at line 85). No rule maps tour position to importance, and the hotspot and dependency sections do not use it. Either define the importance mapping (for example, which tour steps' `nodeIds` fall in the top complexity tier) or record that the importance signal is deferred and to which slice.",
+   "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:178"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Closing-observation exception contradicts the zero-inference rule",
+   "description": "The design exempts \"the closing observation each section carries \u2014 the sentence that reads a pattern out of the data,\" with the example \"complexity concentrates in the seams where squadron meets an external SDK.\" Its test is that the sentence must be derivable from the table above it. The example fails that test. Reading file paths as \"seams\" and an \"external SDK\" is interpretation, the kind of inference the architecture rules out: \"A knowledge graph describes structure, not purpose,\" and nothing is \"invented from file names\" (`360-arch`, Design Goals). The exemption also conflicts with Success Criteria 3 (every claim traces to a field) and 8 (zero `[INFERRED]` markers).\n\nRecommend deleting the exemption. If a pattern sentence is wanted, limit it to a form that quotes table values, such as \"Packaged Declarative Content holds 34 nodes, 20 of them pipeline nodes,\" and state that this is the only permitted form.",
+   "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:245-250"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Nested-field drift is reported as a content gap, and config drift is silent",
+   "description": "The architecture says a renamed field \"must surface as a loud failure, never as a silently thinner document,\" and that shape validation should name the absent key and the graph version (`360-arch`, Preconditions). Preflight, inherited unchanged from 361, checks only top-level keys. Every nested field these sections read falls back to a gap marker instead: `project.*`, `nodes[].tags`, `nodes[].languageNotes`, `tour[].description`, and `edges[].weight`. A renamed `tags` key would produce \"[GAP: no node carries the entry-point tag \u2014 re-run /understand]\", which sends the reader to a command that cannot fix schema drift.\n\nConfig drift is handled the same way. Lines 227-231 decline to report the documented `autoUpdate` key as absent. Recommend checking key presence for each nested field a section reads, with the same loud error as top-level keys; using gap markers only for present-but-empty values; and reporting documented-but-absent config keys as an observation. This changes the preflight the design says it leaves unchanged, so the design should name where the check lives.",
+   "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:172-180"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "New failure paths have no specified signal and no walkthrough case",
+   "description": "The project review rules require each failure mode to be observable, with at least one test asserting the signal. Several paths in this design lack that:\n- `.understandignore` absent: the section 7 fallback (line 180) covers only \"unreadable.\" Lines 232-235 pair the all-comments case with \"this repo's current state has 17 active lines,\" which reads as if this repo were all-comments.\n- `config.json` absent or malformed: only \"unreadable\" is covered (line 180).\n- Drift cases: Correction 1 (lines 140-141) and Correction 2 (lines 160-161) say drift \"is reported,\" but no section, provenance line, or log is named.\n- `edges[].weight` absent on an edge: the ordering rule depends on it, with no fallback.\n\nThe walkthrough (lines 394-420) exercises only a missing `meta.json`, an empty `tour`, missing entry-point tags, and the `analyzedFiles` mismatch. Specify the signal for each path above, and add walkthrough cases for `.understandignore` absence, malformed `config.json`, and a function node inside a layer.",
+   "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:394-420"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "Frontmatter `model:` value has no source or failure path",
+   "description": "The walkthrough requires `model:` to \"read back as a real model id, not a placeholder.\" Neither this design nor the 361 contract it says is executed unchanged states where the skill gets its model identifier, or what it writes when none is available. As written, the check can only pass on a guessed value or fail with no defined behavior. Name the runtime source of the identifier. If it is unavailable, the skill should stop with an error or write an obviously-placeholder value that the walkthrough check detects. Pick one and state it.",
+   "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:380-381"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "Several sections exceed what this slice needs",
+   "description": "Three items can be cut or deferred without dropping a plan requirement:\n1. **\"Read discipline, unchanged\" (lines 282-293)** restates the 361 discipline. Keep the two deltas (added selections, widened filter) in two sentences with a cross-reference.\n2. **`languageNotes` annotation (line 84; section 4, lines 206-213)** is not in the plan's 362 scope and covers 40% of file nodes. Defer it to 364 or cut it.\n3. **Project identity section (lines 195-198)**: neither the architecture's comprehension outputs nor the plan lists it. The stated reason, feeding 363, is weak because 363 reads the mapping, not the rendered document. Keep the mapping row for 363 and defer the section unless the PM wants a reader-orientation opener.",
+   "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:282-293"
+  },
+  {
+   "i": 8,
+   "severity": "NOTE",
+   "title": "Dependency list and interface table are incomplete",
+   "description": "- `jq` is now a hard requirement (lines 284-286) but is not listed under Dependencies (lines 67-73). The architecture names `grep` for the read discipline (`360-arch`, Read discipline). Field-scoped `jq` meets that intent, but list the tool so the dependency is visible.\n- `nodes[].tags` is listed for \"section grouping\" (line 83), and no section groups by tag.\n- `tags` and `languageNotes` coverage was measured on file nodes only (lines 104-105). The widened selector adds 37 config and pipeline nodes, and the entry-point rule runs over all 238. Confirm the null-`tags` behavior in the walkthrough.",
+   "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:67-88"
+  }
+ ]
+}

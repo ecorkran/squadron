@@ -1,0 +1,117 @@
+{
+ "review": "r04",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "FAIL",
+   "title": "T7 precedence makes TIGHTEN unreachable below the floor, contradicting its own prose and T8",
+   "description": "The numbered precedence puts `n < floor \u2192 INSUFFICIENT_EVIDENCE` first (line 116). That returns before step 4, so `TIGHTEN` can never fire when `n < floor`. Line 119 and the T8 regression test at line 134 both require the opposite: a below-floor cell with a low match rate must return `TIGHTEN`. An implementer following the numbered list fails T8. The design's Direction Bands table (slice design lines 183-189) has the same first-match ordering, so the design is ambiguous as well. Whether an unversioned low-match cell may return `TIGHTEN` is also unstated.\n\nFix: state one order, for example (1) `match_rate <= tighten_rate` \u2192 TIGHTEN, not floor-gated; (2) `n >= floor and versioned and match_rate >= graduate_rate` \u2192 GRADUATE; (3) `n < floor or not versioned` \u2192 INSUFFICIENT_EVIDENCE; (4) otherwise HOLD. Decide the unversioned-TIGHTEN case explicitly and record it in the design.",
+   "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:115-121"
+  },
+  {
+   "i": 1,
+   "severity": "FAIL",
+   "title": "T13 assumes a result-enumeration surface that does not exist; its fallback makes the non-empty guarantee impossible",
+   "description": "T13 says to reuse \"320's existing result-discovery surface.\" The only review-file resolver in the metrology package is `resolve_target` (src/squadron/metrology/capture.py:68). It resolves one slice index at a time through a `{index}-review.*` glob. Nothing enumerates judge results by `JudgeConfigId`.\n\nThe task's fallback is to scope to \"store-recorded samples only.\" A stored sample already carries a result_ref, so it is by definition already sampled. That fallback yields zero unsampled results, so T13's success line (3 unsampled matches \u2192 3 offers) and T14's non-empty guarantee cannot pass. The task also says \"ask the Project Manager,\" which a junior AI cannot resolve alone.\n\nFix: get the PM decision before T13 starts. The likely answer is a new task (T13a) that enumerates judge review files under the reviews directory, derives each `JudgeConfigId` with `derive_judge_config_id` (identity.py), and excludes those that already have a stored sample. That is new capability, so the design should record it rather than leave it as an inline fallback.",
+   "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:200-201"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Malformed-judge failure mode has no test, the Coverage Check cites a test that doesn't exist, and the stated handling doesn't match `resolve_thresholds`",
+   "description": "The Failure Modes row (slice design line 242) says \"fall back to resolve_thresholds' documented merge; flag the target\" and \"not silently defaulted.\" `resolve_thresholds` has no fallback. It calls `float()` on each value (judge.py:54-57), so a non-numeric `pass_floor` raises `ValueError`. No task catches it, and no task flags the target. The Coverage Check (task file line 287) says this row is \"exercised in T8,\" but T8's bullets (lines 132-136) contain no malformed-block test.\n\nFix: decide the handling. The likely choice is that `read_current_thresholds` catches `ValueError` around `resolve_thresholds`, logs a WARNING naming the template, and returns None so the target is unresolvable, the same as an unregistered template. Any swallowed exception needs a comment justifying it under CLAUDE.md. Add the test to T8, correct the Coverage Check line, and change the design's \"fall back\" wording, since CLAUDE.md forbids silent fallbacks.",
+   "location": "src/squadron/pipeline/actions/judge.py:54-57"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "F4's runtime-drawn-model limitation is missing from T9's model_dimension_note, and no test asserts it",
+   "description": "Success criterion F4 (slice design line 270) requires the runtime-drawn-model limitation to appear \"where the recommendation is produced,\" and the design (line 201) says the note must state that a 180-pool step's threshold cannot track the drawn model. T9's note text (line 147) covers only the config-time pairing. T10 and T16 don't check for the runtime clause either.\n\nFix: add the clause to T9's note. It has to be unconditional text, because recommendations are per template and model and cannot know which steps draw models at runtime. Add a T10 assertion that the clause appears in every note, including in `--json` output.",
+   "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:147"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "T3 and T11 create an import cycle between models.py and calibration_models.py",
+   "description": "T3 puts `GraduatedConfig` in `calibration_models.py`, and its `judge_config` field is `JudgeConfigId`, which lives in `models.py:67`. T11 then adds `graduated_config: GraduatedConfig | None` to `MetrologyRecord` (models.py:100-111). That creates a cycle: models.py imports calibration_models, which imports models.py.\n\nFix: define `GraduatedConfig` in models.py beside `MetrologyRecord`, and have `calibration_models.py` import it from there. Make the decision in T3, before T11.",
+   "location": "src/squadron/metrology/models.py:100-111"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Existing-record compatibility (IR2) has no test",
+   "description": "The slice design's Integration Requirement (slice design line 283) says existing records must load unchanged after the `graduated_config` type is added. No task asserts it. T11's success line and T12 cover only new round-trips.\n\nFix: add to T12 a test that loads a sample-type record in the current store format, written before the change, and asserts it still loads with `graduated_config is None`.",
+   "location": "src/squadron/metrology/models.py:111"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "Commit markers sit after every task, and eight land before their tests",
+   "description": "There are 17 markers, one per task. The convention is markers at working, tested points, not after every task. The implementation-only markers at T1, T3, T5, T7, T9, T11, T13, and T15 all come before their test tasks, so those commits are untested when they are made.\n\nFix: keep markers only where an implementation and its tests are complete: after T2, T4, T6, T8, T10, T12, T14, T16, and T17. That gives nine tested commits. Adjust the T2 commit message so it covers the hash fix as well as the tests.",
+   "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:39"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "The three new config keys have no specified defaults, so T6's \"correct defaults\" cannot be checked",
+   "description": "T5 names the three keys and their types but gives no default values. The design (slice design lines 209-213) gives none either. T6 asserts \"correct \u2026 defaults.\" A junior AI would have to invent values, which CLAUDE.md forbids. `metrology.min_evidence_n` already has a default in config/keys.py:144, which T5 reuses.\n\nFix: name the default values in T5 once the PM sets them. If they are not set, mark the task `BLOCKED:` under it.",
+   "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:90-95"
+  },
+  {
+   "i": 8,
+   "severity": "CONCERN",
+   "title": "T13/T14 have no return contract for lapsed, exhausted, and pruned-file outcomes",
+   "description": "T13 fixes the signature as `-> list[OfferTarget]`, yet says the function must \"return enough information\" to report a lapse. It also offers the CLI re-deriving the lapse as an alternative. T14 then asserts \"whatever signal T13 produces\" (line 217), and the pruned-file case must be \"counted\" (line 218) with no field to hold the count. As written, the three cases cannot be asserted.\n\nFix: specify a return model, for example `ResidualSelection(offers: list[OfferTarget], lapsed: list[JudgeConfigId], pruned_count: int)`. Assign it to T3 or T13, and have T14 assert on its fields.",
+   "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:200-205"
+  },
+  {
+   "i": 9,
+   "severity": "CONCERN",
+   "title": "The graduation write and update surface is specified two ways, and the store helper has a wildcard that would break exact matching",
+   "description": "T11 describes `write_graduation(store, graduated)` as a module function in graduation.py, and also says to \"extend `MetrologyStore` with this method.\" T15 needs an idempotent in-place update, but no task defines an update function. `find_graduation` returns the model, not the record id, so the update path also needs the id. The store writes new record files with `_write_atomic` (store.py:103).\n\nSeparately, `_judge_config_matches` (store.py:64-77) treats a `None` hash in the filter as a wildcard. Reusing it in `find_graduation` would match a graduation for any hash, which breaks the exact-identity requirement. T11 mentions neither point.\n\nFix: place `write_graduation` on the store, mirroring `write_sample`. Add an explicit update path that takes the record id. State that `find_graduation` uses exact equality on all identity fields and must not reuse `_judge_config_matches`.",
+   "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:176-178"
+  },
+  {
+   "i": 10,
+   "severity": "CONCERN",
+   "title": "The Failure Modes table's empty-state signals are not built or tested in the CLI tasks",
+   "description": "The design's observable signals include a \"no evidence\" line for an empty store (slice design line 238) and \"no offers due\" for an exhausted config (line 245). T15 and T16 specify neither line, and T16 asserts neither. The review rule requires each failure mode to be observable and tested.\n\nFix: add both lines to T15, with one T16 assertion for each.",
+   "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:229-234"
+  },
+  {
+   "i": 11,
+   "severity": "CONCERN",
+   "title": "The task file is overweight: 17 tasks, eight test files, and several duplicated checks",
+   "description": "The design rates effort 3/5, and the file has 17 tasks, eight test files, and a nine-step walkthrough in T17. Suggested cuts:\n1. T6's \"project-level `.squadron.toml` override honored\" bullet is not a success criterion. Drop it.\n2. The no-mutation check appears in T10, T16, and T17 step 4. Keep the T10 unit assertion and the T17 walkthrough record. Drop or reduce the T16 duplicate.\n3. T17's instruction to update the 320 slice plan's `(322)` entry edits a planning document the design never mentions. Move it to the PM or drop it.\n\nKeep the test-with pairs, since the pattern requires them.",
+   "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md"
+  },
+  {
+   "i": 12,
+   "severity": "NOTE",
+   "title": "\"A documented path\" is ambiguous: it could mean the walkthrough or a user-facing doc",
+   "description": "T17 covers the walkthrough reading, since it pastes output into the design or a companion note. If the criterion means a user-facing doc, such as a `sq metrology recommend` section in a guide, no task writes it. Decide which is meant, then add a doc task if needed.",
+   "location": "project-documents/user/slices/322-slice.calibration-to-threshold-feedback.md:267"
+  },
+  {
+   "i": 13,
+   "severity": "NOTE",
+   "title": "\"321 consumed unchanged\" is not verified by any task",
+   "description": "Nothing checks that `report.py` and `report_models.py` are untouched. Add a diff check to T17 step 9, for example `git diff --stat` showing no change under `src/squadron/metrology/report*.py`.",
+   "location": "project-documents/user/slices/322-slice.calibration-to-threshold-feedback.md:282"
+  },
+  {
+   "i": 14,
+   "severity": "NOTE",
+   "title": "T9 and T7 signatures diverge from the design without being recorded",
+   "description": "The design (slice design line 83) gives `recommend_thresholds(agreement, *, floor, current: ThresholdSnapshot)`. T9 replaces `current` with `graduate_rate` and `tighten_rate`. T7's `classify_direction` gains `versioned`, `graduate_rate`, and `tighten_rate`. These changes look right, but `ThresholdSnapshot` appears nowhere in the design's model list, and the task does not say where `versioned` comes from (the cell's `JudgeConfigId.template_content_hash`). Record the changes in the design.",
+   "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:145"
+  },
+  {
+   "i": 15,
+   "severity": "NOTE",
+   "title": "Commit-marker form and two resolved hedges",
+   "description": "Markers are written `**Commit:**`, while the convention is `**Commit**:`. They are plain lines, not checkboxes, but confirm the tooling accepts this form. T2's \"check first\" hedge for `test_identity.py` and T6's hedge for `test_config.py` are both resolved: the files exist under tests/metrology.",
+   "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:39"
+  }
+ ]
+}

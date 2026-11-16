@@ -1,0 +1,207 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "The overwrite guard is on `save_review_file`, but `sq review code` saves through `save_review_result`",
+      "description": "T12 adds archive-on-overwrite only to `save_review_file` (`persistence.py:220`). The CLI review commands all save through `save_review_result` (`cli/commands/review.py:451,523,610,746`). That function calls `path.write_text(...)` directly at `persistence.py:300,303` and never goes through `save_review_file`. The pipeline action also uses `save_review_result` whenever it has `slice_info` (`pipeline/actions/review.py:255`).\n\nSo the success criterion \"Re-running `sq review code <N>` over an edited review file archives the prior content and warns\" stays unmet. The data loss reported in the slice's Overview also stays live. T13's tests would pass while the real path is still unguarded.\n\nFix: move the archive-verify-abort step into a shared helper that both writers call before `write_text`. Point T13 at `save_review_result`, the path `sq review code` actually uses.\n\n`save_review_result` also has no `OSError` handling and returns `Path`, not `Path | None`. The design's fail-closed rule (F003: \"the save returns None with an ERROR\") therefore needs a contract change there. Its callers in `cli/commands/review.py` also need to handle a `None` return. T12 says neither.",
+      "file_ref": null,
+      "category": "coverage-gap",
+      "raw_category": null,
+      "location": "src/squadron/review/persistence.py:257-314"
+    },
+    {
+      "severity": "FAIL",
+      "title": "Part 0 moves keep review\u2192pipeline imports, recreating the cycle F002 removes",
+      "description": "Two of the moves, as written, leave the new package importing from the pipeline package:\n\n- **T3 (`verification.py`):** It says to keep the import of `RoundDiff` from `pipeline.actions.findings_addressed.screens` and calls this the \"pipeline\u2192review direction\". It is the reverse. After the move, `review/addressed/verification.py` imports pipeline code, which is review\u2192pipeline.\n- **T5 (`judge_residue_core`):** Its signature takes `diff: RoundDiff` (today's `judge.py:21,94`), so the new `review/addressed/judge.py` has the same problem.\n- **T1 (`models.py`):** It moves the file \"verbatim\", but the file imports `squadron.pipeline.models.ActionResult` (`models.py:14`) for `read_findings`.\n\nAll three leave `review/addressed/` depending on `pipeline/`, the package-level cycle the design's \"Dependency direction (review F002)\" section forbids. The plan also points file 2's `review/resolution.py` at `review/addressed/`, and through these imports it would reach the pipeline anyway.\n\nFix:\n- Move the `RoundDiff` dataclass into `review/addressed/`. It is a plain value type; `compute_round_diff` and the screens can stay put and import it from there.\n- Either leave `read_findings(ActionResult)` in the pipeline package or change its parameter type.\n- Add a check to T8 that nothing under `src/squadron/review/` imports `squadron.pipeline`.",
+      "file_ref": null,
+      "category": "sequencing",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/actions/findings_addressed/verification.py:17"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "T11 tests only one of the two `reviewedSha` write paths",
+      "description": "The success criterion requires the stamp \"from both the CLI and the pipeline persistence paths\". T11's integration test targets \"`save_review_result` (or the pipeline review action, whichever is more directly testable)\", so only one path gets tested.\n\nThe pipeline action also has two branches: `save_review_result` when `slice_info` is present, and `format_review_markdown` plus `save_review_file` when it is not. T10 should name both branches. T11 should assert the stamp on the CLI path and on the pipeline action.",
+      "file_ref": null,
+      "category": "test-coverage",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/actions/review.py:245-272"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Part D commits at T13 before the T14 go/no-go check runs",
+      "description": "The slice's Phase 5 note says the cf `archive/`-scanning check must be \"sequenced before Part D lands\". The breakdown numbers it T14, after T12 and T13. It relies on prose (\"do not mark T12 done\u2026\"), while T13 still carries the commit for Part D. A junior agent following the list in order will commit the archive filename scheme before the check is done.\n\nFix: renumber T14 to come before T12. This also removes the circular wording \"T14 gates T12 even though it is numbered after it\".",
+      "file_ref": null,
+      "category": "sequencing",
+      "raw_category": null,
+      "location": "unverified"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "T12 leaves out the design's \"content still printed to terminal\" behavior on abort",
+      "description": "In the Part D implementation details, the design says that when an overwrite is aborted, \"the review content is still printed to the terminal\". T12 covers the ERROR log, the `None` return and not writing to the original, but says nothing about where the content goes. Without that, an aborted save throws away the new review output. T12 should state where the content is surfaced, most likely by the CLI caller when it gets `None`.",
+      "file_ref": null,
+      "category": "coverage-gap",
+      "raw_category": null,
+      "location": "unverified"
+    },
+    {
+      "severity": "NOTE",
+      "title": "T2, T4 and T6 could be folded into the tasks they verify",
+      "description": "T2, T4 and T6 each just re-run 305's existing suite and commit. That is reasonable for a move-only refactor. Folding each into its move task as the final checkbox would cut three tasks without losing any checkpoints.",
+      "file_ref": null,
+      "category": "granularity",
+      "raw_category": null,
+      "location": "unverified"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Commit markers are bullets inside tasks, not the standard plain line",
+      "description": "The commits are written as `- Commit:` bullets inside tasks, not the standard `**Commit**:` plain line. They are placed at sensible working, tested points: after each move, after Part A's tests, after Part D's tests. Only the format differs.",
+      "file_ref": null,
+      "category": "format",
+      "raw_category": null,
+      "location": "unverified"
+    },
+    {
+      "severity": "PASS",
+      "title": "No load test is required, and there is no scope creep",
+      "description": "The slice restates no NFR, so no load test or CI wiring task is required. Every task traces to Part 0/F002, Part A or Part D. Each implementation task is followed directly by its test or verification task.",
+      "file_ref": null,
+      "category": "proportionality",
+      "raw_category": null,
+      "location": "unverified"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "coverage-gap",
+      "raw_category": null,
+      "summary": "The overwrite guard is on `save_review_file`, but `sq review code` saves through `save_review_result`",
+      "location": "src/squadron/review/persistence.py:257-314",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "fail",
+      "category": "sequencing",
+      "raw_category": null,
+      "summary": "Part 0 moves keep review\u2192pipeline imports, recreating the cycle F002 removes",
+      "location": "src/squadron/pipeline/actions/findings_addressed/verification.py:17",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "test-coverage",
+      "raw_category": null,
+      "summary": "T11 tests only one of the two `reviewedSha` write paths",
+      "location": "src/squadron/pipeline/actions/review.py:245-272",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "sequencing",
+      "raw_category": null,
+      "summary": "Part D commits at T13 before the T14 go/no-go check runs",
+      "location": "unverified",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "coverage-gap",
+      "raw_category": null,
+      "summary": "T12 leaves out the design's \"content still printed to terminal\" behavior on abort",
+      "location": "unverified",
+      "location_verified": null
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "granularity",
+      "raw_category": null,
+      "summary": "T2, T4 and T6 could be folded into the tasks they verify",
+      "location": "unverified",
+      "location_verified": null
+    },
+    {
+      "id": "F007",
+      "severity": "note",
+      "category": "format",
+      "raw_category": null,
+      "summary": "Commit markers are bullets inside tasks, not the standard plain line",
+      "location": "unverified",
+      "location_verified": null
+    },
+    {
+      "id": "F008",
+      "severity": "pass",
+      "category": "proportionality",
+      "raw_category": null,
+      "summary": "No load test is required, and there is no scope creep",
+      "location": "unverified",
+      "location_verified": null
+    }
+  ],
+  "template_name": "tasks",
+  "input_files": {
+    "input": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-1.md",
+    "against": "project-documents/user/slices/306-slice.review-resolution-recording-that-findings-were-addressed.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/squadron-306-tasks"
+  },
+  "timestamp": "2026-11-16T13:02:54.900807",
+  "model": "claude-opus-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 6,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-opus-5-5",
+  "answering_models": [
+    "claude-opus-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 8,
+    "in_fences": 0,
+    "in_section": 8,
+    "surviving": 8
+  },
+  "effort": "medium",
+  "profile": "sdk",
+  "turns": 7,
+  "prompt_tokens": 433215,
+  "cached_tokens": 341858,
+  "cache_write_tokens": 91345,
+  "completion_tokens": 4132,
+  "reasoning_tokens": null,
+  "duration_seconds": 52.56170379091054,
+  "cost_usd": 0.8824787000000001,
+  "cost_basis": "provider"
+}

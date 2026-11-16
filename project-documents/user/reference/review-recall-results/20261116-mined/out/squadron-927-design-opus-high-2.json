@@ -1,0 +1,207 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Walkthrough step 6 cannot capture the per-profile ids that D9's mitigation depends on",
+      "description": "D9 (line 185) and the Mitigation section (lines 362\u2013363) put the whole OpenRouter/local false-substitution risk on Phase 6 capturing real `answering_models` \"from one review per configured profile (sdk, openai, openrouter, local)\". The plan requires this: \"an alias resolving to its own snapshot is not reported as a substitution\" (slice plan line 443). But step 6 says \"for each profile\" and then gives one fixed command, `sq review slice 927 --model sonnet -v`. That command picks the same alias on every run, so it never selects the openai, openrouter or local profiles. Followed as written, it captures only SDK ids, and the one guard against D9 false positives never runs. A gate reads `requestedModel` presence as proof of substitution (D10), so that contract would be wrong on those profiles.\n\nThis is also the hallucination-trap pattern CLAUDE.md warns about: a fixed example placed next to an instruction to repeat something per source. Fix: say how each profile is selected (the model alias or profile flag per profile), with no example value that can be copied verbatim. Add one line saying what to record when a profile has no credentials, so it is skipped explicitly rather than silently.",
+      "file_ref": null,
+      "category": "verification",
+      "raw_category": null,
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:348-353"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "A missing stamp from a provider that normally reports is mislabeled \"not reported by provider\", and no warning fires",
+      "description": "D11 treats any empty `answering_models` as \"provider does not report\". It writes `Answering model: not reported by provider` and deliberately logs no WARNING, which makes sense for Codex. But SDK and OpenAI-compatible providers do report, and D8 (line 174) stamps only on the final Message that also carries `stop_reason`. The design never covers the case where that final message is missing or unstamped while a `ReviewResult` is still produced:\n- the stream ends or the peer disconnects after assistant text but before the SDK `ResultMessage`;\n- the OpenAI agentic loop exits on a path that skips `_stamp_tool_telemetry`;\n- the recovery turn's capture replaces rather than appends.\n\nIn each case the models seen are thrown away. The artifact then states a provider limitation that is false, with no observable signal. That is the same silent class this slice exists to close, and it breaks the review rule that every failure mode must be observable (WARNING or higher).\n\nFix: list these cases. Either state that each one cannot reach `run_review_with_profile` with a result (and why), or key the \"not reported\" wording and the no-warning rule on the provider kind. Codex stays quiet. A reporting provider that stamped nothing logs a WARNING and gets a different digest line. Add one test asserting that signal.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:198-202"
+    },
+    {
+      "severity": "PASS",
+      "title": "Part A picks the minimum field a gate needs",
+      "description": "The plan asked for \"the minimum that lets a gate decide\" (slice plan line 441). D1 puts only the boolean in frontmatter and keeps the counts in the header and JSON. It records characters rather than bytes because characters are what `_truncate` actually measures. D2's tri-state (absent / `false` / `true`) keeps a clean code review distinguishable from an artifact written before this slice, and leaves the `clean_pass_artifact.md` snapshot byte-identical.",
+      "file_ref": null,
+      "category": "scope",
+      "raw_category": null,
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md#d1--measure-characters-frontmatter-carries-only-difftruncated"
+    },
+    {
+      "severity": "PASS",
+      "title": "Part B decision is explicit and only ever moves a verdict down",
+      "description": "D4 chooses the CONCERNS cap over failing the run, which the plan left to design. It explains how this works with `CheckpointTrigger.ON_CONCERNS`, and why it does not break the #5 precedent: the input is a measured fact, not a finding severity. D5's `VerdictSource.IMPOSED` keeps the enum closed and avoids misreporting the verdict as `stated` or `derived`. D6 catches a real side effect: the synthetic finding would otherwise hide a degraded parse.",
+      "file_ref": null,
+      "category": "architecture",
+      "raw_category": null,
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md#d4--truncated-and-unread-cap-pass-to-concerns-dont-fail-the-run"
+    },
+    {
+      "severity": "PASS",
+      "title": "CLI and pipeline parity is structural",
+      "description": "Every new fact travels on `ReviewResult`, and both entry points go through `run_review_with_profile` and then `format_review_markdown`. That meets the plan's interface-parity requirement for Parts A and C without a second code path. Integration Requirements and walkthrough step 4 verify it.",
+      "file_ref": null,
+      "category": "integration",
+      "raw_category": null,
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:101"
+    },
+    {
+      "severity": "PASS",
+      "title": "Deferrals and the scope addition are justified against the plan",
+      "description": "The plan allowed diff ordering and `--stat` only \"if design shows it is small; otherwise it becomes an issue\" (line 442). D7 makes that call and files #137. Truncation of file bodies is filed as #138. The plan's own exclusions (changing the defaults, #114) are honored. The one addition, D3's skip by the total-injection budget, is the worst case of the same fact. It needs no new budget logic, so it is not scope creep.",
+      "file_ref": null,
+      "category": "scope",
+      "raw_category": null,
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md#excluded"
+    },
+    {
+      "severity": "NOTE",
+      "title": "\"Any successful tool call\" is a weak proxy for having read the omitted part, but the plan sets it",
+      "description": "Under D4, a model that made one successful but unrelated tool call keeps its PASS, even when D3 dropped the whole diff. This follows the plan's wording, \"where the model did read files stays a normal verdict\" (line 442), so it is not a defect in this design. The `diffTruncated: true` field and the header counts still show it. Worth noting for #137/#138, if a later slice wants to check that the reads actually covered the omitted files.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:131-135"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Metrology identity changes once for OpenAI-direct judges",
+      "description": "`metrology/identity.py` keys judge identity on the `aiModel` frontmatter key (`_FM_MODEL = \"aiModel\"`). D10 acknowledges that judges whose API returns dated snapshots will move from `gpt-5` to `gpt-5-2025-08-07`, so new data will not pool with history recorded under the bare id. The design says this is intended, and the snapshot behind older artifacts cannot be recovered anyway. No action is needed beyond the CHANGELOG bullet already planned. The plan's risk line (444) mentions context-forge gates but not metrology, so the 900 entry could add it.",
+      "file_ref": null,
+      "category": "integration",
+      "raw_category": null,
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:196"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "verification",
+      "raw_category": null,
+      "summary": "Walkthrough step 6 cannot capture the per-profile ids that D9's mitigation depends on",
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:348-353",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "A missing stamp from a provider that normally reports is mislabeled \"not reported by provider\", and no warning fires",
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:198-202",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "pass",
+      "category": "scope",
+      "raw_category": null,
+      "summary": "Part A picks the minimum field a gate needs",
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md#d1--measure-characters-frontmatter-carries-only-difftruncated",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "pass",
+      "category": "architecture",
+      "raw_category": null,
+      "summary": "Part B decision is explicit and only ever moves a verdict down",
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md#d4--truncated-and-unread-cap-pass-to-concerns-dont-fail-the-run",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "pass",
+      "category": "integration",
+      "raw_category": null,
+      "summary": "CLI and pipeline parity is structural",
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:101",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "pass",
+      "category": "scope",
+      "raw_category": null,
+      "summary": "Deferrals and the scope addition are justified against the plan",
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md#excluded",
+      "location_verified": null
+    },
+    {
+      "id": "F007",
+      "severity": "note",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "\"Any successful tool call\" is a weak proxy for having read the omitted part, but the plan sets it",
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:131-135",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "note",
+      "category": "integration",
+      "raw_category": null,
+      "summary": "Metrology identity changes once for OpenAI-direct judges",
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:196",
+      "location_verified": true
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md",
+    "against": "project-documents/user/architecture/900-slices.maintenance-and-refactoring.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/squadron-927-design"
+  },
+  "timestamp": "2026-11-16T12:19:14.509513",
+  "model": "claude-opus-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 10,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 217,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-opus-5-5",
+  "answering_models": [
+    "claude-opus-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 8,
+    "in_fences": 0,
+    "in_section": 8,
+    "surviving": 8
+  },
+  "effort": "high",
+  "profile": "sdk",
+  "turns": 11,
+  "prompt_tokens": 966775,
+  "cached_tokens": 850095,
+  "cache_write_tokens": 116662,
+  "completion_tokens": 8003,
+  "reasoning_tokens": null,
+  "duration_seconds": 96.6291268330533,
+  "cost_usd": 1.2641191999999999,
+  "cost_basis": "provider"
+}

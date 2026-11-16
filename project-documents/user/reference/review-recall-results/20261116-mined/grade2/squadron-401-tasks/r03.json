@@ -1,0 +1,40 @@
+{
+ "review": "r03",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "The `Tokenizer` type can't pick the TSX grammar for `.tsx` files",
+   "description": "Task 10 defines `Tokenizer` as \"file text in, ordered (token text, line number) pairs out\". The TypeScript side picks its grammar from the file path. `_extract_functions(path, text)` calls `_parser(Path(path).suffix.lower() == _TSX_SUFFIX)`, so `.tsx` files get the TSX grammar and everything else gets the plain TypeScript one. A tokenizer that only sees text has to guess the grammar. If it always uses the plain TypeScript grammar, every `.tsx` file containing JSX gives an error root. Task 14 then raises `TypeScriptParseError`, and the file lands in duplication's `unparsed_files`. Task 15's \".tsx file with a shared JSX block\" test would fail. A junior implementer might instead \"fix\" it by loosening the error-root check. The fix: in Task 10, make `Tokenizer` take `(path, text)`, matching `FunctionExtractor = Callable[[str, str], ...]` at `lengths.py:153`. Then say in Task 14 that grammar selection reuses the `_TSX_SUFFIX` rule.",
+   "location": "src/squadron/metrology/snapshot/typescript_length.py:120"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Task 10 and Task 14 disagree on what a `MemoryError` does",
+   "description": "Task 10 says \"A `MemoryError` during the pass is handled the same way\", meaning `tool_failed`. Task 11 tests that a tokenizer raising `MemoryError` gives `tool_failed`. This matches D3 and the failure-mode table. Task 14 then says \"Token errors are `TypeScriptParseError` and `MemoryError`\". It copies 400's length tuple at `typescript_length.py:151`, which turns `MemoryError` into a per-file unparsed entry. Which outcome wins depends on whether `measure_duplication` checks `token_errors` or `MemoryError` first, and nothing in either task fixes that order. The result could be a partial duplication figure on memory exhaustion, which D3 forbids (\"never a partial figure\"). The fix: remove `MemoryError` from Task 14's token errors, or have Task 10 say `MemoryError` is caught before `token_errors` and always means `tool_failed`.",
+   "location": "src/squadron/metrology/snapshot/typescript_length.py:151"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "`read_coverage` is described as two-state but has three outcomes",
+   "description": "Task 21 lists stat `OSError` as \"a failure naming the path\" (line 215), and \"otherwise parse with Task 19\" can return Task 19's failures. Line 218 then says \"The result is either a reading or an absence (reason, detail)\". Task 23 uses a third case (\"a failure becomes both `tool_failed`\"). A junior implementer following line 218 would have no type to carry a failure, and might squeeze failures into an absence with a made-up reason. The fix: state the result as reading | absence | failure, and say which type Task 19's parse failure uses.",
+   "location": "unverified"
+  },
+  {
+   "i": 3,
+   "severity": "NOTE",
+   "title": "Task 13's \"function length is unaffected\" check proves nothing for these two fixtures",
+   "description": "An unterminated triple-quoted string and bad indentation both make `ast.parse` fail. So those files are already in function length's `unparsed_files` through `_PARSE_ERRORS` (`python_adapter.py:81`). The check can't show that the two passes are independent, and a reader might expect function length to be present. Reword it to \"function length is the same as with duplication disabled\", or drop the clause. Task 11's tokenizer-error test already covers that the passes are independent.",
+   "location": "unverified"
+  },
+  {
+   "i": 4,
+   "severity": "NOTE",
+   "title": "Criterion 10's \"other metrics unchanged\" is only tested at module level",
+   "description": "Task 11 lowers `DUPLICATION_MAX_TOKENS` against `measure_duplication` on its own. That can't show that file length, function length and complexity stay present when duplication fails. The Technical Requirement asks failure-mode tests to assert the outcome as well as the signal. One adapter-level case in Task 13 or Task 26 with the ceiling lowered would close this.",
+   "location": "unverified"
+  }
+ ]
+}

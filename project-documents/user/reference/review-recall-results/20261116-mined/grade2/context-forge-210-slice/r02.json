@@ -1,0 +1,82 @@
+{
+ "review": "r02",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "FAIL",
+   "title": "Copilot target's rule and skill sources are `.claude/` outputs that a Copilot-only project may not have",
+   "description": "The file layout takes its sources from `.claude/rules/typescript.md` (line 42) and `.claude/skills/commit.md` (line 46). The Copilot target therefore consumes the Claude target's output. The Value (line 23) names the driver as a user who cancelled Claude. The parent says the target serves users who \"cannot or do not use Claude Code\" (parent line 184), and its criterion at line 212 requires `cf init --ide copilot` to run end-to-end on a fresh directory.\n\nSlice 202's init flow runs only the chosen IDE target and writes commands only to `~/.claude/commands/cf/` (202 line 120). On a fresh directory, nothing in the flow the slice describes creates project-level `.claude/rules/` or `.claude/skills/` for the backend to read. I could not confirm whether `cf guides install` creates them: the guides submodule is not populated in this worktree.\n\nThe parent is also inconsistent. Its mapping table calls the source \"Claude-format\" (parent lines 187\u2013190), while its stated goal is Copilot-only users. This must be resolved before the backend is built. I recommend the copilot backend read the guide-side canonical rule and skill sources, with both targets reading the same source. The alternative, requiring `setup-ide claude` to run first, drops the stated persona and needs a parent change.",
+   "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:36-48"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Routing for rules with no `paths` contradicts itself",
+   "description": "Line 32 says an omitted `paths` defaults to `applyTo: \"**\"`, which implies a split `.instructions.md` file. Line 83 says an omitted `paths` means the rule is `alwaysApply` and goes into `copilot-instructions.md`. The parent uses `alwaysApply` as a term (parent lines 189\u2013190), but the slice never defines it as a frontmatter field or says whether the discriminator is that field or the absence of `paths`. The outcome for a non-alwaysApply rule with no `paths` is also undefined. Define the discriminator once and state that outcome. Parent criterion 216 cannot be tested until this is settled.",
+   "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:71-83"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Translator input and output grammar is underspecified",
+   "description": "- The parent says the translator \"must handle both forms\" (parent line 200). The slice names only the array input (lines 74\u201378) and never says what the second form is.\n- The output is a comma-joined `applyTo`. A brace glob such as `src/**/*.{ts,tsx}` contains a comma, so the joined list is ambiguous to a reader that splits on commas. The slice should say whether brace globs are rejected, escaped, or passed through, and how consumers split the list.\n- Skill-to-prompt translation (lines 46\u201347) says only that the file is produced. The parent lists prompt fields (`name`, `description`, `argument-hint`, `agent`, `model`, `tools`; parent line 191), but the slice does not say which Claude skill fields pass through, which are dropped, or how `tools` and `model` map. Without that, the prompts layer can emit frontmatter that is invalid for Copilot with nothing to catch it.",
+   "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:32"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Managed-file ownership is incomplete",
+   "description": "- The safety check covers only `.github/copilot-instructions.md` and `AGENTS.md` (lines 98, 109). Lines 63\u201365 say all generated Copilot files carry the marker and that the Claude safety contract applies. But `.github/instructions/*` and `.github/prompts/*` are overwritten without a check, so an unmanaged `.github/prompts/commit.prompt.md` is replaced silently. Parent criterion 214 requires a prompt before overwriting unmanaged files.\n- Nothing says what happens to a generated file whose source rule or skill has been deleted. Unless CF removes files it previously generated (identifiable by the marker), stale `applyTo` rules keep applying.\n- Slice 202 places the marker immediately after the `#` heading, not on line 1 (202 line 253). `.instructions.md` and `.prompt.md` need frontmatter first, so that rule cannot apply to them, and the slice does not say where the marker goes.\n- The worktree step (line 111) overwrites copies in each worktree with no managed check or prompt, and the doc does not say so.",
+   "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:98-100"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "`.bak` handling diverges from slice 202 and can destroy the user's original",
+   "description": "Line 99 says \"backup to `.bak`\". Slice 202 says that when a `.bak` already exists, the backup is skipped and the earlier backup is kept (202 line 273), and that backup runs regardless of `--yes` (202 line 275). This slice does neither. \"prompt (or skip with `--yes`)\" is also ambiguous about whether `--yes` skips the backup.\n\nFailure sequence: a user's hand-written file is backed up and replaced (run 1). The user later removes the marker and writes new content (run 2). The second run overwrites the `.bak`, and the original is lost. Line 65 claims the same safety contract as the Claude path, which 202 defines with this case. Restate 202's four-case table for both files (`AGENTS.md`, `copilot-instructions.md`) and add a test for the `.bak`-exists case.",
+   "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:99"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Failure modes are not enumerated for the new I/O steps",
+   "description": "The I/O steps are the backups (step 4), the script run (step 5), and the worktree copies (step 6). The only failure named is a missing `copilot` case in the guide script (line 133), which the doc says \"will fail with a clear error.\" That is an assumption about the existing script that I could not verify here. Not handled:\n\n- The script exits non-zero after writing some files. Since `AGENTS.md` must match `copilot-instructions.md` (line 61), a partial run leaves them inconsistent.\n- The script hangs. `execFileSync` (line 101) has no timeout and blocks the CLI.\n- A backup write fails. The doc does not say whether setup continues.\n- One worktree copy fails. The root is already updated (step 5 runs before step 6), and the doc does not say whether the remaining worktrees proceed or how the failure is reported.\n- Caller-dependent exit behavior. Inside `cf init`, IDE failures are warnings (202 line 281). Standalone `cf setup-ide copilot` is not specified.\n\nNo failure has a named observable signal (warning, log, or exit code), and Test Coverage (lines 121\u2013129) has no failure-mode test. Each mode needs an explicit handling strategy and a test.",
+   "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:93-103"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "Guide-script contract is undefined and the dependency is declared as none",
+   "description": "The frontmatter declares `dependencies: []`, yet the slice requires a `copilot` backend in the guides submodule, released in sync (line 133). CF has no planned check for that backend or a minimum guide version. The contract between CF core and `scripts/setup-ide copilot` is not stated: arguments, exit codes, the files written, who writes the marker (202 implies the script does), idempotency, and backup responsibility. Without it, CF tests can only run against a fake script with undefined behavior. Declare the dependency and specify the contract.",
+   "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:6"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "Target logic is hard-coded per target and duplicates the Claude path",
+   "description": "- The string `copilot` as a target identifier appears in VALID_TARGETS (line 28), the propagation branch (lines 30, 89), the script argument (line 101), and the help text (line 34). The project rule is to define such a value once.\n- Line 65 says the Claude marker check is \"replicated\" for Copilot. The project's DRY rule forbids copying the logic; one parameterized check over a file list would serve both. The helper is also named two ways: `isManagedCopilot(filePath)` (line 29) and `isManagedCopilotFiles(projectPath)` (line 109).\n- Propagation adds another `else if` branch hard-coding four paths (line 111). Claude and Copilot perform the same copy with different path sets. The parent's future-target pattern (parent line 209) would add one more branch to this chain for each target. A small target table (script argument, output paths, marker-checked files) would let a new target add one entry. This is a table, not a framework.",
+   "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:105-111"
+  },
+  {
+   "i": 8,
+   "severity": "CONCERN",
+   "title": "Test coverage omits the translator and uses no real-format fixtures",
+   "description": "No listed test covers rule translation (array to comma string, `**` default), skill translation, marker detection on real generated output, or `AGENTS.md` matching `copilot-instructions.md` (parent line 211). The only end-to-end item (line 129) is \"manual verification,\" but parent criterion 212 is a fresh-directory run. The project's parser rules require that a parser's test fixture be the real format its producer emits, and that a parser which returns empty on bad input has a test on real input. Add translator tests on a real Claude rule file, marker detection on backend output, and an automated fresh-directory run, or state why that run cannot be automated.",
+   "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:121-129"
+  },
+  {
+   "i": 9,
+   "severity": "CONCERN",
+   "title": "Parent-named tool guide is not referenced",
+   "description": "Parent criterion 218 requires the tool guide to be \"referenced in slice design.\" The file exists in this worktree at `project-documents/user/tool-guides/copilot-vscode/setup-ide.md`, and the parent names it as the reference (parent line 184). This slice does not mention it. Add the reference and state whether the guide will be promoted.",
+   "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md"
+  },
+  {
+   "i": 10,
+   "severity": "NOTE",
+   "title": "Agent deferral is conditional, and its mapping is not carried over",
+   "description": "Line 54 defers agents \"unless the instruction + prompt layer lands cleanly\" and asks to \"document the mapping,\" but the mapping is not in this doc (it is in parent line 192). The parent's non-goal (parent line 207) is a plain deferral. Make it a firm non-goal, name the follow-up, and point to the parent row so the scope decision is not made during implementation.",
+   "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:54"
+  }
+ ]
+}

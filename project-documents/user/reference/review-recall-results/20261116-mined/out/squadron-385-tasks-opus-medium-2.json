@@ -1,0 +1,207 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "The real-file fixture fallback will fail on the 384 task file, and on this file once the slice closes",
+      "description": "Task 2.2 says to read `384-tasks.post-findings-to-the-pr.md` \"until then\" and assert that \"both groups are non-empty.\" I searched that file for unchecked items (`[ ]`) and found none, because 384 is merged and fully checked. The unchecked group is empty, so the test fails on its first run. The same happens to this file later: Task 16.4 requires marking every item `[x]` at close, which empties the unchecked group and breaks the test after the slice ships. The technical criterion only asks for a fixture \"using this slice's own task file.\" Change the assertion to \"counts sum to the file's checkbox count, and at least one item parsed,\" and drop the \"both non-empty\" requirement. If a mixed-state check is still wanted, use a frozen copy of a mid-implementation task file kept under `tests/`.",
+      "file_ref": null,
+      "category": "testing",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:67"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Only the first task file is read, but this repo splits slices across several task files",
+      "description": "Task 7.1 says to \"read the first task file and `parse_task_items` it.\" `resolve_slice_info` (`src/squadron/review/persistence.py:108`) returns a list, `task_files`, and this repo does have multi-file slices: `381-tasks.*-1/-2.md` and `382-tasks.*-1/-2/-3.md`. On a slice like those, \"how it was verified\" and \"known gaps\" would leave out every item in the later files. That breaks the functional criterion that the body \"lists checked task items \u2026 and unchecked items under 'known gaps.'\" It also breaks the design's traceability rule, because an incomplete \"known gaps\" section says something no input supports. Task 7.1 should parse and combine all task files in order, and Task 7.2 should add a two-file case.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:159"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "An empty commit range is never refused, though later steps assume at least one commit",
+      "description": "Task 7.1 says an empty range \"is impossible here, since a PR with no commits cannot be opened.\" Nothing stops it reaching the code, though: a pushed head equal to its base passes Task 6 and Task 5. Task 3.2 even requires `commits_in_range` to return `[]` in that case. Three things then go wrong:\n- \"What changed\" has no fallback line for missing input (D4: \"never\").\n- The fallback title in D4a (\"first commit's subject\") would fail on index 0.\n- The host's rejection comes only at `open_pull_request`, after the model call, which breaks D8's rule that every refusal decidable without a model call happens before it.\n\nAdd a refusal for an empty range in Task 7 (or 13), with a test in Task 13.2 that the composer is never called in that case.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:158"
+    },
+    {
+      "severity": "NOTE",
+      "title": "How a composer failure becomes a non-zero exit is unclear across the layers",
+      "description": "Task 10.1 has the composer in `pr/body.py` \"become a non-zero exit,\" and Task 10.2 asserts \"exits non-zero\" in `test_body.py`. D6 keeps `pr/` testable without Typer, so the composer should log and raise a domain error, and `create` should turn that into `typer.Exit(1)`. As written, a junior implementer could import `typer` into `pr/`. Say which layer owns the exit code, and move the exit assertion into Task 13.2.",
+      "file_ref": null,
+      "category": "design",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:221"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Where the identity precondition is implemented isn't stated",
+      "description": "`check_head_pushed` in Task 6 covers only the missing and behind checks. The `identify_operator` refusal shows up only in the order of Task 13.1 (\"identity, then pushed\") and in the tests for Tasks 13.2 and 14. It's covered, but it's implicit. Add one sub-item to Task 13.1 or Task 6 naming where it lives. Likewise, nothing says where `local_sha` comes from; `resolve_reviewed_sha` or a `rev-parse HEAD` call would do.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:298"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The slice's push-command criterion contradicts D2; the tasks correctly follow D2",
+      "description": "The success criterion says a sha mismatch fails \"with the same command.\" D2 says different commands (`git push -u` versus `git push`), and Task 6.2 asserts \"the two refusals name different commands.\" The tasks are right. The slice's criterion should be corrected so that Task 16.3's walkthrough doesn't fail against it.",
+      "file_ref": null,
+      "category": "traceability",
+      "raw_category": null,
+      "location": "project-documents/user/slices/385-slice.create-a-pr-with-a-good-message.md:545-546"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The dry-run equality test checks the body but not the title",
+      "description": "The criterion is \"`--dry-run` title and body equal what the next real run creates.\" Task 13.2 tests only the body. The design's Testing section also asks for a structural check that one bound object reaches both paths, rather than a comparison of two strings. Add the title to the equality case and state that the check is structural.",
+      "file_ref": null,
+      "category": "testing",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:309"
+    },
+    {
+      "severity": "PASS",
+      "title": "Success-criteria coverage and order",
+      "description": "Each functional criterion maps to a task:\n- Base refusal and acceptance: Task 5.\n- Push preconditions: Task 6.\n- Ancestor-review exclusion: Task 8.2.\n- Section contract and the unplanned-repository path: Task 11.\n- Presence check with zero writes: Tasks 12 and 13.2.\n- Title rules: Task 10a.\n- Identity refusal: Tasks 13.2 and 14.\n- Live creation: Task 16.2.\n\nEach technical criterion also maps:\n- Timeout constants: Task 14.\n- Provider failure: Task 10.2.\n- Import boundary: Task 15.1.\n- `summary_oneshot` docstring: Task 15.2.\n- Lint and type checks: Task 16.1.\n\nThe referenced code exists: `resolve_reviews_dir`, `read_frontmatter`, `resolve_slice_info`, `locate_review`, `render_code_host_error` and `GIT_QUERY_TIMEOUT_SECONDS`. There are no circular dependencies, and the order follows the LLD. No task falls outside the slice's scope. The task count fits the slice's size. The file has no `**Commit**:` markers, which is acceptable. The slice states no NFR, so no load test is required.",
+      "file_ref": null,
+      "category": "traceability",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "testing",
+      "raw_category": null,
+      "summary": "The real-file fixture fallback will fail on the 384 task file, and on this file once the slice closes",
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:67",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "Only the first task file is read, but this repo splits slices across several task files",
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:159",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "An empty commit range is never refused, though later steps assume at least one commit",
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:158",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "note",
+      "category": "design",
+      "raw_category": null,
+      "summary": "How a composer failure becomes a non-zero exit is unclear across the layers",
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:221",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "Where the identity precondition is implemented isn't stated",
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:298",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "traceability",
+      "raw_category": null,
+      "summary": "The slice's push-command criterion contradicts D2; the tasks correctly follow D2",
+      "location": "project-documents/user/slices/385-slice.create-a-pr-with-a-good-message.md:545-546",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "note",
+      "category": "testing",
+      "raw_category": null,
+      "summary": "The dry-run equality test checks the body but not the title",
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:309",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "pass",
+      "category": "traceability",
+      "raw_category": null,
+      "summary": "Success-criteria coverage and order",
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md",
+      "location_verified": null
+    }
+  ],
+  "template_name": "tasks",
+  "input_files": {
+    "input": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md",
+    "against": "project-documents/user/slices/385-slice.create-a-pr-with-a-good-message.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/squadron-385-tasks"
+  },
+  "timestamp": "2026-11-16T13:04:07.274617",
+  "model": "claude-opus-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 7,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-opus-5-5",
+  "answering_models": [
+    "claude-opus-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 8,
+    "in_fences": 0,
+    "in_section": 8,
+    "surviving": 8
+  },
+  "effort": "medium",
+  "profile": "sdk",
+  "turns": 8,
+  "prompt_tokens": 572975,
+  "cached_tokens": 477705,
+  "cache_write_tokens": 95258,
+  "completion_tokens": 6382,
+  "reasoning_tokens": null,
+  "duration_seconds": 72.29036545800045,
+  "cost_usd": 0.9859124000000001,
+  "cost_basis": "provider"
+}

@@ -1,0 +1,225 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "PASS",
+      "title": "Fits the architecture's per-provider authentication model",
+      "description": "`100-arch.orchestration-v2.md` (Authentication Patterns, lines 231\u2013243) says squadron does not unify authentication and each provider resolves its own credentials. The slice addresses this head-on. `InteractiveLogin` is an optional capability that only one strategy implements. It hands all the work to the Codex runtime, and squadron keeps no token store (Excluded scope, line 41; State Management, line 92). Waiting until a second provider adopts it before editing the architecture's auth section is the right call.",
+      "file_ref": null,
+      "category": "architecture",
+      "raw_category": null,
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:88-89"
+    },
+    {
+      "severity": "PASS",
+      "title": "Dependencies point the right way and capabilities are checked by type, not by name",
+      "description": "- D3 (line 99) adds `InteractiveLogin` as its own Protocol, so API-key strategies don't have to stub login methods. Changing `AuthStrategy` would have forced that.\n- D9 (line 112) does the same for `ExtraRequirement`.\n- The CLI depends on Protocols in `providers/`, never the other way round.\n- `openai_codex` is imported only inside functions (line 76), so a default install still loads the module graph.\n- The provider still registers, so a user gets the install hint instead of \"unknown provider\". This meets the architecture's provider rule 3 (register at import time, line 216).\n- Both prerequisite slices, 128 and 931, are `status: complete`.",
+      "file_ref": null,
+      "category": "architecture",
+      "raw_category": null,
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md#technology-choices"
+    },
+    {
+      "severity": "PASS",
+      "title": "Codex turn failures and startup cost are covered",
+      "description": "The turn table covers:\n- hang (bounded by `codex.turn_timeout_s`)\n- transport closing mid-turn (agent state reset)\n- cancellation (`shutdown()` runs in `finally`)\n- busy or rate-limited server\n- auth rejection\n- failed, interrupted or empty turns (D8 closes the issue-#15 class of bug where an empty result was accepted)\n\nEach row has a test assigned to it (line 199). Neither the architecture nor the slice plan sets a latency target for this path. Even so, lines 81\u201382 limit where the runtime gets spawned, and startup time is logged at DEBUG. That is the right size for the job.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:116-135"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Login and logout don't list their failure modes, and logout has no timeout",
+      "description": "`sq auth login` and `sq auth logout` each start the Codex runtime: a subprocess, an `initialize` step, then an RPC. That is the same kind of I/O as a turn. Their failure handling, though, is one sentence at line 138 plus two timeout rows in D7.\n\n**Gaps:**\n- **`sq auth logout` has no bound.** D7 (lines 105\u2013109) gives timeouts for the turn, for `handle.wait()`, and for \"runtime start + `account()`\". Nothing bounds runtime start + `logout()`. A runtime that hangs on logout would hang the command forever. This breaks the project rule that every new I/O path answers \"what if it hangs?\".\n- **Runtime start is unbounded during login.** `codex.login_timeout_s` covers only `handle.wait()` (line 108). Spawning the runtime and calling `login_chatgpt()` or `login_chatgpt_device_code()` beforehand has no limit.\n- **Login/logout errors aren't specified.** Nothing says what the user sees when the runtime fails to start, the transport closes during `wait()`, or the package or binary is missing. The functional requirement at line 190 implies the install hint, but no row in the table maps these to an error message and exit code.\n\n**Fix:** add a short \"Failure Modes \u2014 Login/Logout\" table like the turn table. Then either let `codex.account_timeout_s` also bound runtime start + `logout()`, or say which key does. This needs no new config key.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:84-86"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Behaviour when no effort is set isn't stated",
+      "description": "The data flow at line 80 (and D5, line 101) always builds `ReasoningEffort(effort.value)`. `AgentConfig.effort` is optional, so most aliases won't set it. Add one clause saying that an unset effort passes `effort=None`, which leaves the backend default in place. Otherwise the obvious implementation fails when effort is `None`.",
+      "file_ref": null,
+      "category": "under-specification",
+      "raw_category": null,
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:80"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`--timeout` repeats a config key",
+      "description": "The slice plan entry doesn't ask for `sq auth login --timeout`. `codex.login_timeout_s` already makes the login wait configurable. The flag adds an override path and a CLI option that the Codex profile is the only one to use. It's small, but it could be dropped.",
+      "file_ref": null,
+      "category": "proportionality",
+      "raw_category": null,
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:108"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The doctor row imports a provider-specific module",
+      "description": "D9 makes `cli/commands/doctor_checks.py` import `providers/codex/runtime.py` to get its detail text. That's acceptable because the row is about Codex by definition. The install hint still comes through `ExtraRequirement`, and doctor does no import checks of its own. Record it as a deliberate exception so a later reviewer doesn't take it for a layering leak.",
+      "file_ref": null,
+      "category": "dependencies",
+      "raw_category": null,
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:112"
+    },
+    {
+      "severity": "NOTE",
+      "title": "\"Provides to Other Slices\" lists capabilities no planned slice uses",
+      "description": "The frontmatter (line 7) correctly records `interfaces: []` because nothing planned consumes these. Lines 178\u2013181 still present `CodexRuntime` as reusable \"by any later Codex-adjacent feature\". `InteractiveLogin` and `ExtraRequirement` are justified because they stop the CLI choosing behaviour by profile name. `CodexRuntime` is justified by its three callers inside this slice. Trimming the section to that reasoning would match the frontmatter.",
+      "file_ref": null,
+      "category": "proportionality",
+      "raw_category": null,
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:178-181"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The version-cap decision is left open",
+      "description": "D1 already writes `<1` (line 97), but lines 97 and 231 leave the cap open. With the SDK still at 0.x and its generated API changing, `<1` gives almost no protection. The real guard against drift is the test against the real `openai_codex` types (line 200). State that, and settle on `<1` (or a tighter bound) in the design, so the dependency line isn't left as an open item.",
+      "file_ref": null,
+      "category": "under-specification",
+      "raw_category": null,
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:231"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "pass",
+      "category": "architecture",
+      "raw_category": null,
+      "summary": "Fits the architecture's per-provider authentication model",
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:88-89",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "pass",
+      "category": "architecture",
+      "raw_category": null,
+      "summary": "Dependencies point the right way and capabilities are checked by type, not by name",
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md#technology-choices",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "pass",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "Codex turn failures and startup cost are covered",
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:116-135",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "Login and logout don't list their failure modes, and logout has no timeout",
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:84-86",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "under-specification",
+      "raw_category": null,
+      "summary": "Behaviour when no effort is set isn't stated",
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:80",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "proportionality",
+      "raw_category": null,
+      "summary": "`--timeout` repeats a config key",
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:108",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "note",
+      "category": "dependencies",
+      "raw_category": null,
+      "summary": "The doctor row imports a provider-specific module",
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:112",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "note",
+      "category": "proportionality",
+      "raw_category": null,
+      "summary": "\"Provides to Other Slices\" lists capabilities no planned slice uses",
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:178-181",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "note",
+      "category": "under-specification",
+      "raw_category": null,
+      "summary": "The version-cap decision is left open",
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:231",
+      "location_verified": true
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md",
+    "against": "project-documents/user/architecture/100-slices.orchestration-v2.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/squadron-129-design"
+  },
+  "timestamp": "2026-11-16T13:18:56.606174",
+  "model": "claude-opus-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 7,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-opus-5-5",
+  "answering_models": [
+    "claude-opus-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 9,
+    "in_fences": 0,
+    "in_section": 9,
+    "surviving": 9
+  },
+  "effort": "high",
+  "profile": "sdk",
+  "turns": 8,
+  "prompt_tokens": 525308,
+  "cached_tokens": 444548,
+  "cache_write_tokens": 80748,
+  "completion_tokens": 6898,
+  "reasoning_tokens": null,
+  "duration_seconds": 79.70855120802298,
+  "cost_usd": 0.873572,
+  "cost_basis": "provider"
+}

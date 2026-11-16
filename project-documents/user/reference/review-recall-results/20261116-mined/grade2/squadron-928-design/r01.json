@@ -1,0 +1,61 @@
+{
+ "review": "r01",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Receipt-name suffixes become ambiguous once the base is a user-chosen pack name",
+   "description": "D5 builds the receipt name as `base + \"-agents\" + \"-local\"`. In 925 the base was the fixed `squadron-commands`, so the four names could not collide. Here the base is any pack name from `skills.toml`.\n\n- **The collision:** pack `foo` installed for agents and pack `foo-agents` installed for Claude both resolve to `foo-agents.toml`. The same holds for `foo-local`, and for `foo-agents-local`.\n- **The harm:** the second install silently overwrites the first receipt. A later uninstall then removes one pack's files and orphans the other's in a shared directory, which is the #65 failure receipts exist to prevent.\n- **Why the exclusion does not cover it:** line 52 excludes collisions \"with squadron's own receipt names\" as pre-existing. This pack-versus-pack collision is created by D5.\n- **Fix:** reject manifest pack names ending in a reserved suffix. Alternatively, have install and uninstall check the receipt's recorded `pack_name` and destination against the expected target root and exit 1 on mismatch. Add the case to the receipt-name test table.",
+   "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md:134"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Doctor's \"pack ships no Codex content\" row needs a source lookup the design does not specify",
+   "description": "D8 has `check_skill_packs` report `WARN \u2014 pack ships no Codex content` for packs without an `agents/` directory. The status table (lines 104\u2013109) defines `installed_path(entry, root)` only over the install root, which cannot answer that question.\n\n- **What it requires:** resolving the pack source. For `bundled` and local-path sources that is a filesystem read. For `github:` sources it is a `git clone`.\n- **Why it matters:** slice 905 defines doctor as a read-only inspection, and the check is currently manifest-plus-filesystem only. A clone per GitHub pack on every `sq doctor` is a new network path.\n- **Missing failure modes:** nothing is stated for a hung clone, a timeout, being offline, or a local source path that no longer exists.\n- **Fix:** state that the content probe runs only for locally resolvable sources. GitHub packs report plain \"not installed\" with the install hint, since the install itself fails loudly under D2. State what a missing local source reports. Add both to the doctor test list.",
+   "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md:140"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Walkthrough step 7 and criterion 5 expect WARN rows from a bare `sq doctor`",
+   "description": "Doctor hides WARN rows without `-v`. The 925 design corrected exactly this in place (its step 4 and \"Found During Implementation\").\n\n- **Step 7, first command:** by this point `demo` was never installed for Claude and was uninstalled for Codex in step 5. Both are WARN rows, so \"all four rows present\" cannot hold.\n- **Step 7, second command:** the `demo (codex): WARN \"pack ships no Codex content\"` row is also hidden.\n- **Criterion 5 (line 225):** \"shows `<pack> (codex)` rows\" is true only for installed packs unless `-v` is given.\n- **Fix:** use `sq doctor -v` in step 7 and qualify criterion 5.",
+   "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md:277-279"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "The sandbox hint covers three fixed skills while the rule's command list is open",
+   "description": "D12 adds the hint to `sq-review`, `sq-run` and `sq-pr` only. D10 leaves the rule's membership to a probe, with candidates beyond those three: `metrology`, `skills install`, the daemon-client commands, and `auth login`.\n\n- **The gap:** any command that lands in a \"yes\" row and has an agents skill (for example `sq-spawn` or `sq-task`) fails under the sandbox with the same misleading paraphrase #127 reports, and no hint.\n- **Fix:** define the hint set as \"every agents skill whose command is a D10 yes row\", and change criterion 9 to match.",
+   "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md:170"
+  },
+  {
+   "i": 4,
+   "severity": "NOTE",
+   "title": "The drift guard from 925 is not named among the consumers of the D4 move",
+   "description": "925's drift test asserts a bijection `commands/<sub>/<name>.md` \u2194 `commands/agents/<sub>-<name>/SKILL.md`. After D4 the analysis twins live at `commands/analysis/agents/analysis-<name>/`. The migration plan lists \"fixtures\" in `test_install_commands.py`, and line 184 says tests pass \"without edits other than the moved fixture paths\". The guard's lookup rule is logic, not a fixture path. Say explicitly that the guard resolves twins across all AGENTS `bundle_subdirs`, so a task covers it.",
+   "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md:182"
+  },
+  {
+   "i": 5,
+   "severity": "NOTE",
+   "title": "Agents status is inferred from a name glob in a shared root",
+   "description": "`root/p-*/SKILL.md` matches any skill whose name starts with the prefix, including another pack's (`foo` matches `foo-bar-x`) or a user's own. Line 176 says receipts are the only authority in a shared directory. This mirrors the Claude probe and the squadron-versus-pack overlap is pre-existing, so it does not block. Reading the receipt would be exact and is cheap if false \"Installed\" rows turn up.",
+   "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md:104-109"
+  },
+  {
+   "i": 6,
+   "severity": "NOTE",
+   "title": "The pack-format change is not recorded in the skill-pack architecture document",
+   "description": "925 added dated amendment lines to `340-arch.skill-pack-infrastructure.md` for its install-path change. The optional `agents/` directory changes the pack source contract that document owns, but it is recorded only in the README. One amendment line there would follow the precedent.",
+   "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md:196-204"
+  },
+  {
+   "i": 7,
+   "severity": "NOTE",
+   "title": "Scope beyond the plan entry is modest and already acknowledged",
+   "description": "The plan entry names `skills install` and `uninstall` only. The design adds `skills list --ide`, per-target doctor rows, `PACK_LAYOUTS`, and the removal extraction, and the plan entry already records the effort revision to 3/5. `list` and the shared removal routine are needed for a usable Codex path. The per-target doctor rows are the one deferrable piece and carry the under-specification raised above. If the slice needs trimming, cut D8 and leave doctor reporting Claude only.",
+   "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md:310"
+  }
+ ]
+}

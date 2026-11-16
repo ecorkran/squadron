@@ -1,0 +1,68 @@
+{
+ "review": "r03",
+ "findings": [
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Commit markers are checkboxes, each inside its own \"Commit\" task",
+   "description": "Commit markers must be plain `**Commit**:` lines, never checkboxes. Here each commit is a separate task (1.5, 2.4, 3.6, 4.3, 5.5) holding checkbox items (`- [ ] git add \u2026`, `- [ ] **Commit:** \u2026`). The same pattern repeats at lines 176-179, 246-249, 283-286 and 322-325.\n\nFix: remove the five Commit tasks and put one plain line `**Commit**: feat: \u2026` at the end of Tasks 1.4, 2.3, 3.5, 4.2 and 5.4. The marker positions are already at sensible working points, so only the format needs to change.",
+   "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:93-96"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Section 4 commits config changes without re-running the test suite",
+   "description": "Tasks 4.1 and 4.2 switch `config/default.yaml` and `config/test.yaml` to `wrap`, but the only check is a `python -c` load. `tests/conftest.py` and other tests may read these shipped configs, and the first full `pytest` run after the change is in Task 5.1, after the commit.\n\nFix: add `pytest` to Task 4.2 before the commit marker, or merge Section 4 into Section 3 before the 3.5 regression run.",
+   "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:269-286"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Walkthrough Step 8 can leave `test.yaml` violating SC12",
+   "description": "Step 8 says to \"restore `config/test.yaml` to whichever policy you want to keep (recommend `wrap`)\". SC12 requires `test.yaml` to use `policy: wrap`. If the implementer leaves it on `reflect` or `open` after Steps 6\u20137, the committed state fails the criterion.\n\nFix: change Step 8 to \"restore `policy: wrap` in `config/test.yaml`\".",
+   "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:306"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Task 1.3 allows a literal tuple of the policy values",
+   "description": "The step offers \"`sorted(p.value for p in BoundsPolicy)` or a literal tuple\". A literal tuple copies the enum values into a second place, which breaks the project rule that comparison values are defined once. Adding a variant (such as the planned `SOFT` policy) would then mean editing two places.\n\nFix: require the list to be built from `BoundsPolicy` and drop the literal-tuple option.",
+   "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:73"
+  },
+  {
+   "i": 5,
+   "severity": "NOTE",
+   "title": "Task 1.1 would add a duplicate import",
+   "description": "`from enum import StrEnum` is already imported, and `_serialize_for_yaml` uses it. Task 1.1 says to add it, which would create a duplicate import that ruff flags. Change the step to \"confirm `StrEnum` is imported\". The line hints are also out of date: the task says \"line 25\" for `WorldBoundsConfig` (it is at line 47) and \"around line 156\" for `_validate_world_bounds` (it is at line 180).",
+   "location": "src/migratory_server/config.py:7"
+  },
+  {
+   "i": 6,
+   "severity": "NOTE",
+   "title": "Task 3.2's \"zero import-time overhead\" contradicts the Notes section",
+   "description": "Task 3.2 asks the implementer to confirm \"zero import-time \u2026 overhead\" on the `OPEN` path. But the same task makes the import unconditional, and the Notes at line 329 say the import is not avoided. Reword the step to \"no function call or array slicing on the `OPEN` path\".",
+   "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:209"
+  },
+  {
+   "i": 7,
+   "severity": "NOTE",
+   "title": "Making `world_bounds` required breaks about 23 test call sites",
+   "description": "I found 21 `SimulationManager(` constructions in `tests/test_simulation.py`, plus `tests/test_force_builder.py:201` and `tests/test_repulsor_integration.py:53`. Task 3.5 names `test_clients.py`, which does not construct `SimulationManager` directly, and does not name `test_repulsor_integration.py`. Its \"or any other file\" wording still covers it.\n\nSuggestion: say in Task 3.4 to add one shared fixture or helper for a `WorldBoundsConfig`, so the implementer doesn't hand-edit around 23 constructor calls separately.",
+   "location": "tests/test_simulation.py:137"
+  },
+  {
+   "i": 8,
+   "severity": "NOTE",
+   "title": "Unit test matrix can be trimmed slightly",
+   "description": "- The parametrized dispatch test (line 171) repeats what the per-policy tests already prove. Cut it.\n- `test_open_is_noop_positions` and `test_open_is_noop_velocities` can be merged into one test.\n\nThe rest of the matrix matches what the slice asks for (edge-exact, single overshoot, multi-width overshoot).",
+   "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:150-171"
+  },
+  {
+   "i": 9,
+   "severity": "NOTE",
+   "title": "Frontmatter says `status: complete` while every box is unchecked",
+   "description": "The task file is marked complete, but none of its checkboxes are ticked. Task 5.3 is the step that sets this status, so the frontmatter should be `not-started` or `in-progress` until then. The source tree already contains the slice's code (`src/migratory_server/simulation.py:10-11` imports `apply_bounds_policy` and `BoundsPolicy`), so the checkboxes are what's out of date.",
+   "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:9"
+  }
+ ]
+}

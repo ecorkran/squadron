@@ -1,0 +1,61 @@
+{
+ "review": "r04",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "FAIL",
+   "title": "The \"numpy\" backend actually runs Numba because of slice 118's default `USE_JIT_KERNELS = True`",
+   "description": "The design says NumPy is \"the only backend that exists today\" (lines 25-26) and that the `numpy` runner calls `engine.tick.tick()` with \"the five existing `BulkForce` implementations\" (lines 60-62, 138-141). Slice 118 has `status: complete`, and its design (`118-slice.numba-force-jit.md:373-392`) makes those same five forces thin wrappers that pick a path from a module-level `USE_JIT_KERNELS = True` in `flocking.py` / `herding.py`. JIT is the default in production. The consequences:\n- Every timing and parity hash labeled `numpy` would be Numba output. The claim \"the NumPy run is the golden\" (lines 465-466) and the reference hash for slice 145 (line 533) would both be mislabeled.\n- Walkthrough step 9 (lines 661-668) checks the profile shape against Entry 8's numbers, which were measured before JIT. A JIT run will not match that shape.\n- A true NumPy backend has to flip a module-level global. With `--all-backends` in one process (line 481), the `numpy` and `numba` runners would fight over that shared mutable state. Line 342 relies on this \"existing JIT-config flag\" without saying what it is or how runners isolate it.\n- Slice 118 (lines 394-396) plans to delete `_call_numpy` in a later cleanup. That would remove the harness's NumPy reference, and the harness design does not record that dependency.\n- Lines 92 and 341 give the Numba runner to slice 144 (Quadrants force kernels). Numba is available now. The slice plan (`140-slices\u2026md:26`) says backends \"slot in as those backends become available\", and slice 142 needs NumPy vs Numba comparisons. 118 is missing from `dependencies`/`interfaces` (lines 6-7).\n\n**Fix:** Add 118 as a dependency. Define how each runner selects the force path without fighting over one global (for example, run each backend in its own process, or have the runner set and restore the flag in setup/finalize). Either register `numba` in this slice or name 142 as its owner. Re-baseline step 9 against post-JIT numbers (Entry 9).",
+   "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:25-28"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "The per-force breakdown the slice plan assigns to 141 is deferred, and adding it later breaks the \"one file\" promise",
+   "description": "The slice plan entry (`140-slices.simulation-scaling.md:26`) names the phases as \"spatial build, spatial query, CSR assembly, **force totals per force**, integration\". The design collapses `force_total` into one number and pushes per-force timing to slice 142. Two problems:\n- This drops scope the plan gives to this slice.\n- Adding it later means changing `PhaseTimings`, `tick_instrumented`, the JSON schema (a version bump per line 531) and the Markdown renderer. That contradicts the integration requirement that slice 142 lands with \"one file \u2026 and zero changes elsewhere in the harness\" (lines 586-588). Slice 142 exists to benchmark a single force (cohesion), so it needs per-force numbers on day one.\n\nThe design already identifies the cost of collecting them: per-force numbers are one `perf_counter_ns` bracket around each `BulkForce` call inside the force loop that `tick_instrumented` already owns. Include `force_breakdown` now.",
+   "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:292-296"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "`tick_instrumented` copies the whole tick algorithm, and the cost is understated",
+   "description": "Option B is described as \"the timer body is ~5 lines per phase\". In practice `tick_instrumented` reimplements the entire `tick()` body in `bench/backends/numpy_backend.py` (lines 496-501): spatial build, query, CSR assembly, force dispatch, integration, plus the \"density-record dispatch\" and \"profile-attribute fancy indexing\" that line 289 counts as overhead. That conflicts with the project's DRY rule.\n\nThe risk section (lines 682-695) admits that drift in phase boundaries \"is not detectable mechanically\". The reason for rejecting the profiler hook (\"one caller\") is weak:\n- The architecture's first principle (`140-arch\u2026md:38`) calls for live-server measurements across formation states, so a second caller is already expected.\n- The hook could be a no-op callable defaulting to `None` with no `if timer:` branches. That would leave `tick()` behaviorally identical while removing a whole duplicate algorithm.\n\nAt minimum, size the duplication honestly and state that the parity test runs against all three checked-in workloads. Better: reconsider the hook. Slice 140's contract concerns the return type, not whether `tick()` may take an optional observer argument.",
+   "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:244-272"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "The parity hash cannot be used for tolerance-based comparison, which slice 145 needs",
+   "description": "- Lines 469-473 say future GPU backends' hashes will be interpreted \"within the documented tolerance band\". A SHA-256 has no tolerance: any bit difference gives an unrelated digest.\n- Line 533 says slice 145's parity test \"consumes the harness's NumPy parity hash as the reference\". The slice plan (`140-slices\u2026md:36`) defines 145's test as parity \"within a documented tolerance for non-deterministic GPU reductions\", which needs the arrays themselves, not a digest.\n- Slice 118 already accepts \"a different float bit-pattern than NumPy\" (`118-slice\u2026md:178-182`), so the hash will differ even between NumPy and Numba.\n- The design has two internal inconsistencies:\n  - It hashes \"post-warmup\" state (line 81) but also hashes \"after the measure phase\" (line 460).\n  - \"dtype-locked\" (line 461) does not name the dtype.\n- It does not say whether `positions[:count]` is used, even though slice 140 (`140-slice\u2026md:144-149`) explicitly allows `count < len` for GPU backends.\n\n**Fix:** Narrow the hash's stated purpose to same-backend reproducibility, which is what the success criteria actually test (lines 559-560). Remove the slice 145 reference claim, or replace it with an optional `.npz` state dump. The design's own open question (lines 748-755) already names `tools/run_deterministic_trajectory.py` as the parity oracle. Also specify slicing by `count` and float64.",
+   "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:458-473"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "The runner lifecycle in the data flow contradicts the Protocol, and finalize runs before hashing",
+   "description": "- The data-flow diagram shows `BackendRunner.finalize()` producing the final `TickResult`, which is then hashed. The Protocol (lines 329-333) has `finalize() -> None`.\n- Line 338 says `finalize` will \"release GPU memory\". Hashing after finalize would then read released buffers on future backends. Slice 140 (`140-slice\u2026md:218-225`) only promises the arrays stay valid until the next `tick()`, and says nothing about after teardown.\n- Warmup and measurement are drawn as harness steps, but the Protocol only exposes `tick_once`. The design does not say whether warmup ticks go through the same instrumented path.\n\nFix the order (last `tick_once` \u2192 hash \u2192 finalize) and state that the harness keeps the last `TickResult` only until it has been hashed.",
+   "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:195-211"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Failure modes leave out mid-run errors, git metadata and write errors",
+   "description": "The list covers workload load, an unregistered backend, `setup` raising, and low TPS. It does not say what happens in these cases:\n- **`tick_once` raises during warmup or measurement.** Does `finalize` still run? Is a partial report written or suppressed? What is the exit code?\n- **`git rev-parse HEAD` fails** (no git, or not a repo; lines 232-233). Without a stated rule this invites a silent placeholder, which the project's no-silent-fallback rule forbids.\n- **The working tree is dirty.** HEAD's SHA then misrepresents the code that was measured. That breaks the reproducibility claim \"reproducible by repo hash + workload name\" (line 185) and the historical-comparison requirement (lines 592-595). Record a `dirty` flag or refuse to run.\n- **`bench/results/` cannot be created or written** (lines 220, 236).\n- **A backend tick hangs.** There is no timeout. Acceptable for NumPy, but state that it is intentionally unbounded.",
+   "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:508-519"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "Markdown aggregation and some CLI surface are heavier than this slice needs",
+   "description": "- Line 440 says the Markdown report is \"one table per workload across all backends in `bench/results/`\", which implies reading every earlier result file. That is a cross-run comparison feature, which the design itself puts out of scope (lines 104-105, 592-595). It would also put runs from different `git_sha`/platform values side by side in one table without saying so. Limit the Markdown to the records produced by the current invocation. Combining runs belongs to the deferred comparison tool.\n- `--all-backends` (line 481), with one registered backend, and `--workload-dir` (line 482) are not exercised by any success criterion. They can be deferred, and deferring `--all-backends` also defers the shared-process question in the third open question (lines 762-766).\n- The `pytest-benchmark` reuse for stub-backend tests (lines 122-124) adds a dependency on a tool that does nothing a synthetic timer stub doesn't already do.",
+   "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:440"
+  },
+  {
+   "i": 7,
+   "severity": "NOTE",
+   "title": "PhaseTimings needs a measurement rule for asynchronous backends",
+   "description": "`PhaseTimings` is the contract that makes numbers comparable across backends. Lines 262-267 let a Quadrants backend fill it in from \"its own timed kernel launches\". GPU kernel launches are asynchronous: wall-clock brackets without a device sync measure launch latency, not execution time. One sentence in the contract would keep slices 142/143 from producing numbers that look comparable but aren't: each phase value must be measured to completion, with the backend synchronizing before closing a bracket.",
+   "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:262-267"
+  }
+ ]
+}

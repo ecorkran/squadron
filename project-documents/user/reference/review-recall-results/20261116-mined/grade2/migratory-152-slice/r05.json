@@ -1,0 +1,54 @@
+{
+ "review": "r05",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Exit criteria replace the slice plan's baseline and drop \"no regression on k-first\"",
+   "description": "The plan entry for (152) sets three exit criteria: k-nearest TPS at N=200k within 20% of **k-first** TPS at the same N, parity preserved, and no regression on the k-first path. The design changes two of them:\n\n- **Baseline swapped.** The gate is now `k_nearest` vs `radius_only`, a mode that does not exist yet and has no measured baseline.\n- **k-first criterion deleted.** `k_first` is removed outright, so \"no regression on k-first\" cannot be evaluated.\n- **Gate is weaker than it looks.** `radius_only` accumulates every in-radius candidate, while `k_nearest` discards most once the heap is full. `k_nearest` can pass the 20% gate while both modes are slow in absolute terms.\n- **No absolute target.** The plan's scaling goal is 60 TPS per tier, and it records 3 TPS at N=200k for the slice 145 kernel. The design restates no TPS floor for the tick path it rewrites.\n\nFix: keep `k_first` through measurement and gate against it as the plan states, or update the plan entry in the same change. Either way, add an absolute TPS floor at N=200k.",
+   "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md:358"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "`k_first` removal is specified two incompatible ways, with no outcome if the gate fails",
+   "description": "The design gives two incompatible instructions:\n\n- **Hard removal.** Scope item 7 (line 67) and Technical Decisions (line 199) say `k_first` is \"removed entirely\" and raises `ConfigurationError`, with \"no silent migration\".\n- **Soft deprecation.** Mitigation Strategies (line 433) says to ship the new modes alongside `k_first`, \"still parsed, with a deprecation warning\", and remove it in the final commit.\n\nDevelopment step 4 (line 444) describes the final commit as \"one-line edits\" to the default and does not mention removing parsing or the kernel branch. The \"AFTER\" kernel in step 2 already has no `k_first` branch, so a still-parsed `k_first` has nothing to dispatch to between steps 2 and 4.\n\nThe default is also conditional (\"once the TPS gate is met\"), but nothing defines the end state if criterion 4 fails. In that case `k_first`, the current default, is gone from the kernel and `k_nearest` is not approved as default.\n\nFix: pick one sequence. State in which commit the kernel branch, the config value and the default each change, and what ships if the gate fails.",
+   "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md:433"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Original-order outer loop undermines the cross-warp coalescing the slice is built on",
+   "description": "The Overview claims neighbor reads \"coalesce across warp threads\". That needs adjacent threads to read adjacent addresses, which only happens if adjacent threads handle spatially adjacent agents.\n\nThe chosen design keeps `for i in range(n)` in original spawn order. Thread `i` and thread `i+1` therefore scan unrelated cell ranges of `_px_c`. Each thread's own reads become sequential, which helps cache locality, but that is not warp coalescing. The claim at line 169 that \"adjacent agents' heaps tend to evict slots from the same nearby cell range\" fails for the same reason.\n\nThe rejected alternative (outer loop over coherent slots, writeback via `_coherent_to_original`) is the one that delivers the cited Hoetzlein behaviour. It was rejected to avoid 4 scattered writes per agent, against the design's own figures of roughly 160 to 1400 neighbor reads per agent.\n\nThe Risk Assessment does not list this. Criterion 4 cannot detect it, because both modes share the same outer loop.\n\nFix: adopt the coherent-slot outer loop, or justify the original-order choice with a measurement and restate the expected gain as per-thread locality.",
+   "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md:165"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "`radius_only` duplicates the uncapped path, and `max_neighbors <= 0` under `k_nearest` is undefined",
+   "description": "Slice 150 requires the uncapped case: `max_neighbors <= 0` must take the accept-all-within-radius path (its success criterion 4 and verification step 5). Scope item 8 says `radius_only` is that same sub-branch \"promoted to a first-class mode\", but the \"AFTER\" kernel no longer has a `max_neighbors <= 0` branch.\n\nUnder `k_nearest` with `max_neighbors = 0`, the pseudocode behaves like this:\n- `heap_size < max_neighbors` is false.\n- `dsq < heap_dsq[0]` is true, because the root is the INF sentinel.\n- The eviction path then reads `_px_c[heap_idx[0]]` with `heap_idx[0] == -1`.\n\n`max_neighbors` is per-profile while `neighbor_mode` is a global template value, so a mixed-profile config can hit this.\n\nFix: state whether `max_neighbors <= 0` stays supported under `k_nearest` (keep the sub-branch) or becomes a configuration error pointing to `radius_only`. The design also does not say whether `radius_only` ignores a positive `max_neighbors`; say so, and whether that is silent.",
+   "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md:297-312"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "`radius_only` adds scope and carries a sanity gate that is contradictory and likely to fail spuriously",
+   "description": "The plan entry asks for a coherent grid that makes k-nearest viable. The design adds the following beyond that:\n\n- **A new public mode.** `radius_only` touches config, `Workload`, the CLI flag and JIT specialization.\n- **A breaking config change.** Existing `neighbor_mode: k_first` configs now fail.\n- **Unspecified workloads.** The 500k and 1M headroom probes use `mid-flock-500k` and `mid-flock-1M`, which are never listed as work; only `mid-flock-200k` is.\n- **Cross-hardware narrative.** Lines 36-44 and 402 compare against 16M boids on an M1 Max under WebGPU, which cannot be compared to a dev-class CUDA box on Quadrants.\n\nCriterion 3 is labelled \"no pass/fail\" and, in the same paragraph, a \"slice-stop bug\" if `radius_only` at N=10k does not beat 213.9 TPS. Its premise is that coherent reads without a cap are \"strictly less work\" than scattered reads with early exit. That is wrong on the design's own numbers: `k_first` reads at most 32 candidates per agent, while `radius_only` reads and accumulates all of them (about 1400 at this workload's density per slice 150). A 2\u20133\u00d7 bandwidth gain does not cover roughly 44\u00d7 more reads, so this stop condition can halt a correct implementation.\n\nCut: the 16M reference framing, the 500k/1M probes, and the 213.9 TPS stop condition. If `radius_only` stays as a measurement baseline, keep it bench-only and leave the production `ComputeConfig` surface for a plan-level decision. To bound reindex cost, compare `k_first` TPS before and after adding the reindex at step 1; that is also the plan's \"no regression on k-first\" check.",
+   "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md:357"
+  },
+  {
+   "i": 5,
+   "severity": "NOTE",
+   "title": "FRNN collect-then-sort deferred",
+   "description": "The plan entry says k-nearest via FRNN \"becomes viable\" with coalesced reads; slice 150 listed it as Phase 2 of this work. The design keeps the heap and defers FRNN. That is a reasonable reduction and the plan's wording does not strictly assign it, but the plan entry should be reworded so the deferral is recorded.",
+   "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md:187-193"
+  },
+  {
+   "i": 6,
+   "severity": "NOTE",
+   "title": "Minor internal inconsistencies",
+   "description": "- **Writebacks.** Line 461 says writebacks \"scatter to `_px[i]`\"; lines 165 and 331 say they are coalesced.\n- **Risk 2 title.** Line 425 calls the inverse-permutation lookup \"a scattered read\", then says it is coalesced.\n- **Tier 3 figure.** Line 17 says \"Tier 3 target (N=200k)\"; the plan defines Tier 3 as 250k on production-class hardware.\n- **Slice 150 status.** Line 81 says slice 150 is shipped on `main`; the plan has it unchecked and its design is `in_progress`.\n- **Branch name.** Line 439 uses `152-coherent-grid-...`; the project convention gives `152-slice.coherent-grid-for-k-nearest-neighbor-search`.\n- **Step order.** Step 4 marks the plan entry `[x]` before the step 5 visual check, which is success criterion 5.",
+   "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md"
+  }
+ ]
+}

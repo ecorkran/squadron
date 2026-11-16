@@ -1,0 +1,47 @@
+{
+ "review": "r06",
+ "findings": [
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Tick determinism is not addressed and the test plan contradicts itself",
+   "description": "The architecture's \"Tick determinism\" goal says the same state and inputs produce the same outputs, to enable replay and distribution. This design makes tick output depend on dispatcher state (selected backend, last density) that lives outside the agent arrays.\n\n- **Backends are not bit-equivalent.** Slice 105 guarantees identical neighbor sets, but \"order within each agent's neighbors may differ\". Forces reduce floats in CSR order, so positions can differ in the low bits depending on which backend ran.\n- **Replay can diverge.** A run resumed from a logged state restarts on `initial_backend` and can drift from the original run.\n- **The Non-Risks claim is unsupported.** \"It can only pick the wrong one for performance\" ignores the two points above.\n- **The tests contradict each other.** Line 421 requires \"bit-exact position equality against brute-force-only\" while exercising both backends. Lines 359 and 431 allow only set equality \"modulo documented determinism caveats\".\n\nThe design should pick one resolution and state it:\n- canonicalise row order in the wrapper, for example sort each row, and budget the cost;\n- or declare the dispatch state part of replayable state;\n- or downgrade the parity criterion to a tolerance and say so.",
+   "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:406-409"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Default threshold cannot select the grid in the scenarios the design cites",
+   "description": "Line 210 computes about 132 mean neighbors for N=3100 spread uniformly on the 300\u00d7300 world. Line 211 then says that under uniform spread the mean \"can drop below 10\". Uniform spread is roughly the minimum-density arrangement, so on that world the mean never gets near 10.\n\n- **Default adaptive is effectively brute-only.** With `t=10, h=2` the dispatcher starts on brute and never switches, so the plan's stated value (capturing the expansion-phase grid win) is not delivered by default.\n- **Journal data points the same way.** In Entry 4, uniform N=2000 on a 1000\u00d71000 world with r=50 is about 16 mean neighbors, where the grid is 3.3\u00d7 faster. That is still above `t - h = 8`.\n- **Walkthrough step 4 cannot pass as written.** The sweep values 2\u201350 (line 369) all sit below the roughly 100 floor for N=2500, so every value yields 100% brute and no \"optimum in the 5\u201320 range\" can appear.\n- **Step 5 fails for the same reason.** It expects `grid_selected` to be high during expansion (line 377).\n- **An absolute threshold is fragile.** Grid cost scales with candidates per agent and brute cost with `n`, so the crossover is roughly a ratio `mean_neighbors / n`, the same shape as the journal's `max_cell / n`. Entity counts change at runtime, so an absolute value needs retuning each time.\n\nFix: re-derive the default from Entry 4's numbers, widen the sweep range, and either normalise the signal by `n` or justify keeping it absolute.",
+   "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:206-213"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "The `record_density` hook is heavier than the requirement needs",
+   "description": "`tick.py` is typed against `SpatialQuery` but probes for an undeclared method with `hasattr`. That is a hidden interface, at odds with the architecture's \"Clean boundaries\" goal and the project rule to program to contracts.\n\nIt is also unnecessary. `AdaptiveSpatial.query_radius_batch` already returns the raw pre-cap `counts`. The wrapper can compute the signal there (subtracting the self-hit) and apply the switch on the next `build()`. That removes:\n- the `tick.py` change and the `hasattr` guard;\n- the guard test and the \"Special Considerations\" paragraph;\n- the rejected-alternative discussion at line 164.\n\nIt also makes \"the dispatcher is invisible upstream\" (line 53) literally true. The near-duplicate \"Data Flow\" section (240-254) restates \"Tick Integration\" and can be cut too.",
+   "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:145-164"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Empty active subset is unhandled in the density signal",
+   "description": "The signal is `counts.sum() / n_active` (line 25 writes it as `float(counts.sum()) / len(counts)`). The architecture's \"Subset-evaluable tick\" principle lets the caller pass any subset, including an empty one, and \"empty\" is already a parity-test distribution at line 366. With zero active agents this either raises `ZeroDivisionError` mid-tick or produces NaN that silently never switches. The design should state the behavior, for example keeping the current backend when `n_active == 0`, and add a test for it.",
+   "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:116"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Config surface and observability are inconsistent with what the design relies on",
+   "description": "- **`initial_backend` is not actually configurable.** Line 301 calls it operator-configurable and the risk at line 400 discusses an operator setting `initial_backend: grid`. But `SpatialConfig` (171-176) has no such field and `_build_spatial` hardcodes `\"brute\"` (238). The plan does not require this knob, so drop the claim and the constructor parameter, or add the field.\n- **Defaults live in two places.** The constructor defaults `hysteresis_band` to `0.0` (line 88) while the config defaults it to `2.0`. Project rules call for defaults centralised at the config level, so the constructor should take required arguments.\n- **Backend names are raw strings.** `\"adaptive\" | \"grid\" | \"brute\"` are compared in validation, in `_build_spatial` and in the dispatcher. Define them once as an enum.\n- **Switch logging is assumed but never designed.** Walkthrough steps 4 and 5 depend on \"the dispatcher's log output\" with `grid_selected` and `brute_selected` counts, and on a grid-versus-brute tick ratio. Without a specified log line on switch or per-backend tick counters, those steps cannot be run and flip-flop (the first listed risk) is not observable.",
+   "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:166-204"
+  },
+  {
+   "i": 6,
+   "severity": "NOTE",
+   "title": "Test pinning mechanism is left open",
+   "description": "Walkthrough step 2 shows a `MIGRATORY_SPATIAL_BACKEND` env var, while the Testing Strategy (line 432) says a parametrized fixture. Choose the fixture: an env-var override would be a second, undocumented config surface outside `SpatialConfig`. Step 1 also excludes `tests/test_main.py` while step 2 does not.",
+   "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:354-360"
+  }
+ ]
+}

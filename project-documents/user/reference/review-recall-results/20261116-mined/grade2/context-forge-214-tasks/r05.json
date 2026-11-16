@@ -1,0 +1,40 @@
+{
+ "review": "r05",
+ "findings": [
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Commit points are written as checkbox tasks, not `**Commit**:` markers",
+   "description": "Tasks 2C, 3C, 4C, 5C and 6C (lines 71, 94, 117, 126, 134) are `- [ ] **Task NC: Commit**` checklist items. Commit markers must be plain `**Commit**: <message>` lines, never checkboxes. Convert each to a plain marker line after its test task; the placement is already correct.",
+   "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md:71"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Lint runs only after the three feature commits, and late code fixes land under `docs:` commits",
+   "description": "`pnpm lint` first runs in Task 6, after the `feat` commits at 2C, 3C and 4C, so those commits are not at fully checked points. Two later steps can also change code with only a docs commit available:\n- **Task 5:** tells the implementer to fix parity bugs and add tests, but its only commit is `docs: record slice 214 parity sweep results`.\n- **Task 6:** any lint fix would land under `docs: add cf validate design to command reference`.\n\nFix: add `pnpm lint` to the Success line of Tasks 2T, 3T and 4T. Give Tasks 5 and 6 a commit message that fits code changes (for example `fix(cli): \u2026` when source changed), with the docs message used only for docs-only changes.",
+   "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md:119-134"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Task 4T does not say how to pick designs \"that pass the bash script today\"",
+   "description": "The step requires several real slice designs that pass the bash script, but the script is first run in Task 5. A junior implementer is likely to pick files that pass the new command, which makes the test circular and loses the parity intent of the criterion. Add a sub-step to Task 4T: run `./project-documents/ai-project-guide/scripts/validate-slice-design` over `project-documents/user/slices/*-slice.*.md` and take the test inputs from the files it reports as `PASS`.",
+   "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md:108"
+  },
+  {
+   "i": 5,
+   "severity": "NOTE",
+   "title": "Some exit-2 conditions are tested only at core level, and \"unreadable\" is untested",
+   "description": "Directory-as-file and template-without-markers are asserted in Task 3T but not in Task 4T's exit-2 list (line 113). Unreadable file, unreadable template and the \"wrap unexpected `fs` error\" path have no test at either level. This is acceptable because the CLI sends one error type through `handleError(err, 2)` and permission-based tests are unreliable in CI. Adding directory-as-file to the 4T list would be a cheap extra check; no new task is needed.",
+   "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md:91"
+  },
+  {
+   "i": 6,
+   "severity": "NOTE",
+   "title": "Task 0 hard-codes `main` instead of using the configured target",
+   "description": "Task 0 expects an empty integration branch and stops for the Project Manager otherwise. The branch rules say to fork from the configured target whatever it is. Reword to `git checkout -b 214-slice.native-slice-design-validation {target}` and drop the stop condition.",
+   "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md:37-38"
+  }
+ ]
+}

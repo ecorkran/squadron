@@ -1,0 +1,54 @@
+{
+ "review": "r07",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Walkthrough 8.1 does not verify SC4, SC10 (sourcing and `[INFERRED]` rule) or SC12",
+   "description": "Tasks 4.1, 7.1 and 7.3 write the text for these criteria, but no Task 8 check confirms the written document meets them:\n- **SC4** (why-now, audience evolution and methodology preference appear nowhere, as content or as gap markers): 8.1's checklist has no check for these topics. Add a step that scans the written `000-concept.squadron.md` for them, and for gap markers that name them.\n- **SC10**: 8.1 only checks that the engagement-questions and inferred-claims lines exist. It doesn't check for one Section-sourcing outcome per section (all seven) taken from the defined outcome set. It also doesn't check that each `[INFERRED]` sentence meets the rule from 7.1 (comes from a named field but says more than the field states; plain restatements are unmarked).\n- **SC12** (\"a PM would edit rather than discard\"): no task records this judgment, even though the PM is present in 8.1. Add a step that asks the PM for an edit-or-discard verdict and records it in the DEVLOG entry (9.2).\n- 8.1 also leaves out the design's own walkthrough check \"no interview content beyond Q1's half\" for Problem & Motivation and Target Users (design step 3, line 404). Without it, SC2 and SC3 are only partly checked.",
+   "location": "project-documents/user/tasks/363-tasks.concept-generation.md:304-318"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Commit markers are checkboxes, and there is one after every task",
+   "description": "Every commit marker is a checklist item (`- [ ] Commit: ...`), at lines 99, 125, 164, 185, 221, 254, 296 and 351. Markers should be plain `**Commit**:` lines, not checkboxes.\n\nThere are also seven commits in Tasks 1\u20137 for a slice that edits one markdown file. At least one marks a point where the work doesn't function: after Task 1, `concept` routes to an empty section shell. Reduce to two or three markers at real working points:\n- after Task 4 (selector, preconditions, sources and mapping)\n- after Task 7 (flow complete)\n- after Task 8 (walkthrough evidence plus the generated concept)",
+   "location": "project-documents/user/tasks/363-tasks.concept-generation.md:99"
+  },
+  {
+   "i": 2,
+   "severity": "NOTE",
+   "title": "Text-only verify subtasks inflate the file; merge them into the authoring tasks",
+   "description": "Subtasks 1.2 and 4.2 (lines 181\u2013184) only re-read text against the design. Their authoring tasks' \"Success\" lines (1.1 and 4.1) already require this. Fold them in.\n\nSubtask 0.2 repeats the Verified anchors table traced on the same day (lines 36\u201346). It's harmless as a quick STOP gate, but it could be one line.\n\nKeep 5.3, because byte-identical question wording is central to SC2. Also keep 2.2, 3.4 and 6.3, which actually run against the repo. Merging gets the file to about 25 subtasks.",
+   "location": "project-documents/user/tasks/363-tasks.concept-generation.md:94-98"
+  },
+  {
+   "i": 3,
+   "severity": "NOTE",
+   "title": "Scratch-copy walkthroughs 8.2 and 8.3 don't say how to set them up",
+   "description": "**8.2:** precondition 3 (2.1) requires the cf project registration to resolve a name. A copied tree may not be registered. If it isn't, the run stops at the precondition and never reaches the decline path. The task should say how the scratch copy gets a registration, or tell the agent to confirm `cf get` resolves there first.\n\n**8.3:** it says \"point the check at it\", but the skill reads a fixed path (`project-documents/ai-project-guide/...`). The task doesn't say how to point it elsewhere. One way is a scratch tree whose guide copy has the heading renamed. A junior agent needs that method spelled out, or may be tempted to touch the real guide.",
+   "location": "project-documents/user/tasks/363-tasks.concept-generation.md:320-330"
+  },
+  {
+   "i": 4,
+   "severity": "NOTE",
+   "title": "SC7 failure is exercised only for the renamed heading",
+   "description": "SC7 has three failure cases: guide absent, guide unreadable, and section title missing. Task 8.3 exercises only the renamed-heading case. That matches the design's walkthrough, and the other two stop paths are written in 6.1. Removing the guide in the same scratch tree would be a cheap way to cover the absent case too.",
+   "location": "project-documents/user/tasks/363-tasks.concept-generation.md:326-330"
+  },
+  {
+   "i": 5,
+   "severity": "NOTE",
+   "title": "Augment fill path in 8.4 is untested",
+   "description": "SC8 requires the \"mechanical refillability\" test for augment: re-runs fill only sections that are empty or hold just a gap marker. 8.4 checks that populated sections stay byte-identical, but the 8.1 document probably has no gap-only sections, so nothing gets filled. Running augment against the 8.2 decline-path document, which has Q1/Q2 gap markers, would exercise the fill side.",
+   "location": "project-documents/user/tasks/363-tasks.concept-generation.md:332-336"
+  },
+  {
+   "i": 6,
+   "severity": "NOTE",
+   "title": "Task 0.1 assumes the target branch instead of reading it",
+   "description": "Task 0.1 states \"integration branch is unset; target is `main`\". Project rules say to run `cf config get git.integration_branch` and use its value, and this checkout is a git worktree, where that value can differ per checkout. Replace the claim with the command and branch from whatever it returns.",
+   "location": "project-documents/user/tasks/363-tasks.concept-generation.md:59-63"
+  }
+ ]
+}

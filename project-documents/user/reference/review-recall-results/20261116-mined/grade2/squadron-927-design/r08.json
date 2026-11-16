@@ -1,0 +1,33 @@
+{
+ "review": "r08",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Walkthrough step 6 cannot capture the per-profile ids that D9's mitigation depends on",
+   "description": "D9 (line 185) and the Mitigation section (lines 362\u2013363) put the whole OpenRouter/local false-substitution risk on Phase 6 capturing real `answering_models` \"from one review per configured profile (sdk, openai, openrouter, local)\". The plan requires this: \"an alias resolving to its own snapshot is not reported as a substitution\" (slice plan line 443). But step 6 says \"for each profile\" and then gives one fixed command, `sq review slice 927 --model sonnet -v`. That command picks the same alias on every run, so it never selects the openai, openrouter or local profiles. Followed as written, it captures only SDK ids, and the one guard against D9 false positives never runs. A gate reads `requestedModel` presence as proof of substitution (D10), so that contract would be wrong on those profiles.\n\nThis is also the hallucination-trap pattern CLAUDE.md warns about: a fixed example placed next to an instruction to repeat something per source. Fix: say how each profile is selected (the model alias or profile flag per profile), with no example value that can be copied verbatim. Add one line saying what to record when a profile has no credentials, so it is skipped explicitly rather than silently.",
+   "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:348-353"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "A missing stamp from a provider that normally reports is mislabeled \"not reported by provider\", and no warning fires",
+   "description": "D11 treats any empty `answering_models` as \"provider does not report\". It writes `Answering model: not reported by provider` and deliberately logs no WARNING, which makes sense for Codex. But SDK and OpenAI-compatible providers do report, and D8 (line 174) stamps only on the final Message that also carries `stop_reason`. The design never covers the case where that final message is missing or unstamped while a `ReviewResult` is still produced:\n- the stream ends or the peer disconnects after assistant text but before the SDK `ResultMessage`;\n- the OpenAI agentic loop exits on a path that skips `_stamp_tool_telemetry`;\n- the recovery turn's capture replaces rather than appends.\n\nIn each case the models seen are thrown away. The artifact then states a provider limitation that is false, with no observable signal. That is the same silent class this slice exists to close, and it breaks the review rule that every failure mode must be observable (WARNING or higher).\n\nFix: list these cases. Either state that each one cannot reach `run_review_with_profile` with a result (and why), or key the \"not reported\" wording and the no-warning rule on the provider kind. Codex stays quiet. A reporting provider that stamped nothing logs a WARNING and gets a different digest line. Add one test asserting that signal.",
+   "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:198-202"
+  },
+  {
+   "i": 6,
+   "severity": "NOTE",
+   "title": "\"Any successful tool call\" is a weak proxy for having read the omitted part, but the plan sets it",
+   "description": "Under D4, a model that made one successful but unrelated tool call keeps its PASS, even when D3 dropped the whole diff. This follows the plan's wording, \"where the model did read files stays a normal verdict\" (line 442), so it is not a defect in this design. The `diffTruncated: true` field and the header counts still show it. Worth noting for #137/#138, if a later slice wants to check that the reads actually covered the omitted files.",
+   "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:131-135"
+  },
+  {
+   "i": 7,
+   "severity": "NOTE",
+   "title": "Metrology identity changes once for OpenAI-direct judges",
+   "description": "`metrology/identity.py` keys judge identity on the `aiModel` frontmatter key (`_FM_MODEL = \"aiModel\"`). D10 acknowledges that judges whose API returns dated snapshots will move from `gpt-5` to `gpt-5-2025-08-07`, so new data will not pool with history recorded under the bare id. The design says this is intended, and the snapshot behind older artifacts cannot be recovered anyway. No action is needed beyond the CHANGELOG bullet already planned. The plan's risk line (444) mentions context-forge gates but not metrology, so the 900 entry could add it.",
+   "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:196"
+  }
+ ]
+}

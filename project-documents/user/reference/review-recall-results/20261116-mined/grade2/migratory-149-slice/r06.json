@@ -1,0 +1,40 @@
+{
+ "review": "r06",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Gate runs that are meant to measure each change separately are identical commands",
+   "description": "Step 3 lists four runs: baseline/counter-gating, early-exit only, subdivision only with counter-gating, and both changes. The baseline and \"early exit only\" commands are byte-for-byte the same (`--subdivision-factor 1`). So are \"subdivision only\" and \"both\" (`--subdivision-factor 3`). The design adds no switch to turn early exit on or off. Once Intervention 1 lands, the \"counter-gating\" rows cannot be produced, and the claim that the two changes \"compose multiplicatively\" (line 58) cannot be tested.\n\nThe lighter fix is to cut the two ablation rows. A2 compares against the recorded slice 145 baseline (38 TPS), so it does not need a live counter-gating run. Adding an early-exit switch only to measure each change separately is configuration that nothing else uses.\n\nA related problem is in Step 1 (lines 143\u2013148). It asks for an S=3 vs S=1 equivalence check, but the command shown is a plain `pytest -k quadrants_fused` with no subdivision parameter. Name the test that performs this check, or drop the sentence; A4 already covers parity against the numpy reference.",
+   "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:158-178"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "How `S` reaches the backend is unspecified, and `cell_size` and `S` can conflict",
+   "description": "Line 80 says the `setup()`/`tick()` interface is unchanged and that \"`cell_size` and `S` are configuration inputs\". It does not say which configuration object `setup()` reads them from, or how. The component diagram shows `BenchConfig` holding both `cell_size (= query_radius / S)` and `subdivision_factor S`. If both are independent settings, a config with `cell_size=50, S=3` scans 7\u00d77 cells of 50 units each, which is correct but slow and silently defeats the change. Specify that `cell_size` is derived from `query_radius / S` in one place, with `S` the only setting.\n\nThe same gap affects slice 146. Line 111 says 146 is unblocked because the external API is unchanged. But A3's stated purpose (line 116) is headroom before 146 wires the GPU tick into production. With the production default S=1, 146 gets only the early-exit gain, not the S=3 gate setup. The design should say whether `subdivision_factor` lives in config that the production engine path can also read, or explicitly hand that wiring to 146.",
+   "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:80-100"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "A5 (no register spill) is a CUDA gate with no defined way to check it",
+   "description": "A5 is not in the slice-plan exit criteria, but this design makes it a gate. Step 4 (lines 180\u2013182) checks it with \"`TI_PRINT_KERNEL_STATS=1` or equivalent\" and \"`nvcc --ptxas-info` or benchmark log\". Quadrants builds kernels itself rather than through user-run `nvcc`, so the check depends on a flag the design does not confirm exists. That leaves a gate that may not be checkable on the CUDA host.\n\nThe concern behind A5 is real: making the scan bounds a runtime `S` can raise register pressure. Either name the confirmed Quadrants mechanism for printing ptxas stats, or downgrade A5 to a diagnostic that A2/A3 performance results stand in for.",
+   "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:124"
+  },
+  {
+   "i": 3,
+   "severity": "NOTE",
+   "title": "\"Correct neighborhood is preserved\" overstates it: which 32 neighbors are picked depends on scan order and on S",
+   "description": "Subdivision keeps the same physical search area. It does not keep the same accepted set. First-k-found takes candidates in `drow`/`dcol` order starting at the (-S,-S) corner, so the 32 neighbors picked lean toward one side. The slice 145 design (`145-slice...md` \"Parity gap\") already accepts this lean, and at ~5000 agents per cell S=1 shows it too. Changing S changes which cells supply the 32, so behavior may shift. A4's 20% statistical parity is the right guard. The wording should say the search region is preserved and the selected neighbors may differ, rather than imply the neighborhood is the same.",
+   "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:56"
+  },
+  {
+   "i": 4,
+   "severity": "NOTE",
+   "title": "The reasoning for the S \u2264 8 cap is inaccurate, and the cap is a magic number",
+   "description": "Line 78 says S=8 is \"larger than the physical neighborhood\". It is not: by construction, a (2S+1)\u00b2 scan at `cell_size = r/S` covers exactly radius r for any S. The real costs of a large S are a cell count that grows with S\u00b2 and more per-cell loop overhead. Restate the reason in those terms. Also define the limit once as a named constant, per the project rule against scattered comparison values, and reject `bool` in the type check (`isinstance(True, int)` is true in Python).",
+   "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:69-78"
+  }
+ ]
+}

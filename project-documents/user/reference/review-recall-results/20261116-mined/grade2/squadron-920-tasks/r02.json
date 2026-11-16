@@ -1,0 +1,61 @@
+{
+ "review": "r02",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Commits at Tasks 6, 7 and 9 would land with failing tests; their tests come 3\u20134 tasks later",
+   "description": "- **Task 6** removes the `is_rate_limit_event(exc.data)` special case (`src/squadron/providers/sdk/agent.py:128`). After that, `test_a_rejected_rate_limit_event_reaches_the_backoff` (`tests/providers/sdk/test_agent.py:648`) fails. It feeds in a `MessageParseError` with a `rate_limit_event` payload, which is now skipped with a WARNING instead of backing off.\n- **Task 9** deletes `install_rate_limit_parser_shim`. The four `test_the_shim_*` tests import it locally (`test_agent.py:701-760`), so they fail at that commit.\n- **Task 7** removes the shim from `sdk_session.py`, but the exclusion-set fix is in Task 8. Until then, informational events reach `response_parts` (`src/squadron/pipeline/sdk_session.py:173`). That brings back the issue #23 leak in Task 7's commit.\n\nThe rewrites that make these green are in Task 10 (after 6 and 9) and Task 11 (after 7). This breaks the test-with pattern. A junior AI running tests at Task 6 will see red with no instruction on what to do.\n\n**Fix:**\n- Put each test rewrite directly after its implementation: Task 10's agent.py rewrites after Task 6, Task 11 after Task 7.\n- Delete the four shim tests in the same task that deletes the shim.\n- Merge Task 8 into Task 7.",
+   "location": "project-documents/user/tasks/920-tasks.claude-agent-sdk-upgrade-and-rate-limit-parser-shim-retirement.md:58-101"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Task 6 contradicts itself on informational events",
+   "description": "The step says: \"log at DEBUG and continue the loop **without yielding it** to the caller \u2026 **let it flow to translation** as normal.\" Both can't be true. In query and client mode, `translate_sdk_message` runs in the caller on whatever `_skip_unparseable` yields (`agent.py:155-156`, `agent.py:203-205`). If the event isn't yielded, translation never sees it.\n\nThe slice has the same tension: D4 says informational events \"must not reach translation\", while D6 says they should be \"observable rather than dropped\". The task should pick one and say so. Two options:\n- Yield informational events so Task 4's translation branch is reachable in agent mode.\n- Skip them in `_skip_unparseable`, and accept that D6's branch only matters for pipeline `dispatch`.\n\nWhichever is chosen, Task 10's `allowed_warning` test needs to assert the matching behavior (message yielded or not).",
+   "location": "project-documents/user/tasks/920-tasks.claude-agent-sdk-upgrade-and-rate-limit-parser-shim-retirement.md:61"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Task 6 misses the third `RATE_LIMIT_MARKER` check, which risks Success Criterion 6",
+   "description": "Task 6 says to replace \"both `RATE_LIMIT_MARKER in str(exc)` gates\". Query mode has a second check at line 180 that decides whether running out of retries raises `ProviderRateLimitError` or a plain `ProviderError`.\n\nTask 2 never says what message `RateLimitRejected` carries. If the message doesn't contain `\"rate_limit\"`, a run that exhausts retries on typed events raises a plain `ProviderError`. That violates SC6. `test_exhausted_rate_limit_raises_a_distinct_error` would catch it, but only in Task 10, and only if the implementer reads the failure correctly.\n\n**Fix:** have Task 6 also replace line 180 with `_is_throttle(exc)`. Alternatively, have Task 2 require that `RateLimitRejected`'s message contains `RATE_LIMIT_MARKER`.",
+   "location": "src/squadron/providers/sdk/agent.py:180"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Commit markers are checkboxes and appear after every task",
+   "description": "Every task ends with `- [ ] Commit: ...`. That's 14 commit checkboxes. Commit markers should be plain `**Commit**:` lines, not checkboxes, placed at working, tested points rather than after every task.\n\nThe file is also heavier than a slice with effort 3/5 needs, at 16 tasks:\n- Task 8 is a one-line change in the same loop as Task 7.\n- Task 12 is verify-only and duplicates Task 13's `pytest tests/providers tests/metrology` run.\n- Tasks 3 and 5 could be folded into Tasks 2 and 4 under test-with.\n\n**Fix:** merge 8\u21927, 12\u219213, 3\u21922 and 5\u21924. Use roughly 4\u20135 plain `**Commit**:` markers:\n1. After the dependency bump.\n2. After classification and translation with their tests.\n3. After agent.py with its tests.\n4. After sdk_session with its tests and the shim deletion.\n5. After closeout.",
+   "location": "project-documents/user/tasks/920-tasks.claude-agent-sdk-upgrade-and-rate-limit-parser-shim-retirement.md:28"
+  },
+  {
+   "i": 4,
+   "severity": "NOTE",
+   "title": "Success Criterion 7 ends up with only a unit test",
+   "description": "Task 10 converts every plain `ClaudeSDKError(\"rate_limit...\")` test to a typed event. After that, the retained substring path (genuine 429) is covered only by Task 3's direct `_is_throttle` unit test. That's adequate because all three gates call `_is_throttle`. Still, keeping one existing retry test aimed at a plain 429-style message (one that doesn't match Task 10's grep) would preserve end-to-end proof of SC7 at almost no cost.",
+   "location": "project-documents/user/tasks/920-tasks.claude-agent-sdk-upgrade-and-rate-limit-parser-shim-retirement.md:94"
+  },
+  {
+   "i": 5,
+   "severity": "NOTE",
+   "title": "Client-mode docstring will be stale and no task covers it",
+   "description": "`_handle_client_mode`'s docstring says \"when the CLI emits a `rate_limit_event` the SDK raises `ClaudeSDKError`\". After the upgrade that's false. Part B asks for stale docstrings and comments to be rewritten, but Task 6 only rewrites `_skip_unparseable`'s docstring. Add a sub-item to Task 6.",
+   "location": "src/squadron/providers/sdk/agent.py:187-191"
+  },
+  {
+   "i": 6,
+   "severity": "NOTE",
+   "title": "Shim grep only checks `src/`, while SC2 covers `src/` and `tests/`",
+   "description": "Task 9's success grep only checks `src`. Task 10 deletes the tests that reference the shim, so the outcome is right, but no step verifies `grep -rn install_rate_limit_parser_shim tests` as walkthrough step 1 does. Add it to Task 10's or Task 13's success line.",
+   "location": "project-documents/user/tasks/920-tasks.claude-agent-sdk-upgrade-and-rate-limit-parser-shim-retirement.md:88"
+  },
+  {
+   "i": 7,
+   "severity": "NOTE",
+   "title": "No unit test asserts the WARNING required by SC3",
+   "description": "SC3 requires a WARNING that names the attempt number. Only Task 15's manual forced-throttle check confirms it. That meets the walkthrough. A `caplog` assertion in one of Task 10's rewritten tests would make it a regression test, but this is optional.",
+   "location": "project-documents/user/tasks/920-tasks.claude-agent-sdk-upgrade-and-rate-limit-parser-shim-retirement.md:137"
+  }
+ ]
+}

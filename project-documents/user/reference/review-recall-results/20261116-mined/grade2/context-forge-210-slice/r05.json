@@ -1,0 +1,54 @@
+{
+ "review": "r05",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "FAIL",
+   "title": "The translation's input format doesn't match the real source files",
+   "description": "The design translates `.claude/rules/*.md` using a `paths: string[]` frontmatter field, and splits on `alwaysApply`. It translates skills from flat `.claude/skills/commit.md` files. The real inputs don't look like that:\n- **Rules have no frontmatter.** Files like `.claude/rules/typescript.md` start straight at the `# TypeScript Rules` heading, with no `paths` or `alwaysApply`. So the rule that decides what goes to `copilot-instructions.md` and what goes to `.github/instructions/` (lines 44, 83) has nothing to work with. Every rule would hit the \"absent paths\" branch.\n- **The guide script reads a different source.** It reads `project-guides/rules`, and its `validate_frontmatter` expects Cursor-style `globs:`, not `paths:`. Its `claude` branch never writes `.claude/rules/` or `.claude/skills/`.\n- **Skills are folders, not flat files.** They look like `.claude/skills/analyze/SKILL.md`, with frontmatter such as `disable-model-invocation`.\n\nThe design needs to say which source the `copilot` backend reads (`project-guides/rules` or the compiled `.claude/` output). If it reads `.claude/`, it depends on `cf setup-ide claude` having run first. That dependency is hidden, and it contradicts the \"Copilot-only user\" goal. The design also needs to name the real field the split is based on (`globs`, `alwaysApply`, or something else) and the real skill layout. Without that, the plan's success criterion \"Path\u2192applyTo translation correctly converts Claude frontmatter\" can't be met.",
+   "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:32-48"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Writing the same content to both `AGENTS.md` and `copilot-instructions.md` undoes the single-file rationale",
+   "description": "The design picks one compiled always-on file because VS Code combines instruction files in no guaranteed order. It then writes identical content to both `.github/copilot-instructions.md` and `AGENTS.md`, and the tool guide says VS Code loads both as always-on. Copilot will therefore load the same rules twice. If the project also has a `CLAUDE.md`, which VS Code reads for compatibility, it loads them three times. The plan entry allows `copilot-instructions.md` \"(or `AGENTS.md`)\". Pick one as the full always-on target and make the other a short pointer, or say explicitly why loading it twice is acceptable.",
+   "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:59-61"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "The overwrite safety check misses per-file instructions and prompts",
+   "description": "Only `.github/copilot-instructions.md` and `AGENTS.md` are checked for the managed marker. A repo with hand-written `.github/instructions/typescript.instructions.md` or `.github/prompts/review-pr.prompt.md` would have them overwritten silently, with no prompt and no `.bak`. That breaks the plan's criterion \"Re-running on a project with existing unmanaged files prompts before overwriting\". Either extend the check to every target path the backend will write, or write generated files under a CF-owned subfolder (e.g. `.github/instructions/cf/`) so they can't collide.\n\nRelated gap: the design doesn't cover a source rule or skill being removed. The old generated `.instructions.md` stays in place and keeps applying through `applyTo`, and worktree propagation (copy-only) spreads it further. Say whether managed files that are no longer produced get deleted.",
+   "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:98-100"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "The marker helper is named and shaped two ways, and duplicates existing logic",
+   "description": "Line 29 defines `isManagedCopilot(filePath)`. Line 109 defines `isManagedCopilotFiles(projectPath)`, which has a different parameter and different semantics. `isManagedClaudeMd` already is a general \"marker in first 20 lines\" check. Generalise it into one `isManagedFile(path)` with a single marker constant, rather than \"replicating\" it (line 65), which breaks the DRY rule in CLAUDE.md. Then settle on one signature in Interfaces and Files Changed.",
+   "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:29"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "No tests for the guide-side translation, the slice's riskiest part",
+   "description": "Every listed test exercises the CF CLI wrapper. Nothing tests the guide script: the `paths` (or `globs`) to `applyTo` conversion, the split between always-on and scoped rules, skill-to-prompt frontmatter mapping, or that the managed marker is written into each generated file. The design itself rates the submodule as \"the highest-risk coupling\" (line 133). Under the project's parsing rules, those tests need fixtures in the real production format (frontmatter-less rules, `SKILL.md` folders). Add them, or state where guide-script tests live.",
+   "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:121-129"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Plan items left out: skill-to-prompt field mapping, agent mapping, tool guide reference",
+   "description": "Three things the plan entry assigns to this slice are missing:\n- **Prompt frontmatter mapping.** The plan lists the prompt fields (`name`, `description`, `argument-hint`, `agent`, `model`, `tools`). The design never says how skill frontmatter (`name`, `description`, `disable-model-invocation`, \u2026) maps to them.\n- **Agent mapping.** The plan says to \"document mapping\" for `.claude/agents` to Copilot custom agents. The slice says it will \"document the mapping\" (line 54) but never does.\n- **Tool guide.** A plan success criterion requires the tool guide `project-documents/user/tool-guides/copilot-vscode/setup-ide.md` to be referenced in the slice design. It isn't referenced anywhere.\n\nEach is a short addition.",
+   "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md#technical-scope"
+  },
+  {
+   "i": 6,
+   "severity": "NOTE",
+   "title": "An older guide submodule fails with a generic error",
+   "description": "With a guide version that has no `copilot` case, the script prints \"Unsupported IDE\" and the CLI then reports a generic `setup-ide exited with code 1`. Risks calls this \"a clear error\". That's acceptable, but naming a minimum guide version, or pointing the user to `cf guides update` in that message, would make it so. Nothing blocks the slice here.",
+   "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:133"
+  }
+ ]
+}

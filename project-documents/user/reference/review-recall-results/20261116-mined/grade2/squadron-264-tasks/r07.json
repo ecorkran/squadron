@@ -1,0 +1,47 @@
+{
+ "review": "r07",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Protocol/transport-error row of the failure-mode table has no deterministic test",
+   "description": "The design says \"Each row above has a test asserting the observable signal\" (slice design line 149-150). The `McpError` / closed-stream row is implemented in Task 4.3 but never tested.\n\n- Task 5.4 lists only \"timeout, server isError, spawn failure\" for the `caplog` assertions.\n- `test_unknown_tool_name` (5.1) is the nearest test, but an unknown tool may come back as an ordinary `isError` result rather than `McpError`, depending on how the fixture is built.\n- No Task 3 fixture tool closes the stream mid-call.\n\nFix: add a `crash` tool to the Task 3 fixture (exits the process mid-call) and a `test_transport_error_maps_to_error_result` in Task 5 that asserts `is_error` and the WARNING.",
+   "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md:162-176"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Two of the four result-mapping rules are untested",
+   "description": "Success criterion 2 requires results mapped \"per the Result mapping rules\". Task 4.2 implements all four, but Task 5 only covers single text, `isError` and zero blocks.\n\n- **Multi-block join:** nothing tests that several `TextContent` blocks are joined with `\\n`.\n- **Non-text blocks:** nothing tests that they are noted by type rather than dropped, and the fixture (Task 3.1) has no tool that emits either shape.\n\nFix: add one fixture tool returning two text blocks plus one non-text block, and one test in 5.1 asserting the joined content and the type note.",
+   "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md:156-163"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Live non-SDK model demo has no task, yet the slice is marked complete",
+   "description": "Success criterion 6 has two halves. The `cf_workflow_status` half is covered by Tasks 8.2 and 9.1. The second half (a non-SDK model dispatch calling `cf_build_context`, walkthrough step 4) has no checkbox.\n\nTask 9.3 only adds a prose note that it \"remains open\", and the same step sets the task file and slice design to `status: complete`. That closes the slice with a success criterion unmet and nothing unchecked to show it.\n\nFix: add an explicit unchecked item for walkthrough step 4 in Task 9. If it cannot run inside the implementing session, leave it unchecked with a `BLOCKED:` line and do not set `status: complete` in that state.",
+   "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md:289-292"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "No CI-runnable test drives an executor through a real stdio spawn",
+   "description": "Success criterion 3 says \"against the fake python MCP server, an executor returns the server's text\". Task 5 calls `call_mcp_tool` directly, and Task 7 mocks `call_mcp_tool` everywhere.\n\nThe real path (config read, `shlex.split`, `StdioServerParameters(cwd, env)`, spawn) is only exercised by Task 8.2, which skips when node is absent. In CI without node, a wiring bug between `cf_tools` and `mcp_bridge` passes every test.\n\nFix: add one test to Task 7 that sets `cf.mcp_command` to the fake server (via `sys.executable`), with the fixture exposing a `workflow_status` tool. It should assert that the materialized `cf_workflow_status` executor returns the fixture's text.",
+   "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md:228-243"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Per-task commit checkboxes and over-split tasks for a 2/5 slice",
+   "description": "Every task ends in a commit checkbox, and the protocol says \"a task is not done until committed\". That gives nine commits, three of them (Tasks 1, 4, 6) before the tests for that code exist. Task 4 is committed on a \"manual smoke\" alone.\n\nCommit points should be plain `**Commit**:` lines at tested points, not checkboxes after every task. Suggested cuts and merges:\n\n- **Task 2 into Task 1:** two default-value assertions do not warrant their own task and commit.\n- **Commit pairs together:** one commit each after Task 2, Task 5 and Task 7, so each lands implementation with its tests.\n- **Drop the manual smokes:** the Task 3 and Task 4 smoke criteria (lines 118-119, 151) duplicate `test_echo_round_trip` in 5.1.",
+   "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md:57-61"
+  },
+  {
+   "i": 5,
+   "severity": "NOTE",
+   "title": "Task 3 fixture does not list what Task 5.2 needs from it",
+   "description": "Task 5.2 relies on the fake server writing its PID to a temp file at startup, but Task 3.1 does not list that behavior. The implementer will have to reopen the fixture after it is committed; add it to 3.1.\n\nSeparately, the Task 3 intro says \"tasks 5, 6 both need a real stdio peer\". Task 6 is the descriptor implementation and Task 7 uses a mocked transport, so the reference should be Task 5 (and Task 7 if the executor test above is added).",
+   "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md:100-115"
+  }
+ ]
+}

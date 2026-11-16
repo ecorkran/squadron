@@ -1,0 +1,54 @@
+{
+ "review": "r06",
+ "findings": [
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Logout and the login start phase have no timeout or failure handling",
+   "description": "The failure table and D7 bound three things: `thread.run`, `handle.wait()`, and \"runtime start + `account()`\". Two new I/O paths are left out:\n- **`sq auth logout`:** runtime start plus `AsyncCodex.logout()` has no timeout key, no failure row, and no stated behaviour if the RPC fails or the runtime dies. The test list names only \"logout\", with no failure case.\n- **Login before `wait()`:** `codex.login_timeout_s` is defined as bounding `handle.wait()` only. Runtime start plus the `login_chatgpt()` / `login_chatgpt_device_code()` request is unbounded.\n- **Runtime exit during `wait()`:** a transport close while waiting on login has a row for turns but not for login. The design does not say whether the handle is cancelled or what the exit message is.\n\nFix without adding keys: reuse `codex.account_timeout_s` (or rename it to a general RPC timeout) for logout and login start, and add those rows to the table.",
+   "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:116-135"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "The `OPENAI_API_KEY` verification step is under-specified and can destroy the user's login",
+   "description": "Step 0 gates the whole slice on a live check whose procedure is \"unset `~/.codex/auth.json`\". The fallbacks are a `CODEX_HOME`-style location \"only if the runtime supports one\", otherwise \"a machine without a login\".\n- **Destructive reading:** read literally, the step removes the developer's real credential file.\n- **Unresolved facts:** the design does not establish whether the runtime supports a relocated home, and an implementing agent has no second machine.\n- **Open contract:** the four `OAuthFileStrategy` methods have two possible shapes until the check runs, so the design does not fix their behaviour.\n\nThe design should settle the isolation mechanism now. It should state whether the runtime honours a home override and require the check to run only against that throwaway location, never the real file. It should also say which outcome applies if the check cannot be run in isolation. The fail-explicit default is to remove the fallback.",
+   "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:232"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "SDK version bound is contradictory and the drift guard may never run",
+   "description": "D1 specifies `openai-codex>=0.159.3,<1`, while D1 and Special Considerations (line 231) both say the upper bound is undecided and left to the PM. Project rules make a design step that waits on PM confirmation invalid, so the design should state the bound and drop the deferral.\n\nThe chosen `<1` also gives no protection for a 0.x SDK that the design itself says has a moving generated surface. The stated mitigation is the real-types test (line 200), which is \"skipped when the extra is absent\". The design never says the dev or CI dependency set installs the `codex` extra. If it does not, that test always skips and \"a drifted SDK surface fails loudly\" is not met. Either add the extra to the dev/CI group, or cap at the next minor release.",
+   "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:97"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "`--timeout` duplicates `codex.login_timeout_s`",
+   "description": "The login wait has two controls: a config key and an `sq auth login --timeout` override. The slice plan asks for neither. The project's no-magic-defaults rule justifies the config key; nothing requires the flag. Cut `--timeout` from the CLI surface (line 149) and from the `InteractiveLogin.login` discussion. The Protocol's `timeout` parameter can stay, fed from config.",
+   "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:108"
+  },
+  {
+   "i": 7,
+   "severity": "NOTE",
+   "title": "`missing_extra_hint()` is built on a resolver that raises for two different reasons",
+   "description": "`resolve_codex_runtime()` raises `ProviderError` both when the package is missing and when no binary exists. `missing_extra_hint()` and the doctor row consume it, but the design does not say how they tell the cases apart. Returning a typed result or distinct error subclasses would avoid matching on message text. The gap is narrow because the extra pins the bundled binary.\n\nA related case: `sq auth status` with `auth.json` present but the extra absent will report \"authenticated\" and log a WARNING on every run (line 126). State whether that is intended.",
+   "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:112"
+  },
+  {
+   "i": 8,
+   "severity": "NOTE",
+   "title": "Dependency on slice 931 is not in the slice plan entry",
+   "description": "The plan lists `Dependencies: [128]`. The design also depends on slice 931 from another initiative for `AgentConfig.effort`, `applies_effort` and `core/usage.py`. It is declared in the frontmatter and Prerequisites, and 931's status is `complete`, so nothing is blocked. The slice plan entry should be updated to match.",
+   "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:6"
+  },
+  {
+   "i": 9,
+   "severity": "NOTE",
+   "title": "\"Provides to Other Slices\" lists interfaces with no consumer",
+   "description": "The frontmatter correctly records `interfaces: []` because no planned slice consumes `InteractiveLogin`, `ExtraRequirement` or `CodexRuntime`. All three are still justified inside this slice by the ban on profile-name dispatch and the single-resolver requirement, so no cut is needed. The section could be reduced to one line.",
+   "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:178-181"
+  }
+ ]
+}

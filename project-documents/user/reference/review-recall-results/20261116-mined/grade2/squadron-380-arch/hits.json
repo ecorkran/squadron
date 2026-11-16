@@ -1,0 +1,18 @@
+{
+ "case": "squadron-380-arch",
+ "flaws": [
+  {
+   "id": "F1",
+   "text": "\"Rules outside a planned project\": \"In an unplanned repository the review runs with the template's rules and language auto-detection only, and says so",
+   "hits": {
+    "r01": [
+     1
+    ],
+    "r05": [
+     4
+    ]
+   }
+  }
+ ],
+ "note": "Only r01#1 and r05#4 say the document's \"template rules only\" claim is wrong and give the real resolution chain. r06#2 disputes the same sentence but for a different reason (auto-detection off without a rules dir), so it is excluded. r02#0, r03#0, r07#0, r08#0 and r01#0 mention cwd/rules lookup only as a trust/root-split issue and do not correct the claim."
+}

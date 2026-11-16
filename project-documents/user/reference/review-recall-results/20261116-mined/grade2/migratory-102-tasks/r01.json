@@ -1,0 +1,54 @@
+{
+ "review": "r01",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "FAIL",
+   "title": "BehavioralProfile call site in server code is not covered by any task",
+   "description": "Task 2.1 makes `leadership_weight` and `momentum_weight` required, and Task 2.2 updates call sites only under `tests/`. `simulation.py` builds `BehavioralProfile` from `ProfileConfig` with the six existing fields, so it raises `TypeError` once 2.1 lands.\n\n- **Unmet requirement:** the slice's \"backward-incompatible by design; all affected tests are updated\" and \"all tests green\" criteria. 2.2's verify step (`pytest tests/`) cannot be met by following the task as written if any test exercises this builder.\n- **Missing decision:** `ProfileConfig` (`src/migratory_server/config.py:51`) has no herding fields, and its parser already uses `data.get(..., default)` for the flocking weights. Without direction, a junior implementer will likely hard-code `0.0` at the call site, which the project's no-silent-fallback rule forbids.\n- **Stale context:** the frontmatter `projectState` (\"80 tests passing\", engine only) does not mention the server package. 2.2 also omits `tests/test_simulation.py:65` and `tests/test_entities.py:27` from its named files; only the catch-all search bullet covers them.\n\nFix: add a task after 2.1 that extends `ProfileConfig` and its parser with the two fields, passes them through in `simulation.py`, and updates the config and simulation tests. Refresh `projectState`.",
+   "location": "src/migratory_server/simulation.py:18-25"
+  },
+  {
+   "i": 1,
+   "severity": "FAIL",
+   "title": "Batch spawn merges AgentState arrays by hand and will leave `leadership` out of sync",
+   "description": "Task 1.1 updates `create()`, `add_agent()` and `remove_agent()`, but `EntityManager.spawn_population` concatenates `positions`, `velocities`, `accelerations` and `profile_indices` field by field. After 1.1, a batch spawn leaves `state.leadership` at its old length while `count` grows.\n\n- **Consequence:** `remove_agent()` will then `np.delete` an index beyond the end of the leadership array, which should raise `IndexError` (not run here), and `LeadershipForce` would index out of bounds on any server-built state.\n- **Unmet requirement:** the slice's \"`add_agent()` and `remove_agent()` must also handle the new array\" and its Integration Points promise of an extended `AgentState` usable by later slices.\n- **Task 1.2 gap:** its \"these use `AgentState.create()` so they should work without changes\" bullet does not anticipate this path.\n\nFix: add a sub-item to 1.1 to concatenate `batch.leadership` in the merge, and a test in 1.2 asserting `leadership.shape == (count,)` after spawn and after spawn-then-remove.",
+   "location": "src/migratory_server/entities.py:135-147"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Convergence assertion in 5.2 is satisfied by the initial conditions",
+   "description": "The criterion is that mean heading \"converges toward the leaders' initial heading\". Task 5.2 asserts only that the final mean heading has a positive x-component. Five of the 50 agents start at `[4.0, 0.0]`, so the population mean is already biased east at tick 0, and alignment roughly preserves mean velocity. The test would likely pass with `LeadershipForce` returning zeros.\n\nFix: assert on change, for example that the non-leader agents' mean eastward heading component at the end exceeds its initial value by a stated margin.\n\nTask 5.3 has a related weakness: its assertion is an either/or (lines 160-161), which lets the implementer pick whichever metric happens to pass. Name one metric.",
+   "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:147-154"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "LeadershipForce known-geometry test checks direction only",
+   "description": "The criterion is \"correct output for hand-constructed inputs\". Task 4.2 asserts only that the force on agent 2 \"biases toward agent 1's heading\". The exact value is hand-computable: (0.1\u00b7[0,1] + 0.9\u00b7[1,0]) / 1.0 \u2212 [0,0] = `[0.9, 0.1]` at `leadership_weight=1.0`.\n\nA normalisation bug such as dividing by neighbour count gives `[0.45, 0.05]`, which still passes the direction check and the \"similar to plain averaging\" uniform test.\n\nFix: assert `result[2] \u2248 [0.9, 0.1]`, matching the exact-value check `MomentumForce` already gets in 3.2.",
+   "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:126-127"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Vectorisation requirement is not carried into any task",
+   "description": "The slice requires \"Both forces are vectorized within each agent's neighborhood \u2014 no nested Python loops\". Task 4.1 writes the weighted average as `sum(velocity[i] * leadership[i]) / sum(leadership)`, which a junior implementer can reasonably read as a Python loop over neighbours. Nothing in 4.1 or the Section 6 verification states or checks the requirement.\n\nFix: add one sub-item to 4.1 requiring the neighbour computation to use NumPy array operations with no inner Python loop.",
+   "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:113-119"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Section 6 and Task 5.1 add weight without covering any criterion",
+   "description": "- **Task 6.2** repeats the protocol-conformance checks already in 3.1, 3.2, 4.1 and 4.2. Cut it.\n- **Task 6.3** commits \"any remaining changes\" as `docs: complete slice 102` after 5.4 has already committed everything. It will be an empty or checkbox-only commit. Cut it.\n- **Task 6.1** is a full-suite run. Fold it into the verify step of 5.3, before the 5.4 commit.\n- **Task 5.1** is a five-force smoke test with no assertion beyond \"runs without error\", and 5.2 already runs the same five forces through `tick()` for 300 steps. Merge it into 5.2.",
+   "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:141-182"
+  },
+  {
+   "i": 6,
+   "severity": "NOTE",
+   "title": "Commit steps are checkbox tasks, not `**Commit**:` markers",
+   "description": "Tasks 1.3, 2.3, 3.3, 4.3 and 5.4 are numbered checkbox tasks. Their placement is correct: each follows an implement-and-test pair at a green point and matches the slice's checkpoint list (Implementation Notes item 7). Converting them to plain `**Commit**:` lines would match the marker convention; no change to placement is needed.",
+   "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:48-49"
+  }
+ ]
+}

@@ -1,0 +1,117 @@
+{
+ "review": "r04",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "FAIL",
+   "title": "PR reviews reuse a save path that stamps the operator's HEAD as `reviewedSha`",
+   "description": "The document says \"the head sha recorded in the artifact is what was reviewed\" (Base semantics). It also says persistence \"takes a target\" (Architectural Principles) and that archiving, digest, and integrity checks \"apply unchanged\" (Envisioned State). The save path it reuses does not take the sha from the target. It takes it from the process working directory: `resolve_reviewed_sha(\".\")` at `src/squadron/review/persistence.py:515`, and `resolve_reviewed_sha(cwd)` at `src/squadron/pipeline/actions/review.py:301`. For a PR review run from an operator checkout, `git rev-parse HEAD` returns a valid-looking sha that is not the PR head, and nothing reports an error.\n\nThis matters beyond cosmetics. `reviewedSha` is the evidence baseline for resolution (`src/squadron/review/resolution_evidence.py:183-200`, `:268`) and for the addressed-findings screens (`src/squadron/review/addressed/screens.py:49`). The document needs to make the head sha a field of the PR record and name these call sites as changes. `main` has since added `reviewed_sha` to `SaveTargetProtocol` (`src/squadron/review/persistence.py:71-92` on `main`), so the defect is known there. This document does not address it.",
+   "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#technical-considerations"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "The non-slice frontmatter path silently fabricates values",
+   "description": "Design Goals says persistence \"degrade[s] explicitly, not silently\". The Persistence bullet says the fabricated-slice pattern \"is not extended to PRs\". But the frontmatter builder the document reuses already fabricates values when `slice_info` is absent: `slice_name` becomes `\"unknown\"`, `slice_index` becomes `0`, and `project` becomes `\"unknown\"` (`src/squadron/review/persistence.py:206-208`). The resolution reader also defaults `project` to `\"unknown\"` (`src/squadron/review/resolution.py:354`). CLAUDE.md forbids silent fallback values.\n\nA PR review that reaches this builder without target-supplied fields would produce `index: 0` and `project: unknown` and look valid. The document should specify which keys a PR target supplies, and that the builder fails for a target that does not supply them.",
+   "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#design-goals"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Configuration and defaults for unplanned repositories are undefined",
+   "description": "The persistence location is \"a configured squadron data directory\". The document names no config key, default, owner, or precedence. CLAUDE.md says defaults belong in centralized config. In an unplanned repository there is no `cf` project to hold the setting, yet the document uses `cf config get` elsewhere.\n\n`sq pr create` has the same problem. It reads `git.integration_branch` through `cf config get` and the latest saved review from the reviews directory. In an unplanned repository the document does not say whether the base falls back to the host default branch or fails. \"The choice is reported\" names no mechanism. The document should define the key, its default, where it is read, and an explicit error or an explicit fallback for each lookup.",
+   "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#technical-considerations"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "The base branch is never fetched, so the merge-base range cannot be computed as specified",
+   "description": "Fetching is specified as \"fetches into a namespaced local ref\", and \"Hosts expose PR heads as fetchable refs\". Only the head is mentioned. The reviewed range is \"merge-base to head\", which needs the base commit at resolution time. The operator's local base branch is usually stale or absent, so using it silently produces a different diff from the one the host displays. The \"base moved since resolution\" failure mode needs a base sha from the host, and the document never defines a `base_sha` field.\n\nThe document needs a base refspec, a base sha recorded in the PR record, and a merge-base computed against that object. `main` fetches both base and head in `CodeHost.fetch_pull_request_refs` (`src/squadron/codehost/protocol.py:77-93`), which closes this gap.",
+   "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#technical-considerations"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "\"More than one host remote fails loudly\" breaks the common fork workflow",
+   "description": "The target grammar says resolution \"must fail loudly when the repository has no host remote, has more than one\". The usual fork layout has `origin` (the operator's fork) and `upstream` (the repository that holds the PR), both on the same host. With that layout, the bare form `sq review pr` (the current branch's PR) always fails. The document needs a rule for which remote is authoritative, such as the branch's upstream or the remote whose repository matches the host's base repository. The error must name the remotes it found.",
+   "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#technical-considerations"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "The adapter operations listed omit the comment read and edit that idempotent posting requires",
+   "description": "Design Goals lists the adapter operations as \"resolve a PR, fetch its head, read its threads, post a comment, create a PR, identify the operator\". Technical Considerations requires that a repeated `--post` not stack comments, and that squadron \"find and update its own prior comment\". Envisioned State says a later invocation \"updates or supersedes\". Finding and editing a prior comment needs list-comments and edit-comment operations, which the listed protocol lacks. Reading review threads is not the same as reading issue comments, and the listing does not say how comment authorship is read.\n\n\"Updates\" and \"supersedes\" are different behaviors. Editing destroys the record of an earlier head's review. Superseding leaves an older comment that looks current. The document should pick one. `main` has `find_marked_comments` and `update_comment` (`src/squadron/codehost/protocol.py:97-110`), which shows the gap was real.",
+   "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#design-goals"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "The failure-mode list omits timeouts and most local I/O paths",
+   "description": "The document names six failure modes: host unreachable, `gh` missing or unauthenticated, PR not found, head not fetchable, base moved, and post rejected. It omits the following:\n\n- **Hangs and timeouts.** No bound is stated for `gh` or `git fetch`. The codebase has a precedent: `run_git` in `src/squadron/review/git_utils.py:27-49` has a timeout and handles `TimeoutExpired`. `src/squadron/metrology/identity.py:56-57` bounds its git call so an unresponsive git \"cannot hang capture\".\n- **Head moved since resolution.** Technical Considerations says a post against a moved head \"must say so\", but no error is named for it.\n- **Ambiguous or missing remote.** The grammar names it, but the failure list does not.\n- **Scratch worktree.** Creation and cleanup failures are not listed.\n- **Description composition.** A model failure during `sq pr create` is not listed.\n- **Persistence write.** A failed write is not listed.\n\nThe review-code rule requires each new I/O path to answer \"what if this hangs / times out / the peer disconnects\" explicitly. The document should add a table: I/O path, failure, signal, test. It should also centralize the timeout values in config.",
+   "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#architectural-principles"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "The sync/async boundary for the adapter is not specified",
+   "description": "`run_review_with_profile` is `async def` (`src/squadron/review/review_client.py:60`). The document describes `gh` as \"a process boundary and JSON parsing per call\" but does not say whether the adapter protocol is sync or async. The codebase has both patterns. `run_git` is a blocking `subprocess.run`. `frontmatter_gate.py:49` and `bash_tool.py:53` use `asyncio.create_subprocess_exec`. A blocking `gh` call made from the review coroutine stalls the event loop for the length of a network round trip, and any concurrent work on that loop stalls with it. The document should choose one and state it in the protocol signature.",
+   "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#technical-considerations"
+  },
+  {
+   "i": 8,
+   "severity": "CONCERN",
+   "title": "The scratch worktree is load-bearing, and the hard parts are deferred",
+   "description": "The principle \"the operator's checkout is untouched\" depends on a squadron-owned `git worktree`. Technical Considerations then says \"concurrency with the operator's own worktrees, disk use, and cleanup on failure are the slice-level questions\". Those are design questions, not slice questions:\n\n- **Registration.** `git worktree add` writes into the operator's `.git/worktrees` and appears in `git worktree list`. The process guide's worktree registry (`cf worktree list --json`, per-checkout `git.integration_branch`) and its \"unregistered worktree: STOP\" rule would treat it as foreign. The document needs to say whether it is registered or ignored.\n- **Crash recovery.** A crash leaves a stale worktree and a checked-out tree. The document needs a naming, lock, and prune policy.\n- **Tool jail.** Review tools are rooted at `cwd`, so the jail root must be the scratch path. The document says `--cwd` keeps its meaning, which conflicts with this.\n- **Concurrency.** Two `sq review pr` runs on the same PR must not share a worktree path.\n\nPath, naming, lifetime, and cleanup should be specified now.",
+   "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#architectural-principles"
+  },
+  {
+   "i": 9,
+   "severity": "CONCERN",
+   "title": "\"Every existing review flag behaves as it does today\" is undefined for slice- and project-bound flags",
+   "description": "The Overview promises that `sq review pr` keeps every existing review flag's behavior. But `sq review code` (`src/squadron/cli/commands/review.py:939-966`) has flags whose meaning depends on a slice or project:\n\n- `slice_number`, the positional argument.\n- `--cwd`, documented as \"Project directory\".\n- `--files`, which scopes the review.\n- `--fan`, which fans out into parts. Its parts are persisted per index.\n- `--rules-dir` and `--no-rules`, which depend on project rules.\n\n`--fan` on a PR review either produces parts with no index or must be rejected, and the document does not say which. It also does not say which wins when `--diff` and a PR target are combined. The parity claim (\"whatever `sq review pr` accepts, `/sq:review` accepts identically\") cannot hold without a flag matrix: each flag marked supported, rejected with a message, or redefined.",
+   "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#overview"
+  },
+  {
+   "i": 10,
+   "severity": "CONCERN",
+   "title": "The three capabilities do share more than \"one boundary and nothing else\"",
+   "description": "The Overview says the three capabilities \"share one new boundary and nothing else\". Posting reads the saved review's verdict and findings from review persistence. `sq pr create` reads slice artifacts through `cf`, the latest saved review, the integration-branch config, and the model through provider-profile machinery. The shared surface is review persistence and `cf` config reads. The document should list those seams or drop the claim.",
+   "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#overview"
+  },
+  {
+   "i": 11,
+   "severity": "CONCERN",
+   "title": "Model-composed PR prose contradicts the traceability goal",
+   "description": "Design Goals says \"nothing is asserted that no input supports\". Technical Considerations makes \"what changed, why, how verified, known gaps\" the output of a one-shot model call. Only the commit list, linked slice, review provenance, and reviewed sha are deterministic. \"How it was verified\" and \"known gaps\" are the sections most likely to assert facts no input states, such as \"tests pass\". The document should either source those sections deterministically, quoting the review verdict or the task check-offs with their source, or mark model-written sections as model-generated and exclude them from the traceability guarantee.\n\nEnvisioned State also says `sq pr create` \"shows it; and creates the PR\" in one command, with no confirmation and no dry-run gate. Architectural Principles requires every write to have a dry-run form. The write should be an explicit step.",
+   "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#design-goals"
+  },
+  {
+   "i": 12,
+   "severity": "CONCERN",
+   "title": "The initiative bundles a PR-creation capability and a posting path the review capability does not need",
+   "description": "The Motivation is about reviewing PRs. `sq pr create` is a different journey. It writes a PR, composes prose with a model, targets the integration branch, and emits a body with a fixed section contract. Posting adds a second write path with a marker-based comment lifecycle, identity refusal, and dry-run. The document introduces a \"stable section structure\" that \"an AI reviewer \u2026 can parse\", but no consumer of that structure is defined, so it is a contract for nothing yet.\n\nRecommended cut: ship `sq review pr` plus PR-keyed persistence as this initiative. Move `sq pr create` to its own initiative with its own document. Defer posting until the review path has shown its shape. If the body-section contract stays, it needs a named consumer.",
+   "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#overview"
+  },
+  {
+   "i": 13,
+   "severity": "CONCERN",
+   "title": "The document is stale against `main` and does not reconcile with landed work",
+   "description": "The document is `status: not_started`, dated 20260912. Its Current State says \"No hosting integration exists\" and \"There is no target type for 'this review is about something that is not a slice'\". On `main`:\n\n- `src/squadron/codehost/` has an 11-operation `CodeHost` protocol. Its docstring cites a PM decision dated 20260913 that changed `ResolvedPullRequest` (`src/squadron/codehost/protocol.py:88-91`).\n- `src/squadron/pr/` exists, with composer and preconditions modules.\n- `src/squadron/review/persistence.py:71` declares `SaveTargetProtocol` under slice 383.\n- Slice documents 381 through 386 and `project-documents/user/architecture/380-slices.pull-request-workflow.md` exist.\n\nAnticipated Slices restates 381\u2013386 without reference to them. Related Work omits slice 383, although 383 is \"PR-keyed review persistence\", which is this document's third slice. Whatever this document is meant to be now, it needs its status updated, its Current State re-verified against `main`, and a pointer to the slice plan.",
+   "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#current-state"
+  },
+  {
+   "i": 14,
+   "severity": "CONCERN",
+   "title": "The design assumes GraphQL-only data is available through `gh` JSON",
+   "description": "Prompt inputs include \"unresolved threads\" and \"linked issues\". Posting must find its own comment. To my knowledge, review-thread resolution state is exposed through GitHub's GraphQL `reviewThreads` connection, and linked issues through GraphQL `closingIssuesReferences`. I do not believe `gh pr view --json` exposes either. Verify against the installed `gh` version before committing to \"JSON parsing per call\". Thread pagination past the first page and rate limits belong in the failure list. `main` has a `codehost/github_queries.py` module, which suggests this was found during implementation.",
+   "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#technical-considerations"
+  },
+  {
+   "i": 15,
+   "severity": "NOTE",
+   "title": "Untrusted PR text can influence a verdict that is then posted under the operator's identity",
+   "description": "The document delimits PR title, body, and threads as data and never as instructions. That is the right mitigation for injection into the reviewer. The residual risk is in the output path: a crafted PR body can steer the verdict, and `--post` publishes that verdict under the operator's login. Posting already requires an explicit flag and names the model. The document could also show the exact body in dry-run and label the comment as model output. This is a residual risk to track, not a defect in the current design.",
+   "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#technical-considerations"
+  }
+ ]
+}

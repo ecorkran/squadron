@@ -1,0 +1,68 @@
+{
+ "review": "r01",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "FAIL",
+   "title": "Task 16.4 writes the merge into `squadron-pr` as a task item",
+   "description": "The git rules say a merge or push must never appear as a task, sub-item, or success criterion in a task file. Merging belongs to Phase 7, after code review. As written, an implementer could merge during Phase 6. Move the merge into the Phase 7 procedure and remove the bullet from 16.4. The \"never into `main`\" restriction is correct but does not cure the violation.",
+   "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:373"
+  },
+  {
+   "i": 1,
+   "severity": "FAIL",
+   "title": "Task 5 makes an unreachable `cf` silently retarget the PR to the host default",
+   "description": "Task 5.1 (line 122) says that when `cf` is unavailable, the integration-branch term is treated as unset and the chain proceeds to `default_branch`. Task 5.2 asserts \"no raise.\" This conflicts with two things. CLAUDE.md forbids silent fallback values. D1 (slice design lines 238\u2013244) refuses to degrade an unreachable `cf` for exactly the reason that \"silently retargeting a PR is a write.\" If `git.integration_branch` is set and `cf` is down, the PR opens against `main`, which is the wrong target by the same argument D1 uses for an absent branch. Change 5.1 so that an unreachable `cf` raises an error naming the key, and change 5.2 to assert the raise. If the fallback is intended, D1 must state it and justify the exception to the principle.",
+   "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:122"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Task 7.1 reads \"the first task file,\" but a slice can have several",
+   "description": "Slices can have more than one task file. `382-tasks.review-a-pr-1.md`, `-2.md`, and `-3.md` all exist. D7's data flow (slice design line 186) names \"tasks\" in the plural. Reading only the first drops the other files' items silently. The PR would then claim a \"how it was verified\" section that is incomplete. Change 7.1 to gather every task file the slice resolves to, and add a case with two files to 7.2.",
+   "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:159"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Task 2.2's fixture reads a live file that will be checked off, and asserts both groups are non-empty",
+   "description": "The test reads `project-documents/user/tasks/` at run time and requires both checked and unchecked items. Two problems. The \"once it exists\" condition is already met, since this file exists now. And a completed task file has no unchecked items. Task 16.4 marks skipped items `[x]` before closing, so the unchecked group becomes empty and the test fails on the file it was meant to read. It also fails in any checkout that lacks the file. Commit a snapshot of a real task file (this slice's own, or 384's) under `tests/pr/fixtures/` and assert counts against that snapshot. A copy still uses the real format, which is what the parsing rule requires.",
+   "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:67"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "`local_sha` has no producer, and the command never reads the current head",
+   "description": "Task 6.1's `check_head_pushed(..., head, local_sha, cwd)` needs a local sha. No task produces it. Task 13.1's order (locator, preconditions, base, and so on) also omits the step that reads the current branch to produce `head`. An implementer would have to invent a helper, which the no-guessing rule prohibits. The tree already has one: `_resolve_rev(ref, cwd)` at `src/squadron/review/git_utils.py:339` returns the full sha or `None`. Name it in Task 3, either reusing it or making it public. Add the current-branch and local-sha reads to 13.1's sequence. Task 6.1 must also treat a `None` sha as a refusal, not a pass.",
+   "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:138"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "`PrFacts.verdict` has no source task",
+   "description": "Task 9.1 requires `PrFacts` to carry the review's verdict. Task 8.1 reads only `reviewedSha` from the artifact's frontmatter, and no task names where the verdict comes from. D4 places the verdict under \"review provenance.\" Name the source in Task 8.1 (a frontmatter field or an existing parsing function) and add it to `PrInputs`. Otherwise the implementer must guess, and the verdict will be missing or invented in the PR.",
+   "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:199"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "Task 3.1 duplicates `github_cli._branch_for`'s detached-HEAD logic",
+   "description": "`_branch_for` already runs `git rev-parse --abbrev-ref HEAD` and refuses a detached HEAD with `TargetUnresolvableError`. Task 3.1 adds `current_branch` with the same command and the same refusal, but through `run_git`, `GIT_COMMAND_TIMEOUT_SECONDS` (`review/git_utils.py:24`), and a different exception. That leaves two implementations of one git read, with two timeout constants and two error types. CLAUDE.md forbids duplicated logic. Either extract one shared helper that `_branch_for` also calls, or state in Task 3.1 why a second copy is needed. D2's \"match `_branch_for`'s existing behavior\" points to the first option.",
+   "location": "src/squadron/codehost/github_cli.py:170"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "No test pins where checked items, unchecked items, and the review land in the body",
+   "description": "The first functional criterion requires checked items under \"how it was verified,\" unchecked items under \"known gaps,\" and the review path and sha under \"review provenance.\" Task 11.2 checks only that five sections exist and that a commit sha appears. Task 9.2 checks field population, not placement. A body that put checked items under \"known gaps\" would pass every listed test. Add a case to 11.2 with a full fixture that asserts each fact appears under its named heading.",
+   "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:268"
+  },
+  {
+   "i": 11,
+   "severity": "NOTE",
+   "title": "Granularity and file size fit the slice",
+   "description": "One task file with 16 top-level tasks (17 with 10a) fits a seven-module package plus one command, so no split is needed. Task 14 is test-only, but the design's five-site matrix requires it. Its `ls-remote` timeout assertion repeats one in 6.2, which is harmless. The file has no `**Commit**:` markers, which is allowed, so commits fall at the end of each top-level task.",
+   "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md"
+  }
+ ]
+}

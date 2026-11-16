@@ -1,0 +1,40 @@
+{
+ "review": "r08",
+ "findings": [
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Commit markers are written as checkboxes",
+   "description": "All 17 commit lines use the checklist form `- [ ] Commit: \\`...\\``. Examples are lines 112, 157, 187, 264, 344, 414, 493 and 527.\n\nCommit markers must be plain `**Commit**:` lines and never checkboxes. As written, a task-checker can tick them, and the project rule says to \"never make a commit that only checks boxes.\" Change each one to `**Commit**: \\`<message>\\``.\n\nThe places where the commits fall are fine. Each comes after a tested unit, not after every task and not only at the end.",
+   "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md:112"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Task 2 adds Project Manager stop points that override decisions the design already made",
+   "description": "Task 2 has two \"stop and ask the Project Manager\" outcomes, and the design has already settled both:\n- **No `ResultMessage` after interrupt:** the Mitigation Strategies say D7's fallback applies, the decision \"narrows to 'always mark unusable'\", and the design is updated.\n- **A state write off the loop thread:** D5 says \"`StateManager` gains a per-run `threading.Lock` around load, modify and write.\"\n\nProject rule says a step that waits on Project Manager confirmation is invalid unless a named rule requires it. More importantly, because the task stops, no task implements either fallback. A junior agent who hits either case has no work item to follow.\n\nReplace each stop with the design's response:\n- For the interrupt, add a conditional sub-item to Task 16: always mark the session unusable, and update D7.\n- For the threading case, add a conditional sub-item to Task 11 that adds the per-run lock, with a test.",
+   "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md:54-60"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "No task logs the run-id for `process_alive` warnings",
+   "description": "The design (Technology Choices, and the error-handling table row \"WARNING naming run and PID\") requires an unknown process check to be logged with both the run-id and the PID.\n\nTask 9 logs only the PID and says \"the run-id is logged by the caller that has it.\" None of the callers' tasks do that: not `assess_liveness` (Task 9), not wait (Task 19), not the listing (Task 21), not prune (Task 33). Neither the PID-0 nor the PID-`-1` test in Task 10 asserts a run-id.\n\nThe simplest fix is in Task 9: `assess_liveness` already holds the state, so it logs the WARNING with `run_id` whenever `process_alive` returns `None`. Task 10 then asserts the run-id appears in the record.",
+   "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md:140-142"
+  },
+  {
+   "i": 5,
+   "severity": "NOTE",
+   "title": "Task 22a's timing assertion contradicts a line in the design",
+   "description": "The review checklist requires a `tests/load/` test because the slice restates 199's listing target as a Success Criterion, so adding Task 22a is correct. Task 22a asserts that `MAX_LISTING_S = 1.0` holds in-process.\n\nHowever, the design's Special Considerations say \"There is still no assertion on time in tests\" (slice line 648). Update that sentence in the slice design so the two documents agree.\n\nThe CI claim in Task 22a checks out: `pyproject.toml:82` sets `testpaths = [\"tests\"]`, and `.github/workflows/ci.yml:38` runs `uv run pytest`. The load test is therefore gated on both matrix Pythons and in the hermetic job, so no separate CI wiring task is needed.",
+   "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md:308-320"
+  },
+  {
+   "i": 6,
+   "severity": "NOTE",
+   "title": "`resolve_pipeline` tests come two tasks after its implementation",
+   "description": "Task 29 adds `resolve_pipeline` and refactors `load_pipeline` onto it. Its unit tests are only in Task 31, after the `show` command in Task 30. Since the refactor must leave `load_pipeline`'s behaviour and error text unchanged, add a test sub-item to Task 29: the existing loader tests pass, plus `resolve_pipeline` unit tests. Task 31 then keeps only the `show` CLI tests.",
+   "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md:392-414"
+  }
+ ]
+}

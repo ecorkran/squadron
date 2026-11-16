@@ -1,0 +1,314 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "\"Stateless engine\" contradicts the \"register/remove agents\" and \"query agent state\" interface",
+      "description": "Envisioned State says \"The engine is stateless between ticks \u2014 all state lives in the arrays passed to it.\" Two paragraphs later the engine's interface is \"tick the simulation forward, query agent state, register/remove agents.\" An engine that registers agents and answers state queries owns state.\n\n- **Conflict with the world server:** `300-arch.worldserver-foundation.md` gives entity lifecycle to the server (\"The server assigns entity IDs, allocates space in the state arrays\u2026 The behavior engine\u2026 does not manage the entity lifecycle itself\").\n- **What to fix:** Pick one owner of the mutable arrays and delete the other description.\n- **Why it matters:** Ownership decides who may resize arrays and whether indices are stable across ticks, which the subset-index contract depends on.",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md#envisioned-state"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Tick return contract is ambiguous: \"returns the updated state array\" vs. in-place mutation",
+      "description": "Step 5 says the tick \"Returns the updated state array\" and is testable as \"feed in state, get back state\". The GPU bullet demands \"no dynamic allocation\" in the hot loop. A pure function returning new arrays allocates every tick; an in-place one is not \"state in, state out\".\n\nThe document never chooses between copy, in-place, or double-buffer. This matters for three reasons:\n\n- **Update semantics:** Synchronous update (all agents read tick-N state) and sequential update give different results. Determinism and \"regions must agree\" depend on which is used.\n- **Server snapshots:** The world server's \"tick as transaction\" clean-snapshot guarantee needs a defined commit point.\n- **Existing code:** `src/migratory/engine/tick.py` returns `None` and mutates in place, so it already diverges from the prose.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md#envisioned-state"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Neighbor-query interface shape is unspecified, and the described per-agent form defeats the vectorization and GPU goals",
+      "description": "The document names neighbor finding as the dominant cost and requires \"no Python-level per-agent branching\u2026 no callbacks into Python during the hot loop\". Yet the only description of the query is per-agent: \"For each active agent, queries nearby neighbors\" and \"which agents are within radius R of agent A\".\n\nA per-agent `query_radius(position, radius)` contract forces a Python loop of N calls per tick returning ragged results. At the stated \"tens of thousands of agents\" on one CPU process at 20\u201360 Hz, that loop alone consumes the tick budget.\n\nThe replaceability claim (grid, KD-tree, GPU) holds only if the interface is batch-shaped: all query points in, a CSR or padded neighbor structure out. The existing `SpatialQuery` protocol and the loop at `src/migratory/engine/tick.py:49` already encode the per-agent shape. The \"swap without touching force code\" promise is therefore already false: changing to batch output changes every `BulkForce` signature.\n\nThe document must specify:\n\n- batch query semantics;\n- the neighbor result representation;\n- the neighbor cap (k-nearest or max-count versus unbounded radius), without which memory and cost in dense clusters are unbounded.",
+      "file_ref": null,
+      "category": "feasibility",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md#technical-considerations"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Determinism goal has no supporting mechanism",
+      "description": "\"Tick determinism\" is justified by replay and by \"regions must agree on simulation results\". Nothing specifies what makes it true:\n\n- **Neighbor ordering:** Float summation is order-dependent, and a spatial hash returns neighbors in a different order than brute force. The slice plan's \"identical before and after the swap\" check for (105) will fail bitwise unless ordering is canonicalized.\n- **Randomness:** No RNG ownership or seeding is defined for stochastic forces such as wander, noise, or target-selection tie-breaks.\n- **Scope of the guarantee:** It is not stated whether determinism is bitwise or tolerance-based, or whether it holds across machines, BLAS builds, or CPU versus GPU. Cross-backend bitwise agreement is effectively unachievable.\n- **Precision:** \"The engine should define its internal precision\" defers the float32/float64 choice that determinism depends on.\n\nState the determinism class (same binary and backend, bitwise; cross-backend, within tolerance) and the ordering and RNG rules.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md#design-goals"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Subset-evaluable tick is under-specified where it interacts with fixed-timestep integration",
+      "description": "The subset tick is called \"the foundation\" for variable-rate ticking, but the hard parts are absent:\n\n- **Timestep:** An agent evaluated at 1/16 rate must integrate with 16\u00d7dt or be extrapolated by someone. The described tick has a single fixed dt (\"Fixed-timestep integration is essential\"). No per-agent dt or accumulated-time input exists.\n- **Stability:** The same section warns that Euler is unstable at high force magnitudes. A 16\u00d7 step makes that worse, and this is not acknowledged.\n- **Inactive agents:** It is not stated whether they coast at last velocity or freeze. The world server document assumes \"interpolated positions between evaluations\", with no owner.\n- **Stale neighbors:** Active agents read inactive neighbors' stale positions and velocities. The effect on alignment and cohesion is not addressed.\n- **Replay:** The active subset is now a tick input that must be logged for replay. Neither architecture says so.\n\nAs written, the \"designed for, not built\" extension point will not support variable-rate ticking without a signature change.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md#architectural-principles"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "\"Profile as plain data, no archetype code paths\" conflicts with the behaviors the document commits to",
+      "description": "\"Forces, not decisions\" rules out state machines and says \"The same force-accumulation loop handles all archetypes.\" Several committed behaviors need per-agent persistent state and discrete decisions:\n\n- pack \"target selection\" and \"convergence-on-target\" (a chosen target id);\n- \"leadership by experienced individuals\" (a per-agent attribute or role);\n- territorial \"home-range attraction\" (a per-agent home point, not a per-profile value);\n- the concept's predator \"hunt/rest cycles\" (a mode with a timer).\n\nThe agent state is defined only as \"positions, velocities, profile indices\". There is no provision for extensible per-agent attribute columns, and none for where a selected target or mode lives if the engine is stateless.\n\n\"Profile-to-profile interaction rules\" are flagged as a \"combinatorial dimension\" and then left there. No structure is given (P\u00d7P interaction matrix, tag-based roles, or other).\n\n\"Swapped at runtime\" and \"adding a species means defining a profile\" also hide the real extension unit: a new *force type* is new code. The document never defines the force plugin point (the `BulkForce` registry or list) as an architectural element. It first appears by name, undefined, in the GPU bullet.",
+      "file_ref": null,
+      "category": "abstraction",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md#architectural-principles"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Environment interface is asserted but not designed, and its natural form violates the hot-loop constraints",
+      "description": "\"Environment as input surface\" says the engine \"queries environmental state\u2026 through a read-only interface\". That interface is never specified and no slice defines it; the slice plan defers it to a not-yet-existing Environment Layer initiative.\n\nA query-style interface (elevation at point, nearest resource) is a callback into Python per agent, which the GPU bullet forbids. For the constraints to compose, the environment must be delivered as sampled arrays or grids (batch-sampled fields), which is a different contract from \"queries\".\n\nStigmergic swarms need the agents to *write* to the environment (trail reinforcement). This contradicts both \"read-only\" and \"stateless engine\". The document should say that deposits are a tick output owned by the environment layer, or drop swarm from this architecture's archetype goal.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md#architectural-principles"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Tick-loop offload path interacts with engine state ownership but is not addressed",
+      "description": "Scope delegates \"timing, scheduling, asyncio yielding\" to the world server. The world server's plan is to run the tick synchronously on the event loop and later move it to a thread.\n\nAt the stated target (tens of thousands of agents, about 100 neighbors) a NumPy tick takes many milliseconds, so the synchronous design blocks all WebSocket I/O for the full tick. The engine architecture must therefore state its thread-safety contract:\n\n- whether tick may run off-loop;\n- who may read the arrays while a tick is mutating them.\n\nWith in-place mutation and a serializer reading the same buffers, off-loop ticking is a read-during-mutate race. This is another reason the copy, in-place, or double-buffer decision cannot stay implicit.",
+      "file_ref": null,
+      "category": "technology",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md#overview"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Scale goal has no budget or validation plan; O(n\u00b2) starting point is incompatible with it",
+      "description": "\"Tens of thousands of agents at full behavioral fidelity on a single CPU process\" has no tick rate, per-tick budget, or neighbor-count assumption attached. Those numbers appear only in the world-server document.\n\n\"Pluggable spatial queries\" allows the initial implementation to be \"naive O(n\u00b2)\". At 20K agents that is 4\u00d710\u2078 pair tests per tick (about 3 GB as a float64 distance matrix), so it is not viable at the stated goal.\n\nThe only evidence cited is a 2000-agent JavaScript prototype, which says nothing about NumPy with ragged neighborhoods. The slice plan places spatial-hash work last. No benchmark or load-test gate is defined to establish that the goal is met, and no slice claims to produce one.",
+      "file_ref": null,
+      "category": "feasibility",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md#design-goals"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Anticipated Slices diverge from the slice plan and from the document's own goals",
+      "description": "- **Spatial query abstraction:** Listed third: \"Replace naive queries in the tick loop with the abstraction\", after Flocking. Flocking cannot exist without neighbor queries, so forces would be written against a non-interface and then rewritten. The slice plan (`100-slices.behavior-engine.md`) correctly folds the interface into slice 100; the architecture was not updated.\n- **Swarm intelligence:** It is a Design Goal archetype and has a profile description in Envisioned State, but no anticipated slice. The slice plan defers it to Future Work on a different initiative.\n- **Migration:** The Overview lists \"migration\" as an output, but no slice or force covers it.\n\nEither scope the goals down to four archetypes or list the deferred work explicitly as out of scope.",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md#anticipated-slices"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Aggregation and GPU \"designed-for\" hooks are over-claimed and add speculative constraints",
+      "description": "The document claims aggregates can be presented \"through the same neighbor query interface\". An aggregate is not a point: it has count, dispersion and heading, and needs mass-weighted, extent-aware force terms. A neighbor query returning agent indices into the state arrays cannot carry it without either fake rows in the agent arrays or a second neighbor type that every force must handle. The extension point as described does not support the stated future work.\n\nThe 1M\u20134M GPU tier and multi-region agreement impose present-day constraints (no allocation, no branching, cross-region determinism) on a project whose concept says \"avoid premature optimization\" and whose current target is 10K\u201350K on NumPy.\n\nRecommendation:\n\n- **Cut or defer:** the \"Aggregation interface support\" slice and the GPU force-accumulation consideration, moving both to a non-binding future-work note.\n- **Keep:** only the two cheap provisions, the batch array-in/array-out force signature and the subset argument.",
+      "file_ref": null,
+      "category": "antipattern",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md#technical-considerations"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Broken and inconsistent cross-references",
+      "description": "Related Work links `200-arch.world-server-foundation.md`, which does not exist. The file is `300-arch.worldserver-foundation.md`, and the Overview itself refers to \"world server (300-arch)\".\n\nThe scaling argument (\"The world server architecture describes scaling tiers\u2026\") rests on that dead link.\n\nThe sibling document lists this one in `dependsOn` while this document derives interface requirements from the sibling. That is a mutual dependency between two `in_progress` architectures, with no statement of which is authoritative for the shared contract (tick signature, state array layout).",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md#related-work"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Failure behavior of the tick is not addressed",
+      "description": "This is cross-cutting: no section covers invalid input or numerical failure. Unaddressed cases include:\n\n- NaN or inf from zero-distance separation (coincident agents);\n- out-of-range profile indices;\n- an active-subset index beyond the population;\n- agents leaving world bounds (wrap, clamp, or reflect is never stated, yet it affects spatial-hash design).\n\nGiven the project's \"no silent fallback\" rule, the architecture should state that the tick validates at its boundary and raises, and should define the boundary condition.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "unverified"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Dimensionality is never stated",
+      "description": "The document never says whether the simulation is 2D, 2.5D (terrain-following) or 3D. Flocking birds and schooling fish (starlings and jellyfish are the motivating examples) imply 3D. \"Terrain elevation\" as an environment input implies at least 2.5D. The existing code hard-codes N\u00d72. This choice drives array layout, spatial index selection and serialization (the server document assumes 12 bytes per entity, i.e. 3\u00d7float32), so it belongs in this document.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "unverified"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "\"Stateless engine\" contradicts the \"register/remove agents\" and \"query agent state\" interface",
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md#envisioned-state",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "Tick return contract is ambiguous: \"returns the updated state array\" vs. in-place mutation",
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md#envisioned-state",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "feasibility",
+      "raw_category": null,
+      "summary": "Neighbor-query interface shape is unspecified, and the described per-agent form defeats the vectorization and GPU goals",
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md#technical-considerations",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "Determinism goal has no supporting mechanism",
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md#design-goals",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "Subset-evaluable tick is under-specified where it interacts with fixed-timestep integration",
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md#architectural-principles",
+      "location_verified": null
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "abstraction",
+      "raw_category": null,
+      "summary": "\"Profile as plain data, no archetype code paths\" conflicts with the behaviors the document commits to",
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md#architectural-principles",
+      "location_verified": null
+    },
+    {
+      "id": "F007",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "Environment interface is asserted but not designed, and its natural form violates the hot-loop constraints",
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md#architectural-principles",
+      "location_verified": null
+    },
+    {
+      "id": "F008",
+      "severity": "concern",
+      "category": "technology",
+      "raw_category": null,
+      "summary": "Tick-loop offload path interacts with engine state ownership but is not addressed",
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md#overview",
+      "location_verified": null
+    },
+    {
+      "id": "F009",
+      "severity": "concern",
+      "category": "feasibility",
+      "raw_category": null,
+      "summary": "Scale goal has no budget or validation plan; O(n\u00b2) starting point is incompatible with it",
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md#design-goals",
+      "location_verified": null
+    },
+    {
+      "id": "F010",
+      "severity": "concern",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "Anticipated Slices diverge from the slice plan and from the document's own goals",
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md#anticipated-slices",
+      "location_verified": null
+    },
+    {
+      "id": "F011",
+      "severity": "concern",
+      "category": "antipattern",
+      "raw_category": null,
+      "summary": "Aggregation and GPU \"designed-for\" hooks are over-claimed and add speculative constraints",
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md#technical-considerations",
+      "location_verified": null
+    },
+    {
+      "id": "F012",
+      "severity": "concern",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "Broken and inconsistent cross-references",
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md#related-work",
+      "location_verified": null
+    },
+    {
+      "id": "F013",
+      "severity": "note",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "Failure behavior of the tick is not addressed",
+      "location": "unverified",
+      "location_verified": null
+    },
+    {
+      "id": "F014",
+      "severity": "note",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "Dimensionality is never stated",
+      "location": "unverified",
+      "location_verified": null
+    }
+  ],
+  "template_name": "arch",
+  "input_files": {
+    "input": "project-documents/user/architecture/100-arch.behavior-engine.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/migratory-100-arch"
+  },
+  "timestamp": "2026-11-16T13:15:19.359838",
+  "model": "claude-fable-5-2",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 11,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-fable-5-2",
+  "answering_models": [
+    "claude-fable-5-2"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 14,
+    "in_fences": 0,
+    "in_section": 14,
+    "surviving": 14
+  },
+  "effort": "medium",
+  "profile": "sdk",
+  "turns": 12,
+  "prompt_tokens": 309862,
+  "cached_tokens": 200573,
+  "cache_write_tokens": 109279,
+  "completion_tokens": 6526,
+  "reasoning_tokens": null,
+  "duration_seconds": 69.2382549168542,
+  "cost_usd": 2.0501374,
+  "cost_basis": "provider"
+}

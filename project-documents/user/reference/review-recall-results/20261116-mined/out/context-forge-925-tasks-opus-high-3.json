@@ -1,0 +1,243 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "PASS",
+      "title": "Success criteria coverage and scope",
+      "description": "Each functional criterion in the slice design (lines 188\u2013197) maps to tasks:\n- Fresh-clone `cf build`, `--json` and the out-of-sync warning: Tasks 17\u201321.\n- `cf guides info` reports `Checkout: not initialized`: Task 24.\n- `--strategy manual` handled as an alias: Tasks 7\u20138.\n- `manual` set in config: Tasks 5\u20137.\n- `cf init --strategy`: Tasks 26\u201327.\n- Help text: Tasks 25 and 27.\n- Managed-directory line and README: Tasks 28\u201330.\n- Malformed config fails the install: Tasks 5\u20136.\n\nThe technical criteria (the greps, no uncommented `catch {}`, CHANGELOG/DEVLOG) are covered by Tasks 5, 31 and 32. No task goes beyond the slice. The slice states no NFR (review F006), so no load test or CI gating task is needed.",
+      "file_ref": null,
+      "category": "coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/925-tasks.guide-install-robustness.md"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Commits at Tasks 4 and 6 leave the monorepo unbuildable",
+      "description": "Task 3 limits the rename sweep to `packages/core/src`. The design's sweep list (slice line 171) also includes `guideTools.ts:47,93,101` and `guides.ts:119`.\n\nOnce `GuideMethod` drops `'manual'`, the MCP `guide_install` zod enum `['submodule','clone','manual']` is no longer assignable to `manager.install()`. The CLI hides the same mismatch only because of an `as GuideMethod` cast. The commits at Task 4 (`refactor(core): rename\u2026`) and Task 6 therefore land while `pnpm -r build` fails in mcp-server. Task 4 also runs only the core suite, but the design says to \"run the full suite after step 1\".\n\nFix: move the type-only CLI/MCP enum and cast changes into Task 3, or move the Task 4/6 commits to after Task 8. Also make Task 4's success criterion `pnpm -r typecheck && pnpm -r test`.",
+      "file_ref": null,
+      "category": "sequencing",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/925-tasks.guide-install-robustness.md:83-100"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Commit markers are embedded in checkbox items instead of `**Commit**:` lines",
+      "description": "Every commit point is written inside a checkbox, for example `- [ ] Success criteria: \u2026 Commit: \\`refactor(core): \u2026\\``. They should be plain `**Commit**: \u2026` lines. Tooling or agents that look for `**Commit**:` will treat the file as having no markers and fall back to \"commit at the end of each top-level task\". That would commit after Task 1 (core typecheck deliberately broken), Task 10 and Task 20.\n\nFix: move each commit message onto its own plain `**Commit**:` line after the task it closes. This applies to lines 100, 128, 154, 205, 225, 247, 277, 313, 334, 343, 374, 390 and 413.",
+      "file_ref": null,
+      "category": "format",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/925-tasks.guide-install-robustness.md:99-100"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Tasks 15 and 17 disagree on whether auto-init is time-bounded, and no test checks it",
+      "description": "Task 15's first bullet says `init(operationPath)` always runs with `{ timeoutMs: GUIDE_INIT_TIMEOUT_MS }`. Its second bullet says the timeout is \"an `init()` option\", so that `sync()` stays unbounded. Task 17 then calls `SubmoduleStrategy.init(operationPath)` with no option. Following Tasks 15b and 17 literally gives an auto-init path with no timeout, which defeats D10 and the fix for review finding F004.\n\nTasks 16 and 18 test init's behaviour but never check that the timeout reaches `gitExec` on the `ensureCheckout()` path. Task 14 only tests `gitExec` on its own.\n\nFix: give `init` a single signature, `init(operationPath, opts?: { timeoutMs?: number })`. Have Task 17 pass `GUIDE_INIT_TIMEOUT_MS` explicitly. Add one assertion to Task 18 (a spy on `gitExec`, or a mocked `execFile` that reports `killed: true`) showing that `ensureCheckout()` produces the timed-out error with the remediation text.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/925-tasks.guide-install-robustness.md:227-262"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Task 11 throws inside `detect()`; the design throws in `ensureCheckout()`",
+      "description": "The design's data flow (slice lines 103\u2013110) throws on `'error'` inside `ensureCheckout()`. D1 says only that `detect()` records the state. Task 11 throws from `detect()` itself, which affects every caller:\n- `cf guides info` and `guide_status` would fail instead of showing state. The design says `cf guides info` must stay a safe read-only way to inspect.\n- `install()` and `setup-ide` would fail at their already-installed check.\n- `GuideDetector.test.ts` mocks the filesystem (line 49 of the task file). Existing submodule-detection cases would now run real `git submodule status` against a fake tree, get `'error'`, and throw. No task updates those tests.\n\nFix: either keep `detect()` non-throwing (record `checkout: null` or another explicit marker on error) and throw in `ensureCheckout()` as designed, or keep Task 11's approach and add steps to update the mocked detector tests and decide what `guides info` shows when git fails.",
+      "file_ref": null,
+      "category": "design-fidelity",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/925-tasks.guide-install-robustness.md:188-195"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Config-path alias warning is underspecified and untested",
+      "description": "Success criterion 6 (slice line 193) requires a config value of `manual` to install as tarball \"with the same warning\". The tasks fall short in three ways:\n- Task 5 leaves the return shape open (\"Choose one return shape\u2026 use it for both the CLI flag and the config path\"). That is confusing, because Task 7 normalizes the flag at the CLI before `install()` ever sees it. The task needs to say how the alias reaches `guidesInstallAction`, for example a `deprecatedAlias` field on `InstallResult`.\n- Task 7 adds an MCP notice only for the `manual` *parameter*. D5 also requires a notice when the alias comes from config and `guide_install` is called without `strategy`.\n- Task 8 tests only `--strategy manual`. No CLI or MCP test covers the config-file warning, and Task 6 checks only that core reports the alias.\n\nFix: fix the return shape in Task 5, add the MCP config-path notice to Task 7, and add one config-file case each to the CLI and MCP tests in Task 8.",
+      "file_ref": null,
+      "category": "coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/925-tasks.guide-install-robustness.md:110-154"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The real-git fixture will hit git's `file://` transport restriction",
+      "description": "Task 9 builds a host repo whose submodule points at a local bare repo. Since git 2.38.1 (CVE-2022-39253), `protocol.file.allow` defaults to `user`. So `git submodule add` and `git submodule update --init` from a local path fail with \"transport 'file' not allowed\".\n\nTasks 16, 18 and 21 run the production `gitExec` / `init()` code against this fixture, so they will fail the same way. The production code must not add `-c protocol.file.allow=always`. A junior implementer is likely to get stuck here, or to \"fix\" it in production code.\n\nFix: tell Task 9 to set `protocol.file.allow=always` through the test environment only, using `GIT_CONFIG_COUNT`/`GIT_CONFIG_KEY_0`/`GIT_CONFIG_VALUE_0`, or by pointing `GIT_CONFIG_GLOBAL` at a temp file. Also confirm that `gitExec`'s non-interactive env passes those variables through.",
+      "file_ref": null,
+      "category": "test-feasibility",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/925-tasks.guide-install-robustness.md:158-174"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The design's call-site grep is not applied to `packages/mcp-server/src`",
+      "description": "D3 (slice line 123) requires grepping for `createContextPipeline`, `resolvePromptFilePath` and `GUIDE_RELATIVE_PATH` in **both** `packages/cli/src` and `packages/mcp-server/src`, and covering every hit. Task 20 runs the grep for the CLI only, and adds `PROMPT_FILE_RELATIVE_PATH`, which the design missed. Task 22 hard-codes two MCP line locations and runs no grep. Any other MCP tool that reads guide content would skip auto-init.\n\nFix: add the same four-pattern grep to Task 22 for `packages/mcp-server/src`, and list the sites it covers in the commit body.",
+      "file_ref": null,
+      "category": "coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/925-tasks.guide-install-robustness.md:315-325"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Splits that leave the build broken could be merged",
+      "description": "Task 1 deliberately ends with core failing typecheck until Task 3 is done. Task 10 adds a required `GuideInfo.checkout` field that does not compile until Task 11 (line 186). Merging 1 with 3, and 10 with 11, would make every task end in a compiling state and remove two small tasks. Task 10's new required field may also break CLI and MCP test mocks that build `GuideInfo` objects. A short step to update those mocks would help.",
+      "file_ref": null,
+      "category": "granularity",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/925-tasks.guide-install-robustness.md:58-94"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Where `operationPath` is resolved is unclear, and may duplicate `getGuideContext()`",
+      "description": "Task 17 says the core `ensureCheckout()` must resolve `operationPath` the way the CLI's `getGuideContext()` does. Task 19 says `ensureGuideReady` should build `GuideManager` \"the same way `getGuideContext()` does\". Both point toward copying CLI logic. The task should say that `ensureGuideReady` reuses or extracts the CLI's existing context resolution, and that `GuideManager` receives the resolved paths rather than resolving them again in core.",
+      "file_ref": null,
+      "category": "clarity",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/925-tasks.guide-install-robustness.md:264-289"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "pass",
+      "category": "coverage",
+      "raw_category": null,
+      "summary": "Success criteria coverage and scope",
+      "location": "project-documents/user/tasks/925-tasks.guide-install-robustness.md",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "sequencing",
+      "raw_category": null,
+      "summary": "Commits at Tasks 4 and 6 leave the monorepo unbuildable",
+      "location": "project-documents/user/tasks/925-tasks.guide-install-robustness.md:83-100",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "format",
+      "raw_category": null,
+      "summary": "Commit markers are embedded in checkbox items instead of `**Commit**:` lines",
+      "location": "project-documents/user/tasks/925-tasks.guide-install-robustness.md:99-100",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Tasks 15 and 17 disagree on whether auto-init is time-bounded, and no test checks it",
+      "location": "project-documents/user/tasks/925-tasks.guide-install-robustness.md:227-262",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "design-fidelity",
+      "raw_category": null,
+      "summary": "Task 11 throws inside `detect()`; the design throws in `ensureCheckout()`",
+      "location": "project-documents/user/tasks/925-tasks.guide-install-robustness.md:188-195",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "coverage",
+      "raw_category": null,
+      "summary": "Config-path alias warning is underspecified and untested",
+      "location": "project-documents/user/tasks/925-tasks.guide-install-robustness.md:110-154",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "concern",
+      "category": "test-feasibility",
+      "raw_category": null,
+      "summary": "The real-git fixture will hit git's `file://` transport restriction",
+      "location": "project-documents/user/tasks/925-tasks.guide-install-robustness.md:158-174",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "concern",
+      "category": "coverage",
+      "raw_category": null,
+      "summary": "The design's call-site grep is not applied to `packages/mcp-server/src`",
+      "location": "project-documents/user/tasks/925-tasks.guide-install-robustness.md:315-325",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "note",
+      "category": "granularity",
+      "raw_category": null,
+      "summary": "Splits that leave the build broken could be merged",
+      "location": "project-documents/user/tasks/925-tasks.guide-install-robustness.md:58-94",
+      "location_verified": true
+    },
+    {
+      "id": "F010",
+      "severity": "note",
+      "category": "clarity",
+      "raw_category": null,
+      "summary": "Where `operationPath` is resolved is unclear, and may duplicate `getGuideContext()`",
+      "location": "project-documents/user/tasks/925-tasks.guide-install-robustness.md:264-289",
+      "location_verified": true
+    }
+  ],
+  "template_name": "tasks",
+  "input_files": {
+    "input": "project-documents/user/tasks/925-tasks.guide-install-robustness.md",
+    "against": "project-documents/user/slices/925-slice.guide-install-robustness.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/context-forge-925-tasks"
+  },
+  "timestamp": "2026-11-16T13:26:26.122699",
+  "model": "claude-opus-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 2,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-opus-5-5",
+  "answering_models": [
+    "claude-opus-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 10,
+    "in_fences": 0,
+    "in_section": 10,
+    "surviving": 10
+  },
+  "effort": "high",
+  "profile": "sdk",
+  "turns": 3,
+  "prompt_tokens": 117920,
+  "cached_tokens": 117572,
+  "cache_write_tokens": 344,
+  "completion_tokens": 10115,
+  "reasoning_tokens": null,
+  "duration_seconds": 101.83419041684829,
+  "cost_usd": 0.2292346,
+  "cost_basis": "provider"
+}

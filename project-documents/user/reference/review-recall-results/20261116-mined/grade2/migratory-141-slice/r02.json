@@ -1,0 +1,54 @@
+{
+ "review": "r02",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Per-force timing is assigned to this slice by the plan but deferred to 142",
+   "description": "The slice plan entry for (141) specifies phase breakdown as \"spatial build, spatial query, CSR assembly, **force totals per force**, integration\". The design collapses this to a single `force_total_ns` and pushes per-force resolution to slice 142.\n\n- **Cost of deferring:** a later `force_breakdown` field means a `PhaseTimings` change, a JSON schema-version bump and a Markdown renderer change. That contradicts the integration criterion that 142 lands with \"one file \u2026 and zero changes elsewhere in the harness\" (lines 586-588).\n- **Cost of doing it now:** small. Forces are already called one at a time over a named list, so one bracket per call gives the breakdown.\n- **Fix:** include `force_breakdown: dict[str, int]` in schema v1, keeping `force_total_ns` as the sum.\n\nA related risk note (lines 697-703) says per-tick profile-attribute setup is folded into `force_total`. With a per-force breakdown, that setup becomes visible as the residual rather than hidden.",
+   "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:292-296"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Backend identity cannot express compute target, so \"comparable across Metal / CUDA / CPU\" is not met by schema v1",
+   "description": "The plan requires comparable timings across backends \"on Apple Silicon (Metal) and NVIDIA (CUDA)\". Slice 142 benchmarks one Quadrants backend on two targets (Metal and CPU fallback). The design has nowhere to record that:\n\n- The registry key, the `backend` JSON field, the filename `{timestamp}_{workload}_{backend}.json` and the Markdown row key are all the bare backend name.\n- `BackendRunner.setup(workload)` takes no device or target argument.\n- The `platform` block records only `system`, `machine`, `processor` and `python`. `platform.processor()` is `\"arm\"` on every Apple Silicon machine, so M3 Max and M4 Max are indistinguishable.\n- There are no library versions (numpy/scipy now, numba/quadrants later) and no core count.\n\nTwo Quadrants runs on different targets would produce indistinguishable records, and 142 would have to change the schema and runner protocol. Fix now, cheaply: add a `device`/`target` field (value `cpu` for NumPy) to the JSON, filename and table key, and record CPU model plus key library versions.",
+   "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:408-437"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "`tick_instrumented` is a duplicated tick body, and the document contradicts itself on what the NumPy runner calls",
+   "description": "- **Contradiction:** Decision B makes the NumPy backend run a parallel re-implementation of `tick()` in `bench/backends/numpy_backend.py`. Lines 131-132 and 541 say the runner \"calls `tick()` directly\". Both cannot hold, since `tick_once` must return `PhaseTimings` and unmodified `tick()` cannot supply them.\n- **Understated duplication:** \"~5 lines per phase\" describes only the timer brackets. The duplicated part is the whole tick algorithm, which conflicts with the project's DRY rule.\n- **Undetected drift:** the design concedes (lines 691-695) that phase-boundary drift is \"not detectable mechanically\". The harness can then report a profile shape for code the server no longer runs, which undermines the principle that the post-change profile decides where effort goes.\n\nThe slice should resolve the contradiction and add a cheap guard: a test, or a report field, comparing instrumented `total_ns` against un-instrumented `tick()` wall time on the same workload within a tolerance. The bit-equality test already catches algorithmic drift, so this covers the remaining gap. Deferring the `profiler=` hook is defensible given the no-engine-changes constraint.",
+   "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:244-272"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Parity hash cannot serve as the reference slice 145 is told to consume",
+   "description": "The design says slice 145's tick-level parity test \"consumes the harness's NumPy parity hash as the reference\". The slice plan defines 145's parity as \"within a documented tolerance for non-deterministic GPU reductions\", and the design itself says GPU results are not bit-exact (lines 469-473). A SHA-256 gives only equal or not-equal, so no downstream consumer can interpret it \"within a tolerance band\". The hash is useful for NumPy self-determinism and CPU-backend regression only.\n\nEither scope the claim to that, or cut the cross-backend framing and point 145 at slice 140's `tools/run_deterministic_trajectory.py`, which the Open Questions section already names as \"the parity oracle\". The first open question (lines 748-755) then closes.\n\nThere is also an internal inconsistency: scope hashes the \"post-warmup\" `TickResult` (line 81), while the Parity hash section hashes \"after the measure phase\" (line 460). The hashed tick must be pinned for the hash to be a stable contract.",
+   "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:533-534"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Failure modes not enumerated for three I/O paths the design adds",
+   "description": "The Failure modes list covers YAML load, registry lookup, `setup` raising and low TPS. Not covered:\n\n- **`git rev-parse HEAD` subprocess** (line 233): no handling for git missing, a non-repo checkout or a hang. A dirty working tree is silently recorded as a clean SHA, which breaks the claim that a run is \"reproducible by repo hash + workload name\" (line 185). Specify fail-or-explicit-placeholder per the no-silent-fallback rule, and add a `git_dirty` flag.\n- **`tick_once` raising mid-measure:** only `setup` is covered by the try/finally. State whether `finalize` runs, and whether a partial report is written or the run aborts with no artifact.\n- **Result file write** (`bench/results/` missing or unwritable) and filename collision under `--all-backends` or loops within one timestamp resolution.\n\nThe architecture document states no latency or throughput NFR for the harness path, so none needs restating.",
+   "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:508-519"
+  },
+  {
+   "i": 5,
+   "severity": "NOTE",
+   "title": "Markdown report source and the `density` field are under-specified",
+   "description": "- The Markdown table is described as \"one table per workload across all backends in `bench/results/`\", which implies reading prior result files. State Management says the harness is stateless per invocation. If the renderer aggregates the directory, the rule for choosing a run per backend (latest? same git SHA? same platform?) is unspecified, and mixing SHAs or platforms in one table defeats comparability. Simplest: render only the current invocation's runs.\n- Scope lists `density` and a separate \"formation seed\" as workload fields (lines 70-72). The schema example has neither; density is implicit in `formation` and there is one `seed`. Align the two.\n- The \"sortable on TPS\" claim for a static Markdown table (line 80) can be cut.",
+   "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:440-450"
+  },
+  {
+   "i": 6,
+   "severity": "NOTE",
+   "title": "Profile and force name registries duplicate engine and config knowledge",
+   "description": "Profile names resolve through \"a small registry in `bench/workload.py`\" that mirrors constructors used in `config/default.yaml`. This is a second copy of profile definitions that can drift from the live-server operating point the `mid-flock` workload claims to represent. Prefer loading profiles through the existing config loader.\n\nThe slice says \"five existing `BulkForce` implementations\", while the plan's (144) entry lists six, including PropulsionForce. Confirm the force-name table against the engine so workloads can express the live force set.",
+   "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:392-400"
+  }
+ ]
+}

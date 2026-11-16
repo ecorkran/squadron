@@ -1,0 +1,68 @@
+{
+ "review": "r05",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Two result-mapping rules have no test (non-text blocks, multi-block join)",
+   "description": "SC2 requires results to be mapped \"per the Result mapping rules\". The slice design (lines 132-137) lists four rules. Two of them are tested nowhere:\n- **Non-text blocks.** They must be \"noted by type in the content, not dropped silently.\" Task 4.2 (line 137) implements this, but the fake server in Task 3 has no tool that returns a non-text block, and Task 5.1 has no test for it.\n- **Joining.** All `TextContent` blocks must be joined with `\\n`. `echo` returns a single block, so the join is never exercised.\n\nThe non-text rule is the same kind of silent-drop risk the design warns about in its slice-909 lesson. Fix: add one fake-server tool that returns two text blocks plus an image block. Add one Task 5.1 test asserting the joined text and a type note for the image.",
+   "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md:102-111"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "The protocol/transport failure row has no test",
+   "description": "The slice's failure-mode table says \"Each row above has a test asserting the observable signal\" (slice line 149\u2013150). Task 4.3 implements the `McpError` / closed-stream row (line 143). However, Task 5.4 lists only \"timeout, server isError, spawn failure\", and Task 5 has no test where the server dies mid-call.\n\n`test_unknown_tool_name` does not cover this row. With an SDK server, an unknown tool usually comes back as an `isError` result, not a transport error. Fix: add a `crash` tool to the fake server that calls `os._exit(1)` before responding. Then add a test asserting `is_error is True` plus the WARNING via `caplog`.",
+   "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md:143-176"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "The live round-trip test can fail on CI machines that have node installed",
+   "description": "The gate in Task 8.1 only checks whether the server process can be launched. Many CI images (for example GitHub's `ubuntu-latest`) come with node. On those machines:\n- The gate passes and `npx -y` fetches the package.\n- Test 8.2 then expects \"non-error content mentioning the project\".\n- CF resolves the project from the working directory against its own project registry, and a CI checkout normally has no registered CF project.\n- So 8.2 fails instead of skipping.\n\nThe plan says \"CI without node stays green\", but CI *with* node is the real risk. Fix: gate 8.2 separately. Either skip with a clear reason when `workflow_status` reports no project for the current directory, or put the live round-trip behind an explicit opt-in marker or environment variable. The 8.1 contract assertions do not depend on project state and can keep the launch-only gate.",
+   "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md:256-267"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "The slice is marked complete while half of SC6 is unverified",
+   "description": "SC6 requires that \"a dispatch with a tool-capable non-SDK model can call `cf_build_context` and receive assembled context (walkthrough \u00a74)\". Task 9.3 notes that step 4 \"remains open\" but still has the implementer set the task file and slice design to `status: complete`. That records an unmet success criterion as done.\n\nFix: add an unchecked item for walkthrough step 4 with a `BLOCKED:` note explaining that it needs a standard terminal because of the `sq run` CLAUDECODE guard. Leave the slice status short of `complete` until that item is checked, or have the slice design explicitly move that half of SC6 to a later step.",
+   "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md:289-292"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Task 2 is too small to stand alone; merge it into Task 1",
+   "description": "Task 1's own success criterion (line 81) already checks both defaults. Task 2 then adds two tests that assert the same thing, with its own commit. For an effort-2/5 slice this adds a task and a commit for no extra coverage. Fix: fold the two test bullets into Task 1 (config keys plus their tests, one commit). That also fixes the test-with pattern for this pair.",
+   "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md:70-96"
+  },
+  {
+   "i": 5,
+   "severity": "NOTE",
+   "title": "The timeout test needs a fixture feature Task 3 does not specify",
+   "description": "Task 5.2 (lines 167-169) proposes having \"the fake server print its PID to a temp file at startup\", but Task 3's fixture spec has no PID hook, and Task 3 is committed first. Add the PID-file behaviour (for example, driven by an environment variable) to Task 3.1 so Task 5 does not have to go back and change a committed fixture.",
+   "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md:102-111"
+  },
+  {
+   "i": 6,
+   "severity": "NOTE",
+   "title": "The plan says two different things about who sets `env`",
+   "description": "Task 4.1 says the bridge uses `get_default_environment()` as the spawned process's environment. Task 6.3 (line 207) says the caller passes `env=get_default_environment()` into `StdioServerParameters`. A junior implementer could end up with the bridge overwriting whatever environment the caller supplied.\n\nThe SDK's `stdio_client` already falls back to `get_default_environment()` when `env` is None. Pick one owner, preferably the SDK default with no explicit `env` in either place, and state it once.",
+   "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md:129-131"
+  },
+  {
+   "i": 7,
+   "severity": "NOTE",
+   "title": "SC3's \"an executor\" round-trip is only tested at the bridge level",
+   "description": "SC3 says \"against the fake python MCP server, an executor returns the server's text\". Task 5 calls `call_mcp_tool` directly, and Task 7 mocks the transport. The config \u2192 `shlex` \u2192 `StdioServerParameters` \u2192 bridge path is only exercised end to end by the live test (8.2), which is gated.\n\nThis is acceptable: the design's file table puts the real round-trip in `test_mcp_bridge.py`, and 7.3 checks how the parameters are built. No change is needed unless the slice author meant a cf_tools executor literally.",
+   "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md:154-158"
+  },
+  {
+   "i": 8,
+   "severity": "NOTE",
+   "title": "Task 9.4 merges as a task, which conflicts with the parent repo's rules",
+   "description": "The worktree's CLAUDE.md says \"A slice branch merges into the target when its implementation is done\", so Task 9.4 follows the conventions it was given. The squadron root CLAUDE.md, however, says never to write a merge as a task or success criterion, and to merge only in Phase 7 after code review. If the root rules apply to this run, drop 9.4 and the \"plus the merge commit\" wording from Task 9's success criteria.",
+   "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md:293-300"
+  }
+ ]
+}

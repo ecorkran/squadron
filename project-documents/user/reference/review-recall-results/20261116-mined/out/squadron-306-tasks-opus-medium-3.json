@@ -1,0 +1,207 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "Moving models, verification and the judge core \"verbatim\" brings back the review \u2192 pipeline cycle",
+      "description": "Decision 4 and the \"Dependency direction\" section of the slice exist so that `review/` never imports from `pipeline/`. The moves in T1, T3 and T5 break that:\n- **T1:** `models.py:14` imports `from squadron.pipeline.models import ActionResult`. `read_findings(result: ActionResult | None)` at line 93 needs it. T1 says to move the file \"verbatim \u2014 no logic changes\", so `review/addressed/models.py` would import from `pipeline`.\n- **T3:** `verification.py:17` imports `RoundDiff` from `pipeline.actions.findings_addressed.screens`. T3 keeps that import and calls it \"the pipeline\u2192review direction\". That is the wrong way round: once the file lives in `review/addressed/`, it is review importing pipeline, which is the exact cycle F002 removed.\n- **T5:** `judge.py:21` also imports `RoundDiff` from `screens`, and the `judge_residue_core` signature takes `diff`. The extracted core inherits the same back-edge.\n\nThese moves also leave the success criterion \"305's full test suite passes unchanged \u2014 including after the `review/addressed/` relocation (F002)\" in doubt. Package `__init__` files that import each other can fail with circular-import errors when Python loads them.\n\nFix: add a step to Part 0 that breaks each back-edge.\n- Move the `RoundDiff` dataclass, and probably `compute_round_diff`, which only needs `run_git`, into `review/addressed/`. File 2 needs the diff computation anyway.\n- Leave `read_findings`, the function that depends on `ActionResult`, in the pipeline layer, or type it against a protocol.\n- Add a check step to T8, for example a grep that `src/squadron/review/` has no `squadron.pipeline` imports, so the cycle cannot come back.",
+      "file_ref": null,
+      "category": "architecture",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/actions/findings_addressed/models.py:14"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "T13 commits Part D before T14's cf-scanning answer is known",
+      "description": "The slice's Phase 5 note says the cf `archive/` check must be \"sequenced before Part D lands\". T12 and T14 both say T12 isn't done until T14 is answered. But T14 comes after T13, and T13 carries the `fix:` commit. A junior agent working top to bottom will commit Part D with the unmangled archive filename and only then find out whether cf scans `archive/` recursively. Move T14 ahead of T12. That also lets you delete the \"gates T12 in practice even though it is numbered after it\" workaround.",
+      "file_ref": null,
+      "category": "sequencing",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-1.md:272-296"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "T11 tests the reviewedSha stamp on only one of the two save paths",
+      "description": "The success criterion says the stamp must appear \"from both the CLI and the pipeline persistence paths\". T11's integration test targets \"`save_review_result` (or the pipeline review action, whichever is more directly testable)\". With \"or\", the pipeline wiring from T10 can ship with no test. Require a test on each path. The pipeline-path test can be a narrow one that only checks `reviewed_sha` is passed through.",
+      "file_ref": null,
+      "category": "test-coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-1.md:219-222"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "T12 leaves out that aborted saves still print the review to the terminal",
+      "description": "The slice's Part D says that when the archive copy fails, \"the review content is still printed to the terminal, the save returns None with an ERROR naming both paths\". T12 covers returning `None` and logging the ERROR, but never says the freshly generated review must still reach the user. Without that, an aborted overwrite throws away the new review instead of the old one. Add a step that names who prints it (the caller of `save_review_file`, or the function itself) and a test assertion for it in T13. Also note that `save_review_file` currently logs write failures at WARNING (line 251). T12 should say whether that existing path changes to ERROR too, or stays as it is.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "src/squadron/review/persistence.py:247-252"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Commit markers don't use the standard format",
+      "description": "The markers are written as `- Commit: ...` bullets inside tasks, not as plain `**Commit**:` lines. Where they sit is fine: after T2, T4, T6, T8, T11 and T13, each a tested point. Only the format differs from the convention.",
+      "file_ref": null,
+      "category": "format",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-1.md:99"
+    },
+    {
+      "severity": "NOTE",
+      "title": "T8's expected test count asks for something not yet known",
+      "description": "T8 expects \"2832 passed, 2 skipped plus this slice's later additions\". At T8, which is pure relocation, there are no additions yet, so the target should be exactly the 305 baseline. As worded, a lower count than expected is easy to explain away.",
+      "file_ref": null,
+      "category": "clarity",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-1.md:178-180"
+    },
+    {
+      "severity": "PASS",
+      "title": "Parts A and D trace to their success criteria, with tests right after the code",
+      "description": "- T9\u2013T11 cover the reviewedSha criterion, including the git-unavailable path with no placeholder value.\n- T12\u2013T13 cover the archive-and-warn criterion and the fail-closed criterion (F003), checking that the original file is byte-identical afterwards.\n- Every implementation task is followed straight away by its test or verification task.\n- Part 0 sensibly uses the existing 305 suite as its regression check and writes no new tests for code that only moved.\n- No task falls outside the slice's scope.",
+      "file_ref": null,
+      "category": "traceability",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-1.md:188-273"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The remaining success criteria are left to file 2, which this review did not read",
+      "description": "The resolve command, the r1/r2 versioning, the empty-diff, `--no-judge`, legacy-fallback, verdict-mismatch and judge-failure cases, and the metrology glob exclusion are all handed to `-2.md`. That split is reasonable for the size of the slice. Whether file 2 covers those criteria needs its own check.\n\nNo load-test or CI task is needed: the slice states no non-functional requirements and touches no network, concurrency or simulation code paths.",
+      "file_ref": null,
+      "category": "scope",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-1.md:300-306"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "architecture",
+      "raw_category": null,
+      "summary": "Moving models, verification and the judge core \"verbatim\" brings back the review \u2192 pipeline cycle",
+      "location": "src/squadron/pipeline/actions/findings_addressed/models.py:14",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "sequencing",
+      "raw_category": null,
+      "summary": "T13 commits Part D before T14's cf-scanning answer is known",
+      "location": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-1.md:272-296",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "test-coverage",
+      "raw_category": null,
+      "summary": "T11 tests the reviewedSha stamp on only one of the two save paths",
+      "location": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-1.md:219-222",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "T12 leaves out that aborted saves still print the review to the terminal",
+      "location": "src/squadron/review/persistence.py:247-252",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "format",
+      "raw_category": null,
+      "summary": "Commit markers don't use the standard format",
+      "location": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-1.md:99",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "clarity",
+      "raw_category": null,
+      "summary": "T8's expected test count asks for something not yet known",
+      "location": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-1.md:178-180",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "pass",
+      "category": "traceability",
+      "raw_category": null,
+      "summary": "Parts A and D trace to their success criteria, with tests right after the code",
+      "location": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-1.md:188-273",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "note",
+      "category": "scope",
+      "raw_category": null,
+      "summary": "The remaining success criteria are left to file 2, which this review did not read",
+      "location": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-1.md:300-306",
+      "location_verified": true
+    }
+  ],
+  "template_name": "tasks",
+  "input_files": {
+    "input": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-1.md",
+    "against": "project-documents/user/slices/306-slice.review-resolution-recording-that-findings-were-addressed.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/squadron-306-tasks"
+  },
+  "timestamp": "2026-11-16T14:02:43.177356",
+  "model": "claude-opus-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 6,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-opus-5-5",
+  "answering_models": [
+    "claude-opus-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 8,
+    "in_fences": 0,
+    "in_section": 8,
+    "surviving": 8
+  },
+  "effort": "medium",
+  "profile": "sdk",
+  "turns": 7,
+  "prompt_tokens": 317830,
+  "cached_tokens": 306784,
+  "cache_write_tokens": 11036,
+  "completion_tokens": 3945,
+  "reasoning_tokens": null,
+  "duration_seconds": 49.55965045792982,
+  "cost_usd": 0.2290544,
+  "cost_basis": "provider"
+}

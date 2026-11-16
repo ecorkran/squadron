@@ -1,0 +1,26 @@
+{
+ "review": "r05",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "FAIL",
+   "title": "Gates 3.2a and 3.7 cannot pass while tests of removed behaviour still exist",
+   "description": "Task 3.2a requires `pnpm --filter @context-forge/core test` to pass right after 3.1\u20133.2 stop rendering `Comprehension:` and `### Adoption Facts`. Two core tests still assert that output at that point:\n- **`pipeline-integration.test.ts:184`** expects `Comprehension: \u2026`, and lines 154\u2013173 expect probe facts in the prompt. This block is only deleted in 3.3.\n- **`adoptionBuild.integration.test.ts:99-103`** (`expectBrownfield`) expects the `### Adoption Facts` heading. This file is only deleted in 4.1.\n\nTask 3.7 requires `pnpm typecheck` and `pnpm -r test` to pass, and has the same problem. `adoptionBuild.integration.test.ts:68` still calls `createContextPipeline(dir, { adoptionStateWrites, squadronProbe })`, and its brownfield cases expect the swap that 3.3 removed.\n\nA junior implementer following the file literally hits a red gate with no instruction, or deletes tests out of order.\n\nFix:\n- Move the `pipeline-integration.test.ts` brownfield block deletion from 3.3 into 3.1/3.2.\n- Move the `adoptionBuild.integration.test.ts` deletion from 4.1 to before 3.2a.\n- State in 3.2a that `ContextIntegrator.test.ts` and `adoptionParity.test.ts` are unaffected at that point: the first uses a mock engine, the second is outside the core package.",
+   "location": "packages/core/tests/adoption/adoptionBuild.integration.test.ts:68"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Commit points are written as checkboxes, not `**Commit**:` marker lines",
+   "description": "Commits appear as checkbox tasks or sub-items at 2.3 (line 79), 3.2a (101), 3.7 (134), 4.1\u20134.4 (148, 155, 163, 169), 5.1 (186) and 6.3 (206). The convention is a plain `**Commit**: \u2026` line, never a checkbox, so the implementer and task-checker recognise it as a marker and not as work to tick off.\n\nThe placement is sound: each sits at a compiling, tested point once the FAIL above is fixed. Convert them to plain marker lines and fold 2.3 and 3.2a into the preceding task.",
+   "location": "project-documents/user/tasks/268-tasks.pure-cf-build.md:79"
+  },
+  {
+   "i": 2,
+   "severity": "NOTE",
+   "title": "Check 6.2 says \"prints nothing\" but names an expected hit",
+   "description": "The grep includes `fileComprehension`, which will match the retained `COMPREHENSION_PROFILE_VARIABLE = 'fileComprehension'` at `packages/core/src/detection/comprehensionAnalysis.ts:15`. The exception is stated, but the success line \"all three checks are clean\" reads as a contradiction. Say \"prints only that line\".",
+   "location": "project-documents/user/tasks/268-tasks.pure-cf-build.md:198"
+  }
+ ]
+}

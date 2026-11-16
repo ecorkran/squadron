@@ -1,0 +1,351 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Task 7.4 leaves comprehension-flow text that contradicts the new flow",
+      "description": "Task 7.4 edits only line 393 and says \"no other comprehension-flow text changed.\" Three other statements go false once `concept` is recognized: line 389 (\"the only one this skill implements\"), line 392 (\"Any argument other than the comprehension default is unrecognized\"), and lines 628\u2013629 (\"Concept generation is slice 363 \u2026 neither is written here\"). Task 1.1 changes argument handling without naming line 392, so the file contradicts itself after Task 1. The design's Technical Scope also excludes \"any change to the comprehension flow\" (design lines 68\u201369), while its Implementation Notes require one sentence edit there. Name lines 389, 392, 393 and 628\u2013629 in Tasks 1.1 and 7.4, and state the exception to the exclusion.",
+      "file_ref": null,
+      "category": "sequencing",
+      "raw_category": null,
+      "location": "commands/analysis/understand.md:389"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Task 7.1 updates a pointer that does not exist",
+      "description": "The design (line 275) and Task 7.1 say the shared Gap markers section already reserves `[INFERRED]` for this flow and has a pointer to update. The section at lines 286\u2013305 instead says `[INFERRED]` is a retained sibling convention, and that \"This flow does not use `[INFERRED]`\" (line 291). No pointer to a concept subsection exists, and \"this flow\" is ambiguous in a shared section once a second flow exists. Rewrite Task 7.1 to scope line 291 to the comprehension flow by name and add the pointer.",
+      "file_ref": null,
+      "category": "coverage",
+      "raw_category": null,
+      "location": "commands/analysis/understand.md:291"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Precondition checks run after the operator has been interviewed",
+      "description": "Task 2.1 reads the guide \"at write time\" (inherited from design lines 80\u201384), and Task 6.1 checks it \"before any write.\" Preconditions 2 and 3 are terminal stops, but they fire after Tasks 5.1 and 5.2 have asked the two questions and the confirmation. On a repo without the guide tree, the operator answers three prompts and the answers are lost when the flow stops. The review-code.md Fail Fast rule requires the boundary check before human contact. Run preconditions 2 and 3 during preflight, before extraction and the interview. Keep Task 6.1 as the re-check before write.",
+      "file_ref": null,
+      "category": "sequencing",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/363-tasks.concept-generation.md:106"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Walkthrough never produces two of the three confirmation outcomes",
+      "description": "Task 8.1 forces the \"corrected\" outcome. Task 8.2 declines the two questions but does not answer the confirmation. No run produces `extracted-and-confirmed` or `extracted-unconfirmed`, both of which are in the outcome set that Task 7.3 and SC10 depend on. Have Task 8.2 also refuse the confirmation, and have one run confirm it.",
+      "file_ref": null,
+      "category": "verification",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/363-tasks.concept-generation.md:305"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Walkthrough checks omit output-level checks for SC3, SC4, SC10 and SC12",
+      "description": "The Task 8.1 success line checks the questions, verbatim answers, two README citations and the provenance lines. It does not check:\n- SC3: every structural claim in the body names its graph field, not only the sections listed.\n- SC4: why-now, audience-evolution and methodology-preference are absent from the body. The only check is the authoring rule in Task 4.1.\n- SC10: per-section sourcing covers every section, and each `[INFERRED]` sentence meets the Task 7.1 rule.\n- SC12: no recorded PM judgment that the output is one they would edit rather than discard.\n\nAdd these as explicit 8.1 checks and record the PM's verdict.",
+      "file_ref": null,
+      "category": "verification",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/363-tasks.concept-generation.md:318"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Task 8.3 names an action the skill cannot perform, and its coverage is narrower than SC7",
+      "description": "The guide path is fixed (Task 6.1), and nothing says how to \"point the check at\" a scratch copy. Task 8.2 says \"scratch copy of the tree\"; Task 8.3 says \"scratch copy of the guide only.\" Run 8.3 the same way as 8.2: a scratch copy of the tree with the heading renamed in that copy's guide. Task 8.3 also exercises only the renamed-heading case. SC7 covers an absent or unreadable guide and the whole-tree-absent setup message, and no walkthrough step runs them.",
+      "file_ref": null,
+      "category": "completability",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/363-tasks.concept-generation.md:327"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Augment's refill branch is never exercised",
+      "description": "SC8 names mechanical refillability. Task 8.4 re-runs against the Task 8.1 document, which has both questions answered and therefore no `[GAP: ...]` markers. The test only reaches the \"populated sections stay byte-identical\" branch. Run the augment re-run against the Task 8.2 output, which has gap markers, and check that gap-marked sections are filled while populated ones are unchanged.",
+      "file_ref": null,
+      "category": "verification",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/363-tasks.concept-generation.md:332"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Commit markers are checkboxes and sit after nearly every task",
+      "description": "Eight markers are written as `- [ ] Commit: \u2026` (lines 99, 125, 164, 185, 221, 254, 296, 351). The rule requires plain `**Commit**:` lines. As checkboxes they must be checked before the commit they gate, which cannot be done truthfully, and they inflate the \"all checkboxes verified\" count in 9.1. Their placement also matters: eight of ten top-level tasks end on a marker, and Tasks 1\u20137 are verified only by reading a diff. The first live run is 8.1, so a defect in the selector or the precondition stops is committed several commits before anything runs it. Convert them to plain lines, and keep markers only after a live run, such as a route check after Task 1.",
+      "file_ref": null,
+      "category": "format",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/363-tasks.concept-generation.md:99"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Task 0.1 asserts the target instead of reading it",
+      "description": "Task 0.1 states \"integration branch is unset; target is `main`\" as a fact. The project rule is to read `cf config get git.integration_branch`, use its value or `main` if empty, and never infer the target from the current branch. Replace the parenthetical with the read step. If this checkout is a git worktree, add the worktree registration check from the git rules.",
+      "file_ref": null,
+      "category": "completability",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/363-tasks.concept-generation.md:60"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Overweight for a one-file markdown change",
+      "description": "The file has 10 top-level tasks, 31 subtasks and 8 commit markers for one edited file and one generated document. Cut or merge:\n- Fold Task 1.2 into 1.1, and make the live route check in 8.5 run right after 1.1.\n- Fold 4.2 into 4.1. The row-for-row diff is one success line.\n- Merge 9.1\u20139.3 into one close-out task.\n- Drop `uv run pytest tests/skills/` from 8.6. No success criterion traces to it. Keep `ruff format --check`, which the project rule requires.\n\nKeep 5.3 (byte-identical wording is required by SC2), and keep 3.4 and 6.3 (live checks).",
+      "file_ref": null,
+      "category": "sizing",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/363-tasks.concept-generation.md"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Task 1.1's placement anchor is ambiguous",
+      "description": "Task 1.1 says to place the shell \"before the human-documentation divider.\" The header (lines 16\u201318) says the protocol runs \"through the `---` divider,\" but the first divider (line 20) sits above the protocol sections. The divider the task means is the one at line 631, before `# Project documentation`. Name that line in Task 1.1.",
+      "file_ref": null,
+      "category": "completability",
+      "raw_category": null,
+      "location": "commands/analysis/understand.md:16"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Unnamed mechanisms in Tasks 2.1, 7.2 and 9.1",
+      "description": "Tasks 2.1 and 7.2 say \"from the cf project registration\" without naming the read. Task 2.2 names `cf get` (Name field), so put that in 2.1 as well. Task 9.1 says \"per its frontmatter contract\" without naming the document. Point it at `file-naming-conventions`.",
+      "file_ref": null,
+      "category": "completability",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/363-tasks.concept-generation.md:110"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Line-number pointers into the design are brittle",
+      "description": "Task 7.1 cites \"design lines 278\u2013280,\" but the rule sits at lines 277\u2013279. Most other pointers are accurate today, but the design is still a draft, and any edit shifts them. Cite section headings and keep the line numbers as a secondary hint.",
+      "file_ref": null,
+      "category": "maintainability",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/363-tasks.concept-generation.md:259"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The README-absent fallback has no walkthrough run",
+      "description": "The design's Risk table says the source model \"degrades explicitly, never silently\" when the README is absent. Task 3.2 checks only that the fallback text exists. The failure-mode rule in review-code.md asks for at least one test that shows the failure produces its observable signal. Add a scratch-copy step with the README removed, or record why it is out of scope.",
+      "file_ref": null,
+      "category": "verification",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/363-tasks.concept-generation.md:143"
+    },
+    {
+      "severity": "PASS",
+      "title": "Every success criterion has at least one task",
+      "description": "All 12 criteria map to tasks, and the non-criterion tasks are process steps (0.1, 9.x) or the design-mandated 7.4. The gaps are verification depth (the findings above), not missing work. Each verify task (1.2, 2.2, 3.4, 4.2, 5.3, 6.3) follows its implementation task. Dependencies on 361 and 362 are merged, and the sequence has no cycles.",
+      "file_ref": null,
+      "category": "coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/363-tasks.concept-generation.md"
+    },
+    {
+      "severity": "PASS",
+      "title": "The design's guide table matches the guide's section titles",
+      "description": "The seven rows of the design's mapping table match the guide's `## Overview`, `## User-Provided Concept` and `### Problem & Motivation` through `### Development Approach` headings, in order. I checked this in the squadron main checkout. This worktree does not contain the guide, so Tasks 0.2 and 2.2 need a checkout that has it.",
+      "file_ref": null,
+      "category": "coverage",
+      "raw_category": null,
+      "location": "/Users/manta/source/repos/manta/squadron/project-documents/ai-project-guide/project-guides/guide.ai-project.000-concept.md"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "sequencing",
+      "raw_category": null,
+      "summary": "Task 7.4 leaves comprehension-flow text that contradicts the new flow",
+      "location": "commands/analysis/understand.md:389",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "coverage",
+      "raw_category": null,
+      "summary": "Task 7.1 updates a pointer that does not exist",
+      "location": "commands/analysis/understand.md:291",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "sequencing",
+      "raw_category": null,
+      "summary": "Precondition checks run after the operator has been interviewed",
+      "location": "project-documents/user/tasks/363-tasks.concept-generation.md:106",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "verification",
+      "raw_category": null,
+      "summary": "Walkthrough never produces two of the three confirmation outcomes",
+      "location": "project-documents/user/tasks/363-tasks.concept-generation.md:305",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "verification",
+      "raw_category": null,
+      "summary": "Walkthrough checks omit output-level checks for SC3, SC4, SC10 and SC12",
+      "location": "project-documents/user/tasks/363-tasks.concept-generation.md:318",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "completability",
+      "raw_category": null,
+      "summary": "Task 8.3 names an action the skill cannot perform, and its coverage is narrower than SC7",
+      "location": "project-documents/user/tasks/363-tasks.concept-generation.md:327",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "concern",
+      "category": "verification",
+      "raw_category": null,
+      "summary": "Augment's refill branch is never exercised",
+      "location": "project-documents/user/tasks/363-tasks.concept-generation.md:332",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "concern",
+      "category": "format",
+      "raw_category": null,
+      "summary": "Commit markers are checkboxes and sit after nearly every task",
+      "location": "project-documents/user/tasks/363-tasks.concept-generation.md:99",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "concern",
+      "category": "completability",
+      "raw_category": null,
+      "summary": "Task 0.1 asserts the target instead of reading it",
+      "location": "project-documents/user/tasks/363-tasks.concept-generation.md:60",
+      "location_verified": true
+    },
+    {
+      "id": "F010",
+      "severity": "concern",
+      "category": "sizing",
+      "raw_category": null,
+      "summary": "Overweight for a one-file markdown change",
+      "location": "project-documents/user/tasks/363-tasks.concept-generation.md",
+      "location_verified": null
+    },
+    {
+      "id": "F011",
+      "severity": "note",
+      "category": "completability",
+      "raw_category": null,
+      "summary": "Task 1.1's placement anchor is ambiguous",
+      "location": "commands/analysis/understand.md:16",
+      "location_verified": true
+    },
+    {
+      "id": "F012",
+      "severity": "note",
+      "category": "completability",
+      "raw_category": null,
+      "summary": "Unnamed mechanisms in Tasks 2.1, 7.2 and 9.1",
+      "location": "project-documents/user/tasks/363-tasks.concept-generation.md:110",
+      "location_verified": true
+    },
+    {
+      "id": "F013",
+      "severity": "note",
+      "category": "maintainability",
+      "raw_category": null,
+      "summary": "Line-number pointers into the design are brittle",
+      "location": "project-documents/user/tasks/363-tasks.concept-generation.md:259",
+      "location_verified": true
+    },
+    {
+      "id": "F014",
+      "severity": "note",
+      "category": "verification",
+      "raw_category": null,
+      "summary": "The README-absent fallback has no walkthrough run",
+      "location": "project-documents/user/tasks/363-tasks.concept-generation.md:143",
+      "location_verified": true
+    },
+    {
+      "id": "F015",
+      "severity": "pass",
+      "category": "coverage",
+      "raw_category": null,
+      "summary": "Every success criterion has at least one task",
+      "location": "project-documents/user/tasks/363-tasks.concept-generation.md",
+      "location_verified": null
+    },
+    {
+      "id": "F016",
+      "severity": "pass",
+      "category": "coverage",
+      "raw_category": null,
+      "summary": "The design's guide table matches the guide's section titles",
+      "location": "/Users/manta/source/repos/manta/squadron/project-documents/ai-project-guide/project-guides/guide.ai-project.000-concept.md",
+      "location_verified": null
+    }
+  ],
+  "template_name": "tasks",
+  "input_files": {
+    "input": "project-documents/user/tasks/363-tasks.concept-generation.md",
+    "against": "project-documents/user/slices/363-slice.concept-generation.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/squadron-363-tasks"
+  },
+  "timestamp": "2026-11-16T13:43:19.099620",
+  "model": "claude-haiku-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 11,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 1,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-haiku-5-5",
+  "answering_models": [
+    "claude-haiku-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 16,
+    "in_fences": 0,
+    "in_section": 16,
+    "surviving": 16
+  },
+  "effort": "xhigh",
+  "profile": "sdk",
+  "turns": 12,
+  "prompt_tokens": 792167,
+  "cached_tokens": 642931,
+  "cache_write_tokens": 149222,
+  "completion_tokens": 63638,
+  "reasoning_tokens": null,
+  "duration_seconds": 280.5593181250151,
+  "cost_usd": 0.19102847,
+  "cost_basis": "provider"
+}

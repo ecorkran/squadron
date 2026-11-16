@@ -1,0 +1,189 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "PASS",
+      "title": "Theme, scope and deferral boundary fit the architecture",
+      "description": "This is a themed refactor under the architecture's \"Hard-coded values \u2192 configuration or constants\" scope item. It follows the \"no behavior changes without tests\" principle and has explicit success criteria. Slice 241's TD-6 does defer the sweep of pre-existing literals to this slice. The exclusion of the frontmatter vocabulary (lines 47, 100\u2013102) is correctly reasoned: it is a different vocabulary, and merging it would change behavior.",
+      "file_ref": null,
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md:21-23"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Regression guard does not establish the coverage the architecture requires",
+      "description": "The architecture requires refactoring slices to have \"test coverage verifying preserved behavior before and after.\" This doc relies on the existing suite passing (lines 19, 85) and says no test asserts these literals directly (line 51). A green suite therefore does not show that each swept site is exercised. A misspelling is not the real risk, since the compiler rejects `STATUS.Compelte`. The real risk is a wrong member. Every `STATUS` member has the same `NormalizedStatus` type, so `STATUS.InProgress` where `STATUS.NotStarted` was meant compiles, and only a test that reaches that branch will catch it. The success grep (line 135) checks that no literal remains, not that each literal became the right member. Add a step that measures coverage of the six files before the sweep, and add a test for any swept branch that no test reaches.",
+      "file_ref": null,
+      "category": "testing",
+      "raw_category": null,
+      "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md:85"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Success-criteria grep cannot pass as written, and the site counts do not reconcile",
+      "description": "Line 135 requires zero matches \"in the six swept files,\" but the command scans the whole core source tree. The doc also says some matches must survive: the frontmatter vocabulary, the `SliceStatus` member, the `STATUS` definition, and any quoted alias keys. The command therefore contradicts its own exclusions. The `introspection/types.ts:[3-6]:` exclusion hard-codes line numbers that the sweep itself changes. The counts also do not close. Line 35 says `types.ts` has 8 literal sites, 4 of which are the definition, which leaves 4. One of those 4 is the excluded `SliceStatus` member, so at most 3 can be swept, not the 5 in the table. Line 150 says 8 out-of-scope sites, but line 151 lists 3 + 4 = 7. The check should name the expected survivors per file, and the table counts should be corrected before the implementer uses them.",
+      "file_ref": null,
+      "category": "verification",
+      "raw_category": null,
+      "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md:135"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Consumers outside core are not checked, and the \"no consumer updates\" claim is unsupported",
+      "description": "Line 84 says no consumer updates are needed outside core and that no public API signature changes. The Value section (lines 21\u201323) says every reference to a `NormalizedStatus` value becomes a compiler-checked `STATUS` access. The literal check (line 135) scans only core, so neither claim is checked outside it. A grep of production source in the other packages finds:\n- a CLI comparison against `'complete'` on a status field. The doc does not classify it as a `NormalizedStatus` site or as the excluded `SliceStatus`, so it is neither swept nor explained;\n- a CLI read of `TaskFileResult.inferredStatus`, the field this slice retypes.\n\nI did not classify every hit, so this list may be incomplete. The gap matters for two reasons. The Value claim overreaches, because the drift the slice removes would remain in the CLI. And \"no public API signature changes\" is inaccurate, since widening `inferredStatus` changes an exported type. The final build (line 92) would catch an incompatible consumer, but step 1 (line 87) builds and tests only the core files it touches, so a break would surface only at the end. Either extend the sweep and the grep to other packages' `NormalizedStatus` comparisons, or list them as explicit exclusions with reasons and narrow the Value claim. Add a dependent-package build to step 1.",
+      "file_ref": null,
+      "category": "integration",
+      "raw_category": null,
+      "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md:84"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Slice 912 is an undeclared dependency",
+      "description": "The frontmatter lists only `dependencies: [241]`. The counts are \"as of 20260707, post-912\" (line 29), and slice 912 changed the same area. Its own doc names `ruleReviewGate` and the shared evaluator in ConsistencyChecker. Slice 241's doc estimated about 50 sites, and this doc says about 65. The difference is attributed to \"post-912\" but not quantified. Slice 912 is `status: complete` in its doc. If it has landed, the dependency is satisfied but not recorded. If it has not, the counts and the ConsistencyChecker plan are stale. Add 912 to `dependencies` and state how many sites it added.",
+      "file_ref": null,
+      "category": "dependencies",
+      "raw_category": null,
+      "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md:6"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Overweight for a mechanical sweep: repeated sections and verification steps that add no check",
+      "description": "The design repeats itself. The frontmatter-vocabulary exclusion appears at lines 47, 100\u2013102, 128 and 136. The `SliceStatus` exclusion appears at 49 and 104\u2013106. The test baseline appears at 85, 92, 142 and 157. The literal count appears at 135 and 147\u2013151. Cut the following:\n- TD-2 and TD-3 (lines 100\u2013106). The exclusion bullets (lines 47\u201349) are the record.\n- Verification step 2 (line 153). It introduces a typo into source on purpose and then reverts it. TypeScript already rejects unknown members of an `as const` object.\n- Verification step 4 (lines 160\u2013165). It expects output \"identical to pre-sweep,\" but the doc never captures pre-sweep output, so the check cannot fail as written. The test suite is the guard the doc already names.\n- Migration step 6 (line 92) and Technical Requirements (lines 141\u2013142) state the same commands. Keep one.",
+      "file_ref": null,
+      "category": "proportionality",
+      "raw_category": null,
+      "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md:100-106"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Theme is not mapped to the architecture's anticipated slices",
+      "description": "The architecture's anticipated slice \"Hard-coded values audit (extract to config or constants)\" is the theme this slice belongs to, but the slice does not name it. The architecture's `relatedSlices` is currently empty. Naming the theme in the Overview would keep the initiative's slice list traceable. No design change is needed.",
+      "file_ref": null,
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md:21-23"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "pass",
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "summary": "Theme, scope and deferral boundary fit the architecture",
+      "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md:21-23",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "testing",
+      "raw_category": null,
+      "summary": "Regression guard does not establish the coverage the architecture requires",
+      "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md:85",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "verification",
+      "raw_category": null,
+      "summary": "Success-criteria grep cannot pass as written, and the site counts do not reconcile",
+      "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md:135",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "integration",
+      "raw_category": null,
+      "summary": "Consumers outside core are not checked, and the \"no consumer updates\" claim is unsupported",
+      "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md:84",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "dependencies",
+      "raw_category": null,
+      "summary": "Slice 912 is an undeclared dependency",
+      "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md:6",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "proportionality",
+      "raw_category": null,
+      "summary": "Overweight for a mechanical sweep: repeated sections and verification steps that add no check",
+      "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md:100-106",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "note",
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "summary": "Theme is not mapped to the architecture's anticipated slices",
+      "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md:21-23",
+      "location_verified": true
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md",
+    "against": "project-documents/user/architecture/900-arch.maintenance-and-refactoring.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/context-forge-910-slice"
+  },
+  "timestamp": "2026-11-16T13:47:54.213904",
+  "model": "claude-haiku-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 10,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-haiku-5-5",
+  "answering_models": [
+    "claude-haiku-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 7,
+    "in_fences": 0,
+    "in_section": 7,
+    "surviving": 7
+  },
+  "effort": "xhigh",
+  "profile": "sdk",
+  "turns": 11,
+  "prompt_tokens": 518275,
+  "cached_tokens": 413829,
+  "cache_write_tokens": 104434,
+  "completion_tokens": 39729,
+  "reasoning_tokens": null,
+  "duration_seconds": 177.80429366696626,
+  "cost_usd": 0.11833197000000001,
+  "cost_basis": "provider"
+}

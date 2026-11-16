@@ -1,0 +1,75 @@
+{
+ "review": "r07",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Per-force timing breakdown deferred, though the slice plan gives it to slice 141",
+   "description": "The slice plan entry for (141) requires timings \"broken down by phase (spatial build, spatial query, CSR assembly, **force totals per force**, integration)\". The design records one `force_total_ns` and says \"Slice 142 introduces per-force timings.\" That drops scope the plan assigns to this slice. It also undercuts the design's own promises:\n- **Integration Requirements (lines 586-588):** they say slice 142 can add a backend with \"zero changes elsewhere in the harness\". But adding per-force timings means changing `PhaseTimings`, the aggregator, the JSON schema (bumping `schema_version`) and the Markdown renderer.\n- **JSON schema stability (line 530):** the schema is called \"stable from this slice\", yet its first real consumer already has to change it.\n\nThe design itself names a risk this would address (lines 697-703: fancy indexing inflates `force_total` at small N). Add `force_breakdown: dict[str, int]` to `PhaseTimings` and schema v1 now. The NumPy runner already loops over the force list, so this is about 3 lines per force. The alternative is to get the slice plan amended explicitly. Don't leave it as an implicit deferral.",
+   "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:292-296"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Numba backend assigned to the wrong slice; no slice clearly owns it",
+   "description": "Line 92 (\"slice 144 / 118 territory\"), lines 341-345 (\"Slice 144 registers `numba`\") and lines 589-591 (the Integration Requirement) all give the Numba backend to slice 144. In the slice plan, 144 is **Quadrants Force Kernels**. Numba is (118), which lives in plan 100. Slice 142 depends on (141) and (118), and its first job is to benchmark Quadrants cohesion \"against the existing NumPy **and Numba** implementations\". So the `numba` backend has to exist before 142 starts, and 144 is too late.\n\nState which slice registers `numba`, either 118 or 142's first task, and fix the integration requirement so it names the slice that will actually consume it. If this stays wrong, 142 will find it has no Numba runner to compare against.",
+   "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:341-345"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "The NumPy runner is described as both calling `tick()` and not calling it",
+   "description": "Line 132 says \"The harness's NumPy runner calls `tick()` directly\", and line 541 repeats this under Consumes. But lines 63-69, 244-267 and 496-501 say the runner uses a parallel `tick_instrumented()` and that `tick()` is only a reference for the parity test. These lead to different implementations with different drift risk.\n\nAlso, line 266 sizes the duplication as \"~5 lines per phase\", but option B copies the whole tick algorithm, not just the timer brackets. That runs against the project's DRY rule. The bit-equality test (lines 688-695) limits the risk, which is acceptable. Still, the document should:\n- say plainly that the full tick body is copied;\n- fix lines 132 and 541 so they agree with that.",
+   "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:131-132"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Parity hash runs after `finalize()` in the data flow",
+   "description": "The data flow runs `BackendRunner.finalize()` \u2192 `TickResult (final state)` \u2192 `parity.hash(result)`. `finalize` is defined as the teardown hook that will \"release GPU memory\" (line 337). Slice 140's contract also says a `TickResult`'s arrays are only valid until the next `tick()` call, and future GPU constructors may return views onto device memory. On NumPy this order works by accident. On a GPU backend it would hash memory that has already been freed.\n\nHash the last `TickResult` returned by `tick_once` before calling `finalize`, and say so. Also say the hash covers `positions[:count]` and `velocities[:count]`. Slice 140 makes `count` explicit for exactly this reason.",
+   "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:205-211"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "The Markdown summary doesn't say which result files it combines",
+   "description": "\"One table per workload across all backends in `bench/results/`\" means every JSON file in a gitignored directory that keeps growing. Those files will have different `git_sha`, platform and timestamps. A single table would then put numbers from last week's code, or another machine, next to today's, with nothing to show it. That defeats the \"apples-to-apples\" goal on line 47.\n\nPick one rule and state it, for example:\n- only rows from the current invocation, or\n- the latest file per (workload, backend) with a matching `git_sha` and platform, with those values shown in the table header.",
+   "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:440"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Profile registry copies `config/default.yaml` instead of reading it",
+   "description": "`bench/workload.py` gets \"a small registry that maps `flocker` / `leader` / etc. to the existing `BehavioralProfile` constructors used in `config/default.yaml`\". That creates a second copy of the profile definitions, which will drift when someone tunes the config. The `mid-flock` workload claims to be \"roughly equivalent to the live-server default config\" (lines 353-355), and that claim would then quietly stop being true.\n\nResolve profile names by loading the same config source the server uses. Otherwise, document the registry as a deliberate snapshot and add a test that checks it against `config/default.yaml`.",
+   "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:392-396"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "Git SHA lookup has no failure path, and a dirty tree isn't recorded",
+   "description": "The design calls the run \"reproducible by repo hash + workload name\" (line 184) and gets `git_sha` from `git rev-parse HEAD`. The failure-mode list (lines 508-519) doesn't cover:\n- **No git:** `git` is missing, or the run isn't inside a repo.\n- **Uncommitted changes:** the working tree has changes, so the numbers are labelled with HEAD but come from code that isn't committed.\n\nThis is the usual situation when someone benchmarks a change before committing it. Following the project's no-silent-fallbacks rule:\n- fail loudly, or write an obviously-placeholder value, if `rev-parse` fails;\n- record a `git_dirty: bool` (from `git status --porcelain`) next to the SHA.",
+   "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:232-236"
+  },
+  {
+   "i": 7,
+   "severity": "NOTE",
+   "title": "CLI section is missing flags the walkthrough uses",
+   "description": "Walkthrough steps 1-2 (lines 603-613) depend on `--list-backends` and `--list-workloads`, but the CLI section doesn't list them. Add them so the task breakdown includes them.",
+   "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:479-487"
+  },
+  {
+   "i": 8,
+   "severity": "NOTE",
+   "title": "Force list leaves out PropulsionForce",
+   "description": "The slice refers to \"the five existing `BulkForce` implementations\". Slice plan entry (144) lists six, including `PropulsionForce`. If the production tick uses propulsion, the checked-in workloads (lines 379-384) don't measure the production force set, and the step-9 profile-shape comparison won't line up. Check this, and add `propulsion` to the workloads if it applies.",
+   "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:138-141"
+  },
+  {
+   "i": 9,
+   "severity": "NOTE",
+   "title": "Cross-platform (CUDA) validation left to later runs",
+   "description": "The plan entry says \"Standalone against NumPy at first\", so not shipping a CUDA run or CI matrix is acceptable. Recording platform metadata in every result keeps Tier 3 validation possible later. Nothing to change.",
+   "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:96-99"
+  }
+ ]
+}

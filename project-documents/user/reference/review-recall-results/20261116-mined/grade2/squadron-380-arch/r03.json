@@ -1,0 +1,96 @@
+{
+ "review": "r03",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Tool-enabled PR reviews would load conventions from the untrusted PR head",
+   "description": "The document treats PR title, body and threads as untrusted text (Technical Considerations, \"Prompt inputs from the PR\"). It does not apply the same caution to the scratch worktree.\n\nIn the current code, `_resolve_review_cwd` (`src/squadron/cli/commands/review.py:244-258`) does two things with the review working directory:\n- it uses it as the tool jail root;\n- it passes it to `resolve_rules_dir`.\n\nIf `sq review pr` hands the scratch worktree to the existing code path as its working directory, as the Envisioned State says, then three things in the PR author's head commit steer the review:\n- the rules directory;\n- `CLAUDE.md`;\n- `.claude/rules/*`.\n\nA PR could weaken or rewrite the review's own conventions. \"Rules outside a planned project\" only covers repositories that have no rules. The architecture needs to say where rules come from in a PR review: the base ref, the operator's checkout, or the template only. It must never be the PR head. It should also say that the tool jail root (the PR files) and the rules root are separate settings.",
+   "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#architectural-principles"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "The reviewed SHA comes from the operator's HEAD, not the PR head",
+   "description": "\"Base semantics\" says \"the head sha recorded in the artifact is what was reviewed\", and the posted comment relies on that value. But `save_review_result` stamps `reviewed_sha=resolve_reviewed_sha(\".\")` (`src/squadron/review/persistence.py:515`). That is the HEAD of the process's working directory, which the design deliberately keeps separate from the PR.\n\nA PR review would therefore record the operator's current commit as `reviewedSha`. That breaks two things:\n- the \"head has moved\" check when posting;\n- the `sq review resolve` anchor.\n\nThe persistence slice needs to take the SHA from the typed PR record and stop resolving HEAD. The document should name this seam explicitly, not file it under \"attaches to the seams 917 changes\".",
+   "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#technical-considerations"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "The persistence contract is slice-shaped in more places than the filename",
+   "description": "The document says a PR-keyed name will \"satisfy the review frontmatter contract without a slice index\". It does not say what that contract becomes. `format_review_markdown` hard-codes:\n- the `slice:` and `project:` frontmatter;\n- a title of `# Review: {type} \u2014 slice {index}`;\n- `\"unknown\"` / `0` fallbacks when there is no slice. Those are exactly the silent placeholders the project rules forbid.\n\n`save_review_file` and `save_review_result` both build filenames from `{index}-review.{type}.{slice_name}`.\n\nThe document also claims that \"archiving, digest, and integrity checks \u2026 apply unchanged\" and that results land in a \"configured squadron data directory\". Both are unverified. `REVIEWS_DIR` is a fixed path relative to the project, and the resolve path (slice 306) finds reviews through that same constant. A review saved outside the project would be invisible to resolve and digest.\n\nThe architecture should define:\n- the PR target's frontmatter fields (host, repo, number, head SHA);\n- the filename scheme, including collisions across repositories in a shared data directory;\n- the config key for the data directory;\n- which consumers of `REVIEWS_DIR` must learn about the second location.",
+   "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#envisioned-state"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "`owner/repo#n` and URL targets assume the PR's repository is the local clone",
+   "description": "The target grammar accepts a full URL or `owner/repo#n`. But the review needs local objects: the namespaced head ref, the merge-base, and a worktree. If the operator runs `sq review pr other-org/other-repo#42` from an unrelated clone, the PR cannot be fetched or diffed there. That holds even if the target is a fork of the same upstream, unless it is fetched from the correct remote.\n\nThe document lists \"no host remote / more than one remote\" as resolution failures. It does not cover \"target repository \u2260 local repository\". It also does not say whether fork PRs are fetched through `refs/pull/N/head` from the base remote. The grammar should either reject repositories that don't match a local remote, with a named error, or define how the fetch works. Without one of these, the \"fails loudly\" promise has a gap.",
+   "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#technical-considerations"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "The base ref must be fetched too, but only head fetching is described",
+   "description": "\"Fetching without checkout\" describes fetching the PR head into a namespaced ref. Computing merge-base to head \"so the review matches what the host displays\" also needs the base branch at the host's current tip.\n\nThe operator's local `main` or `origin/main` may be stale, or absent in a minimal enterprise clone. In either case the computed range includes or leaves out commits differently from the host. The adapter should fetch the base ref into the same namespace. Alternatively, the record could carry the host's merge-base SHA and the review could use it directly. \"Base moved since resolution\" is listed as an error, but no mechanism detects it.",
+   "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#technical-considerations"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Slice order: `sq review pr` claims flag parity before persistence exists",
+   "description": "Slice 2 promises \"full parity with the existing review flags\", and that includes the save and JSON-output flags. PR-keyed persistence is slice 3, sequenced after 916 and 917 land. Posting (slice 4) renders \"the saved review\", so it also depends on slice 3.\n\nSo either slice 2 ships without persistence, which breaks the parity claim and would push it back toward the fabricated-`SliceInfo` pattern the document forbids, or slice 3 has to come first. The order should be fixed. Persistence before the review command is the natural order, since the review command consumes the save target.",
+   "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#anticipated-slices"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "`sq pr create` doesn't say whether it pushes the branch",
+   "description": "A PR can only be created for a branch that exists on the host. The document never says whether `sq pr create`:\n- pushes the branch;\n- requires it to be pushed already and refuses otherwise;\n- delegates to `gh pr create`'s interactive push prompt.\n\nA push is an outward-facing write. The \"reads before writes, and writes are explicit\" principle and the git rules both make it load-bearing. It needs a stated behavior and a named failure mode, such as \"branch not on remote\" or \"local branch ahead of remote\".",
+   "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#technical-considerations"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "\"Latest saved review\" for PR descriptions has no selection rule",
+   "description": "`sq pr create` includes \"the latest saved review\". Before a PR exists there can be no PR-keyed review. On a slice branch there may be several reviews: code, tasks, slice, and archived generations. On a branch that doesn't match the slice pattern there is no index to key on at all.\n\nThe document also requires that \"the body says which inputs it was built from\". With no rule for choosing the review, that provenance is arbitrary. One risk is citing a review of a different SHA than the branch tip. The architecture should define selection: the review type, a match between `reviewedSha` and an ancestor of HEAD, and what happens when nothing matches.",
+   "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#envisioned-state"
+  },
+  {
+   "i": 8,
+   "severity": "CONCERN",
+   "title": "Blocking `gh` subprocess calls inside the async review path",
+   "description": "The review engine runs `run_review_with_profile` asynchronously. The adapter is \"a process boundary and JSON parsing per call\", and it makes several calls per review: resolve, fetch, read threads, identify the operator, and post.\n\nThe document doesn't say whether the protocol is sync or async. If the adapter calls `subprocess.run` from inside an awaited code path, it breaks the project's async rule (synchronous work must be under 1 ms). `git fetch` and `gh api` calls take hundreds of milliseconds to seconds. The architecture should decide one of two things:\n- the adapter is async, using `asyncio.create_subprocess_exec`;\n- all adapter calls finish before the event loop starts, on the synchronous CLI side.\n\nIt should also state a timeout for each call. \"Host unreachable\" is listed as a failure mode, but nothing bounds how long a hung `gh` call waits.",
+   "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#technical-considerations"
+  },
+  {
+   "i": 9,
+   "severity": "CONCERN",
+   "title": "Scratch worktree lifecycle is deferred, but it is part of the architecture",
+   "description": "\"Concurrency with the operator's own worktrees, disk use, and cleanup on failure are the slice-level questions.\" Several of these decisions cut across slices and conventions:\n- **Location:** inside the repository, `.git`, or the squadron data directory. Placing it inside the repository pollutes `git status` and may fall inside the tool jail.\n- **Registration:** a `git worktree add` registers an entry. The project's `cf worktree` conventions treat unregistered worktrees as a stop condition, and `cf config get git.integration_branch` is resolved per checkout directory.\n- **Crash recovery:** a worktree left behind by a killed process blocks the next `worktree add` of the same ref.\n- **Concurrency:** two concurrent `sq review pr` runs on the same PR.\n\nThe \"never mutates the operator's working tree\" promise depends on these choices, so they belong in the architecture. Naming a squadron-owned root, a naming scheme keyed on PR and run, and a prune-on-start policy would be enough.",
+   "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#technical-considerations"
+  },
+  {
+   "i": 10,
+   "severity": "CONCERN",
+   "title": "Three loosely related capabilities in one initiative; LLM-composed descriptions should be deferred",
+   "description": "The Overview itself says the three capabilities \"share one new boundary and nothing else\". The motivation (slice 916, enterprise PR review) drives capabilities 1 and 2. `sq pr create` adds:\n- a model-composition step;\n- slice-artifact gathering;\n- review selection;\n- integration-branch targeting;\n- push semantics;\n- a \"body section contract other tooling can rely on\", which `sq review pr` is supposed to parse. No component parses it yet.\n\nThis is the heaviest slice and the least tied to the stated driver. It also carries a designed-for-not-built contract. Recommendations:\n- defer `sq pr create` to its own initiative once PR review has proven the adapter;\n- or ship it with deterministic assembly only (commits, linked slice, review provenance) and drop the one-shot model call;\n- drop the \"parseable by `sq review pr`\" contract until a consumer exists.\n\nThe \"updates or supersedes\" posting behavior also leaves two strategies open where one is enough. Pick one. Editing the marked comment in place is the simpler choice.",
+   "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#anticipated-slices"
+  },
+  {
+   "i": 11,
+   "severity": "NOTE",
+   "title": "Unresolved review threads need GraphQL, not the plain `gh pr view` JSON",
+   "description": "\"Unresolved review threads\" as prompt input requires each thread's resolution state. `gh pr view --json` does not expose it, so the GitHub adapter will need `gh api graphql` (`reviewThreads { isResolved }`) with pagination. This is feasible. It is mentioned so the keystone slice can size it and keep the GraphQL shape from leaking through the protocol, as \"gh as the transport\" requires.",
+   "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#envisioned-state"
+  },
+  {
+   "i": 12,
+   "severity": "NOTE",
+   "title": "Fetching and adding worktrees writes to `.git`",
+   "description": "\"Never checks out or mutates the operator's working tree\" is accurate for the working tree. Namespaced refs and worktree registrations are still persistent writes to the operator's repository metadata. The design goal and the doctor/cleanup story should state this, so that leftover `refs/squadron/...` refs and worktree entries are expected and prunable rather than a surprise.",
+   "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#design-goals"
+  }
+ ]
+}

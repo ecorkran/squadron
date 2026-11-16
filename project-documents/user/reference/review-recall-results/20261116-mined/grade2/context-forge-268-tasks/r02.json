@@ -1,0 +1,40 @@
+{
+ "review": "r02",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "FAIL",
+   "title": "The 3.2a commit gate can't pass because existing tests still assert the removed output",
+   "description": "Task 3.2a requires `pnpm --filter @context-forge/core test` to pass after 3.1 and 3.2. But 3.1 and 3.2 only delete the unit cases in `SectionBuilder.test.ts` and `ContextTemplateEngine.test.ts`. Other tests still check for the output those tasks stop rendering:\n- `pipeline-integration.test.ts:184` expects `Comprehension: ${COMPREHENSION}` in the build output. It is not edited until 3.3.\n- `core/tests/adoption/adoptionBuild.integration.test.ts:102` expects `### Adoption Facts`. It is not deleted until 4.1.\n- `mcp-server/tests/integration/adoptionParity.test.ts:116` expects `Comprehension: ${COMPREHENSION_DOC}`. It is not deleted until 3.6. The 3.2a gate does not run mcp tests, so this commit would also leave mcp red.\n\nA junior agent will hit a success criterion it can't meet and have to improvise. Fix it one of two ways:\n- Merge 3.2a into the 3.7 commit. This is simplest: the section then has one commit at a green point.\n- Or have 3.1 and 3.2 also delete the brownfield cases in `pipeline-integration.test.ts`, the facts assertions in `adoptionBuild.integration.test.ts`, and `adoptionParity.test.ts`, and add `pnpm --filter @context-forge/mcp test` to the 3.2a gate.",
+   "location": "packages/core/tests/pipeline-integration.test.ts:184"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "The purity test lands two commits after the behavior change and the deletion of the old coverage",
+   "description": "Section 3 makes the behavior change (D1) and deletes the brownfield coverage: the `pipeline-integration` brownfield cases in 3.3 and `adoptionParity.test.ts` in 3.6. The D5 purity test comes only in 5.1, after the four deletion commits in section 4. This breaks the test-with pattern. The 3.7 commit and the four commits in 4.1\u20134.4 each land with nothing testing the changed brownfield Phase 0 behavior.\n\nThere is a second cost. After 4.4 deletes the squadron probe, the fake-`sq` marker check can no longer fail for a real reason. If 5.1 ran right after 3.7, the probe code would still exist but be unwired, so the check would prove the seam is cut. Move 5.1 to follow 3.7 (before section 4), or fold it into the 3.7 commit.",
+   "location": "project-documents/user/tasks/268-tasks.pure-cf-build.md:173-186"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Commit markers are checkboxes and checklist items, not plain `**Commit**:` lines",
+   "description": "2.3 is a checkbox task (`- [ ] **2.3 Commit**`), and so is 3.2a. Tasks 3.7, 4.1\u20134.4, 5.1 and 6.3 put `Commit:` inside `- [ ]` sub-items. The convention is a plain `**Commit**: {message}` line, never a checkbox. Checkbox commits also lead to check-off-only commits, which CLAUDE.md forbids. Convert each one to a plain `**Commit**:` line after the tested point.",
+   "location": "project-documents/user/tasks/268-tasks.pure-cf-build.md:79"
+  },
+  {
+   "i": 3,
+   "severity": "NOTE",
+   "title": "Section 4 could be one commit instead of four",
+   "description": "Tasks 4.1\u20134.4 are all mechanical deletions with the same gate (typecheck, core tests, grep). Four commits are acceptable because each one is green. One commit at the end of 4.4 would match the \"working, tested points\" cadence just as well and would cut overhead. This is optional.",
+   "location": "project-documents/user/tasks/268-tasks.pure-cf-build.md:138-169"
+  },
+  {
+   "i": 4,
+   "severity": "NOTE",
+   "title": "The `adoption.state` read check only covers `core/src/services`",
+   "description": "The criterion \"no path reads `adoption.state`\" is checked by 6.2's grep of `packages/core/src/services` and by the purity test, which only observes writes. Neither would catch a direct `readAdoptionState` import in `cli/src/commands/build.ts` or `mcp-server/src/tools/contextTools.ts`. Extending 6.2's grep with `readAdoptionState` over those two files would close the gap cheaply.",
+   "location": "project-documents/user/tasks/268-tasks.pure-cf-build.md:199"
+  }
+ ]
+}

@@ -1,0 +1,243 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Profile-weight lookup reintroduces the per-agent Python loop the slice exists to remove",
+      "description": "The design builds weights with `np.array([profiles[pi].cohesion_weight for pi in state.profile_indices[eval_indices]])` inside every force call. That is a Python iteration over n agents per force, per tick. It contradicts three things:\n\n- **The slice's own defining constraint** (line 198): \"No Python-level per-agent loops in any `BulkForce.__call__` implementation\".\n- **The slice plan entry**: \"O(1) Python overhead regardless of agent count\".\n- **The architecture's GPU note**: \"no Python-level per-agent branching\" and \"index-based dispatch: profile interaction parameters stored in lookup tables\".\n\nThe example also matches the design's own verification grep at line 223 (`for.*eval_indices`), so the design as written fails its own walkthrough step 4.\n\nThe fix is lighter than what is specified: build one weight array per profile field (length = number of profiles), then gather with `profile_weights[state.profile_indices[eval_indices]]`. That makes Python overhead O(profiles), not O(agents). Drop the \"can be precomputed per tick if needed\" deferral.",
+      "file_ref": null,
+      "category": "architectural-alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:127-136"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`-1` padding sentinel is dereferenced, and the handling for Separation is unspecified",
+      "description": "The design says padded `-1` entries are \"never dereferenced thanks to `mask`\". The cohesion example contradicts this: `state.positions[neighbor_data.indices]` gathers first and masks after, and in NumPy `-1` silently reads the last agent's row.\n\n- **Cohesion and alignment:** harmless, because the zero-fill happens before the sum.\n- **Separation** (lines 123 and 231, described only as \"follows the same pattern\"): padded slots produce real distances to the last agent. When the row's own agent is the last agent, the distance is 0 and the inverse-square term is `inf`/NaN. Whether that leaks depends on mask-before-divide versus multiply-by-mask (`NaN * 0 = NaN`), which the design does not state.\n- **Requirements at risk:** the \"numerically identical output\" criterion at line 190 and the architecture's tick-determinism goal.\n- **GPU claim** (lines 27, 180): `-1` is an out-of-bounds index on most GPU gather paths, so \"transferred to GPU compute buffers directly\" does not hold with this sentinel.\n\nSpecify the sentinel semantics: either pad with a valid index (for example the row's own agent index) or state that every force applies `mask` via `np.where` before any division. Add a separation test where the last agent has fewer neighbors than `max_neighbors`.",
+      "file_ref": null,
+      "category": "under-specification",
+      "raw_category": null,
+      "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:79-81"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Padded-array memory envelope is misstated against the architecture's scale goal",
+      "description": "The design claims CSR offers \"no benefit at n <= 10K\" and that memory matters at \"100K+\". The slice's own premise, and the slice plan's, is that clustering drives k \u2192 n.\n\nAt n = 10K in that regime:\n\n| Array | Size |\n|---|---|\n| `indices` (n \u00d7 max_neighbors, intp) | ~800 MB |\n| `mask` | ~100 MB |\n| Each `(n_active, max_neighbors, 2)` float64 gather temporary | ~1.6 GB |\n\nThe gather temporary is allocated per force, per tick. Because `max_neighbors` is the maximum over all agents, one dense cluster pads every row.\n\nThe architecture's goal is \"tens of thousands of agents at full behavioral fidelity on a single CPU process\". Its GPU note also asks for \"no dynamic allocation\" in the hot loop.\n\nThe design does not need CSR now. It does need to state the real envelope: O(n_active \u00b7 max_neighbors) per force, with the practical ceiling in the low thousands when clustered. It should correct the \"100K+\" threshold and name what bounds `max_neighbors` in practice (`query_radius` and density). Otherwise the next slice inherits a false assumption.",
+      "file_ref": null,
+      "category": "nfr",
+      "raw_category": null,
+      "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:140-148"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Declared interface to slice 103 is not reconciled with 103's existing design",
+      "description": "Frontmatter lists `interfaces: [103-predator-prey-dynamics, ...]`, and this section says future predator-prey forces \"consume this instead of raw lists\". The existing 103 design is written against the old contract: `__call__(self, state, neighbor_lists, profiles, active_indices)`, with `for list_idx, agent_idx in enumerate(eval_indices)` loops and per-neighbor list comprehensions.\n\nBoth slices are `not_started`. The slice plan gives no order between them, and 103 does not depend on 109.\n\n- **If 109 lands first:** 103's design is stale against a breaking protocol change.\n- **If 103 lands first:** 109's \"all five forces\" scope and its grep check (which covers only `flocking.py` and `herding.py`) miss 103's new loop-based forces. That breaks the plan's \"all existing implementations and callers update in the same slice\".\n\nState the ordering assumption in one line. Either say 103 must be revised to `NeighborData` before implementation, or say 109 absorbs whatever `BulkForce` implementations exist at implementation time and widen the grep to match.",
+      "file_ref": null,
+      "category": "integration",
+      "raw_category": null,
+      "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:176-180"
+    },
+    {
+      "severity": "NOTE",
+      "title": "MomentumForce is classified inconsistently",
+      "description": "Lines 35 and 190 call MomentumForce one of \"five neighbor-dependent forces\". Lines 125 and 201 correctly say it uses no neighbors. The scope itself is right and matches the slice plan; only the wording needs aligning to \"four neighbor-dependent forces plus MomentumForce\".",
+      "file_ref": null,
+      "category": "clarity",
+      "raw_category": null,
+      "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:35"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Equivalence tolerance and the multi-tick comparison need a stated basis",
+      "description": "Masked sum-then-divide changes floating-point summation order relative to the loop's per-agent mean, so results are close but not bit-identical.\n\n- **Per-force test:** `atol=1e-12` alone is fragile for inverse-square separation magnitudes; add `rtol`.\n- **N-tick integration test:** it has no tolerance, and flocking dynamics amplify last-bit differences. Bound N or state the tolerance.\n- **Replay:** the vectorized tick is still deterministic, so the architecture's determinism goal holds. Logs recorded before the slice will not replay bit-identically after it, which is worth one sentence given the world server's replay design.",
+      "file_ref": null,
+      "category": "testing",
+      "raw_category": null,
+      "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:256-260"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Non-neighbor forces are modified without a listed owning slice",
+      "description": "`WorldBoundsRepulsor`, `ConstantDrift`, and `VelocityDrag` get a signature update here. Frontmatter dependencies list only 101 and 102. The change is mechanical (a renamed, ignored parameter), so this is informational; naming their home modules would make \"update all callers\" checkable.",
+      "file_ref": null,
+      "category": "dependencies",
+      "raw_category": null,
+      "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:164"
+    },
+    {
+      "severity": "PASS",
+      "title": "Scope and effort match the slice plan entry",
+      "description": "The included items map one-to-one to the plan entry: padded representation, the five force rewrites, and the protocol and caller update in the same slice. Spatial query batching is correctly left to 105, with `build_neighbor_data()` as the seam. No speculative configuration or abstraction is added, and CSR and GPU work are deferred, not built.",
+      "file_ref": null,
+      "category": "proportionality",
+      "raw_category": null,
+      "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md#technical-scope"
+    },
+    {
+      "severity": "PASS",
+      "title": "Layer boundaries and dependency direction are respected",
+      "description": "`NeighborData` lives in the engine beside the forces. `SpatialQuery` is unchanged and unaware of padding, which preserves the architecture's \"replace the strategy without touching the force computation code\". Neighbor indices stay global, so agents outside the active subset remain visible, as the subset-evaluable tick principle requires.",
+      "file_ref": null,
+      "category": "architectural-alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md#neighbordata-location"
+    },
+    {
+      "severity": "PASS",
+      "title": "Tick-budget target is restated with a specific figure",
+      "description": "The design restates the 50 ms budget, the reproduction configuration (100 agents, `query_radius: 50.0`), and the observed baseline (~58\u201360 ms after clustering) as the acceptance target. The slice adds no I/O path or message type, so failure-mode enumeration for hang, timeout, or disconnect does not apply.",
+      "file_ref": null,
+      "category": "nfr",
+      "raw_category": null,
+      "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:211-215"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "architectural-alignment",
+      "raw_category": null,
+      "summary": "Profile-weight lookup reintroduces the per-agent Python loop the slice exists to remove",
+      "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:127-136",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "under-specification",
+      "raw_category": null,
+      "summary": "`-1` padding sentinel is dereferenced, and the handling for Separation is unspecified",
+      "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:79-81",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "nfr",
+      "raw_category": null,
+      "summary": "Padded-array memory envelope is misstated against the architecture's scale goal",
+      "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:140-148",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "integration",
+      "raw_category": null,
+      "summary": "Declared interface to slice 103 is not reconciled with 103's existing design",
+      "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:176-180",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "clarity",
+      "raw_category": null,
+      "summary": "MomentumForce is classified inconsistently",
+      "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:35",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "testing",
+      "raw_category": null,
+      "summary": "Equivalence tolerance and the multi-tick comparison need a stated basis",
+      "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:256-260",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "note",
+      "category": "dependencies",
+      "raw_category": null,
+      "summary": "Non-neighbor forces are modified without a listed owning slice",
+      "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:164",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "pass",
+      "category": "proportionality",
+      "raw_category": null,
+      "summary": "Scope and effort match the slice plan entry",
+      "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md#technical-scope",
+      "location_verified": null
+    },
+    {
+      "id": "F009",
+      "severity": "pass",
+      "category": "architectural-alignment",
+      "raw_category": null,
+      "summary": "Layer boundaries and dependency direction are respected",
+      "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md#neighbordata-location",
+      "location_verified": null
+    },
+    {
+      "id": "F010",
+      "severity": "pass",
+      "category": "nfr",
+      "raw_category": null,
+      "summary": "Tick-budget target is restated with a specific figure",
+      "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:211-215",
+      "location_verified": true
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/109-slice.force-computation-vectorization.md",
+    "against": "project-documents/user/architecture/100-slices.behavior-engine.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/migratory-109-slice"
+  },
+  "timestamp": "2026-11-16T12:15:32.272200",
+  "model": "claude-fable-5-2",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 8,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-fable-5-2",
+  "answering_models": [
+    "claude-fable-5-2"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 10,
+    "in_fences": 0,
+    "in_section": 10,
+    "surviving": 10
+  },
+  "effort": "medium",
+  "profile": "sdk",
+  "turns": 9,
+  "prompt_tokens": 393594,
+  "cached_tokens": 285664,
+  "cache_write_tokens": 107920,
+  "completion_tokens": 7478,
+  "reasoning_tokens": null,
+  "duration_seconds": 75.93815966602415,
+  "cost_usd": 2.0835393,
+  "cost_basis": "provider"
+}

@@ -1,0 +1,171 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Exit criteria replaced with a weaker gate than the slice plan assigns",
+      "description": "The slice plan entry (152) sets three exit criteria:\n- k-nearest TPS at N=200k within 20% of **k-first** TPS at the same N.\n- Parity within 5% of the numpy reference.\n- **No regression on the k-first path.**\n\nThe design keeps parity but changes the other two:\n- **Comparator swapped.** The gate is now `k_nearest` within 20% of `radius_only`. `radius_only` evaluates and accumulates every candidate in radius, while `k_first` exits after \u226432 reads, so this is a much easier bar than the plan's.\n- **Third criterion unmeasurable.** Deleting `k_first` means \"no regression on the k-first path\" can no longer be checked.\n- **No absolute target.** The architecture's NFR for this path is 60 TPS at tier N, and slice 148 measured 3 TPS at N=200k. The design claims viability \"at the architecture's Tier 3 target\" on a relative gate alone.\n- **Default flip not gated at the live operating point.** The gate is N=200k on CUDA only. The flip changes the live server default at x-fractal scale (N\u224810k), including macOS/Metal, which the architecture treats as a first-class operating mode. Slice 150's regression budget there (\u226420% vs first-k at N=10k) is not re-measured.\n\nFix: either keep the plan's comparator (measure `k_first` on the coherent grid before removing it) or amend the slice plan entry. Also restate the absolute TPS target, or say explicitly that this slice does not claim it.",
+      "file_ref": null,
+      "category": "scope-alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md:358"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Scope beyond the plan entry: new `radius_only` mode and `k_first` removal",
+      "description": "The plan scopes 152 to the coherent reindex, with pruning retained. The design adds a new public mode, a breaking config change, and a default flip. None of these is needed for coherent reads.\n\n- **`radius_only` has no reference path.** The architecture requires every optimization to be \"verifiable against the current NumPy implementation\". The design gives `radius_only` no parity criterion and no CPU equivalent, and does not say what `backend: cpu` does with `neighbor_mode: radius_only`.\n- **Hidden blast radius.** The design says \"No file outside the GPU compute path is touched\" (line 93). It also edits `migratory_server.config`, `bench/workload.py`, the bench CLI, tests pinning the default, and any YAML still set to `k_first`. Those configs are not enumerated.\n\nWhat to cut or defer:\n- `radius_only` as a shipped mode. If a baseline is needed, a bench-only measurement is enough.\n- The \"Reference points\" section and the repeated 16M narrative (lines 36-44, 181-193, 458), which is restated four times.\n- The 500k and 1M headroom probes. Their `mid-flock-500k` and `mid-flock-1M` workloads are never defined, and they serve a follow-up slice.",
+      "file_ref": null,
+      "category": "scope-creep",
+      "raw_category": null,
+      "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md:67-68"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Contradictory `k_first` retirement and undefined gate-fail state",
+      "description": "The design gives three incompatible accounts of `k_first`:\n- Lines 67 and 199: removed entirely, no silent migration, hard `ConfigurationError`.\n- Line 433: ship alongside legacy `k_first`, \"still parsed, with a deprecation warning\", until the final commit.\n- Lines 283-312: the step-2 kernel rewrite has no `k_first` branch.\n\nBetween step 2 and the final commit, `k_first` is still the default and still parsed but has no kernel path. What it maps to is unspecified. Mapping it silently to another mode would violate the project's rule against silent fallbacks.\n\nThe gate-fail outcome is also undefined. If criterion 4 fails, the default never flips, and the design does not say what the default is or whether `k_first` survives.\n\nSmaller inconsistencies in the same area:\n- Line 55 says \"three `neighbor_mode` values\" collapse to two; line 67 says the slice 150 set was two.\n- Criterion 3 requires `radius_only` at 10k, 200k and 1M; the walkthrough only runs 10k and 200k.",
+      "file_ref": null,
+      "category": "under-specification",
+      "raw_category": null,
+      "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md:433"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Coalescing claim assumes spatially adjacent warp threads, but the outer loop stays in spawn order",
+      "description": "The design's stated benefit is that neighbor reads \"coalesce across warp threads\" (lines 21, 169). That holds when the threads in a warp are spatial neighbors scanning the same cell ranges, which means the outer loop runs in sorted order, as in the Hoetzlein scheme.\n\nThe design explicitly rejects that. It keeps `for i in range(n)` in original spawn order, so adjacent threads walk unrelated cell ranges of `_px_c`. Each thread gains sequential locality and loses one indirection, but the cross-warp coalescing and the cited 2\u20133\u00d7 bandwidth gain are not established by this layout. The same applies to the claim that adjacent agents' heaps evict from nearby slots (line 169).\n\nThe rejection rationale weighs a single O(N) scattered writeback against O(N \u00d7 candidates) reads. That trade should be revisited or measured before the gate rests on it. I have not benchmarked this; it is reasoning from the described memory layout.\n\nRelated: the stop-the-slice sanity check (lines 357, 387) asserts that `radius_only` is \"strictly less work\" than `k_first`. Uncapped accumulation over all candidates is more work than \u226432 early-exit reads, so this check could halt the slice for the wrong reason.",
+      "file_ref": null,
+      "category": "technical-soundness",
+      "raw_category": null,
+      "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md:165"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Minor document inconsistencies",
+      "description": "- Branch name is given as `152-coherent-grid-\u2026`; the project convention yields `152-slice.coherent-grid-for-k-nearest-neighbor-search`.\n- The design states slice 150 is shipped on `main`; the slice plan still shows (150) unchecked.\n- Line 146 says sync is implicit at kernel boundaries; line 344 adds an explicit per-tick `qd.sync()`.\n- The design calls Metal \"best-effort\"; the architecture calls it a fully supported operating mode.",
+      "file_ref": null,
+      "category": "documentation",
+      "raw_category": null,
+      "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md:439"
+    },
+    {
+      "severity": "PASS",
+      "title": "Layering, state ownership and memory budget",
+      "description": "- **State ownership.** Original-order fields remain canonical, and coherent fields are tick-scoped scratch regenerated inside `build_spatial_hash`.\n- **Boundaries.** The tick return contract, wire protocol and world-server call site are untouched, consistent with the architecture's fused-tick principle and its engine/server boundary.\n- **Memory.** 28 B/agent is well inside the stated budget.\n- **Dependencies.** Direction is correct (150 \u2192 152).\n- **Failure modes.** There are no new I/O paths or message types, so no enumeration is owed beyond the config error.",
+      "file_ref": null,
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md#state-management"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "scope-alignment",
+      "raw_category": null,
+      "summary": "Exit criteria replaced with a weaker gate than the slice plan assigns",
+      "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md:358",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "scope-creep",
+      "raw_category": null,
+      "summary": "Scope beyond the plan entry: new `radius_only` mode and `k_first` removal",
+      "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md:67-68",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "under-specification",
+      "raw_category": null,
+      "summary": "Contradictory `k_first` retirement and undefined gate-fail state",
+      "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md:433",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "technical-soundness",
+      "raw_category": null,
+      "summary": "Coalescing claim assumes spatially adjacent warp threads, but the outer loop stays in spawn order",
+      "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md:165",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "documentation",
+      "raw_category": null,
+      "summary": "Minor document inconsistencies",
+      "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md:439",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "pass",
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "summary": "Layering, state ownership and memory budget",
+      "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md#state-management",
+      "location_verified": null
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md",
+    "against": "project-documents/user/architecture/140-slices.simulation-scaling.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/migratory-152-slice"
+  },
+  "timestamp": "2026-11-16T12:16:33.363600",
+  "model": "claude-fable-5-2",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 4,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-fable-5-2",
+  "answering_models": [
+    "claude-fable-5-2"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 6,
+    "in_fences": 0,
+    "in_section": 6,
+    "surviving": 6
+  },
+  "effort": "medium",
+  "profile": "sdk",
+  "turns": 5,
+  "prompt_tokens": 240915,
+  "cached_tokens": 119813,
+  "cache_write_tokens": 121096,
+  "completion_tokens": 6333,
+  "reasoning_tokens": null,
+  "duration_seconds": 66.40198329184204,
+  "cost_usd": 2.2154838,
+  "cost_basis": "provider"
+}

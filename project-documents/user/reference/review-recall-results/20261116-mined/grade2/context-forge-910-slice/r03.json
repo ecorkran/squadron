@@ -1,0 +1,33 @@
+{
+ "review": "r03",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Completion check cannot return the result the success criteria require",
+   "description": "The functional criterion requires the grep to return zero matches in the six swept files. It cannot, and the architecture's \"clear success criteria\" principle is unmet until it can:\n\n- **Line-number filter never matches.** The filter `grep -v 'introspection/types.ts:[3-6]:'` assumes line numbers, but the command uses `-roE` without `-n`. The four `STATUS` definition lines are therefore never excluded. The filter also hard-codes line positions.\n- **Intentional residue sits inside swept files.** The excluded `SliceStatus.status` `'complete'` member stays in `types.ts`. The three alias keys the design itself counts in `statusNormalizer.ts` (line 34) also stay.\n- **The criterion contradicts the exclusions.** \"No bare literals remain in production code outside the `STATUS` definition\" conflicts with the `frontmatterSchema.ts` and `SliceStatus` exclusions in the same document.\n- **The walkthrough arithmetic is inconsistent** (lines 150-151). It says \"8 out-of-scope sites\" before, then \"(3) + (4)\" after. `SliceStatus.status` has one literal with a `NormalizedStatus` spelling, not four.\n- **The `types.ts` row does not add up** (line 35). \"5 (of 8 total; 4 are the `STATUS` definition)\" leaves 4, of which one is the excluded `SliceStatus` member. The swept count is 3 (the `inferredStatus` union), and those are replaced by a type reference, not `STATUS.*`. The \"~65\" total inherits the error.\n\nFix: state the exact expected residue as a per-file allowlist (the `STATUS` definition, `SliceStatus` `'complete'`, the alias keys, `frontmatterSchema.ts`, comments). Make the criterion \"grep output equals the allowlist\" and drop the line-number filter.",
+   "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md:135"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Sweep boundary stops at `packages/core/src`, leaving a production site unaccounted for",
+   "description": "The Overview promises \"every production-code site\", and the slice-plan entry says \"sweep all literal sites\". Technical Scope narrows this to `packages/core/src/**` with no stated rationale. The Migration Plan says no consumer updates are needed outside core.\n\nA spot check of the other packages found one bare `status === 'complete'` comparison in CLI production code (`commands/arch.ts`). The design neither sweeps it nor lists it under Excluded. I did not confirm that its `status` field is `NormalizedStatus`-typed.\n\nIf it is, the \"defined in exactly one place\" claim in Value (line 23) is false after this slice. Fix: widen the inventory grep to `packages/*/src`, then either add the site (and a `STATUS` import across the package boundary) or exclude it with a reason, as was done for `SliceStatus`.",
+   "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md:29"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Test-file exclusion rests on a false inventory claim",
+   "description": "The design says \"grep confirms zero `.test.ts` files assert against these literals directly\". That grep was scoped to `packages/core/src`, but the tests live under `packages/*/tests/`. Those test files contain 200+ occurrences of these literals across about 20 files, including the `ConsistencyChecker`, `statusNormalizer` and `WorkflowNavigator` tests.\n\nThe conclusion (do not sweep tests) is still right, and for a stronger reason. Literal assertions pin the wire values independently of `STATUS`, which is what satisfies the architecture's \"No behavior changes without tests\" principle. If tests referenced `STATUS.*`, a changed constant would pass silently.\n\nFix: replace the false claim with an explicit decision: tests keep bare literals on purpose as the independent regression guard. As written, an implementer could read \"tests don't contain these literals\" as leaving the sweep free to extend there later.",
+   "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md:51"
+  },
+  {
+   "i": 3,
+   "severity": "NOTE",
+   "title": "TD-1 widens an exported type while claiming no public API change",
+   "description": "Retyping `TaskFileResult.inferredStatus` to `NormalizedStatus` adds `'deprecated'` to a field that CLI and MCP code consume. Line 84 says \"No public API signature changes\" and the frontmatter says `interfaces: []`; both are inaccurate.\n\nThe change is runtime-neutral, and the full `pnpm -r build` in step 6 would catch any exhaustive consumer. `Exclude<NormalizedStatus, typeof STATUS.Deprecated>` would remove the duplicate definition without loosening the contract. Either option is acceptable; the doc should state the widening as an interface change.",
+   "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md:98"
+  }
+ ]
+}

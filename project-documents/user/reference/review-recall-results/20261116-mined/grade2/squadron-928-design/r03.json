@@ -1,0 +1,75 @@
+{
+ "review": "r03",
+ "findings": [
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Sandbox-rule enumeration is incomplete, and `sq models list` is classified on its bare form only",
+   "description": "The parent requires enumerating every `sq` command that reaches a provider or the network. D10 says it runs \"each top-level `sq` command,\" but its table omits two commands that call providers. One is the hidden summary-run command, documented as a one-shot provider call. The other is the hidden dispatch-run command, which calls a provider API. Also, `sq models list` is marked \"ran, no rule.\" That holds only for the alias listing. Its `--profile` and `--base-url` form fetches from the provider's base URL, and the sandbox would block that the same way D10 shows for `sq pr show`. Criterion 8 (line 228) checks only the bare form, so it would pass while the failure remains. Fix: probe every top-level command, including hidden ones, classify by invocation form where flags change network use, and add a criterion for the `--profile` form. `sq doctor` does not need a rule, since its own module states it makes no network calls.",
+   "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md:155-166"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Suffixed receipt names and `sq-` skill names create collisions the exclusion calls pre-existing",
+   "description": "The exclusion (line 52) calls pack-name collisions \"pre-existing on the Claude path and unchanged here.\" The `-agents` and `-local` suffixes are new to skill packs, so this collision space is new. A Claude pack named `foo-agents` and a Codex pack named `foo` both map to `foo-agents.toml`. D5 adds no target field to receipts, so `skills uninstall foo-agents` reads the other target's receipt and removes files from the wrong destination with no error. Separately, D3 accepts a `dispatch_file` pack that writes `sq-<dispatch_file>/`. For `review`, that is the directory squadron's own `sq-review` skill uses in the same shared root (925 Storage Schema). The pack would overwrite it, and a later uninstall would remove it. Fix: reject reserved suffixes and squadron's own skill names in D3, and either add a target field to receipts and check it on read or record the risk as accepted, with the reason. The exclusion's justification does not cover a destination this slice introduces.",
+   "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md:52, 125-126, 134-135"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "The agents write and receipt path has no enumerated failure modes",
+   "description": "The agents install is a new I/O path. D3 requires validation before any write (\"nothing is written unless all pass\"), but the design does not say what happens when a write fails partway, whether from permissions, disk space, or a crash. Files with no receipt cannot be uninstalled, which contradicts \"receipts remain the only authority\" (line 176). The design also leaves these unspecified: a receipt-write failure after files are written; `skills uninstall PACK --ide codex` when no receipt exists for that target (for example, a pack installed under the default `--ide claude`), which must be an explicit error and not success; and uninstall when a recorded file was already removed by hand or cannot be deleted. For each, the design needs a handling strategy (ordering, rollback, or an explicit error naming the orphaned files) and a test that asserts an observable signal: a non-zero exit or a WARNING-level log.",
+   "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md:85-102, 130"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "D4 reverses 925's layout decision without saying so and breaks 925's drift-guard path",
+   "description": "925 D8 kept the Claude tree in place and put agents twins at `commands/agents/<sub>-<name>/`. Its drift test asserts that bijection (925 line 127). D4 moves the analysis twins to `commands/analysis/agents/`, so that assertion will no longer find them. D4 does not say it supersedes 925 D8 or 925's \"nothing moves\" migration. The migration section (line 184) calls the edits \"moved fixture paths,\" but the drift test's assertion itself changes. 925 also requires `tests/skills` and `tests/metrology` to pass unmodified (925 line 194), and this design edits `tests/skills/test_targets.py`. The move itself is reasonable, since it makes the analysis pack follow D2. The slice should record that it supersedes 925 D8 and re-points the drift guard.",
+   "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md:132-134, 182-184"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "\"No bundled special case\" is not carried through to install-commands or to the pack layout",
+   "description": "D4 rejects \"two behaviors for one rule,\" yet the design has two paths for the same analysis skills. `skills install analysis --ide codex` runs D2/D3 validation through `resolve_source`. `install-commands --ide codex` reads the same content through `bundle_subdirs`, and the slice never says whether D3 runs there. The bundle is also not uniform: squadron's own `sq` skills sit at the bundle root, not under a pack directory. The documented layout (lines 198-204) and the D3 checks also omit `agents/openai.yaml`, which 925 D7 requires in each analysis skill to suppress implicit invocation. A pack author following the README would not know to write it, and a strict validator could reject it. Fix: state whether install-commands validates, add the optional per-skill `openai.yaml` to the layout and to D3's allowed files, and describe the bundled `sq` layout as the special case it is.",
+   "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md:132-133, 123-130, 196-204"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "The walkthrough expects a doctor WARN row from a bare `sq doctor`",
+   "description": "D8's WARN for a pack without Codex content is the only signal that such a pack is inert outside `skills install`. Step 7 shows that row from a bare `sq doctor`. The 925 walkthrough correction (925 line 226) records that doctor hides WARN rows unless `-v` is passed, and that this predates 925 and applies to every optional check. As written, step 7 fails on first run, and the D8 signal is invisible by default. Fix: use `sq doctor -v` in the walkthrough, and state in D8 that the WARN appears in verbose output. If the signal must be visible by default, decide that explicitly.",
+   "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md:277-279, 140-141"
+  },
+  {
+   "i": 8,
+   "severity": "CONCERN",
+   "title": "D1's heading claims \"same flags\" while the override flag differs from install-commands",
+   "description": "D1 is headed \"Same flags, same meaning as `install-commands`,\" but the explicit override here is `--commands-dir`. 925 names `--target DIR` for install-commands (925 lines 33 and 138). The paragraph justifies keeping `--commands-dir` for skills (renaming would break scripts) but does not acknowledge that the two commands now name the same concept differently. Fix: correct the heading and record the asymmetry as a decision. Consider a non-breaking `--target` alias on skills so the CLI has one override name.",
+   "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md:119-120, 37"
+  },
+  {
+   "i": 9,
+   "severity": "CONCERN",
+   "title": "Scope and weight exceed the parent's Part A and effort",
+   "description": "The parent's Part A asks for `--ide` on install and uninstall, with Effort 2/5 and Risk Low (900 lines 454 and 456). The design adds list and doctor per target, a new `pack_layouts.py` table, a move of the Claude install writer into that table, a generalized receipt-name scheme, a shared removal routine, the D3 validator, and the analysis-pack move. Some of this is required by the #125 body and by criteria 4 and 5. Cut candidates that keep the parent's Part A intact: (a) keep the Claude install writer where it is and register only the agents layout, so the Claude diff that criterion 6 must prove unchanged stays small; (b) trim the Codex execpolicy restatement at line 63 to the facts D9 and D10 rely on. If list and doctor are cut instead, #125 is only partly fixed, and the parent's \"Fixes #125\" header must say so.",
+   "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md:66-81, 310"
+  },
+  {
+   "i": 10,
+   "severity": "NOTE",
+   "title": "Parent entry is out of step with the slice design",
+   "description": "Part B still says the rule goes in `~/.codex/rules/default.rules`. The slice-design note at line 457 supersedes that with `squadron.rules`, but the body text was not updated. The entry keeps \"Risk: Low\" (line 456), although the design changes the Claude receipt-name scheme, the Claude uninstall routine, and the analysis tree. The slice frontmatter states no risk level either. Part A names install and uninstall only, while the design also covers list and doctor. Update the Part B text, re-rate risk, and note the list and doctor scope in the parent.",
+   "location": "project-documents/user/architecture/900-slices.maintenance-and-refactoring.md:455-457"
+  },
+  {
+   "i": 11,
+   "severity": "NOTE",
+   "title": "The approval rule grants unsandboxed execution to whole pipelines without deciding allow versus prompt per command",
+   "description": "D9 discloses that matching commands run outside the sandbox with no prompt, and names `decision = \"prompt\"` as an alternative. It does not decide which commands should be allowed and which prompted. `sq run` executes a whole pipeline, including provider steps that can use tools, so a single allow entry covers an open-ended execution surface. `sq review` covers a much narrower one. Record the allow-or-prompt reason for each command in the D10 table, and reconsider `sq run` and the daemon-client commands in particular.",
+   "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md:146-153, 155-166"
+  }
+ ]
+}

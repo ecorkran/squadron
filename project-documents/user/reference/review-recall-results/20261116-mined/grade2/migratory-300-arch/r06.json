@@ -1,0 +1,103 @@
+{
+ "review": "r06",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Scope overlaps with sibling initiatives 320, 500 and 620",
+   "description": "The initiative plan (`001-initiative-plan.migratory.md`) gives work to other initiatives that this document claims for itself:\n- **Logging and replay** belongs to initiative (320).\n- **Terrain, resources, biomes and seasonal state** belong to (500).\n- **Multi-resolution simulation, aggregation and GPU offload** belong to (620).\n\nDespite that, the Anticipated Slices section lists \"Environment layer foundation \u2014 Terrain generation, resource placement\" and \"Seasonal and temporal systems \u2026 day/night\" as 300 slices. \"Logging and replay\" is listed as a 300 slice too. The Envisioned State section also says the server \"initializes the environment layer (terrain, resources, seasonal state)\" as if it owns that work.\n\nThe slice plan has already worked around this. Slice (304) is reduced to \"Environment Layer Integration\", and slice (308) says \"what seasons *mean* \u2026 is owned by initiative 500\". The architecture should match it.\n\nFix: rewrite these slices as integration points (call `environment.update()`, own the world clock, provide the serialization hooks that 320 uses). Also add a short \"Out of scope / owned by\" list naming 320, 500 and 620.",
+   "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md#anticipated-slices"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "The entity-scaling section is too large for this document and still leaves the extension point undefined",
+   "description": "\"Entity scaling and multi-resolution simulation\" takes up roughly a third of the document. It covers 4M+ multi-GPU setups, predictive partition rebalancing for merging murmurations, and multi-machine distribution. All of that is (620) territory. The slice plan defers all of it.\n\nCut it to one paragraph and move the rest into the 620 architecture.\n\nThe section also says \"the key architectural decision now is ensuring \u2026 the entity management layer support aggregation and variable-rate ticking from the start\". The document never says what entity management must contain to make that possible. Missing pieces include:\n- a per-entity \"last evaluated tick\" or accumulated dt\n- a way to represent aggregate entities alongside individual ones\n- stable IDs that survive disaggregation\n- a fidelity-tier assignment owner\n\nSo the scaling prose is long but defines nothing that slice 302 could build against. Keep only the concrete invariants and delete the rest.",
+   "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md#technical-considerations"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Reduced-rate ticking does not fit the engine's fixed-timestep contract",
+   "description": "Two parts of the design conflict:\n- \"Reduced-rate simulation\" says entities tick at 1/4 or 1/16 rate \"with interpolated positions between evaluations\".\n- `100-arch.behavior-engine.md` requires fixed-timestep integration for determinism, and its tick interface accepts only an agent subset. It has no per-agent dt.\n\nAn agent evaluated every 4th tick must either integrate with 4\u00b7dt, which needs a per-agent dt array in the engine interface, or advance 4\u00d7 slower. Interpolating between evaluations means the server must store previous and next states, so that is extra state the server owns. Full-rate neighbors would also query interpolated or stale positions, which affects determinism.\n\nNone of this is addressed. As written, the subset-evaluable interface alone does not support the tier the document says it enables.",
+   "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md#technical-considerations"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Entity lifecycle ownership contradicts the behavior engine architecture",
+   "description": "The two architectures disagree on who manages entities:\n- This document says \"The behavior engine \u2026 does not manage the entity lifecycle itself\" and that the server \"allocates space in the state arrays\".\n- `100-arch.behavior-engine.md:81` says the engine presents \"tick the simulation forward, query agent state, **register/remove agents**\".\n\nOne of these has to change. The document also never defines the ID-to-array-index mapping. Removing an entity requires one of these:\n- swap-remove compaction, which invalidates indices, client delta baselines and active-subset index arrays\n- tombstones with a free list, which leaves holes the engine must mask\n\nWhich one is chosen affects the engine subset interface, client deltas, replay event records and aggregation. It is a load-bearing decision left implicit.",
+   "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md#envisioned-state"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Stigmergy needs a write path, but the environment interface is read-only",
+   "description": "The Envisioned State section describes the environment as giving data to the behavior engine \"through a read-only query interface\". The swarm archetype in 100-arch, and the initiative plan's description of (500), rely on \"stigmergic trails\" that agents strengthen as they move. That means the tick has to write back into the environment.\n\nThe six-step tick cycle has no step for environment writes, and no step for ordering them relative to the state commit. Slice (304) quietly adds \"post-tick environment writes\". The architecture should define this step, and say whether writes are applied in the same transaction or deferred to the next tick. That choice affects determinism and replay.",
+   "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md#envisioned-state"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Running the tick inline blocks the event loop, and the stated upgrade path breaks \"tick as transaction\"",
+   "description": "\"Run the tick synchronously, then yield to the async event loop\" means every WebSocket accept, ping/pong and send stalls for the whole tick. At 20 tps, a 40 ms tick leaves about 10 ms for all client I/O. Keepalive pings in the `websockets` library can time out under sustained load.\n\nThe stated upgrade path, \"offloading the tick to a thread or process (NumPy releases the GIL)\", has two problems:\n1. **Partial GIL release.** NumPy releases the GIL only inside some C kernels. Python-level orchestration, spatial-hash bucketing in Python, and per-profile loops still hold it.\n2. **Concurrent reads.** Once the tick runs off-loop, I/O handlers can read the canonical arrays while the tick mutates them. \"Between ticks, the world is consistent and queryable\" stops being true unless the design adds double-buffering or a published immutable snapshot (for example, a serialized frame swapped atomically after commit).\n\nThe document should require that I/O always reads a published per-tick snapshot, never live arrays. That keeps the thread upgrade from being a rewrite. A process upgrade also needs shared memory, which is not mentioned.",
+   "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md#technical-considerations"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "Slow-client handling is deferred, but the tick loop depends on it",
+   "description": "\"Buffering, dropping frames, or disconnecting unresponsive clients are all strategies to consider\" leaves the most important I/O decision open. With asyncio WebSockets, `await ws.send()` waits on transport drain. If the tick loop awaits sends to each client in turn, one stalled client stalls the simulation.\n\nThe architecture should commit to the following:\n- a send task for each client\n- a latest-frame slot of size 1 that overwrites older frames\n- a bounded send timeout that leads to disconnect\n- one serialization per tick shared by all clients\n\nNote that the per-client spatial culling described later (and slice 309) breaks the shared-serialization assumption: it makes serialization cost O(clients \u00d7 visible). That cost should be acknowledged as well.",
+   "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md#technical-considerations"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "Replay depends on bit-exact determinism that the design does not guarantee",
+   "description": "\"Logging only the initial state plus any non-deterministic inputs \u2026 is sufficient\" requires bit-identical ticks. Several things undermine that:\n- **Summation order.** Floating-point summation order in NumPy reductions can change with array length, SIMD path, BLAS threading and platform.\n- **Spatial-hash ordering.** Spatial-hash neighbor iteration order changes force summation order.\n- **Precision.** `100-arch` says internal precision may be float64 while serialization is float32. Replay starting from a logged float32 snapshot will therefore diverge from the live run.\n- **Spawn randomness.** Spawn positions from population definitions need a seeded RNG, and the RNG state must be logged.\n\nThe document should state the replay guarantee it actually offers: same machine and build, or periodic keyframe snapshots in full internal precision to correct drift. It should also name the RNG ownership. Otherwise the 320 initiative inherits a promise it cannot keep.",
+   "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md#technical-considerations"
+  },
+  {
+   "i": 8,
+   "severity": "CONCERN",
+   "title": "\"Persist state on shutdown\" has no design behind it",
+   "description": "The \"Explicit lifecycle\" principle says the server knows how to \"persist state on shutdown\". Nothing else in the document covers persistence:\n- no save format\n- no load-on-startup path\n- no statement of what \"state\" includes (environment, world clock, RNG, ID counter)\n\nThe slice plan lists \"State Persistence and World Save/Load\" as Future Work. Either remove the claim from the principle or scope it. This is the \"handled by X, where X doesn't exist\" pattern.",
+   "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md#architectural-principles"
+  },
+  {
+   "i": 9,
+   "severity": "CONCERN",
+   "title": "No failure strategy for exceptions during a tick",
+   "description": "\"Tick as transaction\" implies that a failed tick does not commit partial state. The document does not say whether the engine mutates arrays in place or returns new ones. `100-arch` says \"Returns the updated state array\" but does not specify copy versus in-place.\n\nIt also does not say what happens on failure, for example when the engine raises, NaN velocities propagate, or the environment query fails. Options include crashing the process, skipping the tick and keeping the prior state, or quarantining entities. There is also no policy for NaN/Inf detection before the commit, and NaN detection is a common failure in boid integrators at high force magnitudes.\n\nGiven the project rule against silent failures, this needs an explicit policy. The likely choices are to fail fast and exit with the tick number and state dump, or to roll back and log at ERROR.",
+   "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md#envisioned-state"
+  },
+  {
+   "i": 10,
+   "severity": "CONCERN",
+   "title": "Overrun behavior and the sim-time/wall-time relationship are unspecified",
+   "description": "Step 6 says \"sleep for the remainder \u2026 or log an overrun warning\" but does not say how the next tick is scheduled after an overrun. The options are:\n- **Catch-up ticks**, which risk a spiral of death.\n- **Rescheduling from now**, where sim time drifts behind wall time.\n\nSeasonal state \"advances with each tick based on a configurable time scale\", so this choice decides whether simulated seasons track wall time. Clients interpolating between frames also need to know the effective tick interval. State that the loop does not catch up and that sim time is tick-indexed. Then expose the tick number and sim time in every frame.",
+   "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md#envisioned-state"
+  },
+  {
+   "i": 11,
+   "severity": "CONCERN",
+   "title": "The public WebSocket endpoint has no connection limits or exposure policy",
+   "description": "The concept expects observers to arrive via \"social media channels\", so the endpoint will be public. The configuration surface lists \"network binding\" but nothing else. There is no:\n- maximum concurrent clients\n- per-client egress budget\n- origin check\n- maximum inbound message size, even though v1 ignores inbound messages\n\nEach client adds per-tick fan-out cost, and later per-client culling cost, all on the tick thread. Unbounded connections are therefore a direct way to degrade the simulation. Add a configured client cap, and a rule that inbound frames are discarded with a size limit.",
+   "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md#technical-considerations"
+  },
+  {
+   "i": 12,
+   "severity": "CONCERN",
+   "title": "Component interfaces are referenced throughout but never defined",
+   "description": "This finding spans the whole document. It relies on \"well-defined interfaces\" and \"interface contracts\", but it never sketches any of them:\n- the engine tick call as the server uses it (arguments, return, in-place or copy, subset parameter)\n- the environment query surface\n- the lifecycle event queue (who enqueues events during a tick, given that v1 has no client commands)\n- the minimal frame layout descriptor\n\nEven signature-level sketches would make the consistency problems with 100-arch above obvious, and would give slices 303\u2013306 a shared contract instead of each slice inventing one.",
+   "location": "unverified"
+  },
+  {
+   "i": 13,
+   "severity": "NOTE",
+   "title": "Broken document references",
+   "description": "- **Wrong frontmatter dependency.** `dependsOn: [001-concept.migratory, \u2026]` and the Related Work link `../project-guides/001-concept.migratory.md` both point to a file that does not exist. The concept is `000-concept.migratory.md`; `001` is the initiative plan.\n- **Wrong backlink in 100-arch.** `100-arch.behavior-engine.md` links back to `200-arch.world-server-foundation.md`, which also does not exist. This document is `300-arch.worldserver-foundation.md`.",
+   "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md:9"
+  }
+ ]
+}

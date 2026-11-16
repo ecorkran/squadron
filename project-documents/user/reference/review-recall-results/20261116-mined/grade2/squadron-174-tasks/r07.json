@@ -1,0 +1,68 @@
+{
+ "review": "r07",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Putting `ActiveItem` in `state.py` creates a runtime import cycle with `executor.py`",
+   "description": "Task 4 says to define `ActiveItem` in `state.py` and have `run_observer.py` import it. Task 5 then has `executor.py` build `ActiveItem(...)` at runtime. But `state.py:25` already imports `executor` at runtime (`from squadron.pipeline.executor import ExecutionStatus, PipelineResult, StepResult`), so this gives executor \u2192 state \u2192 executor. There is also a conflict inside Task 4: `RunObserver.step_completed` takes `StepResult`, which is defined in `executor.py:178`, yet the task's success check says \"the module has no import of `executor`\". A junior implementer will hit this cycle with no guidance. Task 4 should say where `ActiveItem` lives so `executor` can import it without importing `state` (for example `run_observer.py` or `models.py`, re-exported from `state`). It should also say that `StepResult` is imported under `TYPE_CHECKING` only.",
+   "location": "src/squadron/pipeline/state.py:25"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Tasks 15\u201316 don't say how `_read_turn` tells a foreground or drain timeout from a background one",
+   "description": "`_read_turn` raises `_BackgroundIdleTimeout` on any idle-timer expiry (`:306`), whoever called it. Task 15 adds `_ForegroundIdleTimeout` and Task 16 drains with `_read_turn(idle_s=INTERRUPT_DRAIN_TIMEOUT_S)`, but neither task says how `_read_turn` (or `_read_turn_with_retry`, which `_collect_turns` actually calls) will raise the foreground exception, or how a drain timeout is recognised.\n\nThere is a second gap. Task 16 requires that an `is_error` result during the drain not be re-raised as `ProviderAPIError`, but `_read_turn` raises on error results before collecting them (`:313-314`), so it needs a flag or a separate drain path. Also, the design names `_IdleTimer`, which does not exist in the code: the timer is a bare `asyncio.timeout` (`:297`). Task 15 should name the mechanism, such as a parameter that selects the exception, or catching `_BackgroundIdleTimeout` at the foreground call site and translating it. It should also tell the implementer to ignore the `_IdleTimer` name.",
+   "location": "src/squadron/pipeline/sdk_session.py:303-307"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Task 2 stops for Project Manager input on outcomes the design already decided",
+   "description": "The design decides both spike outcomes in advance:\n- **No `ResultMessage` after interrupt:** \"D7's fallback applies (session unusable, step fails). The decision then narrows to 'always mark unusable' and the design is updated\" (Mitigation Strategies).\n- **A state write runs off the loop thread:** \"`StateManager` gains a per-run `threading.Lock`\" (D5).\n\nTask 2 turns both into \"stop and ask the Project Manager\". The project's CLAUDE.md treats a wait on PM confirmation as invalid unless a named rule requires one, and none does here. Replace each stop with the action the design prescribes: update D7 to always mark the session unusable, or add the per-run lock and its test. Then continue.",
+   "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md:54-60"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "The run-id in the `process_alive` WARNING is handed to \"the caller\", and no task assigns it",
+   "description": "The design's error-handling table and its Technology Choices section require the unknown-process WARNING to name both the run and the PID. Task 9 logs only the PID and says \"the run-id is logged by the caller that has it\". No task tells `assess_liveness`, which has `state.run_id`, or any consumer to log it, and Task 10's tests check only for \"`None` plus WARNING\". As written, the observable signal the design requires will lose the run-id. Task 9 should have `assess_liveness` log the run-id when `process_alive` returns `None`, and Task 10 should assert it.",
+   "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md:140-142"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Commit markers are written as checkboxes",
+   "description": "Every commit point is a checklist item (`- [ ] Commit: ...`), at lines 112, 157, 187, 217, 264, 286, 306, 320, 344, 368, 386, 414, 456, 472, 493, 508 and 527. Commit markers should be plain `**Commit**:` lines, not checkboxes. A checkbox commit item also leaves an unchecked box in the commit it describes, or forces a follow-up commit that only checks boxes, which CLAUDE.md forbids. Convert each one to a plain `**Commit**: \\`<message>\\`` line. Where the markers sit is fine: each comes at a tested, working point, roughly one per sub-feature.",
+   "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md:112"
+  },
+  {
+   "i": 5,
+   "severity": "NOTE",
+   "title": "Task 22a contradicts the design's \"no assertion on time in tests\"",
+   "description": "The load test is justified, because python.md's load tier asks for latency bounds and the design restates the NFR. But the design's Special Considerations section says \"There is still no assertion on time in tests.\" Task 22a, or Task 40, should update that sentence so the design and code agree. \"A few hundred\" run files should also be a named constant, such as `SEEDED_RUNS = 300`, so the bound is reproducible. The 1.0 s figure is reasonable for an in-process call: the 0.67 s/188-run baseline was a full CLI run, interpreter startup included.",
+   "location": "project-documents/user/slices/174-slice.run-liveness-stall-bounds-pruning-and-readable-listings.md:648"
+  },
+  {
+   "i": 6,
+   "severity": "NOTE",
+   "title": "Tasks don't say where the new config keys are read",
+   "description": "Task 15 passes `foreground_idle_timeout_s` without saying where `sdk_session` gets it. Task 13 builds `RunOwner.current(...)` and `RunHeartbeat(..., interval)` without saying where the interval is read. D1 requires each key to be validated where it is read. A one-line pointer would settle both: a `_foreground_idle_timeout_s()` method modelled on `_background_idle_timeout_s()`, and the heartbeat interval read in `_run_pipeline_sdk` using Task 8's typed reader.",
+   "location": "src/squadron/pipeline/sdk_session.py:221"
+  },
+  {
+   "i": 7,
+   "severity": "NOTE",
+   "title": "No test asserts that prompt-only runs stay ownerless",
+   "description": "Task 13 wires prompt-only paths with `owner=None` and no heartbeat, but Task 14's parametrized CLI test covers only the three SDK paths. Adding one case to that test, where `--next` creates a `running` file with `owner is None`, would protect D13's prompt-only rule. This can go in Task 14; it does not need a new task.",
+   "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md:199-216"
+  },
+  {
+   "i": 8,
+   "severity": "NOTE",
+   "title": "Closing #190/#165 moves from step 8 to Phase 7",
+   "description": "Design Dev Approach step 8 closes #190 and #165. Task 41 defers that to Phase 7, after the merge. This is the right call, since issues shouldn't close before the fix lands on the target. It is noted only as a deviation the design could mention.",
+   "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md:514-515"
+  }
+ ]
+}

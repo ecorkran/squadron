@@ -1,0 +1,82 @@
+{
+ "review": "r08",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Commit points are checkbox tasks, not `**Commit**:` markers",
+   "description": "Tasks 2C, 3C, 4C, 5C and 6C are checkbox items (also lines 94, 117, 126, 134). The convention is plain `**Commit**:` lines, never checkboxes. The checkbox form also breaks the required order (implement, task-checker, then commit, so check-offs land in the commit). A commit item cannot be checked before the commit it describes. The placement is right: 2C, 3C and 4C sit after tested points (2T, 3T, 4T). Convert each to a plain `**Commit**:` line at the same position. Keep 5C and 6C marked as conditional.",
+   "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md:71"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Task 0 hard-codes `main` and stops when an integration branch is set",
+   "description": "Line 37 treats a non-empty `git.integration_branch` as a stop condition. Line 38 forks from literal `main`. The Git rules define the target as the configured value (or `main` when empty), and work forks from and merges into that target. Task 0 should record the value as the target and fork from it. The checkout path (`.../wt/context-forge-214-tasks`) suggests a git worktree. I could not confirm that from here. If it is one, the rules require checking `cf worktree list --json` for this checkout's root and stopping to ask the Project Manager if it is missing. Task 0 has no such check. That stop is required by a named rule, so adding the check is not an added approval gate.",
+   "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md:37"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Unreadable inputs and some exit-2 variants are untested",
+   "description": "The slice requires exit 2 with empty stdout for \"a missing, non-regular or unreadable file, a missing or unreadable template, or a template with no required headings\" (design line 171). No task tests an unreadable file or an unreadable template. The command-level list in 4T (line 113) also omits the directory case and the no-required-headings template, which 3T (line 91) covers only at the core level. Add unreadable-file and unreadable-template cases. `chmod 000` does not block root, so those tests need a guard or another way to make the file unreadable. Add the directory and no-headings cases to 4T's exit-2 list.",
+   "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md:113"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Malformed or absent frontmatter has no specified outcome or test",
+   "description": "Task 3 says to parse frontmatter with `parseFrontmatter` and fail a file whose `docType` is not `slice-design`. It does not say what happens when a file has no frontmatter block or the block does not parse. Drafts and hand-edited designs can look like this. The project's failure-mode rule requires an explicit outcome for new I/O paths. 3T (lines 88-89) has no such case. Specify the outcome (the likely choice is the `doctype` failure with its message) and add a test. An exception from the parser is not an fs error, so it is not wrapped in `SliceDesignValidationError` and may miss the `handleError(err, 2)` mapping at line 103.",
+   "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md:78"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Task 5 may change source code, but its only commit is `docs:`",
+   "description": "Line 122 says any parity DIFF not explained by the leniency decisions is a bug. Fix it and add a test in the matching test task's file. That is a source and test change, made after 4C. The only commit defined for Task 5 is 5C, `docs: record slice 214 parity sweep results`, which describes a notes-only change. Give code fixes their own commit with a type chosen for the change. Limit 5C to the notes.",
+   "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md:126"
+  },
+  {
+   "i": 5,
+   "severity": "NOTE",
+   "title": "Integration criterion has no task; the handoff appears only in Context",
+   "description": "\"The guide can replace every `scripts/validate-slice-design` reference with `cf validate design` and remove the script\" is outside cf-side work. The design excludes guide edits (line 38). The task file states the handoff only in Context (line 31: \"not a task here\"). Add a line to the criteria mapping that marks this as satisfied after release. cf's part is the release version and the exact command string.",
+   "location": "project-documents/user/slices/214-slice.native-slice-design-validation.md:186"
+  },
+  {
+   "i": 6,
+   "severity": "NOTE",
+   "title": "Slice 212 is consumed but not listed as a dependency",
+   "description": "The design's Consumes section names slice 212's `PROTECTED_GUIDE_PATHS`, which keeps `project-guides/templates/` from being excluded. The design's frontmatter (line 6) and Prerequisites (line 44) say there are none, and the task file copies `dependencies: []`. State whether 212 must be on the target before this slice starts. Without it, a tarball install could remove the template this command reads.",
+   "location": "project-documents/user/slices/214-slice.native-slice-design-validation.md:153"
+  },
+  {
+   "i": 7,
+   "severity": "NOTE",
+   "title": "Post-release session name differs between documents",
+   "description": "Line 31 names the `ai-project-guide-old` session. The design (line 156) names the \"ai-project-guide session\" with no `-old`. One of them is wrong. Make the task match the design, or confirm the name before the handoff.",
+   "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md:31"
+  },
+  {
+   "i": 8,
+   "severity": "NOTE",
+   "title": "Task 1 is granular, and its path check conflicts with 3T",
+   "description": "Task 1 is a one-constant change with no test of its own. Folding it into Task 2 keeps the commit boundary and removes a top-level task. Its success line says \"No other file hard-codes the template path,\" but 3T (line 86) reads the template from a literal path. The literal is a useful cross-check, because a wrong constant fails the test. Say so in the task, so the path is not \"fixed\" to use the constant.",
+   "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md:44"
+  },
+  {
+   "i": 9,
+   "severity": "NOTE",
+   "title": "Worktree test shape is left open",
+   "description": "\"with `--project` or a worktree checkout fixture\" leaves the test design to the implementer. The criterion (design line 173) is that the template comes from the invoking checkout's guide. Name the fixture case the test must use, and add `--project` only if it is needed.",
+   "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md:114"
+  },
+  {
+   "i": 10,
+   "severity": "NOTE",
+   "title": "Parity sweep compares verdicts only",
+   "description": "The step-6 loop compares only the first output line. A difference in the missing-heading lines of a FAIL file would not appear. FAIL-line parity therefore rests on the one hand-made broken copy in step 2. The design's criterion is verdict-level for real designs, so this does not block. Diffing the full stdout for any file the script fails is a small change to the loop and would close the gap.",
+   "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md:121"
+  }
+ ]
+}

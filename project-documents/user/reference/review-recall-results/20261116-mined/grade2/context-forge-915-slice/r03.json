@@ -1,0 +1,40 @@
+{
+ "review": "r03",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "The collision fix (`cf config unset --project`) deletes the personal value, not the stale shared copy",
+   "description": "The Data Flow says Delete \"mirrors write \u2014 deletes from whichever project file the key's scope maps to\" (line 89). For `git.integration_branch` that file is `.context-forge.local.toml`. `migrate-personal` is named as the only command that touches the other file.\n\nThe collision handling (line 146) and Verification Walkthrough step 9 (line 259) both say to clear the stale shared copy by running `cf config unset git.integration_branch --project`. Under the routing above, that command deletes the developer's personal value (`legacy/value`) and leaves the stale shared copy alone. The next read falls through to `another-legacy-value` in the committed file, which is the opposite of what was intended. Step 9's \"confirm `cf check` is clean again\" would fail.\n\nPick one fix and state it:\n- (a) When values differ, `migrate-personal` deletes the shared copy. The personal value already wins at read time, so the only thing removed is a stale committed value. This is the simplest option and removes the \"skipped\" branch.\n- (b) Make `unset --project` for a personal key delete from both project files.\n- (c) Name a different explicit command for this case.\n\nUpdate line 89, line 146 and step 9 so they agree.",
+   "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:146"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Existing projects never get `.context-forge.local.toml` gitignored",
+   "description": "Only `cf init` adds the ignore line (lines 32 and 159). A project that was set up before this slice, such as one hit by the 916-era bug that the Migration Plan targets, gets the new file the first time someone runs `cf config set git.integration_branch ... --project` or `cf config migrate-personal`. In that case the file is not gitignored. A routine `git add .` then commits the personal value again. That is the leak this slice exists to stop (Value, line 23: \"keep personal settings out of git\").\n\nThe new `ConsistencyChecker` rule only looks for personal keys inside the shared file. It does not notice a personal file that git is tracking or would track. Choose the lightest fix and state it:\n- `migrate-personal` and the first personal-scope `set` call the same ensure-ignored helper that `cf init` uses, or\n- the checker rule also warns when `.context-forge.local.toml` exists and is not covered by `.gitignore`.\n\nEither way the line-check logic is shared rather than duplicated.",
+   "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md#gitignore-handling-in-cf-init"
+  },
+  {
+   "i": 2,
+   "severity": "NOTE",
+   "title": "Read Data Flow step 2 is worded as a condition that is always true",
+   "description": "\"Check the shared file only if the key is shared, OR it's a personal key with no value found in step 1\" always comes down to \"check the shared file next\", because a personal key that was found would have returned already. Saying that plainly avoids an implementer adding a guard that does nothing, or a wrong one.",
+   "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:79"
+  },
+  {
+   "i": 3,
+   "severity": "NOTE",
+   "title": "Substring `.gitignore` check matches negated or commented lines",
+   "description": "A substring check treats `!.context-forge.local.toml` or `# .context-forge.local.toml` as \"already ignored\". Matching on trimmed whole lines is just as lenient, costs nothing extra, and avoids a silent false positive.",
+   "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:159"
+  },
+  {
+   "i": 4,
+   "severity": "NOTE",
+   "title": "Frontmatter lists dependency 914; the slice plan entry says \"none\"",
+   "description": "The design's reason is valid: the canonical personal key has to exist under its final name. 914 is already complete, so nothing is blocked. Updating the plan entry to match would keep the two in sync.",
+   "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:6"
+  }
+ ]
+}

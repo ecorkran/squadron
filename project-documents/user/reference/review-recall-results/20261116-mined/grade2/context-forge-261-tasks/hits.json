@@ -1,0 +1,33 @@
+{
+ "case": "context-forge-261-tasks",
+ "flaws": [
+  {
+   "id": "F1",
+   "text": "The design's Technical Requirements say unit tests cover \"`renderAdoptionFacts` (every outcome, the state-set notice, ...)\". Task 8T covers `brownfiel",
+   "hits": {
+    "r01": [
+     6
+    ],
+    "r02": [
+     2
+    ],
+    "r03": [
+     4
+    ],
+    "r05": [
+     5
+    ],
+    "r06": [
+     0
+    ],
+    "r07": [
+     5
+    ],
+    "r08": [
+     1
+    ]
+   }
+  }
+ ],
+ "note": "r04 finding 6 mentions 8T skips three kinds but is about unspecified renderer text, so not counted; r08 finding 1 counted since title and body name the missing tests."
+}

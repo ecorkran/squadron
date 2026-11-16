@@ -1,0 +1,279 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Task 2's \"suite passes unchanged\" conflicts with an existing assertion",
+      "description": "`test_python_length.py:60` asserts `adapter.metrics == set(SnapshotMetric)`. Task 2 adds four enum members and replaces `PythonAdapter.metrics` (`python_adapter.py:105`, `frozenset(SnapshotMetric)`) with the four 400 metrics. The assertion then fails, and it can't pass again until Task 25 (line 250) restores the full set. Task 2's success line (task file:45) says the full suite passes unchanged, so the Task 2 commit (line 46) and the commits at lines 68 through 246 would be red for the full suite. Fix: have Task 2 change this assertion to the explicit four-metric set, and have Task 25 restore `set(SnapshotMetric)`.",
+      "file_ref": null,
+      "category": "sequencing",
+      "raw_category": null,
+      "location": "tests/metrology/snapshot/test_python_length.py:60"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Task 7's rename breaks `test_render.py`, which the task doesn't name",
+      "description": "Task 7 renames `FunctionLength` to `MeasuredFunction` and says \"400's length tests\" are edited only for the rename (task file:96). `test_render.py` also imports `FunctionLength` (lines 9 and 36), and `test_lengths.py:8` does too. Without an edit, the import fails and the whole module errors at the Task 7 commit (line 97). Name both files in Task 7.",
+      "file_ref": null,
+      "category": "sequencing",
+      "raw_category": null,
+      "location": "tests/metrology/snapshot/test_render.py:9"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Commit markers are checkboxes, not `**Commit**:` markers",
+      "description": "All 17 commit lines (46, 68, 88, 97, 115, 142, 156, 171, 183, 191, 208, 229, 246, 262, 271, 276, 283) are written `- [ ] Commit: ...`. That is a checkbox, not the plain `**Commit**:` marker the cadence rule reads. Because the file has no recognized markers, the fallback applies and an implementer would commit after every top-level task. A checkbox commit line also can't be checked before the commit that the implement \u2192 task-checker \u2192 commit order requires. The placements themselves are good: each sits after a green, tested point. Change the form and keep the placements.",
+      "file_ref": null,
+      "category": "process",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:46"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Criterion 10's \"other metrics unchanged\" has no task",
+      "description": "Slice criterion 10 (slice design line 278) requires that a language past `DUPLICATION_MAX_TOKENS` gets `tool_failed` and that its other metrics are unchanged. Task 11 tests the `tool_failed` and WARNING outcome but not the other metrics. Task 26 is the snapshot-level test list and doesn't include the ceiling case either. Add an assertion to Task 11 or Task 26 that file length, function length, complexity and lint for the same language are unchanged when the ceiling trips.",
+      "file_ref": null,
+      "category": "coverage-gap",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:138"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Task 18's token substitution can produce paths that never match",
+      "description": "Task 18 says \"the absolute `<source>` path is replaced with `FIXTURE_ROOT_TOKEN`.\" The design's mapping rule (slice design line 179) joins `<source>` with `filename` and makes the result repo-relative. If the captured `<source>` is the absolute `src/squadron` directory, replacing the whole value with the token drops the `src/squadron` segment. Every reported file would then fall outside `files` and land in `tool_ignored_files`, and Task 20's assertions would fail for a reason the implementer can't see from the text. State that the token replaces only the absolute repo-root prefix and the segment after it is kept. Check the captured value before relying on it.",
+      "file_ref": null,
+      "category": "ambiguity",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:187"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Task 10 bundles too much for one task",
+      "description": "Task 10 is Effort 4 and has nine sub-bullets: reading and unparsed handling, token-id arrays, the ceiling and `MemoryError`, rolling hash, collision confirmation, overlap rule, `per_file`, counting text, and the `Tokenizer` type. That's the largest task in the slice and mixes a pure window index with a file-IO wrapper. Split it: 10a is the window index over token-id arrays (hash, confirm, overlap, line marking), testable without files; 10b is `measure_duplication` (read, tokenize, `unparsed_files`, ceiling, `per_file`, counting). Each gets its test step.",
+      "file_ref": null,
+      "category": "granularity",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:117-129"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Tasks 4 and 6 test more than the criteria require",
+      "description": "Criterion 3 names three fixtures. Task 4 adds one test per Python decision point (about nine tests), and Task 6 adds one per TypeScript node type and operator (about eleven). The definition is worth guarding, so keep the coverage but express it as one parametrized table in each file, with the three criterion fixtures as separate named tests. That keeps the same checks in fewer test functions.",
+      "file_ref": null,
+      "category": "proportionality",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:60-66"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`config/keys.py` is an unlisted change and its literal duplicates the defined-once rule",
+      "description": "Task 16 adds `metrology.coverage_report` to `CONFIG_KEYS` in `keys.py`. The design's module table (slice design lines 70-85) doesn't list that file. D6 (line 213) says the key name is defined once in `coverage.py`, but Task 16's success line allows the literal in `CONFIG_KEYS`. The existing `metrology.max_function_lines` pattern (`keys.py:247` and `preflight.py:26`) already repeats the literal, so this follows convention. Add `config/keys.py` to the design table, and either import the constant or accept the repeat explicitly.",
+      "file_ref": null,
+      "category": "traceability",
+      "raw_category": null,
+      "location": "src/squadron/config/keys.py:247"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Tasks 1 and 17 are finer than they need to be",
+      "description": "Task 1 (branch creation) is a one-command step and could be a preamble line. Task 17 is a one-item test task that follows Task 16 directly and could merge into it. The test-with pattern is satisfied either way, so this is optional.",
+      "file_ref": null,
+      "category": "granularity",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:38"
+    },
+    {
+      "severity": "NOTE",
+      "title": "No load test is required by this slice",
+      "description": "The slice design restates no performance NFR. The memory figures (133 bytes per token, the 4M-token ceiling) are measurements behind the D3 design choice, and the ceiling path is covered by lowering the constant in a test. I checked only the slice design and not the parent architecture file, so this is limited to what the slice states.",
+      "file_ref": null,
+      "category": "nfr-check",
+      "raw_category": null,
+      "location": "project-documents/user/slices/401-slice.complexity-duplication-and-coverage.md:164"
+    },
+    {
+      "severity": "PASS",
+      "title": "Success criteria and failure modes are covered, with no scope creep",
+      "description": "Mapping: criteria 1 to 9 each have a task (for example, 3 and 4 map to Tasks 4 and 6, 5 to Tasks 22 and 26, 9 to Task 17). Criterion 11 is covered by Task 26. Criterion 12 is covered by Task 7. Every row of the failure-mode table has a test. Tasks trace to the design, with no unrelated work. There are no approval gates, and live runs are pre-authorized.",
+      "file_ref": null,
+      "category": "coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:27"
+    },
+    {
+      "severity": "PASS",
+      "title": "Prerequisites exist and the model validators need no change",
+      "description": "The following exist as the task file describes: `tool_support.tool_failed` and `repo_relative`, `typescript_length._is_counted` and `_extract_functions`, `FIXTURE_ROOT_TOKEN` and `snapshot_git_repo`, `metrology.max_function_lines` in `CONFIG_KEYS`, and `tests/metrology/fixtures/snapshot/README.md`. Measurement validators only require a rule set for lint and type metrics and an environment for type metrics. `LanguageSnapshot` requires every metric, which is the 400-record compatibility break the design accepts. So the design's \"enum members only\" claim for `snapshot_models.py` holds. `.coverage` and `coverage.xml` are gitignored, so the walkthrough's `git status --porcelain` checks are valid.",
+      "file_ref": null,
+      "category": "prerequisites",
+      "raw_category": null,
+      "location": "src/squadron/metrology/snapshot_models.py:133-198"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "sequencing",
+      "raw_category": null,
+      "summary": "Task 2's \"suite passes unchanged\" conflicts with an existing assertion",
+      "location": "tests/metrology/snapshot/test_python_length.py:60",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "sequencing",
+      "raw_category": null,
+      "summary": "Task 7's rename breaks `test_render.py`, which the task doesn't name",
+      "location": "tests/metrology/snapshot/test_render.py:9",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "process",
+      "raw_category": null,
+      "summary": "Commit markers are checkboxes, not `**Commit**:` markers",
+      "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:46",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "coverage-gap",
+      "raw_category": null,
+      "summary": "Criterion 10's \"other metrics unchanged\" has no task",
+      "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:138",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "ambiguity",
+      "raw_category": null,
+      "summary": "Task 18's token substitution can produce paths that never match",
+      "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:187",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "granularity",
+      "raw_category": null,
+      "summary": "Task 10 bundles too much for one task",
+      "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:117-129",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "concern",
+      "category": "proportionality",
+      "raw_category": null,
+      "summary": "Tasks 4 and 6 test more than the criteria require",
+      "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:60-66",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "note",
+      "category": "traceability",
+      "raw_category": null,
+      "summary": "`config/keys.py` is an unlisted change and its literal duplicates the defined-once rule",
+      "location": "src/squadron/config/keys.py:247",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "note",
+      "category": "granularity",
+      "raw_category": null,
+      "summary": "Tasks 1 and 17 are finer than they need to be",
+      "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:38",
+      "location_verified": true
+    },
+    {
+      "id": "F010",
+      "severity": "note",
+      "category": "nfr-check",
+      "raw_category": null,
+      "summary": "No load test is required by this slice",
+      "location": "project-documents/user/slices/401-slice.complexity-duplication-and-coverage.md:164",
+      "location_verified": true
+    },
+    {
+      "id": "F011",
+      "severity": "pass",
+      "category": "coverage",
+      "raw_category": null,
+      "summary": "Success criteria and failure modes are covered, with no scope creep",
+      "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:27",
+      "location_verified": true
+    },
+    {
+      "id": "F012",
+      "severity": "pass",
+      "category": "prerequisites",
+      "raw_category": null,
+      "summary": "Prerequisites exist and the model validators need no change",
+      "location": "src/squadron/metrology/snapshot_models.py:133-198",
+      "location_verified": true
+    }
+  ],
+  "template_name": "tasks",
+  "input_files": {
+    "input": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md",
+    "against": "project-documents/user/slices/401-slice.complexity-duplication-and-coverage.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/squadron-401-tasks"
+  },
+  "timestamp": "2026-11-16T12:31:49.801428",
+  "model": "claude-haiku-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 9,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-haiku-5-5",
+  "answering_models": [
+    "claude-haiku-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 12,
+    "in_fences": 0,
+    "in_section": 12,
+    "surviving": 12
+  },
+  "effort": "xhigh",
+  "profile": "sdk",
+  "turns": 10,
+  "prompt_tokens": 714331,
+  "cached_tokens": 534657,
+  "cache_write_tokens": 179662,
+  "completion_tokens": 48192,
+  "reasoning_tokens": null,
+  "duration_seconds": 207.8580674158875,
+  "cost_usd": 0.30925981,
+  "cost_basis": "provider"
+}

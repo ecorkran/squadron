@@ -1,0 +1,243 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Commit markers are checkboxes, not plain `**Commit**:` lines",
+      "description": "All eight commit points (lines 99, 125, 164, 185, 221, 254, 296, 351) are written as `- [ ] Commit: ...` checklist items. Commit markers must be plain lines, `**Commit**: {message}`, never checkboxes. As checkboxes they get mixed up with check-off bookkeeping, and task-checker could tick them without a commit having happened. Convert each one to a plain `**Commit**:` line under its task. Where the commits sit is fine: each comes after a verify step.",
+      "file_ref": null,
+      "category": "process",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/363-tasks.concept-generation.md:99"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Success Criterion 4 (dropped topics absent from the document) is never verified on output",
+      "description": "Task 4.1 writes the dropped-topics rule into the skill, and 4.2 checks the table. But neither the 8.1 happy-path checks nor the 8.2 decline-path checks look at the written `000-concept.squadron.md` for why-now, audience-evolution or methodology-preference content, or for gap markers on those topics. SC4 is a property of the generated document (\"appear nowhere in the document \u2014 neither as content nor as gap markers\"), not of the skill text. The design's own walkthrough leaves this out too, so the task file inherited the gap. Add one check to 8.1 and to 8.2: the document has no content and no `[GAP: ...]` marker for any of the three dropped topics. In 8.2 this matters most, because with both questions declined the model is most tempted to gap-mark extra topics.",
+      "file_ref": null,
+      "category": "coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/363-tasks.concept-generation.md:308-318"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "PM interaction notice covers only 8.1, but 8.2 and 8.4 also need a human",
+      "description": "The notice says \"Walkthrough Task 8.1 requires the PM live\". But:\n- 8.2 needs someone to decline both engagement questions and then answer (or refuse) the description confirmation.\n- 8.4 needs someone to choose \"augment\" at the re-run prompt. Under the augment rule, new answers are appended under a dated subheading, so the flow will likely ask the engagement questions again.\n\nA junior agent reading the notice may answer or decline the questions itself. That would quietly undermine SC2 (\"only questions ever asked\u2026\") and SC6 (\"verbatim operator answers\"). Extend the notice, and the framing line at the top of Task 8 (line 302), to name 8.2 and 8.4 and say what the PM will be asked in each.",
+      "file_ref": null,
+      "category": "completability",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/363-tasks.concept-generation.md:48-53"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Success Criterion 7: only the renamed-heading case is tested",
+      "description": "SC7 covers three cases: guide absent, guide unreadable, and section title missing. Task 8.3 tests only the renamed heading. 6.1 writes all three stop messages, and the absent case uses a different message (naming the setup step). Pointing the check at a scratch path that doesn't exist would cover the absent case cheaply. That's optional, since the renamed case is the one the contract exists for.",
+      "file_ref": null,
+      "category": "coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/363-tasks.concept-generation.md:326-330"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Mechanical refillability is never shown filling a gap",
+      "description": "8.4 confirms that populated sections stay byte-identical under augment. But the 8.1 document likely has no gap-only sections, so the \"fills sections holding exactly `[GAP: ...]`\" half of SC8 is never exercised. Running the augment step against the 8.2 scratch document, which has Q1/Q2 gaps, would cover both halves in one run.",
+      "file_ref": null,
+      "category": "coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/363-tasks.concept-generation.md:332-336"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Success Criterion 10's \"every `[INFERRED]` sentence satisfies the checkable rule\" is checked only by presence",
+      "description": "8.1 confirms that provenance has an inferred-claims line. It doesn't ask the agent to check each listed `[INFERRED]` sentence against the 7.1 rule: derived from a named field, but not a literal restatement of it. One added check item would close this.",
+      "file_ref": null,
+      "category": "coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/363-tasks.concept-generation.md:315-316"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Success Criterion 12 has no explicit task",
+      "description": "\"A concept a PM would edit rather than discard\" can only be judged by the PM. The PM review in 9.3 already covers it in practice. Naming SC12 in the 9.3 hand-off report would make the link traceable. No extra step is needed.",
+      "file_ref": null,
+      "category": "coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/363-tasks.concept-generation.md:370-375"
+    },
+    {
+      "severity": "NOTE",
+      "title": "8.6 changed-file set includes the DEVLOG before 9.2 writes it",
+      "description": "The expected `git diff --name-only main` set in 8.6 lists the DEVLOG, but the DEVLOG entry is written in 9.2. The check still passes, because a subset of the stated set is fine. Wording it as \"at most these files\" avoids confusing whoever runs it.",
+      "file_ref": null,
+      "category": "sequencing",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/363-tasks.concept-generation.md:346-347"
+    },
+    {
+      "severity": "PASS",
+      "title": "Scope traceability and dependency order",
+      "description": "Every task traces to the slice design. Task 7.1's pointer update and 7.4's sentence fix trace to Implementation Notes (design lines 448\u2013451), even though the Excluded list says the comprehension flow is not to be changed. Task 0.2 re-checks the design's measured facts and stops if they no longer hold. The order (selector, then preconditions, then sources, mapping, interview, contract, governance, and finally the walkthrough) builds each piece on the ones before it, with no circular dependencies. Task sizes are reasonable for a markdown-only slice.",
+      "file_ref": null,
+      "category": "scope",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/363-tasks.concept-generation.md"
+    },
+    {
+      "severity": "PASS",
+      "title": "No NFR or load-test requirement",
+      "description": "The slice restates no NFR, so no load test or CI gating task is needed.",
+      "file_ref": null,
+      "category": "nfr",
+      "raw_category": null,
+      "location": "project-documents/user/slices/363-slice.concept-generation.md"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "process",
+      "raw_category": null,
+      "summary": "Commit markers are checkboxes, not plain `**Commit**:` lines",
+      "location": "project-documents/user/tasks/363-tasks.concept-generation.md:99",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "coverage",
+      "raw_category": null,
+      "summary": "Success Criterion 4 (dropped topics absent from the document) is never verified on output",
+      "location": "project-documents/user/tasks/363-tasks.concept-generation.md:308-318",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "completability",
+      "raw_category": null,
+      "summary": "PM interaction notice covers only 8.1, but 8.2 and 8.4 also need a human",
+      "location": "project-documents/user/tasks/363-tasks.concept-generation.md:48-53",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "note",
+      "category": "coverage",
+      "raw_category": null,
+      "summary": "Success Criterion 7: only the renamed-heading case is tested",
+      "location": "project-documents/user/tasks/363-tasks.concept-generation.md:326-330",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "coverage",
+      "raw_category": null,
+      "summary": "Mechanical refillability is never shown filling a gap",
+      "location": "project-documents/user/tasks/363-tasks.concept-generation.md:332-336",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "coverage",
+      "raw_category": null,
+      "summary": "Success Criterion 10's \"every `[INFERRED]` sentence satisfies the checkable rule\" is checked only by presence",
+      "location": "project-documents/user/tasks/363-tasks.concept-generation.md:315-316",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "note",
+      "category": "coverage",
+      "raw_category": null,
+      "summary": "Success Criterion 12 has no explicit task",
+      "location": "project-documents/user/tasks/363-tasks.concept-generation.md:370-375",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "note",
+      "category": "sequencing",
+      "raw_category": null,
+      "summary": "8.6 changed-file set includes the DEVLOG before 9.2 writes it",
+      "location": "project-documents/user/tasks/363-tasks.concept-generation.md:346-347",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "pass",
+      "category": "scope",
+      "raw_category": null,
+      "summary": "Scope traceability and dependency order",
+      "location": "project-documents/user/tasks/363-tasks.concept-generation.md",
+      "location_verified": null
+    },
+    {
+      "id": "F010",
+      "severity": "pass",
+      "category": "nfr",
+      "raw_category": null,
+      "summary": "No NFR or load-test requirement",
+      "location": "project-documents/user/slices/363-slice.concept-generation.md",
+      "location_verified": null
+    }
+  ],
+  "template_name": "tasks",
+  "input_files": {
+    "input": "project-documents/user/tasks/363-tasks.concept-generation.md",
+    "against": "project-documents/user/slices/363-slice.concept-generation.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/squadron-363-tasks"
+  },
+  "timestamp": "2026-11-16T13:03:46.358463",
+  "model": "claude-opus-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 2,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-opus-5-5",
+  "answering_models": [
+    "claude-opus-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 10,
+    "in_fences": 0,
+    "in_section": 10,
+    "surviving": 10
+  },
+  "effort": "medium",
+  "profile": "sdk",
+  "turns": 3,
+  "prompt_tokens": 119196,
+  "cached_tokens": 44149,
+  "cache_write_tokens": 75043,
+  "completion_tokens": 4792,
+  "reasoning_tokens": null,
+  "duration_seconds": 51.742068874882534,
+  "cost_usd": 0.7056564,
+  "cost_basis": "provider"
+}

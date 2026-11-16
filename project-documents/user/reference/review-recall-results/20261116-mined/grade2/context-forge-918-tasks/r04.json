@@ -1,0 +1,47 @@
+{
+ "review": "r04",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "FAIL",
+   "title": "Task 1's unindexed `[~]` example will not parse, even after the regex change",
+   "description": "Task 1 tells the implementer to add `7. [~] Feature Epsilon without explicit index \u2014 cut for scope.` with no `**\u2026**` around the name. `PLAN_UNINDEXED_RE` (`packages/core/src/introspection/parsers/slicePlanParser.ts:9`) requires `\\*\\*([^(].*?)\\*\\*`, so this line still won't match after Task 2 adds `~` to the checkbox class. The example copies the Future Work section's style (`sample-slice-plan.md:32`), which a different parser reads. As a result, Task 5's unindexed assertions and the `totalSlices: 7` / `completedSlices: 5` counts will fail.\n\nThe slice's success criterion gives the unindexed form as `N. [~] **Name** \u2014 rationale`. Task 1's own success line only asks for the bold wrap on the indexed form. **Fix:** change the example to `7. [~] **Feature Epsilon** \u2014 cut for scope.`, and require the bold wrap for both forms in the success line.",
+   "location": "project-documents/user/tasks/918-tasks.sliceplanparser-deprecated-entry-handling.md:41"
+  },
+  {
+   "i": 1,
+   "severity": "FAIL",
+   "title": "Editing the shared `sample-slice-plan.md` fixture breaks existing tests the task file doesn't mention, and contradicts the regression criterion",
+   "description": "At least four test files use this fixture. Adding two entries under \"Feature Slices\" will break tests that Task 5 doesn't list:\n- `packages/core/tests/introspection/ArtifactIntrospector.test.ts:52` asserts `totalSlices` is `5`.\n- `packages/core/tests/introspection/slicePlanParser.test.ts:10` asserts `toHaveLength(5)`. Task 5 only mentions the count test at line 44.\n- `slicePlanParser.test.ts:128` asserts every entry in this fixture has `indexSource: 'explicit'`. An unindexed entry breaks that.\n- The unindexed entry gets fallback index `1` (`unindexedCounter`). After the sort at `slicePlanParser.ts:91` it becomes `entries[0]`, which breaks the `entries[0]`, `entries[2]`, `entries[1]` assertions at `slicePlanParser.test.ts:12`, `:22`, `:166-167`.\n\nThe slice's last success criterion says no-regression is \"proven by the existing `sample-slice-plan.md` fixture tests continuing to pass unchanged\". Task 5 instead rewrites those tests. The slice explicitly allows \"or add a sibling fixture\". **Fix:** have Task 1 create a new fixture, e.g. `deprecated-slice-plan.md`, with both `[~]` forms plus at least one `[ ]` and one `[x]` line. Leave `sample-slice-plan.md` and its tests unchanged. That also makes Task 5's \"update the existing count test\" step and its separate \"byte-identical regression test\" unnecessary, since the existing tests already prove it.",
+   "location": "packages/core/tests/fixtures/introspection/sample-slice-plan.md"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Task 9's initializer change is based on a wrong reading of `slice.ts`, and misses the real `[~]` \u2192 `degraded` path",
+   "description": "Task 9 says the line 91 initializer is \"the fallback used if `detectDocuments` throws\". It isn't. The `catch` at line 125-126 sets `derivedStatus = 'degraded'`, and the try block always assigns at line 122. So the initializer is overwritten on every path, and changing it does nothing.\n\nThe real gap is line 122: when a task file fails to parse, or the slice-design frontmatter has a status value that isn't recognized, the entry becomes `'degraded'` before `deriveEntryStatus()` runs. That happens even for a `[~]` entry, so `planLineStatus` never takes effect. `isNext` (lines 130-135) does not exclude `'degraded'`. A `[~]` entry with a broken design or task doc can therefore render as degraded and be marked `\u2190 next`. That conflicts with Decision 4 (a plan-line `[~]` wins \"regardless of what a stale task file or slice-design frontmatter says\") and with the criterion that `cf list slices` \"never marks it `\u2190 next`\".\n\n**Fix:** replace the initializer step with a check before the degraded short-circuit. When `entry.status === STATUS.Deprecated`, resolve to `Deprecated`. If this is judged out of scope, record it explicitly as a known limitation instead of shipping a change that does nothing. Check whether `WorkflowNavigator.resolveEntryStatus` has the same degraded short-circuit.",
+   "location": "packages/cli/src/commands/slice.ts:91-127"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Task 8's test comes three tasks later, so it goes into an untested commit",
+   "description": "Task 8 (wiring in `WorkflowNavigator.resolveEntryStatus`) is only tested by Task 11's `getNext()` test. The commit after Task 10 has a message that claims \"thread plan-line deprecated status through resolveEntryStatus\", but nothing has tested that part yet. That breaks the test-with-implementation pattern and puts a commit marker at a point that isn't fully tested. **Fix:** move Task 11 to right after Task 8, and either give it its own commit or merge it into the next one.",
+   "location": "project-documents/user/tasks/918-tasks.sliceplanparser-deprecated-entry-handling.md:137-197"
+  },
+  {
+   "i": 4,
+   "severity": "NOTE",
+   "title": "`arch-status-vs-plans` has no test of its own",
+   "description": "The success criterion names both `plan-status-vs-entries` and `arch-status-vs-plans`. Task 12 only tests the first. Both compute `allComplete` from the same parser-supplied `completedSlices`/`totalSlices` (lines 726 and 828), so Task 4 plus Task 12 covers the shared logic. No extra task is needed.",
+   "location": "packages/core/src/introspection/ConsistencyChecker.ts:828"
+  },
+  {
+   "i": 5,
+   "severity": "NOTE",
+   "title": "Task 11's \"stop and report\" step is a legitimate block, not a sign-off gate",
+   "description": "If the test fails, that disproves an assumption in the design (Decision 5). Stopping in that case is a real blocker, not a request for sign-off. It would be clearer to say \"write `BLOCKED:` with the failure output\" so it matches the project's convention.",
+   "location": "project-documents/user/tasks/918-tasks.sliceplanparser-deprecated-entry-handling.md:189-194"
+  }
+ ]
+}

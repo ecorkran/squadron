@@ -1,0 +1,75 @@
+{
+ "review": "r01",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "\"Already planned\" cannot represent a partially completed adoption",
+   "description": "Detection rule 2 fires on any one of an initiative plan, an architecture doc or a slice plan, and claims \"An adopted project lands here, so no completion state is needed.\" The adoption flow (step 5) writes those artifacts in sequence: concept, then derived architecture, then existing-state slice plan.\n\n- **Interrupted adoption:** if the run stops after the architecture is written, the next detection reports \"already planned\". `sq onboard` step 2 then says \"adoption doesn't apply\", and `cf next` navigates it \"like any planned project\". That leads to ordinary slice planning, which produces a plan with no retroactive entries: the \"empty slice plan that pretends nothing has been built\" from the Motivation.\n- **Resume is gone:** the original contract's \"a re-run resumes from whatever artifacts exist\" lived in the `cf build` profile selection the amendment removed. Nothing replaces it.\n- **Pre-existing artifact:** a brownfield repo where someone hand-wrote one arch doc is permanently \"planned\" and can never be adopted.\n- **Ordering hazard:** squadron 364's \"candidates adopt\" writes CF's initiative-plan format. If it runs before the baseline, it flips the repo to \"already planned\". The table's \"candidates are indexed after retroactive entries\" implies an order but nothing enforces it.\n\nThe files do not say whether adoption finished. The document needs a file-derived definition of \"adopted\" (for example, a slice plan containing at least one retroactive entry, or the derived-provenance marker on the architecture), or the report must expose which baseline artifacts exist so `sq onboard` can resume.",
+   "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md#detection-a-read-only-report-amended-20261025"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "The override is now one-directional, but the threshold analysis still relies on it",
+   "description": "\"Brownfield thresholds\" says \"the override is the safety valve\" and weighs \"a false brownfield writes wrong artifacts\". Both statements predate the amendment.\n\n- **No force-brownfield:** the only stored value is now the opt-out (brownfield to greenfield). The shipped override ran both ways (`planningArtifacts.ts` still advertises `cf config set adoption.state in_progress`). After slice 269, a shallow clone, squashed import or vendored drop misdetected as greenfield has no remedy.\n- **Cost asymmetry inverted:** a false brownfield in cf now writes nothing; it prints one line. A false greenfield silently sends a real codebase down the Phase 0 path, with no way to correct it.\n- **\"Set in slice design\":** signals and thresholds are described as still to be set, but they shipped in 261.\n\nState whether `sq onboard` can force adoption regardless of the report. If it can, the report is advisory and \"one detection, many consumers\" should say so.",
+   "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md#technical-considerations"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Prompt delivery, the main cf-to-squadron interface, is left to slice design",
+   "description": "\"Guide prompt contract\" says \"Slice 271's design settles how the profile's variables are delivered.\" That is the load-bearing decision, and three problems follow from leaving it open.\n\n- **Second resolution path:** `brownfield-adoption: [fileConcept, fileArch, fileSlicePlan, fileComprehension]` is a context profile, resolved by the `cf build` machinery (`ContextIntegrator`, `ContextTemplateEngine`). Delivering it outside `cf build` means either a parallel template-resolution path or a build under another name. The document rules out neither, and the second quietly breaks \"cf commands keep one meaning each\".\n- **Lost fail-fast rule:** \"Guide release coupling\" says the named-error rule \"moves to the prompt-delivery primitive\", but the body still reads \"`cf build` fails with a named error\". The primitive's failure contract (missing profile, guide below minimum, missing comprehension doc) is not defined anywhere.\n- **CF-only path by the back door:** the retained original text makes `fileComprehension` optional (\"the prompt works from the repo alone\"), and slice 271 says the prompt \"says plainly when it doesn't\" exist. Under \"Squadron is the only adoption path\", a missing comprehension doc at step 4 means step 3 failed. It should be an error, not a degraded prompt.",
+   "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md#technical-considerations"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "The concept writer is undetermined now that the probe is gone",
+   "description": "The Concept row says it is written by \"squadron 363, or the guide's adoption prompt. Exactly one writer per run\". Flow step 5 says only \"The agent drafts the concept\".\n\nThe selector between the two writers was the probe's `surfaces.<s>.concept` (guide v0.22.1), which the amendment deletes along with \"the prompt's raw-probe branching\". Nothing now decides which writer runs, or enforces \"exactly one\". The 363-provenance check (\"has the PM confirm or correct a machine-derived concept\") survives only in the block labelled history. Assign the concept to one owner under `sq onboard`, or name the signal that chooses.",
+   "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md#responsibility-split-with-squadron-pm-approved-20261020-amended-20261025"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "The versioned probe contract is replaced by unversioned, untested ones",
+   "description": "The probe contract had `probe_version`, a pinned squadron commit and cf-side field-name tests. Its replacements have none of these.\n\n- **Detection report JSON:** squadron will parse it, but there is no schema version, no stability rule (is adding a fact breaking?) and no contract test.\n- **Comprehension doc lookup:** cf finds it \"by filename and `docType` (plus squadron 361's provenance block)\". That is three squadron-owned formats, held together by convention only.\n- **Retroactive marker:** squadron's pipeline gates read it, and 364 \"candidates adopt\" writes CF's initiative-plan format.\n\n\"cf does not orchestrate squadron\" is true of call direction. Data-format coupling still runs both ways and is less protected than before. A rename of `{n}-analysis.codebase-comprehension.md` on the squadron side would produce a silent \"no comprehension doc\", which the prompt tolerates (see the prompt-delivery finding). Add a version field to the report, and say where the filename/`docType` contract is recorded and tested.",
+   "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md#architectural-principles"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "The interim brownfield behaviour is worse than the problem statement and points at a command that does not exist",
+   "description": "Until squadron ships `sq onboard` (unscheduled: \"once the cf core is stable\"), a brownfield user gets one `cf next` line saying adoption \"arrives with `sq onboard`\", plus the opt-out. Row (g) then says \"then normal navigation\", which for an unplanned repo is Phase 0.\n\n- **Design goals unmet for the parked period:** \"brownfield is first-class\" and \"The workflow starts where the project is\" are not delivered by anything in slices 268\u2013272.\n- **Removal ahead of replacement:** the rework removes the shipped, working (if misplaced) path from 0.19.x users before the replacement exists. Slice 269 itself flags \"config key semantics change for shipped 0.19.x users\".\n- **Hard-coded forward reference:** cf output names a specific command in another product that has not been built. The same amendment says cf \"neither knows nor tests\" squadron's surfaces.\n\nEither gate the removals (268, 270) on `sq onboard` availability, or state explicitly that brownfield regresses to opt-out-only for the interim, and make the one-liner not depend on an unshipped command name.",
+   "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md#navigation"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "Superseded content is left in place as live text",
+   "description": "The document cannot be read as a single specification. Examples:\n\n- **Current State** describes the pre-260 world (\"Three hand-written copies\", \"The capability probe does not exist yet\", `/setup-ci` \"fires only when `.github/workflows/ci.yml` is absent\"). Slices 260\u2013267 shipped, so the actual baseline for the rework is the state the amendment paragraph describes.\n- **Dependencies:** \"cf releases that select the brownfield profile require at least v0.22.2\". cf no longer selects it. v0.22.1 and v0.22.2 are both probe-path fixes for a path being deleted. The guide release that drops `cf build` steps and probe branching (slice 272's `MIN_GUIDE_VERSION` raise) is not named.\n- **Guide release coupling** says guide changes ship \"before the cf release that depends on them\". The rework inverts this: slice 268 removes build-time selection while the shipped guide prompt still tells agents to run `cf build` (268's own risk note). The cross-repo release order for 268\u2013272 is unspecified.\n- **Anticipated Slices** still lists \"the persisted adoption state\" and \"adoption steps while in progress\". **Technical Considerations** carries about 300 words of probe contract and the Adoption Facts mechanism \"for history\".\n- **Frontmatter** has `relatedSlices: []` although fifteen slices exist.\n- **Related Work** says \"All findings are addressed in this revision\", which refers to the pre-amendment revision. The slice plan confirms \"No re-review has been run\".\n\nMove the historical contracts to an appendix or delete them (git holds the history), and rewrite Current State to the post-267 baseline.",
+   "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "Scope retained from the first build has no producer or consumer in this architecture",
+   "description": "After the amendment, cf contains no flow that creates a retroactive entry, a derived architecture or a docs map. They are written by an agent following a guide prompt under an orchestrator that does not exist.\n\n- **Unenforceable rule:** the marker is \"set only by the adoption flow\", but cf cannot tell who wrote a line in a markdown slice plan. The only real guard is the checker error on a design or task file.\n- **Unverified shipped code:** the retroactive rules, the existing-state plan parser, the 240 gate amendment, reconciliation (266) and the docs map (267) are kept as \"deliberately not in this rework\". The only end-to-end verification (265) ran against the flow being deleted, and the slice plan says the navigation half was \"never exercised live\".\n- **Later items:** \"Conventions reconciliation\" and \"Docs and ADR mapping\" are still listed as initiative scope with no trigger. They are no longer steps of any cf flow, and `sq onboard`'s outline (steps 1\u20136) does not include them.\n\nSay which of these are standalone cf features with their own entry points, which are contracts awaiting `sq onboard`, and what verifies the latter before slice 273. Otherwise park them alongside 273\u2013274 instead of carrying them as delivered.",
+   "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md#baseline-artifacts"
+  },
+  {
+   "i": 8,
+   "severity": "NOTE",
+   "title": "Opt-out precedence and ownership are underspecified",
+   "description": "The opt-out is checked first and maps to \"greenfield\", so an opted-out project that later gains planning artifacts reports greenfield forever, not \"already planned\". The check order should probably be planned, then opt-out, then code signals.\n\nThe document also never says which command writes the opt-out (the report, `cf build` and `cf next` all \"write nothing\"), where it is stored, or how it is cleared. Legacy handling is also missing: `readAdoptionState` currently throws `AdoptionError` on any value outside the four-state set, slice 269 promises a one-time notice, and the slice-plan Notes still say \"No migration of user data\".",
+   "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md#detection-a-read-only-report-amended-20261025"
+  },
+  {
+   "i": 9,
+   "severity": "NOTE",
+   "title": "Monorepo scoping is stated for files but not for history",
+   "description": "\"Detection is scoped to the project's own folder\", with CI as \"the one exception\". Commit history is a repository-level signal unless it is path-filtered. A new CF project in a fresh subdirectory of an old monorepo would inherit ten years of history. State whether history is path-scoped, and how a shallow clone is told apart from a young repo.",
+   "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md#detection-a-read-only-report-amended-20261025"
+  }
+ ]
+}

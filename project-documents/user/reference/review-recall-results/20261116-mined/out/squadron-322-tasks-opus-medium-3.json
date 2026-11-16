@@ -1,0 +1,315 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "T7's numbered precedence order contradicts the floor asymmetry it is meant to implement",
+      "description": "The numbered list puts `n < floor \u2192 INSUFFICIENT_EVIDENCE` first and `TIGHTEN` fourth. In that order a below-floor, low-match cell can never reach `TIGHTEN`. Step 4 and the next bullet then say it must reach `TIGHTEN`, so the task contradicts itself. Someone implementing the list literally gets the regression that T8 exists to catch. Rewrite the list in the order that is actually wanted: (1) `match_rate <= tighten_rate` \u2192 `TIGHTEN`; (2) `n < floor` \u2192 `INSUFFICIENT_EVIDENCE`; (3) unversioned \u2192 `INSUFFICIENT_EVIDENCE`; (4) `match_rate >= graduate_rate` \u2192 `GRADUATE`; (5) `HOLD`. Also state explicitly whether an unversioned cell with a low match rate yields `TIGHTEN`. The design only forbids `GRADUATE` for unversioned cells (slice:186, 271), so `TIGHTEN` looks correct, but the task should say so.",
+      "file_ref": null,
+      "category": "sequencing",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:115-121"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "No task produces the runtime-drawn-model limitation statement",
+      "description": "The success criterion (slice:270) requires \"the runtime-drawn-model limitation is stated where the recommendation is produced \u2026 including `--json`\". The design (slice:201) says the note must state that a step drawing its model from a 180 pool cannot track the drawn model. T9 specifies only the \"this template paired with this model / choose together at config time\" wording. T10 and T16 only check that the note is non-empty or printed. Add the runtime-pool sentence to T9's note content, and have T16 assert that the note text, including that sentence, appears in the `--json` output.",
+      "file_ref": null,
+      "category": "coverage-gap",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:147"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The malformed `judge:` block failure mode is claimed as covered but has no step",
+      "description": "The Failure Modes row (slice:242) requires a malformed judge block to be flagged on the target, with a WARNING naming the template. The Coverage Check says this is \"exercised in T8\", but T8 (lines 131-136) has no malformed-block test. T7 doesn't implement detection, and `ThresholdTarget` (T3) has no field to carry a flag. Either add a flag field (or reuse `current=None` plus a WARNING) and a test in T7/T8, or correct the coverage claim.",
+      "file_ref": null,
+      "category": "coverage-gap",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:287"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "T13's fallback for result discovery cannot meet the non-empty-offers guarantee",
+      "description": "I checked 320's code. The only review-file discovery is `resolve_target` in `src/squadron/metrology/capture.py:93-106`, which globs one `{index}-review.*` under `_REVIEWS_SUBDIR` and reads `reviewType` frontmatter through `_candidates_by_type`. There is no surface that lists all reviews. T13's fallback, \"scope this task to the store-recorded samples only\", cannot work: the store holds only *sampled* results, so it can never yield unsampled ones. That would quietly break the slice's core guarantee (slice:269). Replace the hedge with a concrete step: glob `_REVIEWS_SUBDIR` for all `*-review.*`, reuse `_candidates_by_type` and `derive_judge_config_id`, and exclude any file already referenced by a `SampleVerdict.result_ref`.",
+      "file_ref": null,
+      "category": "feasibility",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:201"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Rounding for the residual rate is unspecified and can break the non-empty guarantee",
+      "description": "\"Select a `rate` fraction\" with floor rounding gives zero offers for small pools, for example `rate=0.1` over 3 results. That violates the guarantee \"unsampled results \u2192 non-empty offer set\". T14:219 expects `0.5 \u00d7 4 = 2`, but nothing defines the rounding rule or how selection happens (random vs. deterministic). Specify `max(1, ceil(rate \u00d7 n))` when `rate > 0`, plus a deterministic ordering (for example sorted by path) so the tests are stable. Add a test for `rate \u00d7 n < 1`.",
+      "file_ref": null,
+      "category": "specification",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:202-206"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The lapse signal is left for the implementer to invent",
+      "description": "T13 offers two designs (\"return enough information \u2026 or have the CLI re-derive it\"), and T14:217 asserts on \"whatever signal T13 produces\". The lapsed-graduation criterion (slice:272) is a named success criterion, so the contract should be fixed up front. One option: `select_residual_offers` returns a small result model with `offers` plus `lapsed: list[GraduatedConfig]` and `exhausted: list[GraduatedConfig]`. The CLI needs both lists: the lapse line in T15, and the \"no offers due\" line required at slice:229/245, which T15 currently omits.",
+      "file_ref": null,
+      "category": "specification",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:203"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Pruned-file handling is tested but never implemented",
+      "description": "T14 tests \"pruned review file \u2192 skipped, counted, WARNING naming the path\" (slice:246), but T13 has no step for it and no field to hold the count. Add the behavior and a count field to T13, ideally on the same result model suggested above.",
+      "file_ref": null,
+      "category": "coverage-gap",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:218"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The idempotent re-graduate needs a store update path that T11 doesn't provide",
+      "description": "T15:230 requires \"update its evidence snapshot in place \u2026 one record, not two\". T11's `write_graduation` returns a *generated* id. `MetrologyStore` writes files by id (`store.py:100-101`) and has no update or overwrite method. Without a stable id, the second write creates a second file. In T11, either derive the record id deterministically from `(JudgeConfigId, artifact_level)` so `_write_atomic` overwrites it, or add an explicit upsert. Then test it in T12, not only at the CLI layer in T16.",
+      "file_ref": null,
+      "category": "dependency",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:176-177"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`graduate` doesn't say which `JudgeConfigId` to pick when several share template, model and level",
+      "description": "After a prompt edit, the agreement report can hold several cells with the same `(template, model, level)` but different `template_content_hash` values. \"Filtered to this template/model/level\" is ambiguous here, and choosing the wrong cell would graduate a stale instrument, which is exactly what the version-scoping decision (slice:167-177) forbids. Specify that `graduate` selects the cell whose hash equals the template's *current* `_template_content_hash`, and refuses if no such cell exists.",
+      "file_ref": null,
+      "category": "specification",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:230"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Config defaults are undefined, inviting invented magic numbers",
+      "description": "T5's success criterion is \"shows all three keys with descriptions and defaults\", and T6 asserts \"correct \u2026 defaults\". Neither the slice nor the task gives values for `graduate_match_rate`, `tighten_match_rate` or `residual_sample_rate`. A junior AI will make them up, which conflicts with CLAUDE.md's \"do not guess\" rule and its rule against magic defaults. State the default values in T5, or add a `BLOCKED:` line asking the Project Manager for them.",
+      "file_ref": null,
+      "category": "specification",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:90-95"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Commit markers follow every task, including untested implementation",
+      "description": "All 17 tasks end in a `**Commit**:` marker. Implementation tasks T1, T3, T5, T7, T9, T11, T13 and T15 each commit before their tests exist, so those commits don't sit at tested points. Merge each pair into one marker after its test task: T1+T2, T3+T4, T5+T6, T7+T8, T9+T10, T11+T12, T13+T14, T15+T16, and T17. That cuts 17 commits to 9, all at green points. The plan would still have 17 tasks, which is acceptable for a 3/5-effort slice; this change is about where commits sit, not about adding work.",
+      "file_ref": null,
+      "category": "commit-cadence",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:39"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Function signatures differ from the design",
+      "description": "The design's `recommend_thresholds(..., current: ThresholdSnapshot)` and `classify_direction(match_rate, n, floor)` (slice:83-84) have become rate parameters plus an internal threshold read. `ThresholdSnapshot` is defined nowhere, so the task's version is more coherent. Consider updating the design so the two documents agree.",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:145"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Possible circular import between `models.py` and `calibration_models.py`",
+      "description": "T11 makes `MetrologyRecord` in `models.py` hold a `GraduatedConfig` from `calibration_models.py`, which itself imports 320/321 types. If any of those come from `models.py`, the imports become circular. Worth checking during T3/T11; the fix is to define `GraduatedConfig` where the envelope can import it without a cycle.",
+      "file_ref": null,
+      "category": "structure",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:175"
+    },
+    {
+      "severity": "PASS",
+      "title": "Hash narrowing, the floor refusal, unversioned refusal, no-mutation and the Typer-free core all trace to tasks",
+      "description": "The self-defeating-loop fix comes first (T1/T2) and is tested in both directions through `derive_judge_config_id`. The floor refusal and unversioned refusal are in T7/T8. The no-mutation byte-identity check runs at both the unit and CLI layers (T10, T16). The check that the core imports no Typer is in T16. The nine walkthrough steps are in T17. 321 is consumed without change. The slice restates no NFR, so no load-test or CI task is needed.",
+      "file_ref": null,
+      "category": "coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:31-52"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "sequencing",
+      "raw_category": null,
+      "summary": "T7's numbered precedence order contradicts the floor asymmetry it is meant to implement",
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:115-121",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "coverage-gap",
+      "raw_category": null,
+      "summary": "No task produces the runtime-drawn-model limitation statement",
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:147",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "coverage-gap",
+      "raw_category": null,
+      "summary": "The malformed `judge:` block failure mode is claimed as covered but has no step",
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:287",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "feasibility",
+      "raw_category": null,
+      "summary": "T13's fallback for result discovery cannot meet the non-empty-offers guarantee",
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:201",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "specification",
+      "raw_category": null,
+      "summary": "Rounding for the residual rate is unspecified and can break the non-empty guarantee",
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:202-206",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "specification",
+      "raw_category": null,
+      "summary": "The lapse signal is left for the implementer to invent",
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:203",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "concern",
+      "category": "coverage-gap",
+      "raw_category": null,
+      "summary": "Pruned-file handling is tested but never implemented",
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:218",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "concern",
+      "category": "dependency",
+      "raw_category": null,
+      "summary": "The idempotent re-graduate needs a store update path that T11 doesn't provide",
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:176-177",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "concern",
+      "category": "specification",
+      "raw_category": null,
+      "summary": "`graduate` doesn't say which `JudgeConfigId` to pick when several share template, model and level",
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:230",
+      "location_verified": true
+    },
+    {
+      "id": "F010",
+      "severity": "concern",
+      "category": "specification",
+      "raw_category": null,
+      "summary": "Config defaults are undefined, inviting invented magic numbers",
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:90-95",
+      "location_verified": true
+    },
+    {
+      "id": "F011",
+      "severity": "concern",
+      "category": "commit-cadence",
+      "raw_category": null,
+      "summary": "Commit markers follow every task, including untested implementation",
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:39",
+      "location_verified": true
+    },
+    {
+      "id": "F012",
+      "severity": "note",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "Function signatures differ from the design",
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:145",
+      "location_verified": true
+    },
+    {
+      "id": "F013",
+      "severity": "note",
+      "category": "structure",
+      "raw_category": null,
+      "summary": "Possible circular import between `models.py` and `calibration_models.py`",
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:175",
+      "location_verified": true
+    },
+    {
+      "id": "F014",
+      "severity": "pass",
+      "category": "coverage",
+      "raw_category": null,
+      "summary": "Hash narrowing, the floor refusal, unversioned refusal, no-mutation and the Typer-free core all trace to tasks",
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:31-52",
+      "location_verified": true
+    }
+  ],
+  "template_name": "tasks",
+  "input_files": {
+    "input": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md",
+    "against": "project-documents/user/slices/322-slice.calibration-to-threshold-feedback.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/squadron-322-tasks"
+  },
+  "timestamp": "2026-11-16T14:03:42.831764",
+  "model": "claude-opus-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 5,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-opus-5-5",
+  "answering_models": [
+    "claude-opus-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 14,
+    "in_fences": 0,
+    "in_section": 14,
+    "surviving": 14
+  },
+  "effort": "medium",
+  "profile": "sdk",
+  "turns": 6,
+  "prompt_tokens": 351035,
+  "cached_tokens": 339630,
+  "cache_write_tokens": 11395,
+  "completion_tokens": 7279,
+  "reasoning_tokens": null,
+  "duration_seconds": 82.44179558288306,
+  "cost_usd": 0.30516940000000004,
+  "cost_basis": "provider"
+}

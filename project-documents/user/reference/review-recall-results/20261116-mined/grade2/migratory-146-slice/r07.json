@@ -1,0 +1,68 @@
+{
+ "review": "r07",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Host-side `EntityManager` state goes stale on the GPU path, so spawn/despawn re-upload resets every agent",
+   "description": "On the GPU path, `SimulationManager.step()` gets a `TickResult` back from the driver but never writes positions or velocities back into `self._entity_manager.state`. Later, `sync_from_entity_manager()` (line 89-90, line 179) re-uploads \"CPU state after spawn/despawn\" from `entity_manager.state`. That state still holds the positions from setup, or from the last CPU tick. So the first spawn or despawn after N GPU ticks teleports the whole population back to old positions. The environment `pre_tick`/`post_tick` hooks (lines 172-173, 195-196), and anything else reading `entity_manager.state`, also see stale data.\n\nThe doc needs to name who owns agent state while the GPU path is active. Two options:\n- Copy the downloaded arrays back into `entity_manager.state` every tick.\n- Have spawn/despawn change only the affected rows on the GPU.\n\nIt should also add a test that checks positions carry over across a spawn (test 6 at line 314 only checks that nothing raises).",
+   "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:175-183"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Reflect and soft bounds change velocities, but only positions are synced back",
+   "description": "`apply_bounds_policy()` receives both `positions` and `velocities` (lines 186-190). Reflect and soft necessarily change velocities: reflect flips the sign and soft applies a steering force. The sync-back mechanism (`notify_positions_modified`, `upload_positions`) carries positions only. On the next tick the GPU integrates with the old velocities. Reflected agents keep heading outward and get clamped again every tick.\n\nLine 209 says these cases get the \"same sync-back pattern\", but the interface (lines 215-225) has no velocity upload. Either add a velocity upload (`notify_state_modified(positions, velocities)`), or limit sync-back to wrap and give a reason. A4 (line 330) checks only that positions are finite and in bounds, so it would not catch this.",
+   "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:207-213"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Population growth beyond the setup-time field size is not handled",
+   "description": "Slice 145 allocates the GPU fields \"once in `setup()` and never reallocated\" for a fixed N (145-slice\u2026md:84-90). Slice 146 says spawn/despawn is handled by \"`field.from_numpy()` on any tick where agent count changes\" (line 31). `from_numpy()` cannot grow a field.\n\nThe doc does not say whether `sync_from_entity_manager` reallocates the fields, uploads into a pre-sized buffer with an active count, or fails explicitly when count exceeds capacity. Spawn/despawn is explicitly in this slice's scope in the slice plan, so the design has to state the capacity strategy and say what happens on overflow.\n\nAlso, `count_changed_since_last_tick()` compares counts only. A despawn plus a spawn in the same tick leaves the count unchanged and skips the re-upload. Detect changes with a dirty flag or generation counter set by spawn/despawn instead.",
+   "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:201"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "`_select_arch()` does not detect CUDA, so a Linux host without NVIDIA crashes instead of falling back",
+   "description": "The slice plan entry and A7 (line 336) say that when Metal and CUDA are both missing, the server \"warns and falls back to `qd.cpu`\". The sketched `_select_arch()` only checks `platform.system()`: every Linux host gets `qd.cuda`. On a Linux box with no NVIDIA driver, `qd.init(arch=qd.cuda)` raises. The Open Notes (line 382) then say that exception is fatal at startup.\n\nSo the fallback only applies to Windows and other operating systems, not to the CPU-only Linux CI and dev hosts the plan has in mind (slice 147 measured \"CPU fallback (Linux, no Metal)\"). Specify a real capability probe, such as catching the arch-specific init failure, logging a WARNING, and calling `qd.init(arch=qd.cpu)`, and test it.\n\nRelated: line 252 says `arch` returns `\"cuda\"` or `\"metal\"`, but line 224 includes `\"cpu\"`. Pick one.",
+   "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:100-117"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Sections disagree on the default backend",
+   "description": "The scope (line 33), `ComputeConfig` (line 61), test 1 (line 309) and A1 (line 324) all make `quadrants` the default. The \"CPU default (no GPU)\" walkthrough tells the reader to \"Remove the `compute:` block entirely\" and expect \"No GPU initialization should appear in logs\". With the stated default, that is wrong.\n\nThe default also affects the regression run (line 375) and A5. Every existing server test that builds a `SimulationManager`/server from the default config will now call `qd.init`. Line 382 says a second `qd.init` in the same process is undefined behavior. The doc should say how existing `tests/server/` fixtures are pinned to `backend: cpu`, or made to run in isolated processes, so that A5 holds. It should also fix the walkthrough.",
+   "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:358-362"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "The TickResult factory name doesn't match the slice 140 contract",
+   "description": "`step()` returns `TickResult.from_quadrants_fields(...)`. Slice 140 defines `from_numpy_state` as the only implemented factory. It reserves `from_taichi_fields` for option (b), raw fields owned by the server (140-slice\u2026md:158-171). Slice 145 exports through `from_numpy_state` (145-slice\u2026md:330-331).\n\nSlice 146 downloads NumPy arrays (option a) but calls an option-(b)-style name that neither upstream slice defines. It is also missing from the Files Changed table (lines 288-299). Either build the result from the exported NumPy arrays with an existing or new option-(a) constructor and list that change, or explain why a new factory is needed. Otherwise A3, \"TickResult contract preserved\", depends on an interface nobody has specified.",
+   "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:123"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "The scope says bench code is untouched, while Files Changed edits it",
+   "description": "The out-of-scope list (line 40) excludes \"Any changes to the bench harness\", and line 301 says \"The bench backends (`quadrants_fused_backend.py`, `runner.py`) are **not changed**\". The same table moves `GpuAgentState` out of `bench/backends/quadrants_fused_state.py` (line 294) and edits `quadrants_fused_backend.py` (line 296).\n\nThe move is the right call, since it stops production code from depending on bench code. Restate the scope as \"bench behavior unchanged; one import path updated\". Also say whether `quadrants_fused_state.py` is deleted or kept as a re-export shim.",
+   "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:294-301"
+  },
+  {
+   "i": 7,
+   "severity": "NOTE",
+   "title": "Sync-back transfer size is understated",
+   "description": "The doc puts the per-tick upload at N=50k at \"~200 KB\". Two coordinates \u00d7 50k agents is 400 KB at f32 on the device and 800 KB as the f64 host array. If velocities are added (see the reflect/soft finding), double those figures. This is still small next to the 60 TPS budget, but correct the number.",
+   "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:384"
+  },
+  {
+   "i": 8,
+   "severity": "NOTE",
+   "title": "Test preconditions contradict each other",
+   "description": "Line 307 calls the tests \"CPU-only (skip if \u2026 GPU not available)\" and then says they run on Metal or CUDA. With the `qd.cpu` fallback, tests 5-8 could run on any host that has `quadrants` installed. State that precondition directly.",
+   "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:307"
+  }
+ ]
+}

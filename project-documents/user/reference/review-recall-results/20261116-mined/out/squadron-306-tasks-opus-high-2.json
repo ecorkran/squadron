@@ -1,0 +1,243 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "Part 0 \"verbatim\" moves bring back the review\u2192pipeline import cycle F002 exists to remove",
+      "description": "The design says `review/resolution.py` must not import pipeline internals, because that creates a package-level cycle. The task file moves modules verbatim, but they still import pipeline code:\n- `models.py:14` imports `squadron.pipeline.models.ActionResult`, and `read_findings(result: ActionResult | None)` (line 93) depends on it. T1 moves this file \"verbatim \u2014 no logic changes\", and T7 exports `read_findings` from `review.addressed`.\n- `verification.py:17` and `judge.py:21` import `RoundDiff` from `pipeline/actions/findings_addressed/screens.py`. T3 says this import \"stays as a cross-package import in the pipeline\u2192review direction\". That is backwards: `review/addressed/verification.py` importing `pipeline/.../screens` is review\u2192pipeline.\n- `judge_residue_core(..., diff, ...)` in T5 takes a `RoundDiff`, so `review/addressed/judge.py` would import pipeline code too.\n- File 2 (`compute_diff_since -> RoundDiff`, \"reusing the `RoundDiff` shape from `pipeline/.../screens.py`\") makes it worse.\n\nAfter Part 0, `review/` depends on `pipeline/` in at least three modules, which defeats the reason for doing Part 0 at all. A junior agent following T3 would make this mistake on purpose, believing it is correct.\n\nFix:\n- Move the `RoundDiff` dataclass into `review/addressed/` (for example `models.py`). `screens.py` then imports it in the established pipeline\u2192review direction, and `compute_round_diff` stays in screens.\n- Either keep `read_findings` (the `ActionResult` adapter) in `pipeline/actions/findings_addressed/`, or change its parameter to the plain findings list so `models.py` drops the `pipeline.models` import.\n- Add a check to T2/T4/T8: `grep -rn \"squadron.pipeline\" src/squadron/review/` returns nothing.",
+      "file_ref": null,
+      "category": "architecture",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/actions/findings_addressed/models.py:14"
+    },
+    {
+      "severity": "FAIL",
+      "title": "The overwrite guard is placed in `save_review_file`, which `sq review code` never calls",
+      "description": "T12 adds archive-on-overwrite only to `save_review_file`. But the paths the success criteria name don't go through it:\n- The CLI `sq review code` calls `save_review_result` (`cli/commands/review.py:746`, and also lines 451, 523 and 610).\n- The pipeline review action's main path also calls `save_review_result` (`pipeline/actions/review.py:255`). `save_review_file` is only the fallback (line 272).\n- `save_review_result` writes with `path.write_text(...)` directly (`persistence.py:298-312`).\n\nSo these success criteria are not met:\n- \"Re-running `sq review code <N>` over an edited review file archives the prior content and warns.\"\n- F003 (\"a failed archive copy aborts the overwrite\") on the CLI path.\n\nT13 tests only `save_review_file`, so it would pass while the CLI still destroys content. This is a design-level mistake the breakdown inherited; the breakdown still has to meet the criterion.\n\nRelated gaps in T12:\n- `save_review_result` returns `Path` and raises on `OSError`. It has no `None` contract, so \"return `None`, matching the existing failure-return contract\" doesn't apply there. The abort behavior for that function has to be defined.\n- T12 hard-codes `project-documents/user/reviews/archive/`. The archive should go in a subfolder of the actual target directory (`path.parent / \"archive\"`), which respects `reviews_dir` and `cwd`.\n\nFix:\n- Extract one guarded writer that both functions call.\n- Add a T13 test that goes through `save_review_result` (the CLI path) and checks the archived copy plus the WARNING.",
+      "file_ref": null,
+      "category": "missing-coverage",
+      "raw_category": null,
+      "location": "src/squadron/review/persistence.py:257-314"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "T14 (cf archive-scanning go/no-go) comes after Part D is committed",
+      "description": "The slice's Phase 5 note says this check must be \"sequenced before Part D lands\". In the task file, T13 ends with a Part D commit, and T14 is numbered after it. The file asks the implementer to remember not to check off T12, but the commit has already happened by then.\n\nMove T14 ahead of T12 (as T12, renumbering the rest) so the filename scheme is settled before any guard code is written.\n\nAlso, `project-documents/ai-project-guide/tool-guides/context-forge/` doesn't exist in this checkout. Point to where the cf scanning behavior can actually be found, or state that asking the PM is the expected route.",
+      "file_ref": null,
+      "category": "sequencing",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-1.md:275-296"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "T13 misses two branches the success criteria and design require",
+      "description": "- The success criterion says \"archives the prior content **and warns**\". T12 adds a success-path WARNING, but no T13 test checks for it.\n- The success criterion says \"A failed **or unverifiable** archive copy aborts the overwrite\". T13 only tests a copy that fails to be created. Nothing tests the case where the copy is made but the read-back comparison fails (for example by mocking the read-back to return different bytes).\n- Design Part D says that on abort \"the review content is still printed to the terminal\". T12 doesn't mention this, so the review output would be lost when the archive fails. Add it to T12, or record it as deliberately dropped.",
+      "file_ref": null,
+      "category": "test-coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-1.md:258-272"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Part 0 is split into more tasks and commits than a mechanical move needs",
+      "description": "The design calls the moves \"mechanical (import-path updates)\". The task file spends 8 tasks and 4 commits on them:\n- T1/T2 move one file.\n- T3/T4 move two files.\n- T7/T8 only update `__all__`.\n\nMerge T1, T3 and T7 into one move task with one verify-and-commit task, and keep T5/T6, since the judge extraction is a real change. That cuts Part 0 to 4 tasks.\n\nThe two-file split is also heavy for a 3/5-effort slice (A:1, B:3, C:1, D:1). This file has 14 tasks and the projectState says there are about 40 in total. After the merges above, consider whether one file would do.",
+      "file_ref": null,
+      "category": "proportionality",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-1.md:76-184"
+    },
+    {
+      "severity": "NOTE",
+      "title": "T8 uses a hard-coded baseline test count",
+      "description": "T8 says \"2832 passed, 2 skipped \u2026 plus this slice's later additions\". At T8, this slice hasn't added any tests yet, and a number copied from another document invites the implementer to report it without running the suite. Instead, record the actual pre-move count before T1 and compare against that.",
+      "file_ref": null,
+      "category": "clarity",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-1.md:178-180"
+    },
+    {
+      "severity": "NOTE",
+      "title": "T10's `cwd=...` has no source in `save_review_result`",
+      "description": "`save_review_result` has no `cwd` parameter; it takes `reviews_dir`. T10 should say which directory `run_git([\"rev-parse\", \"HEAD\"], cwd=...)` runs in.\n\nAlso, wiring `reviewed_sha` into `save_review_result` already covers the pipeline's main path (`pipeline/actions/review.py:255`). Only the fallback at line 265, which calls `format_review_markdown` directly, needs separate wiring. T10's \"both callers\" wording could lead to stamping the same path twice.",
+      "file_ref": null,
+      "category": "clarity",
+      "raw_category": null,
+      "location": "src/squadron/review/persistence.py:257-267"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Commit markers use bullet form instead of `**Commit**:`",
+      "description": "The markers are written as `- Commit: ...` list items. They are placed at tested points, which is correct, but they should be plain `**Commit**:` lines.",
+      "file_ref": null,
+      "category": "format",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-1.md:99"
+    },
+    {
+      "severity": "PASS",
+      "title": "Part A traces to its success criterion and follows test-with",
+      "description": "T9\u2013T11 cover the `reviewedSha` criterion for both persistence paths. The git-unavailable case omits the key and logs a WARNING instead of writing a placeholder value, and the test follows the implementation directly.",
+      "file_ref": null,
+      "category": "coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-1.md:188-227"
+    },
+    {
+      "severity": "PASS",
+      "title": "No NFR requires a load test",
+      "description": "The slice states no performance or throughput NFR, so no `tests/load/` task or CI gating task is needed.",
+      "file_ref": null,
+      "category": "nfr",
+      "raw_category": null,
+      "location": "project-documents/user/slices/306-slice.review-resolution-recording-that-findings-were-addressed.md"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "architecture",
+      "raw_category": null,
+      "summary": "Part 0 \"verbatim\" moves bring back the review\u2192pipeline import cycle F002 exists to remove",
+      "location": "src/squadron/pipeline/actions/findings_addressed/models.py:14",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "fail",
+      "category": "missing-coverage",
+      "raw_category": null,
+      "summary": "The overwrite guard is placed in `save_review_file`, which `sq review code` never calls",
+      "location": "src/squadron/review/persistence.py:257-314",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "sequencing",
+      "raw_category": null,
+      "summary": "T14 (cf archive-scanning go/no-go) comes after Part D is committed",
+      "location": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-1.md:275-296",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "test-coverage",
+      "raw_category": null,
+      "summary": "T13 misses two branches the success criteria and design require",
+      "location": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-1.md:258-272",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "proportionality",
+      "raw_category": null,
+      "summary": "Part 0 is split into more tasks and commits than a mechanical move needs",
+      "location": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-1.md:76-184",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "clarity",
+      "raw_category": null,
+      "summary": "T8 uses a hard-coded baseline test count",
+      "location": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-1.md:178-180",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "note",
+      "category": "clarity",
+      "raw_category": null,
+      "summary": "T10's `cwd=...` has no source in `save_review_result`",
+      "location": "src/squadron/review/persistence.py:257-267",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "note",
+      "category": "format",
+      "raw_category": null,
+      "summary": "Commit markers use bullet form instead of `**Commit**:`",
+      "location": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-1.md:99",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "pass",
+      "category": "coverage",
+      "raw_category": null,
+      "summary": "Part A traces to its success criterion and follows test-with",
+      "location": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-1.md:188-227",
+      "location_verified": true
+    },
+    {
+      "id": "F010",
+      "severity": "pass",
+      "category": "nfr",
+      "raw_category": null,
+      "summary": "No NFR requires a load test",
+      "location": "project-documents/user/slices/306-slice.review-resolution-recording-that-findings-were-addressed.md",
+      "location_verified": null
+    }
+  ],
+  "template_name": "tasks",
+  "input_files": {
+    "input": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-1.md",
+    "against": "project-documents/user/slices/306-slice.review-resolution-recording-that-findings-were-addressed.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/squadron-306-tasks"
+  },
+  "timestamp": "2026-11-16T12:21:42.562301",
+  "model": "claude-opus-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 13,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-opus-5-5",
+  "answering_models": [
+    "claude-opus-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 10,
+    "in_fences": 0,
+    "in_section": 10,
+    "surviving": 10
+  },
+  "effort": "high",
+  "profile": "sdk",
+  "turns": 14,
+  "prompt_tokens": 764926,
+  "cached_tokens": 658641,
+  "cache_write_tokens": 106267,
+  "completion_tokens": 8866,
+  "reasoning_tokens": null,
+  "duration_seconds": 109.33762599993497,
+  "cost_usd": 1.1599128,
+  "cost_basis": "provider"
+}

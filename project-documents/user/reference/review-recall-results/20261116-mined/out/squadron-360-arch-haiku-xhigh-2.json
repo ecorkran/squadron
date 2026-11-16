@@ -1,0 +1,350 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "The index scheme rests on a superseded naming rule",
+      "description": "The document says the naming convention \"reserves 940-949\" for codebase analysis (249-251), that overflow past 949 is sanctioned (254-258), and that no convention change is needed (243-247, 333). `project-documents/ai-project-guide/file-naming-conventions.md` (\"Analysis Files\") says analysis docs claim no slice index, prefer the initiative's base index when there is one, and otherwise number in order within `user/analysis/` from 900 to 989. It calls 940-949 the *former* range.\n\nConsequences:\n- The per-run numbering (258-261) has no allocation rule, and it ignores the initiative-base preference, which would make this initiative's outputs `360-analysis.*`.\n- The allocation source is unspecified. This project runs parallel worktrees (this one is `wt/squadron-360-arch`), so two branches can each pick the same next index.\n- `src/squadron/onboard/comprehension.py` takes the newest comprehension doc by highest leading integer, so a collision changes which doc onboard reads.\n\nMain's copy keeps the same 940-949 text (its lines ~364-371 and ~470).",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md:249-258"
+    },
+    {
+      "severity": "FAIL",
+      "title": "Capability 1 re-specifies a brownfield flow the project already has",
+      "description": "This copy says squadron has no awareness of understand-anything (68-77) and specifies one `/sq:analysis understand` skill that writes the concept, comprehension, and candidate docs. The main checkout already has the adoption flow:\n- `commands/sq/onboard.md` runs `sq onboard`, which routes `build-graph`, then `/sq:analysis understand comprehension`, then `/sq:analysis understand concept`, then `adopt`. This document's single skill has no such modes, so onboard's contract cannot be met as written.\n- `project-documents/ai-project-guide/project-guides/guide.ai-project.brownfield-adoption.md` says adoption \"is run by squadron's `sq onboard`\" and sets rules this document lacks: never overwrite an existing artifact without the PM; PM confirmation before machine-derived concept content is built on; the repo's README and docs are an intent source before asking.\n- `src/squadron/onboard/graph.py` and `comprehension.py` already implement staleness and comprehension discovery. Slice 440 (`user/slices/440-slice.sq-onboard.md`) and `440-arch.brownfield-adoption.md` exist.\n\nMain's copy calls the overlap \"compositional ... not overlapping\" under Dependencies, but it does not cite the guide or the subcommand contract, so the overlap is still open. This capability should either adopt onboard's contract and gates or state what it adds beyond them. Two implementations of one flow is the outcome to avoid.",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md:123-156"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The staleness check is self-referential and ignores the upstream's own change signal",
+      "description": "- The check compares `meta.json`'s `gitCommitHash` with HEAD and reports commit distance. The document also tracks the graph and `meta.json` (186-190). The stored hash is HEAD at analysis time, which predates the commit that stores the graph. So once committed, HEAD is at least one commit ahead on every checkout, with no code change. Planning commits, which this project makes directly to the target, push the distance further, so the number tracks document churn, not code drift. The implemented `graph.py` uses the same commit-count method, so this is live.\n- `analyzedFiles` is an integer in the real file (`\"analyzedFiles\": 238`), so the contract row at line 86 (\"staleness signal\") cannot support a path-scoped diff.\n- The upstream's change signal is `fingerprints.json`, written in Phase 7 step 2 and present in squadron's `.understand-anything/`. The contract table (81-90) omits it.\n- Failure path: Phase 7 writes `knowledge-graph.json` (step 1) before the fingerprint baseline (step 2). If step 2 fails, `meta.json` is never written (step 3). The result is a new graph beside an old or missing `meta.json`. The preconditions check only that the graph exists (127-128), so the skill accepts it and compares against the wrong commit or none.\n- \"Provenance\" is required (134-135, 335), but nothing in the document defines a provenance block.\n\nFix: derive staleness from `fingerprints.json`, or from `git diff --name-only gitCommitHash..HEAD` filtered to the graph's `filePath` set. Check graph/meta consistency in preconditions. Define the provenance block.",
+      "file_ref": null,
+      "category": "feasibility",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md:127-135"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The output contract does not match upstream v2.8.1",
+      "description": "Checked against the cached plugin skill and the real `.understand-anything/`:\n- Tour: the document says `tour[]` comes from `/understand` Phase 6 (101-103). In the upstream skill, TOUR is Phase 5; Phase 6 is REVIEW.\n- Config: `autoUpdate` (87) is absent from the real `config.json`, which contains only `{\"outputLanguage\":\"en\"}`.\n- Project: `project` (85) is listed with no schema. The real object has `name` (`squadron-ai`, while the cf project is `squadron`), `languages`, `frameworks`, an LLM-written `description`, `analyzedAt`, and `gitCommitHash`. The document never says which name becomes `{project}` in `000-concept.{project}.md` or in frontmatter.\n- Tour steps carry `languageLesson`, which the document's shape (94-105) omits. The claim that tour order is \"expert judgment ... a strong signal\" for Solution Approach (103-105) is asserted, not shown.\n\nFix: document the real schema, record the upstream version it was checked against, and have the skill fail explicitly on unrecognized shapes.",
+      "file_ref": null,
+      "category": "dependencies",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md:81-105"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Working-tree hygiene leaves `intermediate/` untracked and gets the trash lifecycle wrong",
+      "description": "- The only ignore rule is `.understand-anything/.trash-*/` (182-184). The tracked list (186-190) names the graph, `meta.json`, `config.json`, and `.understandignore`. Upstream Phase 7 step 4 keeps `intermediate/scan-result.json` after every run, so under these rules it appears as untracked. That contradicts \"leave the working tree clean\" (49-50). `fingerprints.json` has no decision either.\n- \"A repo accumulates trash directories for a week\" (177-178) is wrong. The purge runs only in `/understand` Phase 0, so trash persists until the next run after seven days.\n\nFix: list `intermediate/` and `fingerprints.json` explicitly as ignored or tracked, and correct the trash sentence.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md:174-190"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Capability 1's hard steps are undefined and do not fit a markdown-only skill",
+      "description": "- \"Read structure\" (138-139) has the LLM extract layers, tour, and file-level summaries with no size budget. The real graph's nodes span about 15,000 lines (27-15370), including 687 function- or class-typed nodes that the document says are not read (107-110). Joining nodes to layers and tour by ID is not what \"grep for the needed section\" achieves.\n- \"Complexity hotspots\" (152) and \"complexity clustering\" for candidates (154-155) have no metric, threshold, or method, and the document does not say who runs them.\n- Delivery is markdown only. `src/squadron/cli/commands/install.py` copies `*.md` (the `sub.glob(\"*.md\")` loop), and Non-Goals (427-428) say the installer copies markdown. A deterministic extractor cannot ship with the skill without changing 340's mechanism, and the document does not say so.\n- Squadron's parsing rules require fixtures in the real format and tests for empty output. This document has no verification plan. The \"tested path\" (199-200) names no test, and the real graph is an available fixture.\n\nFix: specify the extraction and where it runs, set a size budget, pick a deterministic projection path that fits the installer, and write a test plan built on the real graph.",
+      "file_ref": null,
+      "category": "feasibility",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md:138-156"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Outputs collide with the metrology audit harness (initiative 320, complete)",
+      "description": "The document says it is independent of 320 (312-313). But `src/squadron/metrology/audit.py` globs `project-documents/user/analysis/*-analysis.*.md` (lines 56-59), and `find_audit_file` (259-283) returns the newest fresh match by mtime with no topic check. `audit_parse.py` has no topic or docType check either. Both new outputs match the glob, so one written during an audit's window is read as the audit's output. The untracked-artifact exemption (`_AUDIT_ARTIFACT_PATTERN`, lines 70-75) also lets generated analysis docs pass a variance run's clean-tree check unseen.\n\nFix: write generated docs outside the audit glob, or have the audit select on `topic: tech-debt-audit`. Add 320 to the independence analysis.",
+      "file_ref": null,
+      "category": "dependencies",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md:305-313"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Audience boundary: the principle, translation rules, and decisions disagree",
+      "description": "- Principle (62-66): \"Separation of audience is a document boundary, not a tone setting.\"\n- Translation rules (238-239): \"Emphasis is a generation parameter.\"\n- Resolved decisions (326-331): one neutral document, and \"an emphasis parameter is added only if real use demonstrates the need.\"\n\nThe rules assume a parameter the decision says not to build, and the decision treats audience as tone, which the principle rejects. The real boundary is engineering document versus client document, and it is enforced only by filename topic (see the next finding).\n\nFix: remove the emphasis parameter from 238-239 and restate the principle as the engineering/client boundary, with its enforcement stated.",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md:62-66"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The client document is the squadron artifact, so internal vocabulary and frontmatter leak into it",
+      "description": "Non-Goals say PDF and slides are downstream conversions of the markdown (300-301), so the markdown file is the client artifact. But the output (202-210) lands in `user/analysis/` with squadron frontmatter. The gate requires `docType` and `status` (243-247). The naming convention's analysis schema also requires `topic`, which this document never mentions. The translation rules say docType frontmatter \"never appear\" (230-231). These requirements cannot all hold.\n\nFix: decide whether the client file is an internal source with a separate export step, or a client-visible file with frontmatter. Specify the frontmatter, and what the export strips.",
+      "file_ref": null,
+      "category": "abstraction",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md:202-210"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Capability 2 has no procedure, no traceability, and no re-run rule",
+      "description": "- Capability 1 has a five-step flow (125-144). Capability 2 has inputs, outputs, a field schema, and rules, but no steps.\n- The \"tested path\" (199-200) has no concept, so Problem and Audience (212-220) have no source. The document says the skill \"sources purpose from the initiative plan plus interview\" (196-199), but defines no interview for Capability 2 and does not say where unresolved gaps go (\"flag the gap for the PM,\" 235).\n- \"Every claim traces to an input artifact\" (233-235) has no mechanism. Capability 1 attributes its claims (143-144); Capability 2 does not. \"Features become outcomes\" (236-237) is inference by definition, and Benefits is sourced from \"initiative descriptions\" (222), which describe features.\n- Re-runs create new numbered files (254-258) with no supersession rule, so a client can be handed an older overview. The `deprecated` status (260-261) is never used.\n\nFix: give Capability 2 a flow, define how gaps are recorded (for example an explicit unknown block), require per-claim source tags, and define the re-run rule.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md:194-239"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Graph `project` fields conflict with the \"structure, not purpose\" principle",
+      "description": "Design Goals say \"A knowledge graph describes structure, not purpose\" (46-47). The real graph's `project.description` is an LLM-written purpose statement, and the document never says whether to use it. If it is used, it is inference presented as data, which the `[INFERRED]` convention in the prior-art section (267-269) exists to prevent. The graph's `project.name` (`squadron-ai`) also conflicts with the cf project name (see the contract finding).\n\nFix: exclude `project.description` or mark it `[INFERRED]`, and take `{project}` from the cf registration.",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md:46-48"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Failure modes are unspecified for the I/O paths",
+      "description": "Not addressed:\n- A truncated or malformed `knowledge-graph.json`. Phase 7 step 1 writes the file directly, and no temp-and-rename step is described.\n- An empty or missing `tour[]`, if Phase 5 failed. That removes the document's main Solution Approach input.\n- An unreachable `gitCommitHash` (rebase, shallow clone, graph from another branch). The implemented `graph.py` returns None with a WARNING; the document says nothing.\n- A non-git project, which the staleness check needs git for.\n- An interrupted concept write, and a `.gitignore` write failure.\n\nSquadron's failure-mode rule requires each failure to be observable and tested. None is named.\n\nFix: add a failure table: each failure, the behavior, and the observable signal.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md:125-144"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Dispatcher registration is hand-edited in three places, and the Codex twin rule is missing",
+      "description": "- The skill name appears three times in `commands/sq/analysis.md` (valid-skills line, usage block, skill section). Every new skill edits the dispatcher, which is the switch-statement shape the review-code OCP rule flags. `src/squadron/data/skills.toml` lists packs, not files, so the pack directory and the dispatcher are two sources of truth.\n- Delivery has no Codex side. In the main checkout, `commands/agents/sq-analysis/SKILL.md` got the same three-edit amendment (20261020). Main's amendment for slice 925 requires every `commands/sq/<name>.md` to have a `commands/agents/sq-<name>/SKILL.md` twin, enforced by a drift test, so `/sq:overview` as specified would fail that test. This worktree has no `commands/agents/` at all, so it predates the rule.\n\nFix: derive the valid skills from the pack directory, and add the Codex twin to Delivery for both capabilities.",
+      "file_ref": null,
+      "category": "extension-points",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md:276-289"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Two unrelated deliverables share one initiative; the least-specified output should be cut",
+      "description": "The document says the two capabilities \"share that shape and nothing else\" (16-17). They still share one index range, one Output Conventions section, and one Non-Goals list. Capability 2 depends on nothing external (309-310). Capability 1 depends on an upstream contract the document gets wrong (see the contract finding).\n\nCandidates for deferral or removal:\n- Initiative-plan candidates (154-156). The algorithm is undefined (see the Capability 1 finding), and the document itself requires confirmation before writing (155-156, 302-303). The main slice plan already splits them out as slice 364.\n- The emphasis parameter (238-239). Nothing backs it (see the audience finding).\n- The prior-art section (263-269). That belongs in slice design.\n\nThe main slice plan (`360-slices.document-intelligence.md`) already moves the overview to slice 365 with its own design file. The architecture should follow that seam.",
+      "file_ref": null,
+      "category": "antipattern",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md:16-17"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Three statements about the graph and interview contradict each other",
+      "description": "- \"Graph is an input, not a dependency\" (56-58) conflicts with \"External: understand-anything marketplace plugin\" (309-310) and with a precondition that verifies the plugin is installed (127). The skill only reads JSON, so plugin presence is not needed. The document also never says how presence is detected. The main checkout's `src/squadron/onboard/surfaces.py` reads a Claude plugins file for this.\n- \"Questions the graph already answers are never asked\" (60-61) conflicts with Solution Approach as \"graph ... + interview confirmation\" (167). Confirming a graph-derived answer is exactly what the rule excludes.\n- Initial Technical Direction draws on \"languages, frameworks, dependencies\" (168). The graph's `project` has `languages` and `frameworks`, but the contract has no external-dependency inventory.\n\nFix: align the three statements.",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md:56-61"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`/sq:analysis understand` names a consumer after the producer's verb",
+      "description": "The skill reads a graph and never builds one, but users will reasonably read `understand` as \"build.\" Namespacing keeps it from colliding with `/understand`; it does not tell users which one builds. The main checkout's `commands/sq/onboard.md` already calls the skill with subcommands (`comprehension`, `concept`) that this document does not define (see the brownfield finding). Either document the verb's meaning in the command description or rename it.",
+      "file_ref": null,
+      "category": "abstraction",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md:273-279"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "The index scheme rests on a superseded naming rule",
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md:249-258",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "fail",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "Capability 1 re-specifies a brownfield flow the project already has",
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md:123-156",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "feasibility",
+      "raw_category": null,
+      "summary": "The staleness check is self-referential and ignores the upstream's own change signal",
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md:127-135",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "dependencies",
+      "raw_category": null,
+      "summary": "The output contract does not match upstream v2.8.1",
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md:81-105",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "Working-tree hygiene leaves `intermediate/` untracked and gets the trash lifecycle wrong",
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md:174-190",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "feasibility",
+      "raw_category": null,
+      "summary": "Capability 1's hard steps are undefined and do not fit a markdown-only skill",
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md:138-156",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "concern",
+      "category": "dependencies",
+      "raw_category": null,
+      "summary": "Outputs collide with the metrology audit harness (initiative 320, complete)",
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md:305-313",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "concern",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "Audience boundary: the principle, translation rules, and decisions disagree",
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md:62-66",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "concern",
+      "category": "abstraction",
+      "raw_category": null,
+      "summary": "The client document is the squadron artifact, so internal vocabulary and frontmatter leak into it",
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md:202-210",
+      "location_verified": true
+    },
+    {
+      "id": "F010",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "Capability 2 has no procedure, no traceability, and no re-run rule",
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md:194-239",
+      "location_verified": true
+    },
+    {
+      "id": "F011",
+      "severity": "concern",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "Graph `project` fields conflict with the \"structure, not purpose\" principle",
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md:46-48",
+      "location_verified": true
+    },
+    {
+      "id": "F012",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "Failure modes are unspecified for the I/O paths",
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md:125-144",
+      "location_verified": true
+    },
+    {
+      "id": "F013",
+      "severity": "concern",
+      "category": "extension-points",
+      "raw_category": null,
+      "summary": "Dispatcher registration is hand-edited in three places, and the Codex twin rule is missing",
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md:276-289",
+      "location_verified": true
+    },
+    {
+      "id": "F014",
+      "severity": "concern",
+      "category": "antipattern",
+      "raw_category": null,
+      "summary": "Two unrelated deliverables share one initiative; the least-specified output should be cut",
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md:16-17",
+      "location_verified": true
+    },
+    {
+      "id": "F015",
+      "severity": "concern",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "Three statements about the graph and interview contradict each other",
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md:56-61",
+      "location_verified": true
+    },
+    {
+      "id": "F016",
+      "severity": "note",
+      "category": "abstraction",
+      "raw_category": null,
+      "summary": "`/sq:analysis understand` names a consumer after the producer's verb",
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md:273-279",
+      "location_verified": true
+    }
+  ],
+  "template_name": "arch",
+  "input_files": {
+    "input": "project-documents/user/architecture/360-arch.document-intelligence.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/squadron-360-arch"
+  },
+  "timestamp": "2026-11-16T12:40:58.063130",
+  "model": "claude-haiku-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 57,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 1,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-haiku-5-5",
+  "answering_models": [
+    "claude-haiku-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 16,
+    "in_fences": 0,
+    "in_section": 16,
+    "surviving": 16
+  },
+  "effort": "xhigh",
+  "profile": "sdk",
+  "turns": 58,
+  "prompt_tokens": 4716564,
+  "cached_tokens": 4456156,
+  "cache_write_tokens": 260352,
+  "completion_tokens": 113376,
+  "reasoning_tokens": null,
+  "duration_seconds": 497.25151816708967,
+  "cost_usd": 0.64935758,
+  "cost_basis": "provider"
+}

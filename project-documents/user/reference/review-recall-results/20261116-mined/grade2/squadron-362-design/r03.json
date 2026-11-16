@@ -1,0 +1,61 @@
+{
+ "review": "r03",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "File-level selector is defined three incompatible ways, and the chosen one inverts the architecture's allow-list",
+   "description": "Correction 2 defines \"file-level\" three ways:\n- **Heading:** \"carries a `filePath`\".\n- **Fix text:** \"becomes an explicit type allow-list\".\n- **Selector and next paragraph:** an exclusion, `type != \"function\" and type != \"class\"`, \"stated as an exclusion rather than an allow-list deliberately\".\n\nThe architecture's read discipline is an allow-list of nine named types, with function- and class-level nodes not read. The deny-list fails open in the direction the discipline exists to prevent. A new upstream sub-file type (a method, variable or module-member node, say) would be pulled into context automatically. The \"no `filePath` \u2192 drift\" check does not reliably catch this, since such nodes may carry a `filePath`, and it fires only after the read.\n\nPick one definition. The safer option is the architecture's nine-type allow-list, with any unknown type counted and reported as drift by type name only. That keeps the \"new type is not silently dropped\" property without an unbounded read.",
+   "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:143-165"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Section 6 requires resolving function/class endpoints, which conflicts with the read discipline and success criterion 9",
+   "description": "Section 6 says function- and class-level edge endpoints are \"resolved to their owning file's layer rather than dropped\". The design does not say how. The options are parsing the type-prefixed node id, following `contains` edges, or reading the function node's `filePath`; the last contradicts criterion 9 (\"no function- or class-level node is read\", line 332-333) and the architecture.\n\nThe same paragraph scopes inter-layer observations to `imports` and `depends_on`, then counts a `calls` edge between functions as an inter-layer signal. The set of edge types is therefore ambiguous.\n\nState the resolution mechanism (one that stays inside a `jq` aggregate and emits only layer-pair counts) and the exact edge-type set. Otherwise drop function-level endpoints, which the slice plan entry does not require.",
+   "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:215-220"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Unmarked \"closing observations\" reopen the inference path the `[INFERRED]` decision closes",
+   "description": "The design bans `[INFERRED]` and says every section resolves to sourced content or a gap marker with \"no third option\". It then allows each section a closing observation, justified by a \"mechanical\" derivability test.\n\nIts own example fails that test: \"complexity concentrates in the seams where squadron meets an external SDK\" cannot be derived from a table of `complexity`, `filePath` and layer. It needs an interpretation of what the files are. The result is unmarked inference, which conflicts with the plan criterion \"a gap marker rather than inferred prose\". Criterion 8 (`grep -c INFERRED` returns 0) passes regardless.\n\nEither cut closing observations, or restrict them to restatements of counts and orderings in the table above and add that as a success criterion.",
+   "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:245-250"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Reading-order mapping drops `tour[].nodeIds`, which the 363 integration point needs",
+   "description": "Row 5 sources reading order from `order`, `title` and `description` only. Three things point the other way:\n- The 361 design read `tour[]` order/title/nodeIds.\n- The slice plan assigns 362 \"`tour[]` ordering as the signal for which components matter most\".\n- The architecture's Solution Approach row attempts \"`tour[]` node ordering\".\n\nThe slice says its mapping is \"reused verbatim\" by 363 and that \"layers and tour feed Solution Approach\" (line 299-301). Without `nodeIds`, the tour names no components, so the mapping 363 inherits cannot supply that signal. Add `nodeIds`, resolved to file-level paths, to row 5.",
+   "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:178"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Binding mapping rows leave ordering and fallback rules under-specified or inconsistent",
+   "description": "The table is declared binding, but several rows cannot be executed as written:\n- **Row 6, tie-break:** \"descending count, ties by `weight`\". Count is a layer-pair aggregate and `weight` is per edge; no aggregation (sum, max) is stated.\n- **Unused fields:** `edges[].direction` and `nodes[].tags` for \"section grouping\" appear under Interfaces Required (lines 83-86) but in no mapping row or section detail. Use them or remove them.\n- **Row 4, fallback:** it covers `complexity` being absent wholesale. It does not cover some nodes lacking it (the case 361 named as its likely gap), or which tier counts as \"top\" when no `complex` node exists.\n- **Row 7, fallback:** it gaps on an \"unreadable file\" but does not separate an absent optional `.understandignore` or `config.json` from an unreadable one. A gap marker must name \"the input that would supply it\", and nothing supplies an optional file. Line 229-231 already declines to gap an absent optional config key, so the two treatments are inconsistent.\n- **Row 3, fallback:** it treats \"no `entry-point` tag\" as one case. A missing or renamed `tags` field is upstream drift, which the architecture says must fail loudly rather than produce a thinner document. The marker's remedy, \"re-run /understand\", also assumes a tag vocabulary the architecture's contract does not document.",
+   "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:172-180"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Scope the slice plan does not assign: `config.json` reporting and the edit to the retained reference document",
+   "description": "Two items can be cut:\n- **`config.json` settings in the generated document.** The slice plan entry lists no coverage or config output. The architecture describes `config.json` only as \"read only\" and gives it no role in comprehension. On this graph the output is the single line `outputLanguage: en`. The justification, \"the three fields 361 explicitly deferred\", does not appear in the 361 design. Keep `analyzedFiles` reconciliation and `.understandignore`, which the architecture supports for explaining coverage gaps.\n- **The cross-reference line added to `analyze-codebase-prompt.md`** (lines 277-280, 336-338). The decision is headed \"retain the document unchanged\", and the plan and architecture say only that the document remains in place. Either drop the line or reword the decision. Criterion 11 also calls this file a \"non-document file\", though it sits under `project-documents/`.",
+   "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:222-235"
+  },
+  {
+   "i": 6,
+   "severity": "NOTE",
+   "title": "Success criteria pin literal counts from one graph snapshot",
+   "description": "Criteria 4 and 5 require the literal values 34, 6 and 238, measured at `gitCommitHash` `1bfbca1`. Walkthrough step 1 already expects the graph may be refreshed, and any re-run of `/understand` changes these numbers. State the criteria as invariants (layer count equals `nodeIds | length`; file-level count equals `analyzedFiles`) and keep the literals as walkthrough expectations.",
+   "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:322-326"
+  },
+  {
+   "i": 7,
+   "severity": "NOTE",
+   "title": "\"Unchanged\" wording contradicts the edits the slice makes",
+   "description": "The section \"Read discipline, unchanged\" widens the node filter, and \"361 \u2026 all executed unchanged\" sits beside two corrections to 361 text. The corrections fall in the comprehension flow, which 361 says 362 \"deepens in place\", so they are in scope. The text should say that preflight and document conventions are unchanged, while the selector and layer-count instruction are corrected.\n\nSeparately, the design records that the architecture's `config.json` row (`autoUpdate`) does not match the real file. That deserves a follow-up edit to the architecture rather than staying only in this slice's risk section.",
+   "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:282-293"
+  }
+ ]
+}

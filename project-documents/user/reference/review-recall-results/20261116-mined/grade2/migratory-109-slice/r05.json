@@ -1,0 +1,47 @@
+{
+ "review": "r05",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Padded layout uses O(n\u00b2) memory under clustering, and the reason given for rejecting CSR is wrong",
+   "description": "The slice exists because \"neighbor lists grow from near-zero to near-n\" when agents cluster (line 17). In that state `max_neighbors \u2248 n`, so the padded arrays are O(n\u00b2):\n\n- At the architecture's stated target of \"tens of thousands of agents\" (100-arch.behavior-engine.md:36), n = 10K gives an `indices` array of about 800 MB.\n- The gathered `(n, max_neighbors, 2)` float64 positions add about 1.6 GB more, per force, per tick.\n\nThe design says memory only matters \"at 100K+\" (line 148) and that cost is constant \"regardless of agent count or clustering density\" (line 19). Both claims are false in that regime.\n\nCSR was rejected because \"NumPy advanced indexing doesn't natively support CSR gather\" and would need scipy (line 144). That's incorrect. A flat `positions[flat_indices]` gather followed by `np.add.reduceat(..., offsets)` is pure NumPy. It needs no `np.add.at`, uses O(total neighbors) memory, and the builder can produce it with one `np.concatenate`.\n\nThe doc should do one of two things:\n- Adopt the flat/CSR form behind `NeighborData`.\n- Or keep padding, but state the supported n and density range with the memory bound, and correct the claims on lines 19, 146 and 148.\n\nEach force also allocates a fresh `(n, k, 2)` array every tick. That conflicts with the architecture's caller-provided-buffer / no-dynamic-allocation guidance (100-arch.behavior-engine.md:88, 102).",
+   "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:140-148"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "The profile-weight list comprehension is a per-agent Python loop inside `__call__`",
+   "description": "Line 133 builds the weights with `[profiles[pi].cohesion_weight for pi in state.profile_indices[eval_indices]]`. That is an O(n) Python loop inside every `BulkForce.__call__`. It breaks the slice's \"defining constraint\" at line 198: \"No Python-level per-agent loops in any `BulkForce.__call__`\".\n\nThe grep check at lines 220-225 won't catch it either, because the loop variable is `pi`.\n\nThe fix is cheap and should be the specified pattern:\n- Build a per-profile array of length `len(profiles)`, e.g. `np.array([p.cohesion_weight for p in profiles])`.\n- Index it with `state.profile_indices[eval_indices]`.\n\nThis loops over profiles, not agents. Delete the \"can be precomputed per tick if needed\" deferral.",
+   "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:127-136"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "No plan for migrating slice 103's `FlightForce` and `PursuitForce`",
+   "description": "The frontmatter lists `103-predator-prey-dynamics` as an interface, and line 164 says \"All `BulkForce` implementations must be updated in this slice.\" But slice 103 already has a design and a task file. Its `FlightForce` and `PursuitForce` take `neighbor_lists` and index `neighbor_lists[list_idx]` in a per-agent loop (103-slice.predator-prey-dynamics.md:444-452, 507-515).\n\nThe slice plan lets 103 and 109 land in either order, and 109 doesn't say what happens in each case:\n- **103 lands first:** 109 must also rewrite those two forces, which would make seven neighbor forces, not five.\n- **109 lands first:** 103's design and tasks need updating to consume `NeighborData`.\n\nLines 178 and 190 describe what 109 provides to \"predator-prey,\" but neither defines who owns this change. Add one sentence that names the owner for each ordering.",
+   "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:164"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "The builder construction method and the empty-active-set case are not specified",
+   "description": "Self-exclusion is described as \"when copying query results into the padded array for agent `i`, skip the entry\u2026\" (line 88). Read literally, that is a per-agent, per-neighbor Python copy. It is O(n\u00b7k) Python work, which is the scaling the slice is removing, just moved from the forces into the builder.\n\nThe design should specify vectorized construction:\n1. Concatenate the raw lists.\n2. Build a boolean self-mask against `np.repeat(eval_indices, lengths)`.\n3. Recompute the counts.\n4. Scatter into the padded or flat layout.\n\nAlso, `max_neighbors` is defined as a max over active agents (line 82). That max fails when `n_active == 0`, which can happen because the subset-evaluable tick lets the caller pass an empty subset (100-arch.behavior-engine.md:52). The edge-case list at lines 193 and 259 has \"single agent\" but not \"zero active agents.\" Name the expected behavior: a `(0, 0)` array and a zero force array.",
+   "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:86-101"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "The N-tick trajectory equivalence test is heavy and won't reliably hold",
+   "description": "The integration test (line 260) compares positions and velocities after N ticks between the old and new implementations. Two problems:\n\n- It requires keeping a full loop-based tick path in the test suite, on top of the per-force reference loops.\n- Boid dynamics are chaotic. Vectorized reductions sum in a different order than the loops, so float64 differences of about 1e-16 grow over many ticks. The test will be flaky or need a meaningless tolerance.\n\nThe per-force `np.allclose` tests (line 258) already prove equivalence for each force, and the existing tick tests cover integration. Cut the N-tick comparison, or limit it to a single tick.",
+   "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:258-260"
+  },
+  {
+   "i": 5,
+   "severity": "NOTE",
+   "title": "`MomentumForce` is called \"neighbor-dependent\" but uses no neighbors",
+   "description": "Lines 35 and 190 count `MomentumForce` among the \"five neighbor-dependent forces,\" but line 125 says it \"does not use neighbors at all.\" Say \"five per-agent-loop forces\" instead, so the success criteria match the design.",
+   "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:35"
+  }
+ ]
+}

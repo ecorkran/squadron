@@ -1,0 +1,261 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "`review` / `blocked` recommendation vocabulary is contradicted and left unfixed",
+      "description": "The architecture specifies literal values `recommendation: \"review\"` and `recommendation: \"blocked\"`, and says Amoeba depends on \"structured `recommendation` values with a stable vocabulary\". TD-7 instead shows `recommendation: 'Review required before advancing'` and `'Blocked: review verdict does not clear threshold'`, then says \"Exact strings finalized in implementation\". Line 286 meanwhile promises \"the stable strings runners route on\". These cannot all hold, and this is the slice's main external contract.\n\nThe sample text is also wrong for three of the four boundaries: \"before advancing\" and \"Slice NNN is complete\" do not describe pre-tasks, pre-implementation or pre-slice-plan. Fix the two `recommendation` values in the design as `review` and `blocked`, and move the prose into `rationale`.",
+      "file_ref": null,
+      "category": "integration-contract",
+      "raw_category": null,
+      "location": "project-documents/user/slices/241-slice.gate-logic-in-workflownavigator.md:253-268"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Owed review type and boundary are only available in rationale prose",
+      "description": "The architecture's \"First-class status representation\" goal says runners act on gate state \"without parsing recommendation strings\". It defined `pending-review` for one boundary (tasks complete). This slice reuses `pending-review` / `review-failed` at four boundaries, so status plus a `review` recommendation no longer says which review is owed (arch, slice, tasks or code). The type appears only in the rationale (\"The rationale must always name the review type\").\n\nA runner routing to a review agent must therefore parse prose. The gated status also replaces `needs-tasks` / `in-implementation`, so `getStatus()` consumers lose the lifecycle position. Specify a structured carrier for boundary and review type on both the status and the next-action results. If the `NextAction` shape truly cannot gain an optional field, state how runners obtain the type.",
+      "file_ref": null,
+      "category": "architectural-alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/241-slice.gate-logic-in-workflownavigator.md:220-222"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Parse failures collapse into \"no verdict\"; the architecture requires them to be named",
+      "description": "The architecture's \"File-read failure modes\" says: \"The rationale returned to the caller names the parse failure explicitly.\" The slice relies on `parseFrontmatter` never throwing and returning `{ found: false, data: {} }`. It calls the resulting merge of read failure, malformed YAML and a missing `verdict` field \"exactly the behavior the gate needs\".\n\nThe blocking outcome is correct (`UNKNOWN`, then `review_unknown_as`). But the gate cannot tell \"unreadable file\" from \"field missing\", so the required rationale cannot be produced and the read failure is not observable. Specify how the gate tells the cases apart (for example `found === false` versus found-without-`verdict`), the rationale text for each, and a test asserting the parse-failure signal. The matrix at line 314 lists `unparseable-file` as an input but asserts no distinct output.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/241-slice.gate-logic-in-workflownavigator.md:79"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Config-resolution ownership and the `resolveGateConfig` signature are inconsistent",
+      "description": "- **Ownership stated two ways.** Line 109 says the navigator calls `this.config?.get(...)` and \"hands raw values to `reviewGate`\". Lines 56, 149 and 191 have `resolveGateConfig(config)` read `ConfigManager` itself, inside a module TD-1 calls \"standalone pure\". Slice 242 imports this function, so the answer decides whether `ConsistencyChecker` needs a `ConfigManager`.\n- **No boundary parameter.** `resolveGateConfig(config)` must return a per-boundary threshold override (TD-4) but takes no boundary.\n- **Boundary identifiers unmapped.** The slice uses `preSlicePlan`, slice 240's keys use `pre_slice_plan`, and the architecture uses `pre-slice-plan`. The mapping from `Boundary` to config key segment is not defined, which invites scattered literals.\n- **Read-time invalid values.** Behaviour for a hand-edited `review_threshold` outside the enum, or a non-boolean `review_enabled`, is unstated. With `=== true` narrowing, a bad `review_enabled` silently turns gating off. The architecture's \"Fail-fast on configuration errors\" forbids a \"silent pass or silent block\".",
+      "file_ref": null,
+      "category": "under-specification",
+      "raw_category": null,
+      "location": "project-documents/user/slices/241-slice.gate-logic-in-workflownavigator.md:109"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`pre-slice-plan` (arch) boundary wiring is asserted, not designed",
+      "description": "The slice plan folds retired slice 244 into 241. The architecture described that work as the \"same gate mechanism; different insertion point in the cascade\". The slice covers it with \"follow the identical shape\" and \"extend the no-active-slice / pre-slice-plan path\". Three things are left open:\n\n- **Where it is evaluated.** The reserved `LIFECYCLE: review-gate` branch sits after `in-implementation`. Slice 240's cascade dispatches no-active-slice at the earlier `GUARD: no-active-slice` branch, so the reserved branch is never reached for this boundary.\n- **Which status carries it.** `pending-review` / `review-failed` are `SliceStatus` values set by `deriveSliceStatus()`, and no slice exists at this boundary.\n- **Which index is used.** `detectDocuments(projectPath, sliceIndex, reviewType)` needs an index for `NNN-review.arch.*.md`; the initiative index is implied but not stated.\n\nThe pre-tasks and pre-implementation gates also depend on the gated status reaching the review-gate branch before the `needs-tasks` / `in-implementation` branches; state that ordering.",
+      "file_ref": null,
+      "category": "under-specification",
+      "raw_category": null,
+      "location": "project-documents/user/slices/241-slice.gate-logic-in-workflownavigator.md:168"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Present-but-`UNKNOWN` maps to `review-failed`, differing from the architecture's status wording",
+      "description": "The architecture's `pending-review` definition includes \"or verdict is `UNKNOWN` and `review_unknown_as` treats it as pending\". The slice never surfaces a present artifact as pending. That is defensible, since `review_unknown_as` has no \"pending\" value, and it is consistent with \"must not silently pass\". Record it as a deliberate resolution so slice 243 documents it.",
+      "file_ref": null,
+      "category": "architectural-alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/241-slice.gate-logic-in-workflownavigator.md:216"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`GateOutcome` includes `pending`, which `evaluateVerdict` never returns",
+      "description": "`evaluateVerdict` is typed to return `clears | pending | failed`, but `pending` comes only from the navigator's `review === null` check. Slice 242 needs the same absent/present split for its warning-versus-error rule, so it would have to re-derive it. A single entry point taking the artifact path or null would give both consumers one function. The \"also exposes the normalized verdict and resolved threshold\" interface is also unspecified, and `positionToReviewType` returns `string` where the literal union is available.",
+      "file_ref": null,
+      "category": "interface-design",
+      "raw_category": null,
+      "location": "project-documents/user/slices/241-slice.gate-logic-in-workflownavigator.md:218"
+    },
+    {
+      "severity": "NOTE",
+      "title": "New status values are not covered by the `STATUS` const that the \"no magic strings\" rule cites",
+      "description": "`STATUS` covers `NormalizedStatus` only. The values this slice adds, `pending-review` and `review-failed`, belong to the `SliceStatus` union and will be bare literals in `deriveSliceStatus`, `getNext`, slice 242 and the visualizer. Lines 276 and 394 claim \"status values via `STATUS`\". Either give the two new values a defined constant or narrow the claim.",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/slices/241-slice.gate-logic-in-workflownavigator.md:242-251"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Inert `review_type` keys remain settable and are silently ignored",
+      "description": "The slice plan sanctions leaving the keys defined but unread. A user who sets `pre_advance.review_type` still gets no signal that it has no effect. A warning through the existing warnings pattern when a key is non-empty would be cheap. The parenthetical \"flagged for the PM at implementation\" should be dropped: the plan assigns this decision to the design, and the design has made it.",
+      "file_ref": null,
+      "category": "configuration",
+      "raw_category": null,
+      "location": "project-documents/user/slices/241-slice.gate-logic-in-workflownavigator.md:226-228"
+    },
+    {
+      "severity": "PASS",
+      "title": "Scope matches the slice plan entry; departures from the architecture are plan-sanctioned",
+      "description": "All plan items for 241 are present: four boundaries, position-derived review type, two statuses, `reviewGate.ts`, optional `ConfigManager` injection, the filled review-gate branch, the `STATUS` const and unit coverage. Work for 242, 243 and 910 is excluded. Position-derived type and the folded-in 244 contradict the architecture text, but the slice plan notes explicitly supersede it. The architecture document itself still describes the old model and would benefit from an update.",
+      "file_ref": null,
+      "category": "scope",
+      "raw_category": null,
+      "location": "project-documents/user/slices/241-slice.gate-logic-in-workflownavigator.md:45-68"
+    },
+    {
+      "severity": "PASS",
+      "title": "Layering, dependency direction and conservative default",
+      "description": "- **Dependencies** point from the CLI and MCP surfaces into the core navigator, then to `reviewGate`, and consume only slice 240 outputs.\n- **Gating off** is structural: no config or `review_enabled` false means no artifact lookup, backed by a regression test.\n- **Layer boundary** holds: the gate is deterministic and stateless, reads only `verdict`, leaves score unenforced, and uses checkbox completion (not git) as the code-boundary trigger.\n- **Matrix** in TD-2 matches the architecture's verdict handling, including the `unknownAs = concerns` threshold interaction.\n- **NFRs**: the architecture states no latency or throughput target for this path, so none needs restating.",
+      "file_ref": null,
+      "category": "architectural-alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/241-slice.gate-logic-in-workflownavigator.md:97-112"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "integration-contract",
+      "raw_category": null,
+      "summary": "`review` / `blocked` recommendation vocabulary is contradicted and left unfixed",
+      "location": "project-documents/user/slices/241-slice.gate-logic-in-workflownavigator.md:253-268",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "architectural-alignment",
+      "raw_category": null,
+      "summary": "Owed review type and boundary are only available in rationale prose",
+      "location": "project-documents/user/slices/241-slice.gate-logic-in-workflownavigator.md:220-222",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "Parse failures collapse into \"no verdict\"; the architecture requires them to be named",
+      "location": "project-documents/user/slices/241-slice.gate-logic-in-workflownavigator.md:79",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "under-specification",
+      "raw_category": null,
+      "summary": "Config-resolution ownership and the `resolveGateConfig` signature are inconsistent",
+      "location": "project-documents/user/slices/241-slice.gate-logic-in-workflownavigator.md:109",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "under-specification",
+      "raw_category": null,
+      "summary": "`pre-slice-plan` (arch) boundary wiring is asserted, not designed",
+      "location": "project-documents/user/slices/241-slice.gate-logic-in-workflownavigator.md:168",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "architectural-alignment",
+      "raw_category": null,
+      "summary": "Present-but-`UNKNOWN` maps to `review-failed`, differing from the architecture's status wording",
+      "location": "project-documents/user/slices/241-slice.gate-logic-in-workflownavigator.md:216",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "note",
+      "category": "interface-design",
+      "raw_category": null,
+      "summary": "`GateOutcome` includes `pending`, which `evaluateVerdict` never returns",
+      "location": "project-documents/user/slices/241-slice.gate-logic-in-workflownavigator.md:218",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "note",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "New status values are not covered by the `STATUS` const that the \"no magic strings\" rule cites",
+      "location": "project-documents/user/slices/241-slice.gate-logic-in-workflownavigator.md:242-251",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "note",
+      "category": "configuration",
+      "raw_category": null,
+      "summary": "Inert `review_type` keys remain settable and are silently ignored",
+      "location": "project-documents/user/slices/241-slice.gate-logic-in-workflownavigator.md:226-228",
+      "location_verified": true
+    },
+    {
+      "id": "F010",
+      "severity": "pass",
+      "category": "scope",
+      "raw_category": null,
+      "summary": "Scope matches the slice plan entry; departures from the architecture are plan-sanctioned",
+      "location": "project-documents/user/slices/241-slice.gate-logic-in-workflownavigator.md:45-68",
+      "location_verified": true
+    },
+    {
+      "id": "F011",
+      "severity": "pass",
+      "category": "architectural-alignment",
+      "raw_category": null,
+      "summary": "Layering, dependency direction and conservative default",
+      "location": "project-documents/user/slices/241-slice.gate-logic-in-workflownavigator.md:97-112",
+      "location_verified": true
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/241-slice.gate-logic-in-workflownavigator.md",
+    "against": "project-documents/user/architecture/240-slices.review-aware-workflow-gating.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/context-forge-241-slice"
+  },
+  "timestamp": "2026-11-16T12:13:08.336201",
+  "model": "claude-fable-5-2",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 6,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-fable-5-2",
+  "answering_models": [
+    "claude-fable-5-2"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 11,
+    "in_fences": 0,
+    "in_section": 11,
+    "surviving": 11
+  },
+  "effort": "medium",
+  "profile": "sdk",
+  "turns": 7,
+  "prompt_tokens": 313541,
+  "cached_tokens": 203928,
+  "cache_write_tokens": 109605,
+  "completion_tokens": 8159,
+  "reasoning_tokens": null,
+  "duration_seconds": 84.72667216695845,
+  "cost_usd": 2.1213473,
+  "cost_basis": "provider"
+}

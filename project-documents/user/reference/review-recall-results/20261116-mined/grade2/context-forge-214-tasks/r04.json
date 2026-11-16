@@ -1,0 +1,40 @@
+{
+ "review": "r04",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Commit markers are written as checkbox items, not plain `**Commit**:` lines",
+   "description": "Tasks 2C, 3C, 4C, 5C and 6C (lines 71, 94, 117, 126, 134) are written as `- [ ] **Task NC: Commit** \u2014 ...`. Commit markers must be plain `**Commit**: <message>` lines, never checkboxes. With a checkbox, each commit has to be followed by another edit to tick that box. That edit either goes into the next task's commit or becomes a commit that only ticks boxes, which project rules forbid (\"Never make a commit that only checks boxes or only adds notes\"). The markers are in the right places: after a tested unit for 2/2T, 3/3T and 4/4T, plus the conditional ones after 5 and 6. Only the format needs changing, for example `**Commit**: feat(core): add slice design heading validator`. The conditional wording for 5C and 6C can stay as plain text.",
+   "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md:71"
+  },
+  {
+   "i": 4,
+   "severity": "NOTE",
+   "title": "Task 0 hard-codes `main` instead of using the resolved target",
+   "description": "The git rules make the branch fork from `{target}`, where target is `cf config get git.integration_branch` or `main` if that is empty. Task 0 hard-codes `main` and stops if the value is set. Wording it as `git checkout -b 214-slice.native-slice-design-validation {target}` follows the rule directly and removes the need to stop.",
+   "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md:37-38"
+  },
+  {
+   "i": 5,
+   "severity": "NOTE",
+   "title": "Path handling between the CLI and core is not pinned down",
+   "description": "Task 3's result uses \"`path` as given\", and Task 4 prints \"paths exactly as given\". Neither task says whether the CLI passes raw arguments to core or paths resolved against the checkout or `--project`. If the CLI resolves them first, the printed paths would no longer match the contract. Task 4T's `FAIL <path>` assertions would catch this, but one line in Task 4 would prevent it: \"pass the arguments to core unchanged; resolve only the template path.\"",
+   "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md:100-101"
+  },
+  {
+   "i": 6,
+   "severity": "NOTE",
+   "title": "Template with no required headings is only tested in core, not through the CLI",
+   "description": "Task 3T checks that a template with no markers throws `SliceDesignValidationError`. Task 4T checks exit 2 with empty stdout only for the missing-template case. Both go through the same `handleError(err, 2)` path, so the risk is low. Adding a no-markers template fixture to the Task 4T exit-2 list would cover this success criterion end to end at small cost.",
+   "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md:113"
+  },
+  {
+   "i": 7,
+   "severity": "NOTE",
+   "title": "It is unclear whether the \"original heading text\" includes the `#` markers",
+   "description": "Task 2 says `RequiredHeading` keeps \"original heading text for messages\", but not whether that is the full trimmed line (`## Value`) or just the text (`Value`). The output contract (`missing: ## Value`) and the assertions in Tasks 3T and 4T need the full line. Stating that in Task 2 avoids having to rework it after the tests fail.",
+   "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md:48"
+  }
+ ]
+}

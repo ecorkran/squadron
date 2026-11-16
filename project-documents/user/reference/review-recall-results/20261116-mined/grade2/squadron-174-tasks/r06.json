@@ -1,0 +1,54 @@
+{
+ "review": "r06",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Commit lines are checkbox items, not plain `**Commit**:` markers",
+   "description": "Every commit point is written as `- [ ] Commit: ...`. Examples are lines 112, 157, 187, 217, 264, 286, 306, 320, 344, 368, 386, 414, 456, 472, 493, 508 and 527. Commit markers must be plain lines, never checkboxes. This causes two problems:\n- **Where to commit is unclear.** The project rule is \"commit only at `**Commit**:` markers; with no markers, commit at the end of each top-level task.\" An agent may decide this file has no markers and commit after every task.\n- **Each commit leaves a dirty tree.** Ticking the commit box after committing creates a change that would need a commit of its own, and the rules forbid a commit that only checks boxes.\n\nThe placement itself is good: each commit follows a tested, working group. Fix: change each line to a plain `**Commit**: \\`<message>\\`` line with no checkbox.",
+   "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md:112"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "No task wires the two new config keys into the code that uses them",
+   "description": "Task 8 adds typed readers for `pipeline.foreground_idle_timeout_s` and `pipeline.run_heartbeat_interval_s`. These readers raise `ValueError` for values `<= 0`, which is D1's \"validated where it is read\" rule. No later task says to call them:\n- **Task 15:** passes `idle_s=foreground_idle_timeout_s` in `_collect_turns`, but does not say how the value reaches `SDKExecutionSession`. It could arrive as a constructor argument from the dispatch action or `_run_pipeline_sdk`, or be read from config. It also does not say to use the Task 8 reader.\n- **Task 13:** builds `RunOwner.current(...)` and `RunHeartbeat(..., interval, ...)` without saying where `interval` comes from.\n\nA junior implementer could hard-code the defaults or read config without validation. That leaves the criterion \"a foreground turn silent longer than `pipeline.foreground_idle_timeout_s` is interrupted\" unmet for user-set values, and skips D1's validation. Fix:\n- In Task 15, name the injection point and say it uses the Task 8 reader.\n- In Task 13, say that `_run_pipeline_sdk` reads `run_heartbeat_interval_s` through the Task 8 reader.\n- Add one test showing a configured foreground timeout reaches `_read_turn`.",
+   "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md:225-230"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Spike adds Project Manager gates where the design already prescribes the fallback",
+   "description": "Task 2 says to stop and ask the Project Manager in two cases. The design already gives the action for both:\n- **No `ResultMessage` after interrupt:** Risk Mitigation says the D7 fallback applies (\"always mark unusable\") and the design is updated.\n- **A state write runs off the event-loop thread:** D5 says `StateManager` gains a per-run `threading.Lock`.\n\nNo named rule requires approval here, so under project rules these gates are invalid. Fix: replace both \"stop and ask\" lines with the prescribed actions. That means updating D7 in the design and having Task 16 always set `unusable_reason`, or adding the per-run lock to Task 11 with a test.",
+   "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md:54-60"
+  },
+  {
+   "i": 3,
+   "severity": "NOTE",
+   "title": "Likely circular imports between `state.py`, `run_observer.py` and `run_liveness.py`",
+   "description": "The tasks set up three import dependencies that form cycles:\n- `run_observer.py` imports `ActiveItem` (and the `StateManager` type) from `state.py`.\n- `StateManager.observer()` in `state.py` returns a `RunStateRecorder` from `run_observer.py` (Task 4).\n- `StateManager.claim` in Task 11 calls `assess_liveness`, which takes a `RunState`.\n\nThese are import cycles a junior implementer will probably hit. The design implies this layout, so it is not a defect in the breakdown. Still, a single line in Task 4 would help: use a function-local import in `observer()`/`claim()` and `TYPE_CHECKING` imports for type hints.",
+   "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md:74-82"
+  },
+  {
+   "i": 4,
+   "severity": "NOTE",
+   "title": "The design says no test asserts on time, but Task 22a does",
+   "description": "The slice restates the 1 s listing target as a Success Criterion. The `tests/load/` rule in `.claude/rules/python.md:56` requires a load test that asserts on latency, so Task 22a is correct. Its CI claim also checks out:\n- `pyproject.toml:82` sets `testpaths = [\"tests\"]`.\n- `.github/workflows/ci.yml:38` runs `uv run pytest`.\n- No marker deselects anything, so the load test already gates CI.\n\nThe design's Special Considerations still says \"There is still no assertion on time in tests.\" Updating that sentence when the design is next edited would keep the two documents consistent. Task 22a is small and could also be merged into Task 22's commit.",
+   "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md:308-320"
+  },
+  {
+   "i": 5,
+   "severity": "NOTE",
+   "title": "The run-id half of the process-check WARNING has no owner",
+   "description": "The error-handling table requires the process-check WARNING to name both the run and the PID. Task 9 logs the PID and leaves the run-id to \"the caller that has it\", but no task in 21, 19 or 33 tells that caller to log it. `assess_liveness` receives the `state`, which already contains `run_id`, so the simplest fix is to log the WARNING there.",
+   "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md:140-142"
+  },
+  {
+   "i": 6,
+   "severity": "NOTE",
+   "title": "`finalize` is listed under `RunStateRecorder`",
+   "description": "The design puts clearing of `active_step` and `active_item` in `StateManager.finalize`. Task 11 lists `finalize` among the `RunStateRecorder` methods instead. Naming `StateManager.finalize` explicitly would avoid adding a fourth method to the observer.",
+   "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md:168-171"
+  }
+ ]
+}

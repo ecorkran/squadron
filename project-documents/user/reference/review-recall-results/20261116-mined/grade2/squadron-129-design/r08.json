@@ -1,0 +1,47 @@
+{
+ "review": "r08",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Login and logout bypass the runtime resolver, the install hint and the timeouts",
+   "description": "The Login data flow goes `login.login(mode) \u2192 AsyncCodex(config)` without saying where `config` comes from. Several other parts of the document leave login out:\n- `resolve_codex_runtime()` is said to be shared by \"agent, provider, doctor\" only (line 34, line 98).\n- The install-hint string is referenced by \"agent, provider, doctor, and `model list`\" (line 139). Login is not in that list.\n\nRunning `sq auth login openai-oauth` without the extra would therefore fail with a bare `ImportError` from `login.py`. That breaks the success criterion \"Without the extra, any `openai-oauth` use exits with an error containing the exact install command\" (line 190). Login would also skip the bundled-binary-then-PATH order from D2.\n\nThere are also gaps in the I/O failure handling:\n- **Logout has no time limit.** Line 82 says `sq auth logout` starts the runtime, but D7 (lines 105\u2013109) has no timeout for `logout()`. A hung runtime hangs the command forever.\n- **Login startup has no time limit.** `codex.login_timeout_s` covers only `handle.wait()` (line 108). The runtime start, `initialize` and `login_chatgpt()` calls that come before it are not covered.\n- **Startup failures aren't listed.** The failure-mode list (line 138) doesn't cover the runtime failing to start, or a missing binary, during login or logout.\n\nFix: send `login.py` through `resolve_codex_runtime()` (with `CodexConfig(codex_bin=runtime.path)`, the same as the agent) and add it to the users of the install hint. Put runtime start plus `logout()` under an existing timeout key, or add one. Add a short login/logout failure table that matches the Codex-turn table, plus a walkthrough step for running `sq auth login openai-oauth` without the extra.",
+   "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:84"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Agent state after a turn timeout or cancellation is undefined",
+   "description": "The design gives three rules that don't fit together:\n- **Line 82:** the lazy `AsyncCodex` client is reused for every message in a `CodexAgent`.\n- **Line 129:** only the transport-closed case says `_codex`/`_thread` are cleared so a dead client is not reused.\n- **Line 128:** on timeout or cancellation, \"shutdown() still runs in `finally`\".\n\nIf the runtime is shut down on timeout, the agent must also clear `_codex`/`_thread`. Otherwise the next message reuses a closed client. If the runtime is not shut down, and the turn interrupt doesn't take because the runtime is hung (the very case the timeout is for), the next message reuses a hung thread. Multi-message agents (daemon `sq task`) will hit this.\n\nFix: state that after a timeout, cancellation, or any `ProviderError` from the runtime, the agent interrupts the turn, shuts down the client and resets `_codex`/`_thread`, so the next message starts a fresh runtime. Add that to the row's test.",
+   "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:125-129"
+  },
+  {
+   "i": 2,
+   "severity": "NOTE",
+   "title": "Codex `ProviderError`s don't say whether they carry slice 931's telemetry",
+   "description": "Slice 931 (its \"Usage on failure\" section, D12) says a `ProviderError` leaving `handle_message` carries a `RunTelemetry` snapshot, and `format_provider_failure_markdown` reads it. D6 only covers stamping on success. It also says `metadata[\"turns\"]` is used (line 55) but never gives the Codex value: one `thread.run` per message would mean `turns=1`. `telemetry` defaults to `None`, so nothing breaks. The design should still say \"Codex errors carry no telemetry\" or \"carry `turns=1` and usage when known\", so failure artifacts are predictable.",
+   "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:102"
+  },
+  {
+   "i": 3,
+   "severity": "NOTE",
+   "title": "D1 conflicts with the open version-bound question",
+   "description": "D1 already writes `openai-codex>=0.159.3,<1`, while line 231 says the upper bound \"is not decided here\". `<1` gives no protection against surface changes between 0.x minor versions. Pick one bound and record it. The real-types test (line 200) is already the drift detector, so `<1` plus that test is a reasonable choice. Leaving it open adds nothing.",
+   "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:97"
+  },
+  {
+   "i": 4,
+   "severity": "NOTE",
+   "title": "The frontmatter adds a slice 931 dependency that the slice plan doesn't list",
+   "description": "The slice plan entry lists `Dependencies: [128]`. The design also depends on slice 931 (`applies_effort`, `core/usage.py`). The dependency is real and the direction is right, since 129 uses 931's contracts. The slice plan entry should be updated to match.",
+   "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:6"
+  },
+  {
+   "i": 5,
+   "severity": "NOTE",
+   "title": "Resolving the `OPENAI_API_KEY` fallback goes beyond the slice plan but is justified",
+   "description": "The slice plan doesn't assign this, but it removes a silent-fallback path in a file the slice already edits, and it has a bounded two-outcome plan. One gap: if the \"works\" outcome keeps the key fallback, `account()` may not return a `ChatgptAccount` (line 54 assumes `account.root` is one). `account_summary()` should then return `None` rather than fail on a missing email or plan.",
+   "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:232"
+  }
+ ]
+}

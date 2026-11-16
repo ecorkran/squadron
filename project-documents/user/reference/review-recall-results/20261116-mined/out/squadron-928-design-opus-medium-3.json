@@ -1,0 +1,207 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "D5 receipt naming creates new name collisions that the Excluded list wrongly calls pre-existing",
+      "description": "`receipt_name = base + receipt_suffix + (\"-local\" if local)` joins the parts with `-`, and `-` is also legal inside a pack name. That makes these pairs identical:\n- A Claude machine install of a pack named `foo-agents` and an agents machine install of pack `foo` both produce `foo-agents.toml`.\n- A Claude machine install of pack `foo-local` and a Claude `--local` install of pack `foo` both produce `foo-local.toml`.\n\nBoth suffixes are new for skill packs in this slice. Skills had no `--local` and no target before. So this is not covered by line 52's \"pre-existing on the Claude path and unchanged here\". When two installs share a name, one overwrites the other's receipt. Uninstall then removes the wrong file set, which breaks the \"Receipts remain the only authority\" principle (line 176).\n\nFix: pick one and add a test for it in the receipt-name table:\n- reject pack names that end in `-agents` or `-local` when the pack config is loaded, or\n- use a separator that pack names cannot contain.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md:134"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Doctor's \"pack ships no Codex content\" row needs pack-source access the design doesn't specify",
+      "description": "D8 says an agents row reports `WARN \u2014 pack ships no Codex content` instead of \"not installed\". But `installed_path(entry, root)` (line 104) only looks at the install root. Telling \"not installed\" apart from \"has no `agents/`\" needs the pack *source*. For a `github` source that means a clone or a cached checkout. Slice 905 set doctor's scope as read-only inspection, and a network clone does not fit that.\n\nThe design should say which applies:\n- doctor only checks local and bundled sources, and github packs report a neutral status, or\n- `PackLayout` gets a source-free signal.\n\nIt should also add that case to the \"doctor rows\" test list on line 233.",
+      "file_ref": null,
+      "category": "hidden-dependency",
+      "raw_category": null,
+      "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md:140"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Install and uninstall failure modes are not covered for shared files, missing files, or half-finished writes",
+      "description": "Validation runs before anything is written (D3), but these cases are left open:\n\n1. **Two receipts own the same files.** After D4, `install-commands --ide codex` writes `analysis-understand/` and `analysis-tech-debt-audit/`. `sq skills install analysis --ide codex` writes the same directories under a second receipt. Walkthrough steps 5\u20136 already show the overlap. Uninstalling one deletes files the other receipt still lists, and doctor reports `analysis (codex)` as installed through either path.\n2. **Recorded files that are already gone.** The extracted `remove_receipt_files` (D7, line 138) does not say what it does with these: skip, warn, or fail. After case 1 this is the normal situation.\n3. **A write that fails midway.** If `write_skill_dirs` hits a permission or disk error, the design doesn't say whether the receipt is written, written partially, or skipped.\n4. **Name clashes in the shared root.** D3 notes that `~/.agents/skills` is shared with every other skill source. The design doesn't say what happens when a skill directory with the same name already exists there and squadron did not write it: overwrite, or refuse. If it overwrites, uninstall later deletes the user's own file.\n\nEach case needs a stated handling rule and a WARNING-level signal, as the failure-mode rule requires.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md:93-97"
+    },
+    {
+      "severity": "NOTE",
+      "title": "A one-alternative-per-subcommand rule unsandboxes whole command groups",
+      "description": "`pattern = [\"sq\", [<subcommands>]]` matches on the second word only. Listing `skills` (for the git clone) or `auth` (if `login` needs the network) would also let `sq skills uninstall` or `sq auth status` run outside the sandbox. D9 already says the docs must state what the rule authorizes. When the D10 probe results come in, use deeper prefixes such as `[\"sq\", \"skills\", \"install\"]` for those groups.",
+      "file_ref": null,
+      "category": "security",
+      "raw_category": null,
+      "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md:144-151"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The pack-format rule is close to the edge of 900's \"no new capabilities\" scope",
+      "description": "\"Provides to Other Slices\" offers a pack-format contract and `PACK_LAYOUTS` for future targets. That leans toward new capability, the issue that sent 912 to initiative 300. Here the slice-plan entry explicitly asks for this decision as part of fixing #125, so it is in scope. Keep the contract as small as D2 describes.",
+      "file_ref": null,
+      "category": "scope",
+      "raw_category": null,
+      "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md:208-211"
+    },
+    {
+      "severity": "PASS",
+      "title": "Plan deviations are justified and already recorded in the slice plan",
+      "description": "Three choices differ from or extend the plan entry:\n- The rule goes in `squadron.rules` instead of `default.rules`.\n- There is no doctor check for the rule, with a reason given (D11).\n- Effort is 3/5 instead of 2/5.\n\nEach has a stated reason, and the plan entry (line 457 of the slice plan) already reflects them. Both parts the plan assigns are delivered. The plan's command list (\"at least review, run, pr\") is extended by a probe instead of guesswork.",
+      "file_ref": null,
+      "category": "alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md:142-170"
+    },
+    {
+      "severity": "PASS",
+      "title": "Reuses 925's vocabulary and removes duplicated path logic",
+      "description": "D1 sends `--ide` through `normalize_target`. D6 and D7 replace path and removal logic that was copied across three callers with one table and one routine, keyed by target and checked for completeness like `DELIVERIES`. That is the 900 initiative's refactoring goal, and dependencies still point from the CLI to the skills modules.",
+      "file_ref": null,
+      "category": "architecture",
+      "raw_category": null,
+      "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md#technical-decisions"
+    },
+    {
+      "severity": "PASS",
+      "title": "No parent NFRs apply",
+      "description": "The 900 architecture states no latency or throughput targets for these paths, so nothing needs restating in the slice.",
+      "file_ref": null,
+      "category": "nfr",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/900-arch.maintenance-and-refactoring.md"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "D5 receipt naming creates new name collisions that the Excluded list wrongly calls pre-existing",
+      "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md:134",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "hidden-dependency",
+      "raw_category": null,
+      "summary": "Doctor's \"pack ships no Codex content\" row needs pack-source access the design doesn't specify",
+      "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md:140",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "Install and uninstall failure modes are not covered for shared files, missing files, or half-finished writes",
+      "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md:93-97",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "note",
+      "category": "security",
+      "raw_category": null,
+      "summary": "A one-alternative-per-subcommand rule unsandboxes whole command groups",
+      "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md:144-151",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "scope",
+      "raw_category": null,
+      "summary": "The pack-format rule is close to the edge of 900's \"no new capabilities\" scope",
+      "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md:208-211",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "pass",
+      "category": "alignment",
+      "raw_category": null,
+      "summary": "Plan deviations are justified and already recorded in the slice plan",
+      "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md:142-170",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "pass",
+      "category": "architecture",
+      "raw_category": null,
+      "summary": "Reuses 925's vocabulary and removes duplicated path logic",
+      "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md#technical-decisions",
+      "location_verified": null
+    },
+    {
+      "id": "F008",
+      "severity": "pass",
+      "category": "nfr",
+      "raw_category": null,
+      "summary": "No parent NFRs apply",
+      "location": "project-documents/user/architecture/900-arch.maintenance-and-refactoring.md",
+      "location_verified": null
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md",
+    "against": "project-documents/user/architecture/900-slices.maintenance-and-refactoring.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/squadron-928-design"
+  },
+  "timestamp": "2026-11-16T14:01:52.270365",
+  "model": "claude-opus-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 6,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-opus-5-5",
+  "answering_models": [
+    "claude-opus-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 8,
+    "in_fences": 0,
+    "in_section": 8,
+    "surviving": 8
+  },
+  "effort": "medium",
+  "profile": "sdk",
+  "turns": 7,
+  "prompt_tokens": 588104,
+  "cached_tokens": 578634,
+  "cache_write_tokens": 9458,
+  "completion_tokens": 6037,
+  "reasoning_tokens": null,
+  "duration_seconds": 74.64976508286782,
+  "cost_usd": 0.3128484,
+  "cost_basis": "provider"
+}

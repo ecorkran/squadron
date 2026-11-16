@@ -1,0 +1,225 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "A git failure during range resolution is reported as an unresolved slice",
+      "description": "The failure-mode table treats a `None` from the merge search or reflog read as \"this path can't answer\" and falls through to the next path, ending in an INFO line. But `run_git` returns `None` for hangs, timeouts and non-zero exits (line 158), so a timed-out `git log --merges` on a merge-commit slice falls into the fast-forward path. There it surfaces as `landed_elsewhere` or `no_landing`: a wrong reason, exit 0, at INFO.\n\nThis conflicts with two things:\n- **The design's own API contract.** Line 275 says `slice-ranges` \"exits 1 on a git or store error\".\n- **The failure-mode rule.** Each failure mode must be observable at WARNING or above; this one is only INFO.\n\nLines 349 and 342 then lock the INFO behaviour in as a tested criterion. The design should separate \"git answered: nothing found\" from \"git did not answer\". The second should be a WARNING or higher naming the call, with either exit 1 or a distinct `RangeUnresolvedReason`. The table also doesn't say what happens when `merge-base` or `cat-file` fails partway through a multi-landing resolution.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:164"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The editable self-install risk has no test that can detect it",
+      "description": "The risk at line 375 is that pyright resolves `import squadron` through the live editable install instead of the exported tree, so export type counts would reflect live code. The two stated mitigations cannot catch this:\n- **Criterion 5 (in place equals export at HEAD).** At HEAD the live `src` and the exported tree are identical, so both resolutions give the same count.\n- **Walkthrough step 4 (an older commit).** There is no reference value for that commit, and the step only expects \"absent if the lockfile changed\".\n\nThe architecture's first design goal is deterministic numbers for the measured commit, and D6 leans on this path whenever lockfiles match. The fix is one export test: a throwaway repo with an editable self-install, where the exported commit and the live tree differ in a type error under an identical `uv.lock`. The test asserts that the count is the exported commit's.",
+      "file_ref": null,
+      "category": "testing",
+      "raw_category": null,
+      "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:380"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "A concurrent write can silently and permanently drop a fast-forward landing",
+      "description": "The design accepts last-write-wins on `slice_ranges` with \"Signal: None\", citing 400's precedent. The precedent doesn't carry over, for three reasons:\n- **Not reproducible.** A 400 snapshot can be re-taken; a fast-forward landing can't once its reflog expires.\n- **Wide blast radius.** D1 puts every slice of the project in one record, so one lost write can drop landings for several slices.\n- **Long window.** The data flow (lines 110-124) reads the record first, runs all git resolution, then writes.\n\nThe slice plan's risk entry says \"the persistence has to be right the first time\", and squadron routinely runs several agents and worktrees against one user-level store. A cheap fix that keeps the coarse-record design is to re-read the record immediately before the merge and write. If the loss stays accepted, the design should at least give it a WARNING when the record changed since it was read.",
+      "file_ref": null,
+      "category": "data-integrity",
+      "raw_category": null,
+      "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:166"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Which ref the merge search uses in a fresh clone is unspecified",
+      "description": "The search runs against `<target>` from `resolve_diff_base`. In a fresh clone only the remote's default branch has a local ref; an integration-branch target exists only as `origin/<target>`. Criterion 1 promises resolution \"including in a fresh clone\", so the design should say whether the remote-tracking ref is tried. Walkthrough step 2 (`git clone .`) also yields a different `ProjectId`, since the clone's remote is a local path. That step therefore shows topology resolution, not the store sharing described at line 176.",
+      "file_ref": null,
+      "category": "under-specification",
+      "raw_category": null,
+      "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:109-112"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Live-checkout settings at both boundaries is a documented deviation",
+      "description": "The architecture says limits and exclusions come from the project's config and that an exported commit reads that commit's config. D5 does this for rule-set configs but reads squadron settings from the live checkout. This is acceptable: 400 D9 already makes `.squadron.toml` checkout-local, each record states the settings it used, and line 377 names the consequence. No action needed.",
+      "file_ref": null,
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:214"
+    },
+    {
+      "severity": "PASS",
+      "title": "Slice plan scope is fully covered without scope creep",
+      "description": "All five plan criteria map to design criteria: durable ranges (1-3), `git archive` export with the lockfile gate (4-6), identity-match comparison (7), noise floor and sample size with no composite score (8-9), and unresolved slices at project level only (10). The separate `slice-ranges` command is justified by the no-pipeline-hook non-goal. The slice table in `report project` and dependency installation are correctly excluded.",
+      "file_ref": null,
+      "category": "scope",
+      "raw_category": null,
+      "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md#technical-scope"
+    },
+    {
+      "severity": "PASS",
+      "title": "Architectural principles and dependency directions hold",
+      "description": "- **Store:** `slice_ranges` is an optional sibling payload on `MetrologyRecord` with no schema migration, keyed on `ProjectId`, one coarse record per project.\n- **No gate:** reports never run audits or reviews and feed no pipeline step.\n- **Severities:** review severity stays on the review scale.\n- **Dependencies:** report modules take the store, resolver and `ensure_snapshot` as arguments.\n- **Consumed contracts:** all three match their source designs: 402's `slice_index` and `list_code_reviews`, 323's `commit_sha` and `audit_prompt_hash` on audit runs, and 400's overwrite rule (D3).",
+      "file_ref": null,
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md#architecture"
+    },
+    {
+      "severity": "PASS",
+      "title": "D3 boundary refinement matches the architecture",
+      "description": "Using `M^1` against `M` (or fork against tip for a fast-forward) is the refinement the architecture's Envisioned State already cites. `fork_sha` and `tip_sha` are kept for 420.",
+      "file_ref": null,
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:197-201"
+    },
+    {
+      "severity": "PASS",
+      "title": "Export I/O failure modes are enumerated with handling and signals",
+      "description": "The table gives explicit handling, temp-directory cleanup, an ERROR signal and a `caplog` assertion for each export failure: archive hang or timeout, extraction `OSError`, filter refusal, unknown revision, tool hang, and store write failure. The parent architecture states no latency or throughput NFR for this path, so none needs restating.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:153-167"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "A git failure during range resolution is reported as an unresolved slice",
+      "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:164",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "testing",
+      "raw_category": null,
+      "summary": "The editable self-install risk has no test that can detect it",
+      "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:380",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "data-integrity",
+      "raw_category": null,
+      "summary": "A concurrent write can silently and permanently drop a fast-forward landing",
+      "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:166",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "note",
+      "category": "under-specification",
+      "raw_category": null,
+      "summary": "Which ref the merge search uses in a fresh clone is unspecified",
+      "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:109-112",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "summary": "Live-checkout settings at both boundaries is a documented deviation",
+      "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:214",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "pass",
+      "category": "scope",
+      "raw_category": null,
+      "summary": "Slice plan scope is fully covered without scope creep",
+      "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md#technical-scope",
+      "location_verified": null
+    },
+    {
+      "id": "F007",
+      "severity": "pass",
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "summary": "Architectural principles and dependency directions hold",
+      "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md#architecture",
+      "location_verified": null
+    },
+    {
+      "id": "F008",
+      "severity": "pass",
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "summary": "D3 boundary refinement matches the architecture",
+      "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:197-201",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "pass",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "Export I/O failure modes are enumerated with handling and signals",
+      "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:153-167",
+      "location_verified": true
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md",
+    "against": "project-documents/user/architecture/400-slices.code-quality-measurement.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/squadron-403-design"
+  },
+  "timestamp": "2026-11-16T13:10:08.876859",
+  "model": "claude-fable-5-2",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 7,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-fable-5-2",
+  "answering_models": [
+    "claude-fable-5-2"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 9,
+    "in_fences": 0,
+    "in_section": 9,
+    "surviving": 9
+  },
+  "effort": "medium",
+  "profile": "sdk",
+  "turns": 8,
+  "prompt_tokens": 354915,
+  "cached_tokens": 224433,
+  "cache_write_tokens": 130474,
+  "completion_tokens": 7948,
+  "reasoning_tokens": null,
+  "duration_seconds": 84.79109262512065,
+  "cost_usd": 2.4511848,
+  "cost_basis": "provider"
+}

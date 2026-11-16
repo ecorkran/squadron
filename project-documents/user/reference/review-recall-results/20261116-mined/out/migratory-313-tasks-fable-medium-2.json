@@ -1,0 +1,243 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "PASS",
+      "title": "Success criteria coverage",
+      "description": "Every criterion has an implementation task and, where testable, a test task:\n- **SC1\u20132:** Tasks 1.1 and 1.2.\n- **SC3\u20134:** Task 1.3, with tests in 1.4.\n- **SC5:** the round-trip test in Task 1.4.\n- **SC6\u20139:** Tasks 2.1 and 2.2, with tests in 2.3.\n- **SC10:** Task 3.2, with the mock test in 3.4.\n- **SC11:** Task 3.4.\n- **SC12:** Tasks 4.1 and 4.2.\n- **SC13:** Tasks 3.5 and 5.1.\n- **SC14:** Task 5.2.\n\nThe slice restates no NFR, so no load test or CI gating task is required.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md"
+    },
+    {
+      "severity": "PASS",
+      "title": "Sequencing and test-with pattern",
+      "description": "The order config \u2192 enforcement module \u2192 wiring \u2192 shipped configs respects dependencies, with no cycles. Each implementation group is immediately followed by its test task (1.4, 2.3, 3.4). The required-kwarg change in Task 3.1 and its call-site fixes (3.3, 3.4, 3.5) land inside one commit, so no commit leaves the suite broken.",
+      "file_ref": null,
+      "category": "sequencing",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:42-249"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Integration tests do not pin `dt`, so the reflect-flip test can fail as written",
+      "description": "`SimulationManager` takes `dt` as a constructor argument (`src/migratory_server/simulation.py:63`), and the server passes `1.0 / tick_rate` (`src/migratory_server/server.py:129`). Task 3.4's shared setup never states a `dt`.\n- **Reflect flip:** `test_reflect_policy_flips_velocities_at_edges` puts an agent at `(99, 50)` with velocity `(10, 0)` and steps once. It only crosses `x = 100` if `dt > 0.1`; at any `tick_rate` above 10 the assertion `vx < 0` fails.\n- **50-step tests:** the OPEN drift test has the same dependency on start offset, speed and `dt`.\n\nAdd an explicit `dt` (e.g. `dt=1.0`) or start positions and speeds that guarantee crossing to the shared setup.",
+      "file_ref": null,
+      "category": "task-clarity",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:226-232"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Commit markers are checkboxes in standalone tasks, and the 4.3 commit is at an untested point",
+      "description": "- **Format:** all five commits (Tasks 1.5, 2.4, 3.6, 4.3, 5.5) are written as `- [ ] **Commit:** ...` inside their own \"Commit\" tasks. Markers must be plain `**Commit**:` lines, never checkboxes. Convert each to a plain line at the end of its section and drop the five commit tasks.\n- **Untested point:** Task 4.3 (lines 283-286) commits the `policy: wrap` change to both shipped configs after only a `python -c` load check. The full suite does not run until Task 5.1. `tests/test_config.py:45` loads `config/default.yaml` and `tests/test_main.py:70` starts the server on it, so the behaviour change should be tested before the commit. Move the Task 5.1 `pytest` run ahead of the 4.3 commit.",
+      "file_ref": null,
+      "category": "commit-markers",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:93-96"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Walkthrough can leave `config/test.yaml` off `wrap`, breaking SC12",
+      "description": "Task 5.2 steps 6\u20137 edit `config/test.yaml` to `reflect`, then `open`. Step 8 says to restore \"whichever policy you want to keep (recommend `wrap`)\". SC12 requires `wrap`, so this is not optional. Nothing afterwards checks the file, and Task 5.5 stages only docs, so a stray edit stays in the working tree. Change step 8 to \"restore `policy: wrap` and confirm `git diff config/test.yaml` is empty\".",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:304-306"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Task file is overweight for a 2/5 slice",
+      "description": "The file has 22 tasks, five commits and about 30 named tests for one enum, one field, one roughly 40-line module and one call site. Suggested cuts and merges:\n- **Merge 1.1 and 1.2:** a three-line enum and a one-line field in the same file.\n- **Merge 4.1 and 4.2:** the same one-line YAML edit and the same verify command.\n- **Drop 5.1:** it duplicates 3.5; one full-suite run after the config change is enough.\n- **Trim tests in 2.3:** drop the \"dispatches and does not raise\" parametrized test (line 171), which every other test already covers. Merge the two OPEN no-op tests, and parametrize the four reflect edge tests.\n- **Drop the \"Confirm\" step in 3.2 (line 209):** \"zero import-time \u2026 overhead\" is not verifiable and contradicts the Notes (line 329), which say the import is unconditional. The mock test in 3.4 already proves the behaviour.\n- **Fold commits:** the Section 4 commit can join Section 3's or the final one; three or four commits suffice.",
+      "file_ref": null,
+      "category": "proportionality",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Round-trip test asserts less than SC5 states",
+      "description": "SC5 says reloading the emitted YAML \"produces an equal `ServerConfig`\". `test_bounds_policy_yaml_round_trip` only asserts that the policy matches. Asserting `reloaded == original` as well would cover the criterion as written at no extra cost.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:88"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Viewer steps in Task 5.2 are not completable by an AI implementer",
+      "description": "Steps 5\u20137 need visual observation in the Three.js viewer. SC14 is defined as manual, so this follows the slice. A headless equivalent would let the implementer check these off: a short WebSocket client that samples snapshots for 30\u201360 seconds and checks positions against the bounds.",
+      "file_ref": null,
+      "category": "task-clarity",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:303-305"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Frontmatter says `status: complete` while every checkbox is unchecked",
+      "description": "The file is marked complete, and `src/migratory_server/bounds_enforcement.py` already exists, but no task is checked off. Either the status or the checkboxes are stale. Task 5.3 also instructs setting this same field to `complete`.",
+      "file_ref": null,
+      "category": "document-conventions",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:9"
+    },
+    {
+      "severity": "NOTE",
+      "title": "CHANGELOG and status tasks do not trace to a success criterion",
+      "description": "Tasks 5.3 and 5.4 are ordinary slice housekeeping, and the startup log line in Task 3.3 traces to walkthrough step 4. None is scope creep worth cutting. Task 3.5 names `test_force_builder.py` and `test_clients.py` as likely call sites; the one it does not name is `tests/test_repulsor_integration.py:53`, which the \"any other file\" clause and the pytest run will catch.",
+      "file_ref": null,
+      "category": "scope",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:310-320"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "pass",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "Success criteria coverage",
+      "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "pass",
+      "category": "sequencing",
+      "raw_category": null,
+      "summary": "Sequencing and test-with pattern",
+      "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:42-249",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "task-clarity",
+      "raw_category": null,
+      "summary": "Integration tests do not pin `dt`, so the reflect-flip test can fail as written",
+      "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:226-232",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "commit-markers",
+      "raw_category": null,
+      "summary": "Commit markers are checkboxes in standalone tasks, and the 4.3 commit is at an untested point",
+      "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:93-96",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "Walkthrough can leave `config/test.yaml` off `wrap`, breaking SC12",
+      "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:304-306",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "proportionality",
+      "raw_category": null,
+      "summary": "Task file is overweight for a 2/5 slice",
+      "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md",
+      "location_verified": null
+    },
+    {
+      "id": "F007",
+      "severity": "note",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "Round-trip test asserts less than SC5 states",
+      "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:88",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "note",
+      "category": "task-clarity",
+      "raw_category": null,
+      "summary": "Viewer steps in Task 5.2 are not completable by an AI implementer",
+      "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:303-305",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "note",
+      "category": "document-conventions",
+      "raw_category": null,
+      "summary": "Frontmatter says `status: complete` while every checkbox is unchecked",
+      "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:9",
+      "location_verified": true
+    },
+    {
+      "id": "F010",
+      "severity": "note",
+      "category": "scope",
+      "raw_category": null,
+      "summary": "CHANGELOG and status tasks do not trace to a success criterion",
+      "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:310-320",
+      "location_verified": true
+    }
+  ],
+  "template_name": "tasks",
+  "input_files": {
+    "input": "project-documents/user/tasks/313-tasks.world-bounds-policy.md",
+    "against": "project-documents/user/slices/313-slice.world-bounds-policy.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/migratory-313-tasks"
+  },
+  "timestamp": "2026-11-16T12:16:50.829019",
+  "model": "claude-fable-5-2",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 4,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-fable-5-2",
+  "answering_models": [
+    "claude-fable-5-2"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 10,
+    "in_fences": 0,
+    "in_section": 10,
+    "surviving": 10
+  },
+  "effort": "medium",
+  "profile": "sdk",
+  "turns": 5,
+  "prompt_tokens": 209608,
+  "cached_tokens": 107155,
+  "cache_write_tokens": 102447,
+  "completion_tokens": 5589,
+  "reasoning_tokens": null,
+  "duration_seconds": 54.53586145909503,
+  "cost_usd": 1.8846595,
+  "cost_basis": "provider"
+}

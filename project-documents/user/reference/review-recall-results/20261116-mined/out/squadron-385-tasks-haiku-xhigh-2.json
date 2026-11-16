@@ -1,0 +1,279 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "Task 16.4 writes the merge into `squadron-pr` as a task item",
+      "description": "The git rules say a merge or push must never appear as a task, sub-item, or success criterion in a task file. Merging belongs to Phase 7, after code review. As written, an implementer could merge during Phase 6. Move the merge into the Phase 7 procedure and remove the bullet from 16.4. The \"never into `main`\" restriction is correct but does not cure the violation.",
+      "file_ref": null,
+      "category": "rule-violation",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:373"
+    },
+    {
+      "severity": "FAIL",
+      "title": "Task 5 makes an unreachable `cf` silently retarget the PR to the host default",
+      "description": "Task 5.1 (line 122) says that when `cf` is unavailable, the integration-branch term is treated as unset and the chain proceeds to `default_branch`. Task 5.2 asserts \"no raise.\" This conflicts with two things. CLAUDE.md forbids silent fallback values. D1 (slice design lines 238\u2013244) refuses to degrade an unreachable `cf` for exactly the reason that \"silently retargeting a PR is a write.\" If `git.integration_branch` is set and `cf` is down, the PR opens against `main`, which is the wrong target by the same argument D1 uses for an absent branch. Change 5.1 so that an unreachable `cf` raises an error naming the key, and change 5.2 to assert the raise. If the fallback is intended, D1 must state it and justify the exception to the principle.",
+      "file_ref": null,
+      "category": "rule-violation",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:122"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Task 7.1 reads \"the first task file,\" but a slice can have several",
+      "description": "Slices can have more than one task file. `382-tasks.review-a-pr-1.md`, `-2.md`, and `-3.md` all exist. D7's data flow (slice design line 186) names \"tasks\" in the plural. Reading only the first drops the other files' items silently. The PR would then claim a \"how it was verified\" section that is incomplete. Change 7.1 to gather every task file the slice resolves to, and add a case with two files to 7.2.",
+      "file_ref": null,
+      "category": "gap",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:159"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Task 2.2's fixture reads a live file that will be checked off, and asserts both groups are non-empty",
+      "description": "The test reads `project-documents/user/tasks/` at run time and requires both checked and unchecked items. Two problems. The \"once it exists\" condition is already met, since this file exists now. And a completed task file has no unchecked items. Task 16.4 marks skipped items `[x]` before closing, so the unchecked group becomes empty and the test fails on the file it was meant to read. It also fails in any checkout that lacks the file. Commit a snapshot of a real task file (this slice's own, or 384's) under `tests/pr/fixtures/` and assert counts against that snapshot. A copy still uses the real format, which is what the parsing rule requires.",
+      "file_ref": null,
+      "category": "test-design",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:67"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`local_sha` has no producer, and the command never reads the current head",
+      "description": "Task 6.1's `check_head_pushed(..., head, local_sha, cwd)` needs a local sha. No task produces it. Task 13.1's order (locator, preconditions, base, and so on) also omits the step that reads the current branch to produce `head`. An implementer would have to invent a helper, which the no-guessing rule prohibits. The tree already has one: `_resolve_rev(ref, cwd)` at `src/squadron/review/git_utils.py:339` returns the full sha or `None`. Name it in Task 3, either reusing it or making it public. Add the current-branch and local-sha reads to 13.1's sequence. Task 6.1 must also treat a `None` sha as a refusal, not a pass.",
+      "file_ref": null,
+      "category": "gap",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:138"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`PrFacts.verdict` has no source task",
+      "description": "Task 9.1 requires `PrFacts` to carry the review's verdict. Task 8.1 reads only `reviewedSha` from the artifact's frontmatter, and no task names where the verdict comes from. D4 places the verdict under \"review provenance.\" Name the source in Task 8.1 (a frontmatter field or an existing parsing function) and add it to `PrInputs`. Otherwise the implementer must guess, and the verdict will be missing or invented in the PR.",
+      "file_ref": null,
+      "category": "gap",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:199"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Task 3.1 duplicates `github_cli._branch_for`'s detached-HEAD logic",
+      "description": "`_branch_for` already runs `git rev-parse --abbrev-ref HEAD` and refuses a detached HEAD with `TargetUnresolvableError`. Task 3.1 adds `current_branch` with the same command and the same refusal, but through `run_git`, `GIT_COMMAND_TIMEOUT_SECONDS` (`review/git_utils.py:24`), and a different exception. That leaves two implementations of one git read, with two timeout constants and two error types. CLAUDE.md forbids duplicated logic. Either extract one shared helper that `_branch_for` also calls, or state in Task 3.1 why a second copy is needed. D2's \"match `_branch_for`'s existing behavior\" points to the first option.",
+      "file_ref": null,
+      "category": "dry",
+      "raw_category": null,
+      "location": "src/squadron/codehost/github_cli.py:170"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "No test pins where checked items, unchecked items, and the review land in the body",
+      "description": "The first functional criterion requires checked items under \"how it was verified,\" unchecked items under \"known gaps,\" and the review path and sha under \"review provenance.\" Task 11.2 checks only that five sections exist and that a commit sha appears. Task 9.2 checks field population, not placement. A body that put checked items under \"known gaps\" would pass every listed test. Add a case to 11.2 with a full fixture that asserts each fact appears under its named heading.",
+      "file_ref": null,
+      "category": "coverage-gap",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:268"
+    },
+    {
+      "severity": "PASS",
+      "title": "Every success criterion maps to a task, and no task falls outside the design",
+      "description": "Functional: F1 \u2192 2, 7, 9, 11 (placement gap above); F2 \u2192 11.2, 13.2, 16.2; F3 \u2192 8.2; F4 \u2192 5.2; F5 \u2192 5.2, 13.1; F6 \u2192 6.2; F7 \u2192 12.2; F8 \u2192 10a.2; F9 \u2192 13.2; F10 \u2192 13.2; F11 \u2192 16.2. Technical: 14.1 and 6.2 (timeouts); 10.2 (provider failure); 13.2 (one write); 15.1 (import boundary); 2.2 (parser); 16.1 (gate); 15.2 (docstring). Tasks 4.x, 10a, and 15.2 each trace to a named D-item (D6, D4a, D3). No scope creep.",
+      "file_ref": null,
+      "category": "traceability",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md"
+    },
+    {
+      "severity": "PASS",
+      "title": "Sequencing respects dependencies, and each implementation is followed by its test",
+      "description": "Pure parsers (1, 2) come first. The git helpers (3) precede their consumers (7, 8). `resolve_locator` (4) precedes the command (13). The composer (10) precedes the title (10a) and section contract (11), and the presence check (12) follows 11. Each implementation task is followed by its test task, and no dependency cycles exist. The only ordering gap is the current-branch step in 13.1, covered above.",
+      "file_ref": null,
+      "category": "sequencing",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md"
+    },
+    {
+      "severity": "PASS",
+      "title": "Referenced symbols and files exist in the tree",
+      "description": "I confirmed that `resolve_reviews_dir`, `read_frontmatter`, `resolve_slice_info`, `locate_review`, `render_code_host_error`, `PullRequestCreationRejectedError`, `ProcessTimedOutError`, `HOST_COMMAND_TIMEOUT_SECONDS`, and the four `CodeHost` operations all exist. The files `review/git_utils.py`, `cli/commands/pr.py`, `pipeline/summary_oneshot.py`, and `tests/codehost/test_import_boundaries.py` exist, and `src/squadron/pr/` does not, so Task 1's \"create\" is correct. The 384 task file referenced in 2.2 exists.",
+      "file_ref": null,
+      "category": "verification",
+      "raw_category": null,
+      "location": "src/squadron/review/reviews_dir.py:56"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Granularity and file size fit the slice",
+      "description": "One task file with 16 top-level tasks (17 with 10a) fits a seven-module package plus one command, so no split is needed. Task 14 is test-only, but the design's five-site matrix requires it. Its `ls-remote` timeout assertion repeats one in 6.2, which is harmless. The file has no `**Commit**:` markers, which is allowed, so commits fall at the end of each top-level task.",
+      "file_ref": null,
+      "category": "proportionality",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "rule-violation",
+      "raw_category": null,
+      "summary": "Task 16.4 writes the merge into `squadron-pr` as a task item",
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:373",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "fail",
+      "category": "rule-violation",
+      "raw_category": null,
+      "summary": "Task 5 makes an unreachable `cf` silently retarget the PR to the host default",
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:122",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "gap",
+      "raw_category": null,
+      "summary": "Task 7.1 reads \"the first task file,\" but a slice can have several",
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:159",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "test-design",
+      "raw_category": null,
+      "summary": "Task 2.2's fixture reads a live file that will be checked off, and asserts both groups are non-empty",
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:67",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "gap",
+      "raw_category": null,
+      "summary": "`local_sha` has no producer, and the command never reads the current head",
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:138",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "gap",
+      "raw_category": null,
+      "summary": "`PrFacts.verdict` has no source task",
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:199",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "concern",
+      "category": "dry",
+      "raw_category": null,
+      "summary": "Task 3.1 duplicates `github_cli._branch_for`'s detached-HEAD logic",
+      "location": "src/squadron/codehost/github_cli.py:170",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "concern",
+      "category": "coverage-gap",
+      "raw_category": null,
+      "summary": "No test pins where checked items, unchecked items, and the review land in the body",
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:268",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "pass",
+      "category": "traceability",
+      "raw_category": null,
+      "summary": "Every success criterion maps to a task, and no task falls outside the design",
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md",
+      "location_verified": null
+    },
+    {
+      "id": "F010",
+      "severity": "pass",
+      "category": "sequencing",
+      "raw_category": null,
+      "summary": "Sequencing respects dependencies, and each implementation is followed by its test",
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md",
+      "location_verified": null
+    },
+    {
+      "id": "F011",
+      "severity": "pass",
+      "category": "verification",
+      "raw_category": null,
+      "summary": "Referenced symbols and files exist in the tree",
+      "location": "src/squadron/review/reviews_dir.py:56",
+      "location_verified": true
+    },
+    {
+      "id": "F012",
+      "severity": "note",
+      "category": "proportionality",
+      "raw_category": null,
+      "summary": "Granularity and file size fit the slice",
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md",
+      "location_verified": null
+    }
+  ],
+  "template_name": "tasks",
+  "input_files": {
+    "input": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md",
+    "against": "project-documents/user/slices/385-slice.create-a-pr-with-a-good-message.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/squadron-385-tasks"
+  },
+  "timestamp": "2026-11-16T12:42:31.756199",
+  "model": "claude-haiku-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 10,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-haiku-5-5",
+  "answering_models": [
+    "claude-haiku-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 12,
+    "in_fences": 0,
+    "in_section": 12,
+    "surviving": 12
+  },
+  "effort": "xhigh",
+  "profile": "sdk",
+  "turns": 11,
+  "prompt_tokens": 533674,
+  "cached_tokens": 379311,
+  "cache_write_tokens": 154353,
+  "completion_tokens": 37520,
+  "reasoning_tokens": null,
+  "duration_seconds": 160.41105120885186,
+  "cost_usd": 0.25337001,
+  "cost_basis": "provider"
+}

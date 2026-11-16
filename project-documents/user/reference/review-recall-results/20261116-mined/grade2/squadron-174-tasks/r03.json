@@ -1,0 +1,54 @@
+{
+ "review": "r03",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Commit markers are written as checkboxes",
+   "description": "Every commit point is written as a checklist item, for example `- [ ] Commit: \\`refactor: replace on_step_complete with RunObserver\\``. The same form appears at lines 157, 187, 217, 264, 286, 306, 320, 344, 368, 386, 414, 456, 472, 493, 508 and 527. Commit markers must be plain `**Commit**:` lines, never checkboxes. Otherwise task-checker treats the commit as a deliverable to tick off, and it can produce a commit that only checks boxes. The commits are placed well, at tested and working points, so only the format needs to change.",
+   "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md:112"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "The spike stops for the Project Manager even though the design already decides both outcomes",
+   "description": "Task 2 says to \"stop and ask the Project Manager\" in two cases: if no `ResultMessage` arrives after the interrupt, and if any state write runs off the event-loop thread. The design already says what happens in both cases:\n- **No `ResultMessage`:** Mitigation says D7's fallback applies, the decision narrows to \"always mark unusable\", and the design is updated.\n- **State write off the loop thread:** D5 says `StateManager` gains a per-run `threading.Lock` around load, modify and write.\n\nStopping here would block a junior implementer for no reason. Replace each stop with the design's action, plus a sub-item to update the design and adjust Task 16 (or Task 11 for the lock). Line 243 of Task 16 already expects changes driven by the spike, so this is consistent with the rest of the file.",
+   "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md:54-60"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "No task logs the run-id when the process check returns \"unknown\"",
+   "description": "The design (Technology Choices, and the error-handling table row \"Process check: \u2026 WARNING naming run and PID\") requires the \"unknown\" result to be logged at WARNING with both the run-id and the PID. Task 9 logs only the PID in `process_alive` and says \"the run-id is logged by the caller that has it\". But none of the three callers takes this on: Task 19 (wait), Task 21 (listing) and Task 33 (prune) don't mention it, and Task 10 tests only for a WARNING naming the PID. As written, the run-id half of that signal is never built.\n\nFix: choose one place to log it, for example a sub-item in Task 9 that has `assess_liveness` or a thin shared wrapper log the run-id when `process_alive` returns `None`. Add a matching `caplog` assertion in Task 10. This keeps one implementation instead of three copies across the callers.",
+   "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md:140-142"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Task 25 lists the runs-table columns in a different order from the UI spec",
+   "description": "Task 25 says \"columns Run ID, Status (never shrink), Pipeline, Target, At, Started, Activity per the UI spec\". The UI spec mockup orders them Run ID, Pipeline, Target, Status, At, Started, Activity. A junior implementer is likely to follow the task's order and produce a table that doesn't match the design. The parenthetical about Status not shrinking is right; only the order is wrong. Reword to \"columns in UI-spec order (Run ID, Pipeline, Target, Status, At, Started, Activity); Run ID and Status never shrink\".",
+   "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md:348-351"
+  },
+  {
+   "i": 4,
+   "severity": "NOTE",
+   "title": "The load test is needed and already gated by CI, but the design still says there is no timing assertion",
+   "description": "The slice restates the listing NFR (under 1 s for a few hundred runs). Task 22a adds `tests/load/test_run_listing_scale.py`, modelled on the existing `tests/load/test_usage_reader_loop.py`. The task says no extra CI wiring is needed, and I verified that claim:\n- `pyproject.toml:82` sets `testpaths = [\"tests\"]`.\n- `.github/workflows/ci.yml:38` runs `uv run pytest`.\n\nSo the new test gates CI as soon as it is added, and the gating is stated rather than left implicit. However, the design's Special Considerations still says \"There is still no assertion on time in tests\". After Task 22a, that sentence is false. Add a sub-item to Task 40 or 42 to update it.",
+   "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md:308-320"
+  },
+  {
+   "i": 5,
+   "severity": "NOTE",
+   "title": "Possible circular import between `state.py` and `run_observer.py`",
+   "description": "Task 4 puts `ActiveItem` in `state.py`, which `run_observer.py` imports. It also adds `StateManager.observer()` in `state.py`, which returns a `RunStateRecorder` from `run_observer.py`. That is a two-way import. A sub-item saying how to break it (a function-local import in `observer()`, or `TYPE_CHECKING` for the `StateManager` annotation) would save a junior implementer a confusing `ImportError` partway through the refactor.",
+   "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md:74-81"
+  },
+  {
+   "i": 6,
+   "severity": "NOTE",
+   "title": "Task 15 doesn't say where the foreground timeout value comes from",
+   "description": "Task 8 adds a typed, validated reader for `pipeline.foreground_idle_timeout_s`. Task 15 passes `idle_s=foreground_idle_timeout_s` but doesn't say how that value reaches `SDKExecutionSession`, for example read through Task 8's reader when the session is built, the same way 932's background key is. A single clause would prevent a second, unvalidated read of the key.",
+   "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md:227-229"
+  }
+ ]
+}

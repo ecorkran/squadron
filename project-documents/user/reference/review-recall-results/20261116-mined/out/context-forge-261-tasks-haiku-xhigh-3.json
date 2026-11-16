@@ -1,0 +1,315 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "PASS",
+      "title": "Sequencing and dependencies are sound",
+      "description": "Task order follows the design's Development Approach: state and contracts, then detection facts, then outcome and renderer, then resolver, integrator, pipeline and callers, then integration and docs. Every implementation task is followed by its T task. There is no circular dependency. `ADOPTION_STATES` lives in `ConfigKeys.ts`, which avoids the `ConfigManager` import cycle. `import type` for `SourceVolume` in `adoptionOutcome.ts` avoids a runtime cycle with `sourceVolume.ts`.",
+      "file_ref": null,
+      "category": "sequencing",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md"
+    },
+    {
+      "severity": "PASS",
+      "title": "Scope matches the design, and the exclusions are respected",
+      "description": "Every task traces to a design section. None of the excluded items (squadron probe, `cf next` change, automatic `complete` transition, onboarding change, rule-file interpretation) appears as a task. Functional coverage is broad: all 13 integration fixtures, the parity test, the README line and the walkthrough are present.",
+      "file_ref": null,
+      "category": "scope",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "No automated check for the `context_build` error-result criterion",
+      "description": "The design requires that with a guide missing the profile, `cf build` exits non-zero and `context_build` returns the `AdoptionError` as an error. Task 12 #12 covers rejection at the pipeline level. Task 11's `contextTools` assertions only check the `persist`/`read-only` arguments. The `cf build` exit code is checked only by the manual walkthrough (Task 15 step 4). Nothing checks that `context_build` returns an error result. Add a `contextTools` test where the pipeline rejects with `AdoptionError` and the tool returns an error naming the remedy.",
+      "file_ref": null,
+      "category": "coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:222"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Restated performance NFR has no test, and the exemption cites a Python-only rule",
+      "description": "The design's D2 restates a performance target: detection adds under one second to a Phase 0 build on a local disk. The breakdown adds no timing or load test. Its reason is that the load-test tier lives in `rules/python.md`. That is accurate, since the rule is only in that file, but the review requirement is that a restated NFR gets a `tests/load/` task or the breakdown adds one. The cap tests bound the work; they don't show the target holds. Either add a load task that builds a realistic large tree (about 20,000 entries) and asserts a time bound with margin, with a CI step that gates it, or record in the breakdown that the target is covered only by the caps.",
+      "file_ref": null,
+      "category": "testability",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:38"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The entry-cap test creates 20,001 real files",
+      "description": "Task 3T triggers the cap with `MAX_WALK_ENTRIES + 1` empty files. That is 20,001 sequential writes per run, which can exceed Vitest's default 5-second timeout and slow the suite. Specify a way to keep it bounded. Either accept an optional limit parameter that defaults to the constant (the constant is still defined once), or raise the timeout for that test and write the files in batches.",
+      "file_ref": null,
+      "category": "testability",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:101"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`vi.mock` in `history.test.ts` applies to the whole file",
+      "description": "Task 5T puts the real-git cases and the `gitExec` timeout case in one file. `vi.mock` is hoisted and applies to every test in that file, so the real-repo cases would call a mocked `gitExec`. Specify a factory that wraps the actual module and overrides `gitExec` only in the timeout test, or move the timeout case to its own file.",
+      "file_ref": null,
+      "category": "testability",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:128"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`renderAdoptionFacts` tests skip three of the five outcomes",
+      "description": "The design's Technical Requirements say `renderAdoptionFacts` is tested for \"every outcome\". Task 8T covers brownfield, adoption-in-progress and `NOT_EVALUATED`. The `adoption-closed` kind (both `complete` and `declined`), `already-planned` and `greenfield` have no rendering tests. The exhaustive `never` check catches missing cases at compile time, not wrong text. Add one rendering case per outcome kind.",
+      "file_ref": null,
+      "category": "coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:174"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Task 13 doesn't say where the brownfield guide fixture comes from",
+      "description": "The brownfield guide fixture is created in `packages/core/tests/fixtures/brownfield-guide/` (Task 9T). Task 13 tests in `packages/mcp-server/tests/integration/` and never mentions a brownfield guide there. Without the profile and prompt, the build raises `AdoptionError`, so the test cannot reach the brownfield path. Name the fixture source, and how the mcp-server test copies it into the temp project at `PROMPT_FILE_RELATIVE_PATH`, as Task 9T does.",
+      "file_ref": null,
+      "category": "testability",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:248"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Silent skip when `projectPath` is missing",
+      "description": "Task 10 says to call the resolver \"when the resolver and `project.projectPath` are set\", and otherwise to fall through. The design's Data Flow has no such condition; it calls the resolver with `projectPath` unconditionally. If `projectPath` were ever missing, a brownfield repo would silently get the concept prompt, which the project rules forbid. Either throw when a resolver is set and `projectPath` is missing, or state when that condition can occur.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:206"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Task 6 extracts a pattern because `resolveInitiativePlanPath` swallows every error",
+      "description": "The design says `findPlanningArtifacts` reuses `resolveInitiativePlanPath`. Its helper has a bare `catch` (line 27), so reusing it would break D6's \"other read errors throw\". Task 6's workaround (extract the pattern to a constant, read the directory with ENOENT-only handling, leave `resolveInitiativePlanPath` unchanged) is the right call. Note the deviation, because Task 6 modifies `ArtifactIntrospector.ts`, which the design's Technical Scope does not list.",
+      "file_ref": null,
+      "category": "sequencing",
+      "raw_category": null,
+      "location": "packages/core/src/introspection/ArtifactIntrospector.ts:27"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Commit items are checkboxes, not `**Commit**:` markers",
+      "description": "The file has no `**Commit**:` markers, which is acceptable. Its commit points are checkbox items (\"Task 2C: Commit\"). They don't follow the CLAUDE.md cadence for a file without markers (commit at the end of each top-level task): Tasks 1, 4, 7, 10 and 12 have no commit of their own, and most commit groups join two to four top-level tasks. The groupings do land on tested points, so this is acceptable as written. If you want the cadence enforced, convert them to plain `**Commit**:` lines at the same points.",
+      "file_ref": null,
+      "category": "process",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:78"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Task 12 names two files and 13 scenarios in one task",
+      "description": "\"`CoreServiceFactory.test.ts` (or `pipeline-integration.test.ts`)\" leaves the file choice to the executor. Pick one. The task is effort 3 with 13 scenarios, including git-dependent ones (shallow clone, monorepo). It can stay as one task, but splitting filesystem scenarios from git-backed ones would make it easier to check off.",
+      "file_ref": null,
+      "category": "scope",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:230"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Task 15 worktree command may fail, and the baseline target is hard-coded",
+      "description": "`git worktree add <path> main` fails if `main` is already checked out in another worktree. Use `git worktree add --detach <path> main`. Task 15 also says \"from main\", but CLAUDE.md says the target comes from `cf config get git.integration_branch`, which Task 0 already reads. Use that value.",
+      "file_ref": null,
+      "category": "process",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:262"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Two small over-specifications",
+      "description": "Task 1T's legacy `resolvePhaseValue('phase 1: concept')` assertion tests existing behavior the design does not need. Task 3 (line 86) prescribes both `withFileTypes` and `lstat`, but `Dirent.isSymbolicLink()` is enough, so the `lstat` call is redundant. Trim either if you want the file leaner.",
+      "file_ref": null,
+      "category": "scope",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:61"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "pass",
+      "category": "sequencing",
+      "raw_category": null,
+      "summary": "Sequencing and dependencies are sound",
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "pass",
+      "category": "scope",
+      "raw_category": null,
+      "summary": "Scope matches the design, and the exclusions are respected",
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "coverage",
+      "raw_category": null,
+      "summary": "No automated check for the `context_build` error-result criterion",
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:222",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "testability",
+      "raw_category": null,
+      "summary": "Restated performance NFR has no test, and the exemption cites a Python-only rule",
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:38",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "testability",
+      "raw_category": null,
+      "summary": "The entry-cap test creates 20,001 real files",
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:101",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "testability",
+      "raw_category": null,
+      "summary": "`vi.mock` in `history.test.ts` applies to the whole file",
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:128",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "concern",
+      "category": "coverage",
+      "raw_category": null,
+      "summary": "`renderAdoptionFacts` tests skip three of the five outcomes",
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:174",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "concern",
+      "category": "testability",
+      "raw_category": null,
+      "summary": "Task 13 doesn't say where the brownfield guide fixture comes from",
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:248",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "Silent skip when `projectPath` is missing",
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:206",
+      "location_verified": true
+    },
+    {
+      "id": "F010",
+      "severity": "note",
+      "category": "sequencing",
+      "raw_category": null,
+      "summary": "Task 6 extracts a pattern because `resolveInitiativePlanPath` swallows every error",
+      "location": "packages/core/src/introspection/ArtifactIntrospector.ts:27",
+      "location_verified": true
+    },
+    {
+      "id": "F011",
+      "severity": "note",
+      "category": "process",
+      "raw_category": null,
+      "summary": "Commit items are checkboxes, not `**Commit**:` markers",
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:78",
+      "location_verified": true
+    },
+    {
+      "id": "F012",
+      "severity": "note",
+      "category": "scope",
+      "raw_category": null,
+      "summary": "Task 12 names two files and 13 scenarios in one task",
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:230",
+      "location_verified": true
+    },
+    {
+      "id": "F013",
+      "severity": "note",
+      "category": "process",
+      "raw_category": null,
+      "summary": "Task 15 worktree command may fail, and the baseline target is hard-coded",
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:262",
+      "location_verified": true
+    },
+    {
+      "id": "F014",
+      "severity": "note",
+      "category": "scope",
+      "raw_category": null,
+      "summary": "Two small over-specifications",
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:61",
+      "location_verified": true
+    }
+  ],
+  "template_name": "tasks",
+  "input_files": {
+    "input": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md",
+    "against": "project-documents/user/slices/261-slice.detection-and-adoption-state.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/context-forge-261-tasks"
+  },
+  "timestamp": "2026-11-16T13:46:55.783045",
+  "model": "claude-haiku-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 10,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-haiku-5-5",
+  "answering_models": [
+    "claude-haiku-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 14,
+    "in_fences": 0,
+    "in_section": 14,
+    "surviving": 14
+  },
+  "effort": "xhigh",
+  "profile": "sdk",
+  "turns": 11,
+  "prompt_tokens": 740727,
+  "cached_tokens": 570297,
+  "cache_write_tokens": 170418,
+  "completion_tokens": 50364,
+  "reasoning_tokens": null,
+  "duration_seconds": 215.32622104207985,
+  "cost_usd": 0.30839011000000005,
+  "cost_basis": "provider"
+}

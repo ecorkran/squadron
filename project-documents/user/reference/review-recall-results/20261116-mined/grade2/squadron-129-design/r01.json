@@ -1,0 +1,40 @@
+{
+ "review": "r01",
+ "findings": [
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Failure modes for logout, and for login when the runtime won't start, are not specified",
+   "description": "The failure-mode table covers the Codex turn in detail. Login gets only three items at line 138: timeout, `success=False`, and `account()` failure. Two new I/O paths are not covered:\n\n- **`AsyncCodex.logout()`.** It spawns the runtime (line 82), but no timeout bounds it. None of `codex.turn_timeout_s`, `login_timeout_s` or `account_timeout_s` applies. The design does not say what happens when logout hangs, when the SDK raises, or when the runtime fails to start.\n- **Runtime start or `initialize` failure during `sq auth login`.** This covers the package being missing or no binary being found when the user runs the login command, before any handle exists. Functional requirement line 190 says any `openai-oauth` use must show the install command, but the login path never states that it calls `resolve_codex_runtime()` first.\n\nBoth are required by the project's failure-mode rule (`review-code.md`: every new I/O path needs hang, timeout and disconnect handling that is observable and tested).\n\n**Fix:** add a short \"Failure Modes \u2014 Login/Logout\" table. Bound `logout()` with `codex.account_timeout_s`, or say why it doesn't need a bound. Route login and logout through `resolve_codex_runtime()` so they fail with the same install hint. Add the matching tests to line 199.",
+   "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:116-138"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "The doctor's login check duplicates the strategy's validity logic and can disagree with `sq auth status`",
+   "description": "Line 172 says the `codex provider` row reports \"login state from `auth.json` presence.\" Line 232 keeps an open outcome: if the `OPENAI_API_KEY` fallback works, `OAuthFileStrategy` reports a key-only environment as authenticated. In that case `sq auth status` would say authenticated while `sq doctor` says \"not logged in\". The two commands would disagree, and the validity rule would live in two places.\n\nD9 already takes care to route the extra-missing hint through one abstraction. Login state should get the same treatment.\n\n**Fix:** have the doctor row read `is_valid()` / `active_source()` from the resolved `OAuthFileStrategy`. Neither spawns a subprocess, so the \"no subprocess in doctor\" constraint still holds. Drop the separate `auth.json` presence check.",
+   "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:172"
+  },
+  {
+   "i": 5,
+   "severity": "NOTE",
+   "title": "The version upper bound is stated as both decided and open",
+   "description": "D1 specifies `openai-codex>=0.159.3,<1`, which already includes a cap. Line 231 then says the upper bound \"is not decided here; PM to say whether to cap.\" Pick one. Keeping `<1` as written and deleting the open item at line 231 removes the ambiguity without adding a decision gate.",
+   "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:97"
+  },
+  {
+   "i": 6,
+   "severity": "NOTE",
+   "title": "Two new Protocols have one implementer each and no planned consumers",
+   "description": "The frontmatter (line 7) and Provides-to-Other-Slices (lines 178\u2013181) say no planned slice uses `InteractiveLogin`, `ExtraRequirement` or `CodexRuntime`.\n\n- **`InteractiveLogin`** is justified. The slice plan requires \"a capability on the strategy, not a profile-name check.\"\n- **`ExtraRequirement`** is also defensible. It replaces a hard-coded `\"openai-oauth\"` check in `sq model list`, and each Protocol is a single small interface.\n\nThis is acceptable. Keep both minimal, and don't add anything to them for hypothetical future providers.",
+   "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:7"
+  },
+  {
+   "i": 7,
+   "severity": "NOTE",
+   "title": "Slice 931 dependency is not in the plan entry but is justified",
+   "description": "The plan entry lists only `[128]`. The design adds slice 931 (`AgentConfig.effort`, `applies_effort`, `core/usage.py`), which is where the effort and usage features the plan entry asks for are implemented. The dependency is correct. The slice plan's Dependencies field could be updated to match.",
+   "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:50"
+  }
+ ]
+}

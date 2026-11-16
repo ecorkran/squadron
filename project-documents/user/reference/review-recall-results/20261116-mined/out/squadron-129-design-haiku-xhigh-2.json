@@ -1,0 +1,315 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "PASS",
+      "title": "Plan entry 129 is fully covered; credentials stay provider-owned",
+      "description": "Parts A, B and C of the plan entry map to D1\u2013D9 and the CLI surface. Those cover effort, usage, bundled-then-PATH resolution, the extra, the doctor row, the model-list marker, the README, browser and device-code login, status email and plan, and logout. The design keeps no squadron token store (design line 41, line 92). That matches the architecture rule that each provider handles its own credential resolution (`100-arch.orchestration-v2.md` lines 217, 243).",
+      "file_ref": null,
+      "category": "architecture",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/100-slices.orchestration-v2.md:79"
+    },
+    {
+      "severity": "PASS",
+      "title": "Instance reuse matches the architecture's SDK startup constraint",
+      "description": "The architecture says to design for instance reuse rather than per-message subprocess creation (`100-arch.orchestration-v2.md` lines 55, 347). The design spawns once per `CodexAgent`, and keeps `create_agent`, `validate_credentials`, doctor and model list spawn-free. The architecture sets no numeric latency target for this path, so the design's \"no latency target\" is consistent. The cost to note is that `sq auth status` now spawns one runtime per valid interactive profile on every run, bounded at 30 s each. That is a deliberate choice, not a violation.",
+      "file_ref": null,
+      "category": "architecture",
+      "raw_category": null,
+      "location": "project-documents/user/reference/review-recall-results/20261116-mined/wt/squadron-129-design/project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:82"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The design says the architecture \"stays accurate,\" but it will contradict the architecture after this slice",
+      "description": "The architecture says \"Squadron does not attempt to unify authentication\" (`100-arch.orchestration-v2.md` line 243). The design adds a cross-provider `InteractiveLogin` Protocol and generic `sq auth login` and `logout` commands. Login logic stays provider-owned, so the design fits the principle in spirit. The architecture's auth table (lines 235\u2013241) also has no `openai-oauth` row, although slice 128 added that profile. Amend the sentence and add the row in this slice's planning commit, or name a follow-up that does. Do not leave the architecture saying the opposite of the code.",
+      "file_ref": null,
+      "category": "architecture",
+      "raw_category": null,
+      "location": "project-documents/user/reference/review-recall-results/20261116-mined/wt/squadron-129-design/project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:89"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "A hung runtime startup is unbounded, though the design says it is bounded",
+      "description": "`asyncio.timeout(codex.turn_timeout_s)` wraps only `thread.run`. `AsyncCodex.__aenter__`, `initialize` and `thread_start` are outside it. Line 82 nonetheless says \"the hang case is already bounded by `codex.turn_timeout_s`.\" A runtime that hangs at startup would hang the review indefinitely. Put the whole turn under the timeout, or add a startup row with its own bound. For `sq auth status`, line 126 says the command never blocks other profiles' rows. That holds only if profiles are queried concurrently. Otherwise state the up-to-30 s delay.",
+      "file_ref": null,
+      "category": "failure-modes",
+      "raw_category": null,
+      "location": "project-documents/user/reference/review-recall-results/20261116-mined/wt/squadron-129-design/project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:125"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Login, device-code and logout have no failure-mode enumeration",
+      "description": "The failure table is titled for the Codex turn only. Login and logout are new I/O paths, and they are covered by one timeout row (line 127) and a prose mention of `success=False` (line 138). The following are not enumerated: runtime start or `login_chatgpt*()` raising; `handle.wait()` returning `success=False`, with no exit code or message specified; `logout()` failing; `webbrowser.open` failing on a headless host; and `account()` failing after a successful login. Each needs a row with its observable signal and a test.",
+      "file_ref": null,
+      "category": "failure-modes",
+      "raw_category": null,
+      "location": "project-documents/user/reference/review-recall-results/20261116-mined/wt/squadron-129-design/project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:84"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Two error paths break the design's own logging rules",
+      "description": "- Line 134 logs \"`usage` absent\" at DEBUG. Line 118 says every row is logged at WARNING or above. Slice 931 treats the same condition as a WARNING. Make this one a WARNING, once per run.\n- Line 135 logs a `shutdown()` teardown error and does not re-raise, calling it \"process-boundary teardown.\" `shutdown()` is an agent method, not a process boundary. The project's exception rule allows swallowing only at a process boundary, or for a named specific exception with a comment. Re-raise after logging, or catch the specific SDK error and comment why swallowing is correct.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/reference/review-recall-results/20261116-mined/wt/squadron-129-design/project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:134"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Protocol contracts lose outcome and error information",
+      "description": "- `InteractiveLogin.login(...) -> None` has no channel for success, `success=False` with `error`, and timeout. The design does not say whether these raise, which exception type they use, or how the CLI maps them to an exit code.\n- `account_summary() -> str | None` uses `None` for both \"not logged in\" and \"lookup failed, WARNING\" (line 126). The caller cannot tell these apart.\n- `ExtraRequirement.missing_extra_hint()` is defined as returning \"the install command\" (line 112). `resolve_codex_runtime()` has a second failure, with neither a bundled binary nor `codex` on PATH (line 98), whose remedy is not the install command. Specify what the hint returns in that case.",
+      "file_ref": null,
+      "category": "interfaces",
+      "raw_category": null,
+      "location": "project-documents/user/reference/review-recall-results/20261116-mined/wt/squadron-129-design/project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:163"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The `OPENAI_API_KEY` fallback is left to implementation, although the design calls it a silent fallback",
+      "description": "Line 232 says a key-only environment may report \"authenticated\" and then fail the first turn, and calls this \"a silent-fallback path.\" It defers the decision to a live spike in implementation step 0, with two branches. Those branches change `is_valid`, `active_source`, `get_credentials` and `setup_hint`, which `sq auth status` and login depend on. No functional criterion or test pins either branch (lines 186\u2013205). Recommend deciding the default in the design. The project rule forbids silent fallbacks, so removing the key fallback unless the spike proves it works is the reading that matches it. Name the test for each outcome.",
+      "file_ref": null,
+      "category": "under-specification",
+      "raw_category": null,
+      "location": "project-documents/user/reference/review-recall-results/20261116-mined/wt/squadron-129-design/project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:232"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The dependency pin, the bundled-binary probe and the drift test do not protect what the design claims",
+      "description": "- `openai-codex>=0.159.3,<1` (D1, line 97) caps nothing useful for a 0.x package, where minor versions carry breaking changes. The design itself says the surface moves (line 231). Use a `<0.160`-style bound, or state why not.\n- Line 200 says the real-types test catches \"a drifted SDK surface.\" It is skipped when the extra is absent, so it guards only CI that installs the extra. The design should say CI installs it.\n- `runtime.py` detects the bundled binary by importing `codex_cli_bin` (line 98), a transitive package name. If the SDK renames that package, the probe fails and `resolve_codex_runtime()` silently selects PATH. No test covers this. Log the chosen source at resolution. Add a real-types test asserting `source == \"bundled\"` when the extra is installed.",
+      "file_ref": null,
+      "category": "dependencies",
+      "raw_category": null,
+      "location": "project-documents/user/reference/review-recall-results/20261116-mined/wt/squadron-129-design/project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:97"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The `base_instructions` parameter may contradict slice 128's capability declaration",
+      "description": "The data flow passes `base_instructions` to `thread_start`. Slice 128's capability table declares `CodexProvider.supports_system_prompt = False`, \"instructions via prompt\" (`project-documents/user/slices/128-slice.review-transport-unification-provider-decoupling.md:119`). If `base_instructions` carries the review's system prompt, that declaration is stale. If it does not, the design should say what it carries. Either way, the declared capability must match the port.",
+      "file_ref": null,
+      "category": "integration",
+      "raw_category": null,
+      "location": "project-documents/user/reference/review-recall-results/20261116-mined/wt/squadron-129-design/project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:80"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Slice 931's dependency is missing from the plan, and its Codex contract is reversed without being fully named",
+      "description": "- The design's prerequisites (line 50) and interfaces (line 55) depend on 931's `AgentConfig.effort`, `applies_effort`, `core/usage.py`, and usage metadata. Plan entry 129 lists only `[128]` (`project-documents/user/architecture/100-slices.orchestration-v2.md:79`). The design's own frontmatter (line 6) lists 931, so the two records disagree. Slice 931 is complete, so this is bookkeeping, not a blocker. Add 931 to the plan entry.\n- Slice 931 says Codex refuses effort loudly: a WARNING, and the artifact has no `effort` key (`project-documents/user/slices/931-slice.tool-heavy-reviews-on-openai-compatible-models-effort-batched-reads-and-per-turn-usage.md:183` and its walkthrough step 9 at line 457). This design reverses both. Line 101 names the WARNING. It does not name the artifact change, or that 931's Codex test and walkthrough step 9 are inverted in this slice.",
+      "file_ref": null,
+      "category": "integration",
+      "raw_category": null,
+      "location": "project-documents/user/reference/review-recall-results/20261116-mined/wt/squadron-129-design/project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:50"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The new login module constructs its own SDK client, and its tests patch the import boundary",
+      "description": "`login.py` is new code, and it constructs `AsyncCodex(config)` itself. The tests fake the SDK at the `openai_codex` import boundary (line 199). Under the project's review rule, a class that instantiates its own dependency, combined with tests that must patch internals, means the dependency is inverted. Have the login flows accept a client factory, or have the strategy accept one at construction. This is the one new module where that costs little. `CodexAgent` follows an existing pattern, so leave it alone.",
+      "file_ref": null,
+      "category": "dependencies",
+      "raw_category": null,
+      "location": "project-documents/user/reference/review-recall-results/20261116-mined/wt/squadron-129-design/project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:67"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The doctor's Codex row computes login state three ways, and the auth path is hard-coded",
+      "description": "The row takes its missing-extra state from `missing_extra_hint()`, its runtime detail from `resolve_codex_runtime()` (line 112), and its login state from a direct presence check on `~/.codex/auth.json` (line 172). `sq auth status` takes login state from the strategy's `is_valid()`, as slice 128 requires. The doctor should use that same strategy call, so the auth path has one definition. The design also does not say whether the runtime honors a `CODEX_HOME`-style override of its auth location, which line 232 hints at. If it does, the doctor reports \"not logged in\" for a logged-in user. Verify this and state the result.",
+      "file_ref": null,
+      "category": "integration",
+      "raw_category": null,
+      "location": "project-documents/user/reference/review-recall-results/20261116-mined/wt/squadron-129-design/project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:172"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Scope beyond the plan, and repeated sections, add weight without adding requirements",
+      "description": "- `--timeout SECONDS` on `sq auth login` (line 149) is not in plan entry 129. It duplicates `codex.login_timeout_s` (line 108). Cut it.\n- \"Provides to Other Slices\" (lines 179\u2013181) names consumers for `InteractiveLogin`, `ExtraRequirement` and `CodexRuntime`. The frontmatter says \"no planned slice consumes them\" (line 7). Drop the list or correct the frontmatter.\n- The same checks appear three times: Functional Requirements (lines 188\u2013194), Verification Walkthrough (lines 209\u2013219), and the smoke step in Development Approach (line 228). Keep the walkthrough and have the criteria refer to it.",
+      "file_ref": null,
+      "category": "scope",
+      "raw_category": null,
+      "location": "project-documents/user/reference/review-recall-results/20261116-mined/wt/squadron-129-design/project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:149"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "pass",
+      "category": "architecture",
+      "raw_category": null,
+      "summary": "Plan entry 129 is fully covered; credentials stay provider-owned",
+      "location": "project-documents/user/architecture/100-slices.orchestration-v2.md:79",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "pass",
+      "category": "architecture",
+      "raw_category": null,
+      "summary": "Instance reuse matches the architecture's SDK startup constraint",
+      "location": "project-documents/user/reference/review-recall-results/20261116-mined/wt/squadron-129-design/project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:82",
+      "location_verified": false
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "architecture",
+      "raw_category": null,
+      "summary": "The design says the architecture \"stays accurate,\" but it will contradict the architecture after this slice",
+      "location": "project-documents/user/reference/review-recall-results/20261116-mined/wt/squadron-129-design/project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:89",
+      "location_verified": false
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "failure-modes",
+      "raw_category": null,
+      "summary": "A hung runtime startup is unbounded, though the design says it is bounded",
+      "location": "project-documents/user/reference/review-recall-results/20261116-mined/wt/squadron-129-design/project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:125",
+      "location_verified": false
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "failure-modes",
+      "raw_category": null,
+      "summary": "Login, device-code and logout have no failure-mode enumeration",
+      "location": "project-documents/user/reference/review-recall-results/20261116-mined/wt/squadron-129-design/project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:84",
+      "location_verified": false
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "Two error paths break the design's own logging rules",
+      "location": "project-documents/user/reference/review-recall-results/20261116-mined/wt/squadron-129-design/project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:134",
+      "location_verified": false
+    },
+    {
+      "id": "F007",
+      "severity": "concern",
+      "category": "interfaces",
+      "raw_category": null,
+      "summary": "Protocol contracts lose outcome and error information",
+      "location": "project-documents/user/reference/review-recall-results/20261116-mined/wt/squadron-129-design/project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:163",
+      "location_verified": false
+    },
+    {
+      "id": "F008",
+      "severity": "concern",
+      "category": "under-specification",
+      "raw_category": null,
+      "summary": "The `OPENAI_API_KEY` fallback is left to implementation, although the design calls it a silent fallback",
+      "location": "project-documents/user/reference/review-recall-results/20261116-mined/wt/squadron-129-design/project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:232",
+      "location_verified": false
+    },
+    {
+      "id": "F009",
+      "severity": "concern",
+      "category": "dependencies",
+      "raw_category": null,
+      "summary": "The dependency pin, the bundled-binary probe and the drift test do not protect what the design claims",
+      "location": "project-documents/user/reference/review-recall-results/20261116-mined/wt/squadron-129-design/project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:97",
+      "location_verified": false
+    },
+    {
+      "id": "F010",
+      "severity": "concern",
+      "category": "integration",
+      "raw_category": null,
+      "summary": "The `base_instructions` parameter may contradict slice 128's capability declaration",
+      "location": "project-documents/user/reference/review-recall-results/20261116-mined/wt/squadron-129-design/project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:80",
+      "location_verified": false
+    },
+    {
+      "id": "F011",
+      "severity": "concern",
+      "category": "integration",
+      "raw_category": null,
+      "summary": "Slice 931's dependency is missing from the plan, and its Codex contract is reversed without being fully named",
+      "location": "project-documents/user/reference/review-recall-results/20261116-mined/wt/squadron-129-design/project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:50",
+      "location_verified": false
+    },
+    {
+      "id": "F012",
+      "severity": "concern",
+      "category": "dependencies",
+      "raw_category": null,
+      "summary": "The new login module constructs its own SDK client, and its tests patch the import boundary",
+      "location": "project-documents/user/reference/review-recall-results/20261116-mined/wt/squadron-129-design/project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:67",
+      "location_verified": false
+    },
+    {
+      "id": "F013",
+      "severity": "concern",
+      "category": "integration",
+      "raw_category": null,
+      "summary": "The doctor's Codex row computes login state three ways, and the auth path is hard-coded",
+      "location": "project-documents/user/reference/review-recall-results/20261116-mined/wt/squadron-129-design/project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:172",
+      "location_verified": false
+    },
+    {
+      "id": "F014",
+      "severity": "concern",
+      "category": "scope",
+      "raw_category": null,
+      "summary": "Scope beyond the plan, and repeated sections, add weight without adding requirements",
+      "location": "project-documents/user/reference/review-recall-results/20261116-mined/wt/squadron-129-design/project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:149",
+      "location_verified": false
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md",
+    "against": "project-documents/user/architecture/100-slices.orchestration-v2.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/squadron-129-design"
+  },
+  "timestamp": "2026-11-16T12:32:32.017020",
+  "model": "claude-haiku-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 8,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-haiku-5-5",
+  "answering_models": [
+    "claude-haiku-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 14,
+    "in_fences": 0,
+    "in_section": 14,
+    "surviving": 14
+  },
+  "effort": "xhigh",
+  "profile": "sdk",
+  "turns": 9,
+  "prompt_tokens": 390653,
+  "cached_tokens": 224272,
+  "cache_write_tokens": 166373,
+  "completion_tokens": 66740,
+  "reasoning_tokens": null,
+  "duration_seconds": 288.34409708413295,
+  "cost_usd": 0.22068959999999999,
+  "cost_basis": "provider"
+}

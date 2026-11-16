@@ -1,0 +1,61 @@
+{
+ "review": "r02",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "`step()` listing returns early and skips `post_tick`, contradicting the note directly below it",
+   "description": "In the Implementation Details listing, `step()` does `if self._entity_manager.count == 0: return` before `post_tick()` (lines 276-277). With zero entities, `post_tick` is never called. Line 291 and Special Considerations (line 408) say the opposite: `post_tick()` must run when there are no entities, and \"the early return is moved to wrap only `engine.tick()`\". The earlier listing (lines 176-191) gets this right. The two listings disagree, and the authoritative-looking one is wrong, so an implementer will likely copy the bug. Fix the listing at 272-289 so it matches lines 176-191, and keep only one listing.",
+   "location": "project-documents/user/slices/304-slice.environment-layer-integration.md:272-291"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "`post_tick()` is called with no arguments, so trail and threat writes from agents have no path",
+   "description": "500-arch (lines 56, 117) and slice 500 (lines 36, 284-289) define `post_tick(trail_deposits, threat_mutations)`. The slice plan entry for 304 assigns \"Handle post-tick environment writes (e.g., stigmergic trail deposits)\" to this slice. This design calls `post_tick()` bare everywhere. Line 196 says \"agent-originated writes (trails, threats) apply after evaluation\", but nothing collects those writes from the engine or passes them in. Slices 505 and 506 are listed as consumers in `interfaces:`, so they will need a server change after all. That contradicts the Overview's claim that \"layers plug in without server changes\". Either specify how deposits and mutations reach `step()` (even if they are always `None` for now, with a named handoff point), or move this item explicitly to Excluded and say which slice owns it.",
+   "location": "project-documents/user/slices/304-slice.environment-layer-integration.md:193-196"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Scope assigned in the slice plan is dropped or changed without being recorded as a deviation",
+   "description": "The slice plan entry (300-slices line 27) assigns three things that the design handles differently:\n- **Grid resolution and layer selection in config.** Both are excluded (line 48, line 153). The reason given is sound: no layers exist yet.\n- **\"Pass environment context to `SimulationManager` and `engine.tick()`\".** This is replaced by injecting the environment into force constructors (lines 200-216). Architecture step 3 (300-arch line 63) also says to pass environment context to the behavior engine.\n- **Post-tick writes.** See the finding above.\n\nConstructor injection is a reasonable, lighter choice that leaves the `BulkForce` protocol unchanged. But all three changes should be listed as deviations from the slice plan, and the plan entry should be updated (or flagged for update) so slices 308 and 501+ don't plan around the old contract.",
+   "location": "project-documents/user/slices/304-slice.environment-layer-integration.md#excluded"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "\"Environment is always present\" contradicts `Environment | None` and the `None` checks",
+   "description": "The section says the always-present environment \"avoids `if environment is not None:` checks scattered through the codebase\". Yet `SimulationManager` takes `Environment | None`, `step()` has two `is not None` checks, and the `environment` property returns `Optional`. That means every future force constructor has to handle `None` too. The only stated reason is backward compatibility with existing tests, but the slice already updates those tests for the new `step(tick_number)` signature (line 354, line 407). An empty `Environment(bounds, layers={})` is cheap to build in tests. Make the parameter required and remove the `None` branches. This also follows the project rule against silent fallbacks.",
+   "location": "project-documents/user/slices/304-slice.environment-layer-integration.md:218-220"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Hard-coded default `seed=42` is a silent magic default",
+   "description": "The architecture names \"environment seed\" as explicit configuration (300-arch line 47, \"Configuration over convention\"). The project rules forbid magic defaults that aren't centralized, and silent fallbacks. Here `EnvironmentConfig.seed: int = 42` is used silently when the section is left out. Nothing reads the seed in this slice, so the cheapest fix is one of these:\n- require `seed` whenever `environment` is present and log the value used at startup, or\n- drop the field until slice 501 needs it.\n\nNote that slice 500's `Environment` takes no seed, so this field currently has no consumer.",
+   "location": "project-documents/user/slices/304-slice.environment-layer-integration.md:148-151"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "No handling defined when `pre_tick` or `post_tick` raises inside the tick body",
+   "description": "This slice adds two new calls to the per-tick path. `Environment.pre_tick()` raises `ValueError` for `seasonal_parameter` outside [0, 1] (slice 500 line 445), and future layers can raise during either phase. The architecture's \"Explicit lifecycle \u2026 No silent failures, no undefined states\" principle (300-arch line 45) calls for a stated strategy, and the design gives none.\n\nThree questions need answers:\n- Does an exception stop the tick loop and trigger a clean shutdown, or log and skip the tick?\n- If `engine.tick()` raises after `pre_tick`, is `post_tick` skipped?\n- What observable signal is produced in each case?\n\nAdd a failure-mode bullet and one test asserting the expected behavior.",
+   "location": "project-documents/user/slices/304-slice.environment-layer-integration.md#simulationmanager-as-simulation-orchestrator"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "Tick budget NFR not restated for the tick path this slice extends",
+   "description": "The architecture sets a fixed tick budget at a target of 20-60 Hz, i.e. 16.7-50 ms per tick, with overrun warnings (300-arch lines 66, 78, 90). This slice inserts `pre_tick` and `post_tick` into that path, and later layer slices will add their work through these hooks. State the target, for example \"environment lifecycle overhead with empty layers is negligible against the 50 ms budget at the default 20 Hz\", so later layer slices have a baseline to measure against.",
+   "location": "project-documents/user/slices/304-slice.environment-layer-integration.md#technical-requirements"
+  },
+  {
+   "i": 7,
+   "severity": "NOTE",
+   "title": "Smaller inconsistencies in the document",
+   "description": "- Line 119 lists a `_seasonal_parameter` state field, but `step()` receives the value as an argument (line 176). Drop the field.\n- Line 198 calls `0.0` a \"mid-season\" value. On a cyclic 0-1 scale, 0.0 is the start of the cycle.\n- Line 113 says `WorldBounds` is \"shared with entity manager\". The entity manager uses `WorldBoundsConfig`, and nothing in this design gives it `WorldBounds`.\n- Verification step 2 (lines 368-373) runs `config/default.yaml` \"with environment section omitted\", but line 80 adds that section to `default.yaml`. Use a separate fixture config for this step.",
+   "location": "project-documents/user/slices/304-slice.environment-layer-integration.md"
+  }
+ ]
+}

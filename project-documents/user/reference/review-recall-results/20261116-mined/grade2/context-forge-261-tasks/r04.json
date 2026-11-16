@@ -1,0 +1,40 @@
+{
+ "review": "r04",
+ "findings": [
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Commit markers are checkboxes, not plain `**Commit**:` lines",
+   "description": "All ten commit points (lines 78, 105, 131, 148, 178, 202, 225, 251, 257, 269) are written as checkbox tasks: `- [ ] **Task NC: Commit** \u2014 ...`. Commit markers must be plain lines, never checkboxes. As checkboxes, they will be treated as work items for task-checker to tick, and the commit-cadence rule will not recognise them as markers.\n\nRewrite each one as a plain line, for example `**Commit**: feat(core): add adoption.state config key and state helpers`. Their positions are fine: every one sits after a test task or a passing verification step.",
+   "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:78"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Task 15C commit would contain only notes",
+   "description": "Task 15 says any defect gets its own commit (line 266). That leaves only the recorded walkthrough results and check-offs for Task 15C (`docs: record slice 261 verification walkthrough`). The project rule says: \"Never make a commit that only checks boxes or only adds notes.\"\n\nFix: merge Task 14 into the final step. Either do the README edit after the walkthrough and commit the walkthrough notes with it, or drop 15C and record the notes before the 14C commit. Either way, the separate one-line README commit (14C) goes away too.",
+   "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:266-269"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "No check that `context_build` returns `AdoptionError` as an error result",
+   "description": "Functional Requirement: \"A guide without the profile or prompt: `cf build` exits non-zero with the `AdoptionError` message; `context_build` returns it as an error.\"\n\nCurrent coverage:\n- Task 12 #12 checks that the pipeline rejects.\n- Task 10T checks that the integrator rethrows.\n- Walkthrough step 4 checks the `cf build` exit code by hand.\n\nNeither the automated tests nor the walkthrough check the MCP side. The `contextTools.test.ts` additions in Task 11 only check the `persist`/`read-only` values passed. Add one assertion there: when the mocked pipeline throws `AdoptionError`, `context_build` returns an error result containing the message.",
+   "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:217-223"
+  },
+  {
+   "i": 6,
+   "severity": "NOTE",
+   "title": "Renderer text for unselected outcome kinds is unspecified",
+   "description": "Task 8 requires an exhaustive `switch` with a `never` check, so `greenfield`, `already-planned` and `adoption-closed` each need a branch. Neither the task nor D8 says what those branches render, and Task 8T tests only the three kinds that can actually be selected. A junior implementer will have to guess. One line would settle it: either render a one-line outcome bullet for each kind, or throw for kinds the resolver never passes.",
+   "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:166-168"
+  },
+  {
+   "i": 7,
+   "severity": "NOTE",
+   "title": "No load test for the D2 sub-second target is an accepted design decision",
+   "description": "D2 restates a performance target: detection adds under one second. There is no `tests/load/` task and no CI gating task. However, D2 explicitly decides that \"tests assert the caps, not timings\". Task 3T asserts both caps: early exit at 2000 lines and `AdoptionError` at `MAX_WALK_ENTRIES`. Line 38 documents why. This review does not override that design decision.",
+   "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:38"
+  }
+ ]
+}

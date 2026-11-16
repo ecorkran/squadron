@@ -1,0 +1,117 @@
+{
+ "review": "r08",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "FAIL",
+   "title": "Capability 1 duplicates the shipped `sq onboard` brownfield flow",
+   "description": "`main` already implements most of Capability 1's machinery. `src/squadron/onboard/graph.py` reads `.understand-anything/knowledge-graph.json` and `meta.json`, computes commits-behind with explicit WARNINGs, and gates on staleness. `onboard/comprehension.py` selects the highest-index `{index}-analysis.codebase-comprehension.md`. `onboard/steps.py` (`OnboardStep`, `decide_step`) already routes build-graph \u2192 comprehension \u2192 concept \u2192 adopt. `guide.ai-project.brownfield-adoption.md` (updated 2026-10-26, after this document's 2026-08-18 update) defines adoption as `sq onboard` producing a baseline concept, a derived architecture (`100-arch.*.md`, `provenance: derived`), and a retroactive slice plan.\n\nThe document mentions none of this. Its Dependencies omit slice 440 and the guide. Its Current State says squadron has \"no awareness\" of the plugin and no `.gitignore` entry, and both are false on `main` (`.gitignore` lines 181\u2013184). Its motivation, that planning \"assume[s] a greenfield project,\" is what the brownfield guide already answers.\n\nFix: implement the comprehension and concept content as onboard's existing `COMPREHENSION` and `CONCEPT` steps, plus a derived-architecture step. Drop the separate `/sq:analysis understand` entry point and its three dispatcher edits. Adopt `comprehension.py`'s filename contract as the output spec. Rewrite Current State against `main`.",
+   "location": "project-documents/user/architecture/360-arch.document-intelligence.md#capability-1-comprehension--planning-artifacts"
+  },
+  {
+   "i": 1,
+   "severity": "FAIL",
+   "title": "Concept generation bypasses the PM-confirmation rule and writes into the sacred section",
+   "description": "The Outputs section writes `000-concept` with no confirmation gate. The same section gates initiative candidates on \"explicit confirmation\" because \"an unreviewed generated one is worse than none.\" The document applies its own principle to the initiative plan but not to the concept, even though every later phase reads the concept's Solution Approach.\n\nThe brownfield guide says: \"Machine-derived content is confirmed. A concept carrying a provenance block or `[INFERRED]` markers was derived by a tool. The PM confirms or corrects it before anything builds on it.\" The document's own description fits that definition.\n\nThe concept guide defines User-Provided Concept as \"the PM's original vision\" and marks it SACRED. The document writes squadron's interview Q&A there verbatim. A re-run cannot update it, and the convention forbids rewriting it. The brownfield guide also says never to overwrite an existing artifact without PM approval, which the document does not address.\n\nFix: gate the concept write on PM confirmation. Keep interview answers, attributed, under Refined Concept. Leave User-Provided Concept to the PM's own text. Define re-run behavior for an existing `000-concept`.",
+   "location": "project-documents/user/architecture/360-arch.document-intelligence.md#capability-1-comprehension--planning-artifacts"
+  },
+  {
+   "i": 2,
+   "severity": "FAIL",
+   "title": "Output naming rests on a retired convention and contradicts itself on placement",
+   "description": "The section reserves 940\u2013949 for analysis and routes overflow to 950+ because \"ten slots\" is not enough. The current `file-naming-conventions.md` says: \"Existing files numbered under the former 940-949 analysis range keep their names.\" It assigns analysis either the initiative's base index (for example `120-analysis.guide-tooling-gaps.md`) or a number from 900 to 989 in `user/analysis/`, and states that 900\u2013989 \"never continues into 990-999.\" The premise of a nearly full range does not hold.\n\nThe section also says \"both capabilities write to `user/analysis/`.\" The Outputs section puts the concept and initiative candidates in `user/project-guides/`, which matches the concept guide. The Delivery section rejects routing `/sq:overview` through the analysis dispatcher because nothing about it \"audits a codebase,\" yet the overview is written as `docType: analysis` into the analysis folder. The document needs one justified placement and docType.",
+   "location": "project-documents/user/architecture/360-arch.document-intelligence.md#output-conventions"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Plugin installation is a hard precondition, contradicting the \"graph is an input\" principle",
+   "description": "Architectural Principles say squadron reads the graph as data and \"never shells into the plugin's engine.\" Flow step 1 requires \"Verify the plugin is installed and `knowledge-graph.json` exists.\" Plugin presence on one machine says nothing about a graph committed by a teammate. The document tracks the graph in git, so a clone can contain the graph without the plugin, and the gate would refuse to read a tracked input. The document also never says how \"installed\" is detected. `onboard/graph.py` gates on file presence only.\n\nFix: remove the plugin check. Gate on the graph file and its `meta.json` version.",
+   "location": "project-documents/user/architecture/360-arch.document-intelligence.md#capability-1-comprehension--planning-artifacts"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Graph reading has no deterministic reader, no schema gate, and no reader/generator boundary",
+   "description": "Flow step 3 extracts `layers[]`, `tour[]`, and file-level nodes. The read-discipline paragraph says to grep for the needed section first. Those are relational queries: layers and tour steps reference node IDs, and the output needs them joined to `summary`, `filePath`, and `complexity`. Line search does not perform joins over JSON, and the document does not say what code runs the extraction.\n\nThe project's Python rules require Pydantic for file parsing at external boundaries. The graph format is an external contract owned by a plugin the document calls \"actively developed,\" and nothing pins it. `meta.json` already carries `\"version\": \"1.0.0\"` (`understand/SKILL.md:752`), and the document does not check it.\n\nOne skill currently does parsing, gating, interviewing, and three different writers. Fix: add a deterministic reader with Pydantic models and an explicit version gate that fails on unknown versions. It should emit a bounded structure summary, and the generators should consume only that summary. The document also says \"the graph is large\" without a number, so state the summary's size budget.",
+   "location": "project-documents/user/architecture/360-arch.document-intelligence.md#capability-1-comprehension--planning-artifacts"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "`tour[]` is attributed to the wrong phase and can be silently empty",
+   "description": "The document says `tour[]` is produced by \"`/understand` Phase 6\" and calls this \"Critical.\" In the plugin, Phase 5 is TOUR (`understand/SKILL.md:483`, which reports `[Phase 5/7]`), and Phase 6 is REVIEW (line 556).\n\nMore important, the Phase 6 validator converts a non-array tour to `[]` (line 629). A graph can validly have an empty tour, and Capability 1 has no fallback for it. The project forbids silent fallbacks, so an empty or missing tour must appear in the concept output rather than being dropped. Fix: correct the phase, and specify the empty-tour behavior.",
+   "location": "project-documents/user/architecture/360-arch.document-intelligence.md#the-understand-anything-output-contract"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "The staleness signal is undefined in four real cases, and the graph/meta pair is not written atomically",
+   "description": "Step 1 defines staleness as `gitCommitHash` differing from HEAD, measured in commits. It does not define:\n\n- **Uncommitted changes.** The plugin records only a commit hash. A graph built from a dirty tree at HEAD reads as current.\n- **Empty hash.** `understand-knowledge` writes `gitCommitHash` as `\"\"` when git is unavailable (`understand-knowledge/SKILL.md:106`, `merge-knowledge-graph.py:344`).\n- **Unreachable hash.** After a rebase, force-push, shallow clone, or a commit on another worktree, the hash may not be an ancestor of HEAD. `graph.py` returns `None` with a WARNING, and `decide_step` treats unknown as a gate. The document's \"warn, never block\" does not say what unknown means.\n- **Non-atomic write.** Phase 7 writes `knowledge-graph.json` (step 1), then fingerprints (step 2, which can abort), then `meta.json` (step 3). An aborted run leaves a new graph beside an old `meta.json`, so the pair the provenance depends on no longer describes the same graph.\n\nFix: define three outcomes (current / behind N / unknown) and the provenance text for each. Record the graph's content hash at read time, and treat a graph/meta mismatch as unknown.",
+   "location": "project-documents/user/architecture/360-arch.document-intelligence.md#capability-1-comprehension--planning-artifacts"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "The `knowledge-graph.json` contract has a second producer the document does not mention",
+   "description": "`understand-knowledge/SKILL.md:100` copies a validated graph to `.understand-anything/knowledge-graph.json`. Its `meta.json` uses the same keys, with `analyzedFiles` set to the wiki article count. That graph is built from wiki articles, not source files, so the file-level node model, `filePath`, and \"every file is assigned to exactly one layer\" assumptions may not hold. The document's precondition accepts either graph. Fix: name both producers, discriminate on a provenance field, and reject or explicitly label non-code graphs.",
+   "location": "project-documents/user/architecture/360-arch.document-intelligence.md#the-understand-anything-output-contract"
+  },
+  {
+   "i": 8,
+   "severity": "CONCERN",
+   "title": "The plugin's auto-update hook would rewrite the tracked graph after squadron's own commits",
+   "description": "The plugin's `hooks/hooks.json` registers a PostToolUse hook on Bash. When the command contains `git commit|merge|cherry-pick|rebase` and `config.json` has `autoUpdate: true`, it tells the agent to run the incremental update and says \"Do not ask the user for confirmation.\" A SessionStart hook also warns when the graph's commit differs from HEAD.\n\nSquadron commits at every task marker. With `autoUpdate` on, each commit would rewrite `knowledge-graph.json`, `meta.json`, and the fingerprints file. That leaves the tree dirty between commits and mixes graph changes into the implement \u2192 task-checker \u2192 commit flow. The document says `config.json` is \"never written by squadron\" but says nothing about the plugin writing tracked files from hooks. Fix: have the reader detect `autoUpdate` and state the policy, or keep these files out of squadron's commits.",
+   "location": "project-documents/user/architecture/360-arch.document-intelligence.md#working-tree-hygiene"
+  },
+  {
+   "i": 9,
+   "severity": "CONCERN",
+   "title": "The tracked-file contract is incomplete and conflicts with the working-tree goal",
+   "description": "The document tracks four files: `knowledge-graph.json`, `meta.json`, `config.json`, and `.understandignore`. The plugin also writes `.understand-anything/fingerprints.json`. Its incremental update needs that file. Without it, the next commit reclassifies every file and escalates to a full update (`understand/SKILL.md:724`, upstream issue #152). The plugin also keeps `intermediate/scan-result.json` across runs. The document says squadron \"does not touch it\" but never says whether it is tracked.\n\n`main`'s `.gitignore` (lines 181\u2013184) keeps both `fingerprints.json` and `intermediate/` tracked, so the document and `main` disagree. Tracking a whole-file JSON that is regenerated on each run also means large diffs and branch merge conflicts, which contradicts the design goal \"Leave the working tree clean.\" Fix: record the disposition of every file the plugin writes, reconcile with `main`, and reconsider whether the full graph belongs in git.",
+   "location": "project-documents/user/architecture/360-arch.document-intelligence.md#working-tree-hygiene"
+  },
+  {
+   "i": 10,
+   "severity": "CONCERN",
+   "title": "Squadron's analysis namespace is shared with the metrology harness",
+   "description": "In the worktree snapshot (I did not check `main`'s copy), `src/squadron/metrology/audit.py` identifies its output by glob: `project-documents/user/analysis/*-analysis.*.md` (lines 56\u201359). `find_audit_file` returns the newest match written since the run started (lines 259\u2013283). `_is_audit_artifact` exempts untracked files matching `\\d+-analysis\\..+\\.md` from the clean-tree preflight (lines 70\u201375, 286\u2013302).\n\nThe document's `{index}-analysis.overview.md` and `{index}-analysis.codebase-comprehension.md` both match. A comprehension or overview generated during a variance series could be returned as audit findings. An untracked generated document would also pass the clean-tree check that the series depends on. The document does not mention metrology. Fix: give generated documents a marker the harness can distinguish (a docType or topic allowlist), and list metrology under Dependencies.",
+   "location": "project-documents/user/architecture/360-arch.document-intelligence.md#output-conventions"
+  },
+  {
+   "i": 11,
+   "severity": "CONCERN",
+   "title": "Index allocation races across worktrees and branches",
+   "description": "\"Incrementing per run\" requires each run to scan its checkout for the next index. This repo uses worktrees and integration branches (CLAUDE.md, Git Rules). Two branches that each generate a comprehension document will both pick the next number. That produces an add/add merge conflict, or two different documents with the same index. `onboard/comprehension.py` treats the highest index as current, so which document counts as current depends on the checked-out branch. Fix: index by the initiative base index, as the current convention requires, or use a slug plus timestamp. Have the reader choose by a field inside the document, not by index.",
+   "location": "project-documents/user/architecture/360-arch.document-intelligence.md#output-conventions"
+  },
+  {
+   "i": 12,
+   "severity": "CONCERN",
+   "title": "Capability 2 has no flow, an undefined fallback, and no mechanism behind \"derive, never invent\"",
+   "description": "Capability 2 has inputs and a field table but no Flow. The interview that the no-concept path depends on is defined only for Capability 1. The document calls the no-concept path \"the tested path\" and names no test.\n\nThe rule \"every claim traces to an input artifact\" has no enforcement. Capability 1 attributes claims to graph or interview, but Capability 2 has no per-section source line. The translation example violates the rule itself: \"automated review that converges without human babysitting\" asserts an outcome the example input does not state. The \"degrades gracefully\" path also leaves no marker in the output, which the project's no-silent-fallback rule requires. Fix: write a Capability 2 flow, require a source line per field, and mark sections with missing sources as unknown or PM-supplied.",
+   "location": "project-documents/user/architecture/360-arch.document-intelligence.md#capability-2-planning-artifacts--client-facing-document"
+  },
+  {
+   "i": 13,
+   "severity": "CONCERN",
+   "title": "Emphasis contradicts itself, and a translation example uses an invalid status",
+   "description": "The translation rules say \"Emphasis is a generation parameter\" (line 239). Resolved Design Decisions say no emphasis parameter is added unless real use demonstrates the need (lines 328\u2013331). The translation example \"Initiative 140 status draft\" (line 231) uses `draft`, which the document itself says the gate rejects (line 261). Fix: remove the emphasis parameter from the translation rules, and use a status value from the enum in the example.",
+   "location": "project-documents/user/architecture/360-arch.document-intelligence.md#capability-2-planning-artifacts--client-facing-document"
+  },
+  {
+   "i": 14,
+   "severity": "CONCERN",
+   "title": "Provenance format is undefined but required",
+   "description": "The document requires the staleness warning to appear \"in the generated document's provenance\" (lines 134\u2013135). It attributes claims by origin (lines 143\u2013144) and cites the `[INFERRED]` convention as a design input (lines 268\u2013269). It never defines the provenance block, where it lives (the concept template has no provenance section), or the marker syntax. It is absent from Open Questions. The brownfield guide already uses \"a provenance block or `[INFERRED]` markers\" as the trigger for PM confirmation, so this format is load-bearing for the first FAIL above. Fix: specify the block's fields, location, and markers before slice design.",
+   "location": "project-documents/user/architecture/360-arch.document-intelligence.md#capability-1-comprehension--planning-artifacts"
+  },
+  {
+   "i": 15,
+   "severity": "CONCERN",
+   "title": "Proportionality: the design builds more than it needs",
+   "description": "Cut or defer:\n\n- **The separate `/sq:analysis understand` skill and its three dispatcher edits.** Fold Capability 1 into onboard's existing steps (first FAIL above).\n- **Initiative-plan candidate generation.** It has no algorithm for \"complexity clustering,\" no output path, and it is a commitment-adjacent output. Defer it out of this initiative.\n- **Multi-topic overview naming** (`{index}-analysis.overview.{topic}.md`). Nothing requires it yet.\n- **The emphasis parameter.** Resolved Design Decisions already reject it, so remove it from the translation rules.\n- **Staleness logic.** `onboard/graph.py` already computes it. Reuse it rather than rebuilding it.\n\nCapability 2 has no external dependency, which makes it the smaller first slice. It still needs the placement fix and a flow before it can be built.",
+   "location": "project-documents/user/architecture/360-arch.document-intelligence.md#delivery"
+  }
+ ]
+}

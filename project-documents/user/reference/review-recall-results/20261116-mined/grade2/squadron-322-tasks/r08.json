@@ -1,0 +1,75 @@
+{
+ "review": "r08",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "FAIL",
+   "title": "T13 leaves result discovery undecided, and its fallback cannot satisfy the non-empty-offers criterion",
+   "description": "T13 says to \"reuse 320's existing result-discovery surface\" and, if none exists, to scope to store-recorded samples only and ask the Project Manager.\n- **No such surface in capture:** `src/squadron/metrology/capture.py:68` (`resolve_target`) resolves exactly one review file from a path or index, and the store only lists samples, i.e. already-sampled results. I did not read `report.py` or `identity.py`.\n- **Fallback contradicts the criterion:** unsampled results are by definition absent from the store, so the fallback cannot yield \"a graduated config with unsampled results yields a non-empty offer set\". T13's own success line (3 unsampled results at `rate=1.0` gives 3 offers) and walkthrough steps 6\u20137 become unreachable.\n- **Fix:** decide now. Add an explicit task for a review-file enumeration helper that reuses `_REVIEWS_SUBDIR`, `_read_review_type` and `derive_judge_config_id`, then compares against sampled `result_ref`s. Remove the conditional and the PM stop.",
+   "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:201"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "T7 precedence list contradicts its own success criterion",
+   "description": "The numbered order checks `n < floor \u2192 INSUFFICIENT_EVIDENCE` first, then says in prose that a below-floor, low-match cell must reach `TIGHTEN`. Implemented literally, steps 1\u20135 fail T7's success line and T8's \"tightening is not floor-gated\" test.\n- **Unspecified cases:** unversioned with a low match rate (TIGHTEN or INSUFFICIENT_EVIDENCE?), and a misconfigured `tighten_rate >= graduate_rate`.\n- **Fix:** rewrite as one unambiguous order, e.g. `match_rate <= tighten_rate` \u2192 TIGHTEN, then `n < floor or not versioned` \u2192 INSUFFICIENT_EVIDENCE, then `>= graduate_rate` \u2192 GRADUATE, else HOLD. Delete the \"re-read the design\" bullet.",
+   "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:115-121"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Lapse and pruned-file signals have no defined contract; pruned-file is tested but never implemented",
+   "description": "- **Lapse:** T13 fixes the return type as `list[OfferTarget]` but leaves the signal open (\"return enough information, or have the CLI re-derive it\"). T14 then asserts \"on whatever signal T13 produces\", and T15 must print a lapse line from it. Name the shape, e.g. a result model with `offers`, `lapsed: list[GraduatedConfig]` and `skipped_missing: int`.\n- **Pruned file:** T14 tests \"skipped, counted, WARNING naming the path\", but T13 has no implementation item for it and a bare list cannot carry a count. This leaves the design's \"referenced review file gone since graduation\" failure-mode row unimplemented.",
+   "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:203-219"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "T11 store design: circular import, ambiguous ownership, no update path for idempotent re-graduate",
+   "description": "- **Circular import:** T11 adds `graduated_config: GraduatedConfig | None` to `MetrologyRecord` in `models.py`. T3 defines `GraduatedConfig` in `calibration_models.py`, which must import `JudgeConfigId` from `models.py`. Say where `GraduatedConfig` lives (e.g. in `models.py`) or how the cycle is broken.\n- **Ownership:** `write_graduation(store, ...)` is listed as a `graduation.py` function and also as \"extend `MetrologyStore` with this method\". Pick one.\n- **Idempotence:** T15 requires \"update its evidence snapshot in place \u2014 one record, not two\", but T11's `write_graduation` \"returns a generated record id\" and nothing can overwrite or look up a record's id. Specify a deterministic id from `JudgeConfigId` plus level, or an explicit update method.\n- **No-migration requirement:** \"existing records load unchanged\" has no direct test. Add one T12 assertion that a pre-322 sample record still loads and that `list_samples` ignores `graduated_config` records.",
+   "location": "src/squadron/metrology/models.py:100-111"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Malformed `judge:` block failure mode claimed covered but has no task item",
+   "description": "The Coverage Check says the malformed judge block is \"exercised in T8\". T8 has no such test, and T7's `read_current_thresholds` has no handling for it. The design's row requires \"flagged, not silently defaulted\" with a WARNING naming the template, plus a test. Add one item to T7 and one to T8.",
+   "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:287"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Runtime-drawn-model limitation and `--json` note assertion not covered",
+   "description": "The success criterion requires the runtime-drawn-model (180 pool) limitation to be stated where the recommendation is produced, \"asserted: the note is present in output, including `--json`\".\n- T9's `model_dimension_note` covers only the template-plus-model pairing and omits the runtime-drawn statement.\n- T16 checks the note in table rows; for `--json` it only checks that output parses back.\n- **Fix:** add the limitation text to T9 and a JSON-note assertion to T16.",
+   "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:147"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "Config key defaults are unspecified",
+   "description": "T5 requires defaults to show in `sq config list` and T6 asserts \"correct defaults\", but neither the task nor the design gives values for `graduate_match_rate`, `tighten_match_rate` or `residual_sample_rate`. The implementer must invent three policy thresholds. State the values, or state explicitly that they are `None` and that commands fail when unset.",
+   "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:90-104"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "Commit markers after every task, including untested implementation points",
+   "description": "All 17 tasks end in a `**Commit:**` marker, so every implementation task (T1, T3, T5, T7, \u2026) commits before its test task runs. Keep one marker per impl-plus-test pair (after T2, T4, T6, T8, T10, T12, T14, T16, T17). That gives 9 commits at tested points.",
+   "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:39"
+  },
+  {
+   "i": 8,
+   "severity": "NOTE",
+   "title": "Context Summary's suggested-order line is stale against the actual task numbering",
+   "description": "The line says calibration core is T5\u2013T8, graduation T9\u2013T12 and CLI plus config keys T13\u2013T16. The actual layout is config keys T5/T6, calibration T7\u2013T10, graduation T11\u2013T14, CLI T15/T16. Correct the line.",
+   "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:25"
+  },
+  {
+   "i": 9,
+   "severity": "NOTE",
+   "title": "Minor proportionality trims",
+   "description": "- T4's per-model JSON round-trip tests mostly re-test Pydantic. They could fold into T3's success check, or shrink to the two behavioural assertions (`current` nullable, `template_content_hash` carried).\n- T2's \"(or add if 320 didn't create a dedicated file \u2014 check first)\" can be dropped: `tests/metrology/test_identity.py` exists.\n- Task count is otherwise acceptable for a 3/5 slice.",
+   "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:73-82"
+  }
+ ]
+}

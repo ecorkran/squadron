@@ -1,0 +1,47 @@
+{
+ "review": "r08",
+ "findings": [
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Commit markers are checkboxes inside dedicated tasks, and one sits at an untested point",
+   "description": "Every marker is written as `- [ ] **Commit:** ...` under its own \"Task N.5: Commit\" heading with a `git add` checkbox (lines 93-96, 176-179, 246-249, 283-286, 322-325). Markers must be plain `**Commit**:` lines, not checkboxes or tasks; drop the five commit tasks and put a plain marker after 1.4, 2.3, 3.5 and the final docs task.\n\nThe Section 4 commit (line 286) also lands before any test run. Changing `default.yaml` and `test.yaml` to `wrap` is checked only by a `python -c` load, while `tests/test_config.py:45` and `tests/test_main.py` use the real `default.yaml`. Move the full `pytest` from Task 5.1 ahead of that marker.",
+   "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:93-96"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Walkthrough can leave `config/test.yaml` off `wrap`",
+   "description": "Task 5.2 steps 6\u20137 edit `config/test.yaml` to `reflect` and then `open`. Step 8 says to restore it \"to whichever policy you want to keep (recommend `wrap`)\". Criterion 12 requires `wrap`, and the Section 4 commit has already happened, so a junior implementer may leave the file modified or commit a different policy with the final `git add`. Step 8 should say: restore `policy: wrap` and confirm `git diff config/test.yaml` is empty.",
+   "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:304-306"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Round-trip test asserts less than criterion 5",
+   "description": "Criterion 5 requires that the emitted YAML carries a plain string and that reloading produces an equal `ServerConfig`. `test_bounds_policy_yaml_round_trip` only asserts that the policy matches. Tighten it to assert `reloaded == original` and that the YAML text contains `policy: wrap` with no Python tag. No implementation task is missing: `_serialize_for_yaml` at `src/migratory_server/config.py:657-669` already converts `StrEnum` values.",
+   "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:88"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Task file is overweight for a 2/5 slice",
+   "description": "The file has 21 tasks across 334 lines for roughly 60 lines of production code. Cuts and merges:\n- **Merge 1.1\u20131.3** into one config task. The `StrEnum` import step in 1.1 is redundant, since `config.py` already uses `StrEnum` (line 663).\n- **Merge 2.1 and 2.2** into one module task. The helper bodies are dictated line by line (`out=` arguments, mask-assignment statements) when the slice only requires vectorised `np.mod` and clamp-plus-`abs`.\n- **Merge 4.1 and 4.2** into one task; they are the same edit and check on two files.\n- **Drop 5.1**, which duplicates 3.5, or keep only the one moved before the Section 4 marker.\n- **Trim Task 2.3:** fold the two `OPEN` no-op tests into one, and drop the parametrised \"dispatches and does not raise\" test, which the per-policy tests already cover.\n- **Remove the unverifiable checkbox** at line 209 (\"Confirm the `OPEN` path has zero ... overhead\"). `test_open_policy_does_not_call_enforcement` already proves it.",
+   "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md"
+  },
+  {
+   "i": 6,
+   "severity": "NOTE",
+   "title": "Frontmatter says complete while every checkbox is open",
+   "description": "The file has `status: complete` with all items unchecked, and Task 5.3 instructs setting that same status. A fresh breakdown should carry a not-started status.",
+   "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:9"
+  },
+  {
+   "i": 7,
+   "severity": "NOTE",
+   "title": "Task 5.2 viewer steps need visual observation",
+   "description": "Steps 5\u20137 rely on watching the Three.js viewer, which a junior AI cannot do directly. Criterion 14 is defined as manual, so the task traces correctly. The automated parts (startup log line, clean shutdown, integration tests from 3.4) are the evidence an AI implementer can actually record.",
+   "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:303-305"
+  }
+ ]
+}

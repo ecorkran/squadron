@@ -1,0 +1,47 @@
+{
+ "review": "r03",
+ "findings": [
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Commit markers are checkboxes, and Task 15C commits only notes",
+   "description": "Every commit marker (2C, 3C, 5C, 6C, 8C, 9C, 11C, 13C, 14C, 15C) is written as a checkbox item (`- [ ] **Task 2C: Commit** \u2014 ...`). Commit markers must be plain `**Commit**:` lines, never checkboxes. If they stay as checkboxes, the task-checker will tick them, and those ticks become stray edits.\n\nTask 15C (`docs: record slice 261 verification walkthrough`) commits only the walkthrough results recorded under Task 15. Any defect found there is committed separately (line 266), so when nothing is found, 15C is a notes-only commit. Project rules forbid a commit that only adds notes or checks boxes.\n\nFix:\n- Rewrite each marker as a plain line, e.g. `**Commit**: feat(core): add adoption.state config key and state helpers`.\n- Merge 14C and 15C into one commit after Task 15, so the README change and the walkthrough record go in together.\n\nWhere the markers sit (after tested pairs, about 9 commits) is fine.",
+   "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:269"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Building the parity test on two directory copies can fail for the wrong reason",
+   "description": "Task 13 builds \"from identical copies\" in two different temp directories and asserts the prompt strings are identical. Two problems:\n- D5 says CI paths in the facts are absolute, so any CI file in the fixture makes the two outputs differ by directory path.\n- The project-registration step (following `mcpIntegration.test.ts`) may put a different project path or name into the output.\n\nThe two copies are needed only because a `persist` build writes `in_progress`, which changes the second build's result. A simpler setup avoids both problems: use one directory and reset `adoption.state` to `\"\"` between the two builds (or delete the `[adoption]` table). The step should also say the fixture must not depend on paths, or name the fields to normalize before comparing.",
+   "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:247-249"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Renderer tests skip three outcome kinds the slice requires",
+   "description": "The slice's Technical Requirements ask for tests of `renderAdoptionFacts` with \"every outcome\" (`261-slice...md:336`). Task 8T tests only `brownfield`, `adoption-in-progress` and `NOT_EVALUATED`. It leaves out `greenfield`, `already-planned` and `adoption-closed`. Task 8 requires the renderer to switch on every kind with a `never` check, so those branches exist but have no tests.\n\nFix: add one `it.each` over all five `AdoptionOutcome` kinds plus `NOT_EVALUATED`, asserting that each renders an outcome bullet that is not empty.",
+   "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:173-176"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "No test that `context_build` returns the `AdoptionError` as an error result",
+   "description": "The slice criterion says \"`context_build` returns it as an error\" (`261-slice...md:333`). The tasks cover only these parts of it:\n- Task 10T checks that `generateContextFromProject` rejects.\n- Task 12 #12 checks that the pipeline rejects.\n- Walkthrough step 4 (Task 15) checks `cf build` by hand.\n\nNothing checks the MCP side. `contextTools.ts` wraps its handlers in `catch` \u2192 `errorResult` (`packages/mcp-server/src/tools/contextTools.ts:10-11`), so it probably works already, but Task 11 changes that call path and nothing guards it.\n\nFix: add one assertion to Task 11's `contextTools.test.ts` work. A mocked pipeline that throws `AdoptionError` should give `isError: true`, with the error message as the text.",
+   "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:222"
+  },
+  {
+   "i": 6,
+   "severity": "NOTE",
+   "title": "Task 2 adds an `AdoptionError` case the design does not list",
+   "description": "`readAdoptionState` throws `AdoptionError` when a hand-edited value is not in `ADOPTION_STATES`. D9 lists three `AdoptionError` cases (missing profile or prompt, a walk that can't finish, a failed write), and this would be a fourth. It matches the project's no-silent-fallback rule, and the extra test in Task 2T is small. It is worth adding one line to the design so the error catalogue stays complete for 263 and 264.",
+   "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:67"
+  },
+  {
+   "i": 7,
+   "severity": "NOTE",
+   "title": "Proportionality is acceptable",
+   "description": "There are 16 task pairs in one file, which fits a slice with about 10 new source files and the build integration. The test tasks follow the slice's own Technical Requirements list item by item, with no extras. The detailed steps (constant names, function splits, `it.skipIf` for permission tests) come from the design or project rules rather than new choices. The file correctly omits a `tests/load/` task: D2 says tests assert the caps, not timings, and the load tier does not apply to this TypeScript repo.",
+   "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md"
+  }
+ ]
+}

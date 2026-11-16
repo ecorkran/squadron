@@ -1,0 +1,173 @@
+{
+ "review": "r01",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "FAIL",
+   "title": "Tick runs CPU-bound NumPy work inside the asyncio loop, and client sends are awaited inside the tick",
+   "description": "Technical Considerations (bullet 1) says to \"run the tick synchronously, then yield to the async event loop for I/O between ticks,\" and defers offloading to a thread until tick computation \"consume[s] the full budget.\" This conflicts with the project's Python rules and with the document itself:\n\n- The tick is a coroutine doing NumPy work on the loop thread. The project rule for `async def` says synchronous code must be guaranteed under 1 ms worst case, or it goes to `run_in_executor`/a thread. Any real simulation tick at the doc's entity counts is far above 1 ms.\n- The doc's own requirement, \"without the tick loop starving I/O,\" is violated at every tick duration, not only when the budget saturates.\n- Envisioned State step 5 pushes state to clients inside the tick. WebSocket sends are awaitables that block on client drain. So the tick is not synchronous, and one stalled client stalls the commit cycle. That contradicts the same section's requirement that slow clients not block the tick loop.\n\nSpecify the execution model now: the tick's executor (dedicated thread or process), the publication mechanism for committed state, and per-client sends as separate tasks fed from a committed snapshot.",
+   "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md#technical-considerations"
+  },
+  {
+   "i": 1,
+   "severity": "FAIL",
+   "title": "Replay fidelity contradicts the precision and determinism decisions",
+   "description": "\"Logging format and replay fidelity\" promises that \"given a log and the same configuration, the simulation can be reconstructed tick-by-tick,\" and it relies on the tick being deterministic. Two gaps undermine that:\n\n- The serialization bullet says raw float buffers serve both streaming and logging, and the concept specifies Float32Array for transfer. The 100-arch doc says the engine's internal precision may be float64, with conversion at the serialization boundary. If the log uses the wire format, replayed state is float32-rounded and cannot match the float64 state that produced it. Replay is therefore not bit-exact.\n- There is no determinism contract. The doc never says whether replay must be bit-exact or within tolerance. It does not say who owns RNG and how it is seeded (flocking perturbation, spawn placement from \"where\" in population config). It does not say how entity slot assignment is ordered, or whether NumPy reductions are stable across machines and SIMD alignment. \"Deterministic\" is a goal in 100-arch, not a verified property.\n\nDecide whether the log stores full-precision state or only inputs. Then define the determinism contract and RNG ownership.",
+   "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md#technical-considerations"
+  },
+  {
+   "i": 2,
+   "severity": "FAIL",
+   "title": "Entity identity and removal in SoA storage are undefined",
+   "description": "\"Entity management is centralized in the server... assigns entity IDs, allocates space in the state arrays, and removes entities when appropriate.\" Several load-bearing questions are unanswered:\n\n- How an entity ID maps to an array slot. Removing from contiguous SoA arrays requires swap-remove or compaction, which moves slots. The engine's active-subset indices and the profile-index column would go stale.\n- Whether clients see stable IDs. They must, to track entities across snapshots or deltas.\n- Who produces the lifecycle events that step 4 says are \"queued during the tick.\" The engine is stated to be stateless and not to manage the lifecycle. Whether spawns can happen after startup is never stated.\n- What \"when appropriate\" means for removal.\n\nSlice 302 (entity management) builds directly on this. Decide the ID-to-slot indirection (free list, generation counter, or tombstones) before 302 starts.",
+   "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md#envisioned-state"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Engine interface is described differently here and in 100-arch, and the document asserts interfaces it never defines",
+   "description": "- Step 3 says the server passes \"current entity state and environment context\" and receives \"updated positions and velocities.\" 100-arch says the engine takes an optional active-agent subset (index array or mask) and returns the full updated state array. The 300 tick never passes a subset, so the multi-resolution path in the scaling section has no step to carry it.\n- 100-arch's system-level interface includes \"register/remove agents.\" This doc says the engine \"does not manage the entity lifecycle itself.\" Both cannot hold.\n- \"Subsystem orchestration\" and \"Orchestrator, not monolith\" depend on \"well-defined interfaces\" for the engine, environment, and client layers. None are specified here: no signatures, no ownership of the arrays across the call, no error contract.\n\nWrite the engine and environment contracts into this doc, or reference the exact 100-arch section. Reconcile register/remove.",
+   "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md#envisioned-state"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Performance and memory numbers are internally inconsistent and unvalidated",
+   "description": "- \"Memory is never the constraint (500K entities \u2248 24MB).\" 24 MB matches 500K \u00d7 48 bytes, which is float64 3-D position plus velocity. The egress figure (120 MB/s at 500K) uses 12 bytes per entity, which is float32 3-D position. The doc never says which precision applies to which figure.\n- A vectorized neighbor pipeline materializes pairs. At 500K entities \u00d7 ~100 neighbors there are ~50M directed pairs. One `(pairs, 3)` float64 temporary is ~1.2 GB, and one int64 pair-index array is ~400 MB. Force accumulation creates several per tick. Memory is a binding constraint at the 500K tier unless computation is chunked, and the doc names no chunking strategy.\n- The tier table says 10K\u201350K is \"comfortable on a single CPU,\" while 50K\u2013500K \"requires 2-4 cores saturated.\" 50K is claimed for both. Saturating 2\u20134 cores requires multi-threaded execution, but the design is single-threaded (finding 1), and threads appear only as an upgrade path.\n- At 20 tps the budget is 50 ms. 50K \u00d7 ~100 neighbors is ~5M pair evaluations per tick. In a multi-pass NumPy pipeline, that likely uses most of the budget before neighbor-list construction. This is an estimate, not a measurement.\n\nBenchmark before keeping the tiers. Per the project rules, code on simulation paths needs a load test in `tests/load/` that asserts tick duration.",
+   "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md#technical-considerations"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Network egress is already a wall at the initial operating range",
+   "description": "The doc frames egress as a 500K-entity problem. At 12 bytes per entity at 20 tps (positions only), a single client receives 2.4 MB/s at 10K entities and 12 MB/s (~96 Mbit/s) at 50K. Per-client culling is slice 309, an integration slice that depends on the WebSocket layer. So v1 streams every entity to every client, and the cost multiplies by observer count (\"Eventually many observers\"). The \"initial operating range\" is already network-bound for several browser clients. Either set a v1 cap on entities \u00d7 clients, or move culling or delta encoding into the foundation scope. The snapshots-or-deltas choice drives this number and needs to be made explicitly.",
+   "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md#technical-considerations"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "Slow-client policy, delta-versus-snapshot, and resync are deferred in ways that interact",
+   "description": "Three decisions stay open: deltas versus full snapshots, buffer versus drop-frame versus disconnect for slow clients, and how a client resyncs. They are coupled. Dropping frames for a client that receives deltas makes that client diverge. No sequence number, baseline ID, or keyframe request is specified to recover. Unbounded buffering grows memory per stalled client, and no bound is given. No per-client send queue is designed, so step 5's behavior with a stalled client is undefined. Choose a per-client bounded queue (or latest-state conflation), a disconnect threshold, and a resync path that sends a full snapshot.",
+   "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md#technical-considerations"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "Logging writes sit on the tick path with no sizing, writer design, or failure policy",
+   "description": "Step 5 says \"Write to the event log if logging is active,\" which places writes in the tick. A full snapshot at 500K entities is 12 MB (float32 position + velocity) to 24 MB (float64). Snapshotting every tick would require 240\u2013480 MB/s of sustained disk writes. Synchronous writes make the tick's duration depend on disk speed. The doc says \"every N ticks\" but never sizes N, never says where writes happen (writer thread, bounded queue), and never says what happens when a write fails or the disk fills: halt, warn and skip, or drop logging. \"No silent failures\" requires an explicit choice. The log record structure is also unspecified. The slice plan calls for \"initial configuration, tick-indexed state or event records,\" and the arch should define that.",
+   "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md#envisioned-state"
+  },
+  {
+   "i": 8,
+   "severity": "CONCERN",
+   "title": "Environment write-back is missing, which breaks the stigmergy archetype",
+   "description": "The environment is read-only to the engine (100-arch, \"Environment as input surface\"). The swarm archetype requires agents to deposit state into the environment (\"respond to environmental stigmergy (reinforced paths),\" 100-arch). The six-step tick has no post-behavior environment write. Step 2 is the only environment mutation, and it is time-driven. Slice 304 refers to \"post-tick environment writes (e.g., stigmergic trail deposits),\" so the slice plan assumes a mechanism this architecture does not define. Specify who writes (the server applying engine-emitted deposit records), at which transaction point (at commit), and what ordering the next tick sees.",
+   "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md#envisioned-state"
+  },
+  {
+   "i": 9,
+   "severity": "CONCERN",
+   "title": "Environment and seasonal ownership is split across three documents",
+   "description": "Step 2 has the server call environment update, including \"seasonal progression.\" Envisioned State says \"Seasonal state advances with each tick based on a configurable time scale.\" Slice 308 says the server owns when time advances, and that initiative 500 owns what seasons mean. Anticipated Slices lists \"Environment layer foundation\" (terrain, resources, query interface) and \"Seasonal and temporal systems\" as slices of this initiative, while the slice plan assigns them to initiative 500. Decide the split: the server owns the clock and calls `environment.update(time)`, and the environment owns season semantics. Remove the environment and seasonal items from this doc's anticipated list, or mark them as cross-initiative.",
+   "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md#anticipated-slices"
+  },
+  {
+   "i": 10,
+   "severity": "CONCERN",
+   "title": "The environment layer this design depends on has no architecture document",
+   "description": "The design depends on an environment layer with terrain, biomes, resource locations, seasonal state, a read-only query interface, and seed-based generation at startup. The only architecture docs in the repository are 100-arch and this document. The slice plan refers to \"500-arch,\" which does not exist, and this document's `dependsOn` does not list it. The environment hosting contract, the update contract, and the query surface are therefore assumed. Either write the environment architecture first, or record a provisional environment contract in this doc with its own status.",
+   "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md#envisioned-state"
+  },
+  {
+   "i": 11,
+   "severity": "CONCERN",
+   "title": "Cross-document references are broken or wrong",
+   "description": "- Frontmatter `dependsOn` (line 9) cites `001-concept.migratory`. The concept file is `project-documents/user/project-guides/000-concept.migratory.md`, and 100-arch's `dependsOn` uses `000`.\n- Related Work (line 132) links `../project-guides/001-concept.migratory.md`, which does not exist.\n- 100-arch line 122 links `200-arch.world-server-foundation.md`, which does not exist. This document is `300-arch.worldserver-foundation.md`, with no hyphen between \"world\" and \"server.\"\n\nFix all three. Add the environment architecture to `dependsOn` once it exists.",
+   "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md:9"
+  },
+  {
+   "i": 12,
+   "severity": "CONCERN",
+   "title": "The doc promises state persistence on shutdown, which the slice plan defers",
+   "description": "\"Explicit lifecycle\" says the server will \"persist state on shutdown\" and \"drain client connections gracefully.\" The slice plan puts save/load in Future Work (item 3, \"State Persistence and World Save/Load\"), and this doc designs no persistence format. Either commit to a persistence format and scope it into a foundation slice, or remove the principle.",
+   "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md#architectural-principles"
+  },
+  {
+   "i": 13,
+   "severity": "CONCERN",
+   "title": "No error-handling strategy for the failure modes this design creates",
+   "description": "The doc does not say what happens on:\n- an exception raised inside the tick (NumPy error or engine exception): does the server crash, skip the tick, or restore?\n- NaN or inf from integration (Euler, no clamp, as 100-arch's stability note warns);\n- an environment load failure at startup;\n- a log write failure (see the logging finding);\n- a client disconnecting mid-send, handshake timeouts, or keepalive.\n\nThe project's failure-mode rule requires each I/O path to name its hang, timeout, and disconnect behavior, plus the observable signal (WARNING or higher, or a metric). Add a failure table per I/O path.",
+   "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md#envisioned-state"
+  },
+  {
+   "i": 14,
+   "severity": "CONCERN",
+   "title": "Extension points are asserted, but the current shape does not contain them",
+   "description": "The doc calls aggregation and variable-rate ticking \"the key architectural decision now,\" yet the design lacks what they need:\n- The tick signature (step 3) takes no active subset.\n- Entity storage has positions, velocities, and profile indices only. There is no fidelity-tier column, active flag, or aggregate type.\n- The wire framing carries per-entity arrays. Aggregate descriptors (\"position, radius, count, heading\") need a second record type, and the framing does not reserve one.\n- \"Region-aware entity management\" is a design goal, but \"region\" is never defined.\n\nAdding these later changes three interfaces at once: the tick signature, the entity table schema, and the wire format. The cheap version is small (a tier column, a subset argument, a record-type tag), but the doc has to name them now.",
+   "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md#design-goals"
+  },
+  {
+   "i": 15,
+   "severity": "CONCERN",
+   "title": "Per-client culling needs range queries from a spatial index the design does not assign",
+   "description": "Culling and relevance horizons require region or frustum queries over entity positions for each client, each tick. 100-arch defines only a neighbor query (\"which agents are within radius R of agent A\"). This doc says \"the server must perform spatial culling per client\" but does not say which index serves it or who owns it. Two indexes with separate owners duplicate state. One shared index makes rendering concerns a dependency of the engine. Per-client encoding also means each client's frame is serialized separately every tick, so serialization cost grows with client count, and no bound is given. Assign index ownership and state the per-tick serialization cost model.",
+   "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md#technical-considerations"
+  },
+  {
+   "i": 16,
+   "severity": "CONCERN",
+   "title": "Wire format is underspecified",
+   "description": "The doc specifies \"raw float buffers\" wrapped in \"tick number, entity count, array layout descriptor,\" with no dtype, byte order, or field layout. JavaScript `Float32Array` uses platform endianness, and numpy `tobytes()` uses native order. Both are little-endian on current targets, but the protocol should say little-endian explicitly (`<f4`). The descriptor's format is also undecided: JSON header, or fixed binary struct. The float64-to-float32 conversion is not placed (in the tick, or in the send path), and its cost is not in any budget. Decide these before slice 306 implements the protocol.",
+   "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md#technical-considerations"
+  },
+  {
+   "i": 17,
+   "severity": "CONCERN",
+   "title": "Libraries for load-bearing layers are unselected",
+   "description": "- \"The WebSocket and async I/O story is well-served by asyncio.\" The asyncio standard library has no WebSocket server. A library such as `websockets` or `aiohttp` is required, and that choice determines the backpressure, ping/pong, and message-size behavior the design depends on. `pyproject.toml` currently declares only `numpy` and `pyyaml`.\n- Configuration is \"YAML or similar... validated,\" which leaves format and validator open. The project's Python rules require Pydantic for file parsing and `pydantic-settings` for environment values. PyYAML is already a dependency, so a Pydantic-over-YAML loader needs no further format decision.\n- The concept names SciPy (`cKDTree`) as a natural fit for spatial queries. This doc says \"NumPy-vectorized spatial hashing\" and never mentions SciPy. Ragged neighbor lists need sort and cumulative-sum binning in NumPy, which is nontrivial.\n\nPick the libraries in this doc.",
+   "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md#current-state"
+  },
+  {
+   "i": 18,
+   "severity": "CONCERN",
+   "title": "State ownership across the tick transaction is implicit",
+   "description": "\"Tick as transaction\" requires reading current state and computing next state. The doc does not say whether the engine writes into pre-allocated output arrays or returns fresh arrays (100-arch: \"Returns the updated state array\"), whether the server double-buffers, or where the commit point is. \"There is exactly one truth\" (Design Goals) conflicts with holding current and next state at once. The threaded upgrade path needs a documented publication mechanism for committed state, which the project's concurrency rule requires. Name the owner of each array, the swap or copy point, and the publication mechanism (for example, double buffers with a published sequence number).",
+   "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md#architectural-principles"
+  },
+  {
+   "i": 19,
+   "severity": "CONCERN",
+   "title": "Tick timing policy and timestamp use are unspecified",
+   "description": "Step 6 says \"sleep for the remainder of the tick budget, or log an overrun warning,\" and Technical Considerations says \"warn on overrun, continue at best effort.\" Not specified:\n- whether the next tick starts immediately (catch-up, which can make overruns self-sustaining) or the schedule resets (simulated time then falls behind wall time);\n- whether the tick number, and therefore simulated time, advances by one per tick regardless of wall time. Slice 308 (\"ticks map to simulated time\") implies yes, but this doc does not say so;\n- whether the wall-clock timestamp recorded in step 1 is an engine input. It must not be, or determinism breaks, and the doc does not say so.",
+   "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md#envisioned-state"
+  },
+  {
+   "i": 20,
+   "severity": "CONCERN",
+   "title": "Network exposure is unaddressed for a server that may serve many observers, possibly publicly",
+   "description": "The concept says observers may be shared publicly. This doc lists \"network binding\" as configuration with no default bind address, no connection cap, no origin check, and no stated authentication position (even for read-only). With the unbounded-buffer option for slow clients (see the slow-client finding), one stalled or hostile client can exhaust server memory. State the default bind (loopback), a connection limit, a per-client byte bound, and an explicit decision on unauthenticated read-only access.",
+   "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md#technical-considerations"
+  },
+  {
+   "i": 21,
+   "severity": "CONCERN",
+   "title": "The scaling analysis is most of the design, for scope the slice plan defers",
+   "description": "The \"Entity scaling and multi-resolution simulation\" bullet is roughly the second half of Technical Considerations. It covers 4M+ entities on GPU, multi-GPU spatial decomposition, murmuration examples, and merge-event strategies, and it says the architecture \"should not prescribe a solution.\" The slice plan puts multi-resolution, GPU, and distribution in Future Work at effort 4/5 and 5/5. The claim that \"GPU particle simulations routinely handle 4M+ at 60fps \u2014 the physics is similar\" is unsourced and not equivalent: particle systems rarely run 100-neighbor flocking at 4M entities.\n\nWhat to cut: the tier table, the GPU and multi-GPU and distributed paragraphs, the murmuration example, and the merge strategies. Keep only the constraints the foundation must preserve (a tier column, a subset argument, a record type, serializable state) in a short \"Extension constraints\" section. Reduce \"Distribution-compatible\" in Design Goals to one sentence, or fold it into that section.",
+   "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md#technical-considerations"
+  },
+  {
+   "i": 22,
+   "severity": "CONCERN",
+   "title": "The server absorbs responsibilities the doc says it does not own",
+   "description": "\"Orchestrator, not monolith\" says the server only coordinates. The doc assigns it the tick loop and timing, the entity table and ID assignment, the lifecycle queue, environment hosting and the seasonal clock, aggregate management (100-arch: \"Aggregate entities are managed by the world server\"), spatial culling policy, the wire protocol and per-client encoding, log format and writes, configuration loading and validation, and network binding. Nothing separates these into modules. Name the internal boundaries (for example: simulation host, entity store, environment host, broadcaster with per-client queues, recorder, configuration), and say which ones the tick calls directly, so each can be tested in isolation.",
+   "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md#architectural-principles"
+  },
+  {
+   "i": 23,
+   "severity": "NOTE",
+   "title": "\"NumPy releases the GIL\" is too broad to justify the thread upgrade path",
+   "description": "Numeric ufuncs release the GIL. Fancy indexing, Python-level loops (per-client dispatch, lifecycle queue handling), and object-dtype work hold it. A thread offload helps only if the hot loop is dominated by GIL-releasing operations. The project's rules call for profiling before optimizing, so the doc should make the thread path conditional on a profile showing the tick is ufunc-dominated. A thread also does nothing for the wire and logging paths, which the doc's offload rationale does not mention.",
+   "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md#technical-considerations"
+  }
+ ]
+}

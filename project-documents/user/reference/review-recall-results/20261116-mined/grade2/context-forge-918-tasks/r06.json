@@ -1,0 +1,47 @@
+{
+ "review": "r06",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "FAIL",
+   "title": "Task 1's unindexed `[~]` fixture line won't match `PLAN_UNINDEXED_RE`",
+   "description": "`PLAN_UNINDEXED_RE` requires the name to be wrapped in bold: `\\[([ xX])\\]\\s+\\*\\*([^(].*?)\\*\\*`. Task 1 proposes `7. [~] Feature Epsilon without explicit index \u2014 cut for scope.`, which has no `**\u2026**`. That copies the style of the Future Work section in the fixture (fixture line 32), not the style of slice entries. Widening the regex to `~` won't make this line parse. It will still be dropped silently, and Task 5's unindexed assertions will fail.\n\nThe slice design's success criterion gives the correct form: `N. [~] **Name** \u2014 rationale`. Task 1 should use that form, for example `7. [~] **Feature Epsilon** \u2014 cut for scope.`. Its success line says \"same `**Name**` bold-wrap for the indexed form\" only. It should require the bold-wrap for the unindexed form too.",
+   "location": "packages/core/src/introspection/parsers/slicePlanParser.ts:9"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Adding entries to the shared fixture breaks assertions no task updates",
+   "description": "`sample-slice-plan.md` is also read by `ArtifactIntrospector.test.ts`, `futureWorkParser.test.ts` and `overviewParser.test.ts`. Task 5 only updates the `totalSlices`/`completedSlices` test. Other assertions will break as well:\n- `packages/core/tests/introspection/ArtifactIntrospector.test.ts:52` expects `totalSlices` to be 5.\n- `packages/core/tests/introspection/slicePlanParser.test.ts:10` expects `toHaveLength(5)`.\n- `packages/core/tests/introspection/slicePlanParser.test.ts:12-30` checks `entries[0]` and `entries[2]` by position. An unindexed entry gets index 1 from the sequential counter. Entries are sorted by index (`slicePlanParser.ts:91`), so it moves to `entries[0]` and shifts every other position.\n\nThis also conflicts with the slice's success criterion that existing fixture tests keep passing \"unchanged\". The slice design already allows \"or add a sibling fixture\". Recommended fix: change Task 1 to create a separate fixture (for example `sample-slice-plan-deprecated.md`) and have Task 5 test against it. Then existing tests and fixture counts stay exactly as they are. If the shared fixture is kept instead, Task 5 must list every assertion above that it updates.",
+   "location": "packages/core/tests/fixtures/introspection/sample-slice-plan.md"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Commit markers are written as checkboxes",
+   "description": "Every commit marker (lines 105, 135, 179, 197, 212, 224) is written as `- [ ] Commit: ...`. Commit markers must be plain `**Commit**:` lines, never checkboxes. Where they sit is mostly fine: after the parser change plus its tests (Task 5), after the derivation change (Task 7), and after the wiring plus its integration test (Task 10). Smaller points:\n- Tasks 11 and 12 each add one test file with no production code. They could share a single commit.\n- Task 13's marker is conditional (\"if any uncommitted changes remain\"). It should be dropped or written as a plain marker.",
+   "location": "project-documents/user/tasks/918-tasks.sliceplanparser-deprecated-entry-handling.md:105"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "`arch-status-vs-plans` is never tested",
+   "description": "A success criterion covers two rules: \"`plan-status-vs-entries` / `arch-status-vs-plans` rules do not false-positive\". Task 12 only tests `plan-status-vs-entries`. Both rules compute `allComplete = completedSlices === totalSlices` (`ConsistencyChecker.ts:726,749,828,849`). Task 12 should either add one case for `arch-status-vs-plans` or explicitly state that the shared arithmetic covers it.",
+   "location": "project-documents/user/tasks/918-tasks.sliceplanparser-deprecated-entry-handling.md:199-212"
+  },
+  {
+   "i": 4,
+   "severity": "NOTE",
+   "title": "Task 5's regression test overlaps the existing tests",
+   "description": "The \"byte-identical status/isChecked\" regression test repeats what the existing `toEqual` tests already check. If a sibling fixture is adopted (see above), this step can be cut: the untouched existing tests already prove there was no regression.",
+   "location": "project-documents/user/tasks/918-tasks.sliceplanparser-deprecated-entry-handling.md:99-102"
+  },
+  {
+   "i": 5,
+   "severity": "NOTE",
+   "title": "Task 9's change to the fallback initializer goes beyond the design's \"one-line\" scope",
+   "description": "The design's Decision 4 describes a one-line change to `slice.ts`. Task 9 also changes the `derivedStatus` initializer that runs when `detectDocuments` throws. That change is reasonable: it stops a `[~]` entry being reported as `not-started` when that error occurs. It follows from the success criterion \"`cf list slices` \u2026 never marks it `\u2190 next`\", so this is not scope creep. Note that no test covers that error path.",
+   "location": "project-documents/user/tasks/918-tasks.sliceplanparser-deprecated-entry-handling.md:155-163"
+  }
+ ]
+}

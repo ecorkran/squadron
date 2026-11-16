@@ -1,0 +1,33 @@
+{
+ "review": "r01",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "D9 leaves the routed-provider equivalence rule to Phase 6, though the plan assigns it to design",
+   "description": "The slice plan's Part C says \"Design must decide what counts as 'differs' for providers that return a dated or routed variant of the requested id (OpenRouter), so an alias resolving to its own snapshot is not reported as a substitution.\"\n\nD9 settles the dated-snapshot case only. The routed forms are named as unknown in the Risk Assessment (lines 359-363: a dropped `vendor/` prefix, a `:free` suffix) and deferred: \"Phase 6 captures the real `answering_models` from one review per configured profile.\"\n\n- **Coverage is one alias per profile.** Every other OpenRouter or local model whose returned id differs in form reports a substitution on every run, after merge.\n- **A false positive is not as cheap as D9 says.** D10 makes `requestedModel` presence the gate-facing signal for \"not the model you asked for\", and makes `aiModel` the metrology identity. A false substitution therefore writes a wrong gate signal and re-keys the judge, not just \"one extra frontmatter key and a WARNING\".\n- **Fix.** Capture the ids during design, as was done for the SDK on 20260926, and state the rule for the routed forms in D9. Otherwise, state what a gate and metrology should do with a `requestedModel` that may be a form mismatch.",
+   "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:176-187"
+  },
+  {
+   "i": 1,
+   "severity": "NOTE",
+   "title": "\"Any successful tool call\" is a weaker guarantee than the Value section states",
+   "description": "D4 follows the plan's trigger (\"truncated diff with zero tool calls\"), so this is aligned. But line 27 claims that after this slice \"a PASS means the model either saw the whole diff or read files with its tools\". Under D4 a single successful directory listing or grep keeps a stated PASS. That includes the D3 case, where the model saw none of the diff. `diffTruncated: true` still records it, so a gate can decide. Soften the Value claim, or say that gates wanting the stronger guarantee must read `diffTruncated`.",
+   "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:127-135"
+  },
+  {
+   "i": 2,
+   "severity": "NOTE",
+   "title": "Not every surface that prints the model is listed",
+   "description": "The component table covers the artifact, terminal header, JSON and pipeline metadata. Two other readers of `ReviewResult.model` exist: the PR-review comment body and the findings-addressed judge path. Both will silently switch to the answering id, with no \"(requested X)\" marker on substitution. Neither breaks, but the design should say whether the PR comment shows the substitution, since it is the one surface posted outside the repo. The Risk Assessment also omits the two risks the plan names: frontmatter keys read by context-forge gates, and Part B changing a verdict outcome.",
+   "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md#component-structure"
+  },
+  {
+   "i": 3,
+   "severity": "NOTE",
+   "title": "D12 multi-model handling is the one piece that could be lighter",
+   "description": "The ordered, deduplicated `answering_models` list, its digest line and its second WARNING serve a case the design calls \"possible\", not observed. Recording only the last answering model would satisfy #134 and the plan. The list is cheap and makes a mid-run route change visible, so keeping it is defensible. The overall mechanism count is otherwise in line with the plan's 3/5 effort.",
+   "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:204-206"
+  }
+ ]
+}

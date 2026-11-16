@@ -1,0 +1,47 @@
+{
+ "review": "r04",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "FAIL",
+   "title": "Python Success Criterion 3 fixture scores 7 under Task 3's rule, not 6",
+   "description": "Task 3 (from D2) says a comprehension adds 1 per `for` plus 1 per `if`. Task 4 requires the fixture (`if`, `elif`, `and`, a comprehension `if`, an `except`) to score 6.\n\n- A comprehension `if` cannot exist without its `for`, so the fixture scores 1 + if + elif + and + comp-for + comp-if + except = 7.\n- The same clash hits \"one test per decision point \u2026 each scoring 2\": a comprehension `if` alone scores 3.\n- The TypeScript fixture is consistent (1 + if + `??` + ternary + 2 cases = 6).\n\nThe contradiction is inherited from the slice design (D2 vs Success Criterion 3), but as written the implementer must silently break either the rule or the expected value. Fix: decide which holds, then update Task 4 (and the slice design) \u2014 either state 7 and \"comprehension `if` scores 3\", or stop counting the comprehension `for`.",
+   "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:54-65"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Task 2's \"suite passes unchanged\" is false against the existing test",
+   "description": "The existing test asserts `adapter.metrics == set(SnapshotMetric)`. Task 2 adds four enum members and narrows `PythonAdapter.metrics` to the four slice-400 metrics, so this assertion fails from Task 2 until Task 25.\n\n- Task 2's success line and its commit (and the commits at Tasks 4, 6, 7, 9 and onward) therefore sit at a red suite.\n- Fix: have Task 2 change the assertion to the explicit set, and have Tasks 8, 12, 14 and 25 extend it as each metric is added.\n- The stale \"all four metrics\" docstring at `python_adapter.py:102` should be updated alongside.",
+   "location": "tests/metrology/snapshot/test_python_length.py:60"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "`MemoryError` has two conflicting handlings in the duplication tasks",
+   "description": "Task 14 lists `MemoryError` as a TypeScript token error, mirroring the existing parse-error tuple. Under Task 10, any `token_errors` member puts the file in `unparsed_files` and the pass continues. Task 10 also says a `MemoryError` during the pass yields `tool_failed`, and Task 11 tests that a tokenizer raising `MemoryError` gives `tool_failed`.\n\n- For TypeScript the result depends on which `except` the implementer writes first.\n- The failure-mode table (row 2) says `tool_failed`.\n- Fix: drop `MemoryError` from Task 14's token errors, or state the precedence in Task 10 and add a TypeScript-level test.",
+   "location": "src/squadron/metrology/snapshot/typescript_length.py:151"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "\"Marks every line under both windows\" can count blank and comment lines",
+   "description": "D3 requires `per_file` to hold duplicated non-blank lines so file length is a valid denominator. Task 10's wording allows a first-to-last-token line range, which would include blank and comment-only lines inside the window.\n\n- Task 13's \"report the function's lines in both\", with differing comments and blank lines between the files, does not settle it.\n- Fix: say that only lines carrying a token in the window are marked, and have Task 13 assert the exact count excluding comment and blank lines.",
+   "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:125"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Commit markers are written as checkboxes",
+   "description": "All commit points use `- [ ] Commit: \u2026` rather than plain `**Commit**:` lines. Task 30 also ends with a checkbox \"Commit any remaining changes\". Placement is otherwise good: each marker follows a test task, never bare implementation. Fix: convert them to plain `**Commit**:` lines and drop the Task 30 catch-all.",
+   "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:46"
+  },
+  {
+   "i": 5,
+   "severity": "NOTE",
+   "title": "Success Criterion 10's \"other metrics are unchanged\" has no adapter-level test",
+   "description": "Task 11 tests the ceiling inside `duplication.py` only. One case in Task 13 or 15 could lower the constant through an adapter and assert the other measurements are still present. That would cover the outcome half of the failure-mode row.",
+   "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:138"
+  }
+ ]
+}

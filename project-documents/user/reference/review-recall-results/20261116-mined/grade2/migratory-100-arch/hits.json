@@ -1,0 +1,63 @@
+{
+ "case": "migratory-100-arch",
+ "flaws": [
+  {
+   "id": "F1",
+   "text": "Related Work links `200-arch.world-server-foundation.md`. At `09dd31b` the repo holds `300-arch.worldserver-foundation.md` and no 200-arch file. **VAL",
+   "hits": {
+    "r01": [
+     10
+    ],
+    "r02": [
+     11
+    ],
+    "r03": [
+     12
+    ],
+    "r04": [
+     15
+    ],
+    "r05": [
+     10
+    ],
+    "r06": [
+     11
+    ],
+    "r07": [
+     12
+    ],
+    "r08": [
+     16
+    ]
+   }
+  },
+  {
+   "id": "F2",
+   "text": "Envisioned State says the narrow interface is \"tick the simulation forward, query agent state, register/remove agents\", while the same section says th",
+   "hits": {
+    "r01": [
+     0
+    ],
+    "r02": [
+     0
+    ],
+    "r03": [
+     1
+    ],
+    "r04": [
+     3
+    ],
+    "r05": [
+     0
+    ],
+    "r06": [
+     0
+    ],
+    "r08": [
+     0
+    ]
+   }
+  }
+ ],
+ "note": "F2: r04:3 and r08:0 count because they name stateless (L70) vs register/remove (L81) alongside the ownership point; r07:3 excluded since it only raises register/remove vs server ownership without the stateless contradiction."
+}

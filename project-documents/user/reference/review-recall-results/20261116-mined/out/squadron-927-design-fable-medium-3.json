@@ -1,0 +1,207 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "D9 leaves the routed-provider equivalence rule to Phase 6, though the plan assigns it to design",
+      "description": "The slice plan's Part C says \"Design must decide what counts as 'differs' for providers that return a dated or routed variant of the requested id (OpenRouter), so an alias resolving to its own snapshot is not reported as a substitution.\"\n\nD9 settles the dated-snapshot case only. The routed forms are named as unknown in the Risk Assessment (lines 359-363: a dropped `vendor/` prefix, a `:free` suffix) and deferred: \"Phase 6 captures the real `answering_models` from one review per configured profile.\"\n\n- **Coverage is one alias per profile.** Every other OpenRouter or local model whose returned id differs in form reports a substitution on every run, after merge.\n- **A false positive is not as cheap as D9 says.** D10 makes `requestedModel` presence the gate-facing signal for \"not the model you asked for\", and makes `aiModel` the metrology identity. A false substitution therefore writes a wrong gate signal and re-keys the judge, not just \"one extra frontmatter key and a WARNING\".\n- **Fix.** Capture the ids during design, as was done for the SDK on 20260926, and state the rule for the routed forms in D9. Otherwise, state what a gate and metrology should do with a `requestedModel` that may be a form mismatch.",
+      "file_ref": null,
+      "category": "under-specification",
+      "raw_category": null,
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:176-187"
+    },
+    {
+      "severity": "NOTE",
+      "title": "\"Any successful tool call\" is a weaker guarantee than the Value section states",
+      "description": "D4 follows the plan's trigger (\"truncated diff with zero tool calls\"), so this is aligned. But line 27 claims that after this slice \"a PASS means the model either saw the whole diff or read files with its tools\". Under D4 a single successful directory listing or grep keeps a stated PASS. That includes the D3 case, where the model saw none of the diff. `diffTruncated: true` still records it, so a gate can decide. Soften the Value claim, or say that gates wanting the stronger guarantee must read `diffTruncated`.",
+      "file_ref": null,
+      "category": "correctness-claim",
+      "raw_category": null,
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:127-135"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Not every surface that prints the model is listed",
+      "description": "The component table covers the artifact, terminal header, JSON and pipeline metadata. Two other readers of `ReviewResult.model` exist: the PR-review comment body and the findings-addressed judge path. Both will silently switch to the answering id, with no \"(requested X)\" marker on substitution. Neither breaks, but the design should say whether the PR comment shows the substitution, since it is the one surface posted outside the repo. The Risk Assessment also omits the two risks the plan names: frontmatter keys read by context-forge gates, and Part B changing a verdict outcome.",
+      "file_ref": null,
+      "category": "integration-points",
+      "raw_category": null,
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md#component-structure"
+    },
+    {
+      "severity": "NOTE",
+      "title": "D12 multi-model handling is the one piece that could be lighter",
+      "description": "The ordered, deduplicated `answering_models` list, its digest line and its second WARNING serve a case the design calls \"possible\", not observed. Recording only the last answering model would satisfy #134 and the plan. The list is cheap and makes a mid-run route change visible, so keeping it is defensible. The overall mechanism count is otherwise in line with the plan's 3/5 effort.",
+      "file_ref": null,
+      "category": "proportionality",
+      "raw_category": null,
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:204-206"
+    },
+    {
+      "severity": "PASS",
+      "title": "Scope matches the slice plan entry; deferrals are the ones the plan permits",
+      "description": "Parts A, B and C are all present. Diff ordering and `--stat` go to #137, which the plan allows (\"otherwise it becomes an issue\"). The size-limit defaults and #114 stay out, as the plan states. File-body truncation (#138) is correctly left out as the same class but not this slice's defect. The work is a bug fix on the review path, which fits the 900 architecture's scope, and adds no new capability.",
+      "file_ref": null,
+      "category": "scope",
+      "raw_category": null,
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:31-47"
+    },
+    {
+      "severity": "PASS",
+      "title": "Part A picks the minimum a gate needs and holds parity structurally",
+      "description": "The plan asks for \"the minimum that lets a gate decide\", on both the CLI and pipeline paths. D1 and D2 give one tri-state frontmatter key, with counts in the header and JSON. D3 folds the total-injection skip into the same fact. Both paths share `run_review_with_profile` and the same formatter, so there is no second path to keep in sync.",
+      "file_ref": null,
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:109-125"
+    },
+    {
+      "severity": "PASS",
+      "title": "Part B respects the closed-verdict precedent from slice 916",
+      "description": "The plan offered forcing CONCERNS or failing the run. D4 chooses CONCERNS with reasons and adds no `Verdict` member, so the allowlist gates 916 catalogued keep working. D5 adds provenance through the `verdictSource` key 919 introduced, with a stated check that no external reader exists. D6 catches the interaction with the degraded-parse notice, which would otherwise hide a 919 signal.",
+      "file_ref": null,
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:127-162"
+    },
+    {
+      "severity": "PASS",
+      "title": "Failure modes are enumerated with observable outcomes",
+      "description": "The slice adds no new I/O path; it reads fields off existing provider streams. Each degraded case has explicit handling:\n\n- Provider reports nothing: D11, stated in the artifact.\n- Placeholder and subagent messages: D8.\n- More than one model answered: D12, with a WARNING.\n- Provider failure: D13, unchanged.\n- Diff dropped entirely: D3.\n\nNo fabricated value replaces a missing one, which matches the project's no-silent-fallback rule. The parent architecture states no NFR for this path, so none needs restating.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:168-210"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "under-specification",
+      "raw_category": null,
+      "summary": "D9 leaves the routed-provider equivalence rule to Phase 6, though the plan assigns it to design",
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:176-187",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "note",
+      "category": "correctness-claim",
+      "raw_category": null,
+      "summary": "\"Any successful tool call\" is a weaker guarantee than the Value section states",
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:127-135",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "note",
+      "category": "integration-points",
+      "raw_category": null,
+      "summary": "Not every surface that prints the model is listed",
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md#component-structure",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "note",
+      "category": "proportionality",
+      "raw_category": null,
+      "summary": "D12 multi-model handling is the one piece that could be lighter",
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:204-206",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "pass",
+      "category": "scope",
+      "raw_category": null,
+      "summary": "Scope matches the slice plan entry; deferrals are the ones the plan permits",
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:31-47",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "pass",
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "summary": "Part A picks the minimum a gate needs and holds parity structurally",
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:109-125",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "pass",
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "summary": "Part B respects the closed-verdict precedent from slice 916",
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:127-162",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "pass",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "Failure modes are enumerated with observable outcomes",
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:168-210",
+      "location_verified": true
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md",
+    "against": "project-documents/user/architecture/900-slices.maintenance-and-refactoring.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/squadron-927-design"
+  },
+  "timestamp": "2026-11-16T13:11:15.244527",
+  "model": "claude-fable-5-2",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 13,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-fable-5-2",
+  "answering_models": [
+    "claude-fable-5-2"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 8,
+    "in_fences": 0,
+    "in_section": 8,
+    "surviving": 8
+  },
+  "effort": "medium",
+  "profile": "sdk",
+  "turns": 14,
+  "prompt_tokens": 887429,
+  "cached_tokens": 732101,
+  "cache_write_tokens": 155310,
+  "completion_tokens": 10463,
+  "reasoning_tokens": null,
+  "duration_seconds": 112.4029408339411,
+  "cost_usd": 3.0507139000000003,
+  "cost_basis": "provider"
+}

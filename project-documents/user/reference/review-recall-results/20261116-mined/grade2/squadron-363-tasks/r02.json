@@ -1,0 +1,54 @@
+{
+ "review": "r02",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Commit markers are checkbox sub-items, not plain `**Commit**:` lines",
+   "description": "All seven markers (lines 99, 125, 164, 185, 221, 296, 351) are written as `- [ ] Commit: ...` sub-items under a verify task. The convention is a plain `**Commit**:` line that is never a checkbox, so a marker cannot be \"checked off\" without committing.\n\nThere is also one marker per top-level task for edits to a single markdown file. After Task 1, `concept` routes to an empty section shell, which is not a working point. Convert them to plain lines and reduce to about three: after Task 7 (flow fully authored), after 8.1 (see next finding), and after 8.6.",
+   "location": "project-documents/user/tasks/363-tasks.concept-generation.md:99"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "8.4 byte-identity check is vacuous because the 8.1 document is still untracked",
+   "description": "Task 8.4 proves \"populated sections stay byte-identical\" with `git diff`. The concept document written in 8.1 is a new file, and the first commit that includes it is at the end of 8.6. `git diff` shows nothing for an untracked file, so the check passes whatever the augment did.\n\nThis leaves SC6 (\"pre-existing content survives re-runs untouched\") and SC8 unverified. Add a `**Commit**:` marker after 8.1 so 8.4 diffs against a committed baseline.",
+   "location": "project-documents/user/tasks/363-tasks.concept-generation.md:332-336"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "SC4 (dropped topics) is never checked on the generated document",
+   "description": "SC4 requires that why-now, audience-evolution and methodology-preference appear nowhere in the document, as content or as gap markers. Task 4.1 authors the rule in the skill. The 8.1 checklist only confirms \"nothing else asked\", which covers the interview, not the document body.\n\nThe decline run in 8.2 is where a stray gap marker for a dropped topic is most likely to appear, and it has no such check either. Add one line to 8.1 and one to 8.2: every `[GAP: ...]` marker names Q1 or Q2 as its input, and no section addresses the three dropped topics.",
+   "location": "project-documents/user/tasks/363-tasks.concept-generation.md:308-316"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Verify tasks duplicate Task 0.2 and the authoring tasks' own success lines",
+   "description": "The file has 28 subtasks and 376 lines for one flow section in one markdown file that the design rates 3/5. Several verify tasks repeat checks already made:\n\n- **2.2** re-confirms the guide path and `project.name` = `squadron-ai`, both checked in 0.2. Only the `cf get` name check is new; move that into 0.2 and drop 2.2.\n- **6.3** re-runs the same `grep -c '^## User-Provided Concept'` as 0.2. Drop it.\n- **3.4** re-confirms `tests/`, `ci.yml` and the ruff/pytest tables from 0.2. Keep only \"execute the `jq` selections as authored\".\n- **1.2, 4.2, 5.3** are \"diff against the design\" checks that restate the Success line of the task before them. Fold each into its authoring task; keep 5.3's byte-identical question check as a sub-item of 5.1.\n\nThat removes about six subtasks with no loss of coverage, since Task 8 exercises all of it live.",
+   "location": "project-documents/user/tasks/363-tasks.concept-generation.md:120-124"
+  },
+  {
+   "i": 4,
+   "severity": "NOTE",
+   "title": "Scratch-copy steps 8.2 and 8.3 do not say how the scratch is set up",
+   "description": "- **8.3** says \"point the check at it\", but the skill reads the guide from a fixed path and the task gives no mechanism for redirecting it. Renaming the heading inside the 8.2 scratch tree's guide would be unambiguous.\n- **8.2** does not say how the scratch tree is created. I did not verify whether the cf project registration resolves from a copied directory. If it does not, precondition 3 stops the flow before the decline path runs. One line on how to create and register the scratch copy would cover this.",
+   "location": "project-documents/user/tasks/363-tasks.concept-generation.md:320-330"
+  },
+  {
+   "i": 5,
+   "severity": "NOTE",
+   "title": "Some criterion branches are authored but not exercised",
+   "description": "These mirror gaps in the design's own walkthrough, so they do not block:\n\n- **SC7**: only the renamed-heading case is exercised (8.3); guide-absent and tree-absent stops are not.\n- **SC8**: refilling a `[GAP: ...]` section on augment is not exercised, because the 8.1 document has no gaps. Running augment on the 8.2 scratch document would cover it.\n- **SC10**: 8.1 checks that the inferred-claims line exists, not that each `[INFERRED]` sentence satisfies the checkable rule.\n- **SC3**: \"absence reported as an observation\" cannot occur on squadron, where every signal is present.\n- **SC12**: no task records whether the PM would edit rather than discard the result. The PM is already live in 8.1, so the verdict could be noted there.",
+   "location": "project-documents/user/tasks/363-tasks.concept-generation.md:298-352"
+  },
+  {
+   "i": 6,
+   "severity": "NOTE",
+   "title": "Minor inaccuracies",
+   "description": "- 8.6's allowed changed-file list omits `360-slices.document-intelligence.md`, which 9.1 edits.\n- The 8.6 commit uses `feat:` for a commit whose main content is a generated user document.\n- 7.1 cites design lines 278\u2013280 for the `[INFERRED]` rule; the quoted rule is at 277\u2013279.",
+   "location": "project-documents/user/tasks/363-tasks.concept-generation.md:346-351"
+  }
+ ]
+}

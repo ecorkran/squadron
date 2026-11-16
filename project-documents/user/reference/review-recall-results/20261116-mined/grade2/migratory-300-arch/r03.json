@@ -1,0 +1,89 @@
+{
+ "review": "r03",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Scope overlaps initiatives 320, 500 and 620; Anticipated Slices are stale against the document's own slice plan",
+   "description": "- **Environment (500):** The \"Environment layer foundation\" slice claims terrain generation and resource placement, and \"Seasonal and temporal systems\" claims seasonal cycles and resource shifts. `001-initiative-plan.migratory.md` assigns these to initiative 500, and `300-slices.worldserver-foundation.md` has already reduced them to integration (304) and a world clock (308).\n- **Logging (320):** \"Logging and replay\" is its own initiative in the plan, yet the Scope line (21) and line 74 claim it here.\n- **Scaling (620):** Lines 92-112 design the multi-resolution, GPU and multi-machine strategy. The plan says 620 \"need not be designed proactively\".\n- **Ownership:** The document never says which side of each boundary the world server owns. The Overview lists \"environment hosting\" while the slices imply environment implementation.\n\nCut: terrain, resource and seasonal semantics to 500; log format and replay to 320 (keep only the hook the tick loop exposes); lines 92-112 to 620, leaving a short list of concrete constraints on this initiative.",
+   "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md:114-128"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Observer-driven multi-resolution contradicts \"State flows outward\" and the authoritative-state goal",
+   "description": "Line 43 says nothing flows back from clients into simulation state. Lines 102-104 make simulation fidelity a function of observer position, and line 108 requires per-client view frusta.\n\n- Clients must send viewport data upstream, so the protocol is not push-only.\n- Simulation outcomes depend on who is watching. Observer positions become non-deterministic inputs that the replay log (line 90) does not list.\n- Disaggregation \"spawned from the statistical model\" (line 104) discards individual state. That conflicts with \"exactly one truth about where every entity is\" (line 29).\n- The concept's first motivation is realistic movement telemetry. Observer-dependent fidelity changes that telemetry.\n\nThe document needs to state whether level of detail is driven by observers or by simulation-intrinsic criteria, and if by observers, amend the unidirectional-flow principle and the replay input list.",
+   "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md:100-108"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Tick/asyncio concurrency model is deferred, and the stated upgrade path breaks tick-as-transaction",
+   "description": "- **Blocking by design:** Running the tick synchronously on the event loop blocks all I/O for the whole tick (accepts, WebSocket ping/pong, sends). As ticks approach the budget, keepalives time out and clients drop.\n- **Hidden I/O in the tick:** Step 5 (line 65) puts client distribution and log writes inside the tick. An awaited send couples tick timing to the slowest client; a synchronous disk write blocks the loop. Line 82 lists \"buffering, dropping frames, or disconnecting\" without choosing one.\n- **Thread offload is not free:** Moving the tick to a thread means connection handlers read state arrays while the tick mutates them. \"Between ticks the world is consistent\" (line 39) then needs double-buffering or a snapshot handoff, which is not described.\n- **Multi-core claim:** Line 95 expects \"2-4 cores saturated\", but vectorized NumPy does not parallelize just because it releases the GIL. That needs explicit partitioned worker threads, which the design does not have.\n- **No WebSocket library named:** asyncio has no WebSocket implementation, and backpressure semantics depend on the library chosen.",
+   "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md:78"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Persistence is claimed in lifecycle but absent from startup, slices and failure handling",
+   "description": "The Overview calls the server \"persistent\" and line 45 says it will \"persist state on shutdown\". Startup (line 57) only creates populations from configuration and never restores. No Anticipated Slice covers save/load, and the slice plan lists it under Future Work.\n\nAs written, a restart or crash loses the world. Either persistence is in scope, with format, restore path and crash behaviour, or the lifecycle claim should be removed and the world declared ephemeral for v1.\n\n\"No silent failures, no undefined states\" also has no content behind it:\n- What happens when the engine raises mid-tick or returns NaN?\n- \"Atomic\" tick (line 39) implies rollback or a buffer swap; neither is described.\n- Is an exception in the tick fatal, or is the tick skipped?",
+   "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md:45"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Entity lifecycle has no event source, no removal strategy, and disagrees with the engine interface",
+   "description": "- **No producer:** Step 4 handles lifecycle events \"queued during the tick\", but nothing can queue them. Clients cannot, and the engine \"does not manage the entity lifecycle\". \"Removes entities when appropriate\" is undefined, and predator-prey kills in 100-arch have no return channel in the engine's state-in/state-out interface.\n- **No removal strategy:** Swap-remove compaction versus a free-list with an alive mask is undecided. The choice determines ID-to-index stability, which the wire format, deltas, client instance mapping and replay all depend on. The 12 bytes per entity on line 108 carries no ID.\n- **Cross-document mismatch:** `100-arch.behavior-engine.md` line 81 lists \"register/remove agents\" on the engine interface while also calling the engine stateless. This document says the server alone owns lifecycle. The owner of the spatial index and its invalidation on spawn or removal is unstated.\n- **Unbacked goal:** \"Region-aware entity management\" appears in Design Goals (line 35) and nowhere else.",
+   "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md:64-70"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Replay fidelity rests on determinism the server design does not secure",
+   "description": "Line 74 promises tick-by-tick reconstruction from \"a log and the same configuration\". Several things are missing:\n\n- **Simulation dt:** The document never says dt is a constant decoupled from wall-clock time. \"Reducing tick rate dynamically\" (line 88) and \"timestamp\" recorded at tick start (line 61) leave room for wall-clock leakage.\n- **RNG:** Initial placement (\"how many, where\"), spawning and disaggregation need randomness. Only an environment seed is mentioned; RNG state is not listed among logged inputs.\n- **Environment state:** Seasonal and resource state is evolving state that replay must reproduce or log.\n- **Reduced-rate ticking and level-of-detail assignment:** these become replay inputs.\n- **Floating point:** Bitwise reproducibility of NumPy across machines, builds and thread counts is not guaranteed. Event-only logging will diverge on a different host.\n\nThe log strategy is left as \"depends on usage patterns\". Recommend deciding now: periodic keyframe snapshots plus events, with replay defined as reproducible only between keyframes on the same build.",
+   "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md:90"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "\"Read-only\" environment interface cannot support stigmergy or resource consumption",
+   "description": "The environment is exposed \"through a read-only query interface\". The swarm archetype in 100-arch depends on agents reinforcing paths in the environment, and resources that regenerate (line 62) imply consumption.\n\nThe six-step tick has no step where agent activity writes back to the environment. The slice plan's 304 already mentions \"post-tick environment writes\", so this document is behind its child. Define the write channel: an engine output of deposits and consumption that the server applies at commit, to keep the tick pure.",
+   "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md:72"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "\"Supported from the start\" extension claim has no concrete hooks in entity management or the tick loop",
+   "description": "Line 112 calls it \"the key architectural decision now\" that entity management supports aggregation and variable-rate ticking. Nothing in the design delivers that:\n\n- The tick cycle has no step that selects the active subset the engine accepts.\n- Reduced-rate \"interpolated positions\" need last-evaluated state and per-entity tick phase, which are not in the described arrays.\n- Aggregates need a different schema (centre, heading, dispersion, count) that does not fit the positions, velocities and profile-index arrays.\n- Line 110 says the design must not \"preclude\" merge strategies but states no testable constraint.\n\nEither reduce the claim to the one hook that costs nothing (the tick loop passes an explicit active-index set to the engine, all-active in v1) and defer the rest to 620, or specify the state additions.",
+   "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md:112"
+  },
+  {
+   "i": 8,
+   "severity": "CONCERN",
+   "title": "Scaling-tier figures are unvalidated and the first tier is doubtful on the chosen stack",
+   "description": "\"10K-50K comfortable on a single CPU\" at 20 tps with about 100 neighbours means roughly 5M pair interactions per 50 ms tick at the top of the range. In NumPy that involves large gather temporaries; my estimate is that this exceeds the budget at 50K, though I have not measured it.\n\nThis tier is called \"the initial operating range\" and drives capacity configuration and pre-allocation. It should be a measured benchmark gate in the behaviour-engine integration slice, not an assertion. The higher tiers are speculative and belong in 620.\n\n\"Memory is never the constraint\" also ignores per-tick neighbour-pair temporaries, which are far larger than the 48 bytes per entity of state.",
+   "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md:92-98"
+  },
+  {
+   "i": 9,
+   "severity": "CONCERN",
+   "title": "Overrun and timing policy is undecided where it affects correctness",
+   "description": "Step 6 sleeps \"for the remainder of the tick budget\". Sleeping a remainder each iteration drifts; a fixed-timestep loop needs absolute deadline scheduling.\n\nThe document does not say whether an overrun causes catch-up ticks or lets simulated time slip against wall time. Line 88 lists three responses and picks \"warn and continue\" without stating which. This matters for the world clock and seasonal time scale (line 72) and for clients interpolating between snapshots.\n\nThe \"metrics\" promised on line 88 have no named mechanism.",
+   "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md:66"
+  },
+  {
+   "i": 10,
+   "severity": "NOTE",
+   "title": "Broken and inconsistent document references",
+   "description": "Frontmatter `dependsOn` and the Related Work link point to `001-concept.migratory`. The concept file is `000-concept.migratory.md`; `001` is the initiative plan. In the other direction, `100-arch.behavior-engine.md` links to a non-existent `200-arch.world-server-foundation.md`.",
+   "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md:132"
+  },
+  {
+   "i": 11,
+   "severity": "NOTE",
+   "title": "Client-facing limits unaddressed for a publicly shared server",
+   "description": "The concept anticipates observers arriving through social media. The document has no maximum client count, origin or auth stance, or per-client send budget. Per-client culling (line 108) makes server cost scale with client count. This is cross-cutting: nothing in the document addresses it.",
+   "location": "unverified"
+  }
+ ]
+}

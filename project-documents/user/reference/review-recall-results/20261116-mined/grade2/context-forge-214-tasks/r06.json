@@ -1,0 +1,26 @@
+{
+ "review": "r06",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Commit markers are written as checkbox tasks instead of plain `**Commit**:` lines",
+   "description": "The commit points are at lines 71, 94, 117, 126 and 134. Each is written as a checkbox item, for example `- [ ] **Task 2C: Commit** \u2014 feat(core): ...`. Commit markers should be plain lines in the form `**Commit**: feat(core): add slice design heading validator`, never checkboxes. As checkboxes, they show up as work items that task-checker will tick. That can produce the \"only checks boxes\" commit the project rules forbid, and it makes the markers harder to recognise as commit points. Where the markers sit is fine: each comes after a tested point (2T, 3T, 4T), and 5C and 6C are correctly marked conditional. Only the format needs to change.",
+   "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md:71"
+  },
+  {
+   "i": 1,
+   "severity": "NOTE",
+   "title": "Task 0 hard-codes `main` instead of using the configured target",
+   "description": "Task 0 expects `git.integration_branch` to be empty, stops if it isn't, and creates the branch with `git checkout -b ... main`. The git rules already cover a configured value: read it, call it the target, and fork from it. A clearer step would be: \"Read the target (`cf config get git.integration_branch`, or `main` if empty), then create the branch from that target.\" This removes both the hard-coded branch name and the stop that no rule requires.",
+   "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md:37-38"
+  },
+  {
+   "i": 2,
+   "severity": "NOTE",
+   "title": "No test for an unreadable file argument, and no command-level test for a template with no required headings",
+   "description": "The Functional Requirements list \"unreadable\" files and \"a template with no required headings\" as exit-2 cases. Task 3 implements the readability check in preflight. No test checks an unreadable file, for example one with `chmod 000`. The no-required-headings case is only tested in core (3T), not through the CLI exit-2 path (4T). The design only requires the valid-then-missing test, so neither gap is a hard failure. A one-line unreadable-file case in 3T would cover the last untested preflight branch.",
+   "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md:91"
+  }
+ ]
+}

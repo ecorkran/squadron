@@ -1,0 +1,40 @@
+{
+ "review": "r02",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Fast-forward \"before = reflog fork\" counts other work when the slice branch has sync merges",
+   "description": "D3 claims that \"A fast-forward is only possible if the target hadn't moved past the fork, so for that case the two definitions agree.\" That is false when the slice branch merged the target into itself before landing. Once the branch has absorbed the target's newer commits, it can still be fast-forwarded. D2 (line 191) says squadron has such sync merges.\n\nIn that case `before = fork` and `after = tip`, so the diff includes every commit merged into the target between the fork and the landing. That breaks D3's own guarantee that \"the difference between the two is exactly what the landing changed on the target\". The bad landing is then stored for good (D1 append-only, Risk line 376). This is the arch's Durable-slice-ranges concern: other work gets attributed to the slice.\n\nThe data-flow (lines 115-121) and the resolver test list (line 347) don't cover this case. Fix: on the fast-forward path, detect any merge commit in `fork..tip` (`git rev-list --merges fork..tip`). Either resolve it as a new `RangeUnresolvedReason` such as `SYNC_MERGED_FAST_FORWARD`, or set `before` to the newest target commit reachable from the tip. Add a fixture for a fast-forwarded branch that contains a sync merge.",
+   "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:197-201"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Concurrent writes can silently lose a landing that can never be found again",
+   "description": "The failure-mode row for two concurrent writers of `slice_ranges` gives the signal as \"None\". The table admits that a lost fast-forward landing is only recovered \"while its reflog lasts\". So this path can permanently and silently lose the durability the slice exists to provide (slice-plan criterion 1: \"it still resolves after reflog expiry\").\n\nThe project's Failure-Mode Enumeration rule requires every identified failure mode to be observable. \"Not supported, as in 400\" is weaker here than in 400. Two 400 writers write different per-commit records. Here every command writes the same single per-project file, so `report slice` and `slice-ranges` running in two checkouts of the same remote collide.\n\nCheapest fix: just before `write_slice_ranges`, re-read the record and merge again. Landings are append-only and keyed on `after_sha`, so this merge always succeeds. If the re-read finds landings this run didn't load, log a WARNING. No locking is needed.",
+   "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:166"
+  },
+  {
+   "i": 2,
+   "severity": "NOTE",
+   "title": "Settings read from the live checkout hide in-slice limit/exclusion changes",
+   "description": "The architecture says \"Limits come from the project\" and that exclusions are recorded because they change every metric. For exports, D5 reads limits and exclusions from the live checkout, so a slice that changes them shows no `limits_changed` or `exclusions_changed` break between its two boundaries. The Risk section (line 377) states this openly. Squadron's `.squadron.toml` is gitignored, so there is no committed alternative to read, and each record states the settings it used. This is acceptable as designed; no change is needed.",
+   "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:214"
+  },
+  {
+   "i": 3,
+   "severity": "NOTE",
+   "title": "Validator wording names a field the schema does not have",
+   "description": "Line 315 says the validator rejects \"an empty `landings`\", but the schema at lines 303-305 defines `slices: dict[int, list[SliceLanding]]`. It should say \"an empty landing list for any slice\", so the implementer doesn't add a `landings` field.",
+   "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:315"
+  },
+  {
+   "i": 4,
+   "severity": "NOTE",
+   "title": "`git cat-file -e` returning `None` is not distinguished from \"commit not found\"",
+   "description": "Line 327 states the rule that \"a `None` from `run_git` is never an answer\". The missing-commit row doesn't say how a `None` (timeout or spawn failure) from `cat-file -e` is handled, as opposed to a non-zero exit. If `None` is treated as \"not found\", a transient git failure is reported as rewritten history. One clause in the row would settle it: `None` \u2192 `SnapshotExportError`.",
+   "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:165"
+  }
+ ]
+}

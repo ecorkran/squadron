@@ -1,0 +1,61 @@
+{
+ "review": "r02",
+ "findings": [
+  {
+   "i": 1,
+   "severity": "FAIL",
+   "title": "Criterion 6 names arch-status-vs-plans, and no task tests it",
+   "description": "Criterion 6 requires that neither `plan-status-vs-entries` nor `arch-status-vs-plans` false-positive on a `[~]` plan. Task 12 (task file lines 199\u2013212) adds cases only for `plan-status-vs-entries`. The arch rule uses the same aggregate (`ConsistencyChecker.ts:828`, `completedSlices === totalSlices`), so Decision 3 affects it too. Add Task 12 cases for the arch rule in both directions: `status: complete` with all entries resolved produces no finding, and `in-progress` with all entries resolved still fires.",
+   "location": "packages/core/src/introspection/ConsistencyChecker.ts:828-850"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Extending the shared fixture changes consumers the tasks do not list",
+   "description": "Task 1 extends `sample-slice-plan.md`. That file is also read by `overviewParser.test.ts:20`, `ArtifactIntrospector.test.ts:86`, and several cases in `futureWorkParser.test.ts`. Task 5 then edits the existing totals from 5/3 to 7/5 (task file lines 95\u201398). That conflicts with the design's requirement that existing fixture tests \"pass unchanged.\" The design allows a sibling fixture. Use one, such as `sample-slice-plan-deprecated.md`, so the existing fixture and its consumers stay byte-identical. If the shared fixture is kept, Task 1 must name those consumers and require their suites to run.",
+   "location": "packages/core/tests/introspection/ArtifactIntrospector.test.ts:49"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Task 9 adds an initializer change that never takes effect",
+   "description": "Task 9 (task file lines 155\u2013163) changes the `derivedStatus` initializer at `slice.ts:91` because a filesystem error would otherwise report `not-started`. The catch block at `slice.ts:125-127` sets `'degraded'` on any throw, so the initializer's value never reaches the output. The step is dead code built on a wrong rationale, and the design does not call for it. Remove it.",
+   "location": "packages/cli/src/commands/slice.ts:122-127"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Task 9 misses a short-circuit that runs before deriveEntryStatus",
+   "description": "When task or frontmatter resolution fails, the ternary returns `'degraded'` before `deriveEntryStatus()` runs. Decision 4 places `planLineStatus` at the top precedence tier, but this branch bypasses it. A `[~]` entry whose task file or design frontmatter is unreadable would show `degraded` instead of `\u2298 deprecated`. Task 9 should check for deprecated ahead of this ternary, or the task should state the deviation. Task 10 should add a malformed-task-file case to lock the behavior in.",
+   "location": "packages/cli/src/commands/slice.ts:122-124"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "ProjectModelBuilder.ts:445 is a third deriveEntryStatus call site that the design and tasks omit",
+   "description": "Planned-but-unwritten slices are built with `deriveEntryStatus({ isChecked: entry.isChecked })`. Once Tasks 2\u20133 emit `[~]` entries, they will show here as `not-started`, while `cf list slices` shows `deprecated`. Decision 4 names only WorkflowNavigator and `cf list slices`. Either add the same `planLineStatus` line here with a test, or list it as out of scope with the reason. I did not trace the project model's consumers, so the user-visible impact is unverified.",
+   "location": "packages/core/src/introspection/ProjectModelBuilder.ts:445"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "Tasks 2\u20134 and 11\u201312 are split finer than their size",
+   "description": "Tasks 2 (regex class), 3 (status assignment in two branches), and 4 (one filter change) are one- or two-line edits. Their tests land only in Task 5, so the test-with pattern is delayed across three tasks. Merge Tasks 2\u20134 into one parser task, followed by Task 5. Tasks 11 and 12 are each a single test case with their own commit. They could share one commit or be folded into Task 10.",
+   "location": "project-documents/user/tasks/918-tasks.sliceplanparser-deprecated-entry-handling.md:52-83"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "Commit markers are written as checkboxes",
+   "description": "The commit markers at lines 105, 135, 179, 197, 212, and 225 are `- [ ] Commit:` checkboxes. The convention is plain `**Commit**:` lines, never checkboxes. Task 13's commit (line 225) is also conditional (\"if any uncommitted changes remain\"), which an implementer can skip or misread. Make it an unconditional marker or remove it.",
+   "location": "project-documents/user/tasks/918-tasks.sliceplanparser-deprecated-entry-handling.md:105"
+  },
+  {
+   "i": 8,
+   "severity": "NOTE",
+   "title": "The planLineStatus ternary is duplicated across Tasks 8 and 9",
+   "description": "Tasks 8 and 9 both specify `entry.status === STATUS.Deprecated ? STATUS.Deprecated : undefined`. The design accepts this because the signal gathering is already duplicated. A single exported helper in `statusDerivation.ts` would keep the rule in one place if you want to avoid adding to the duplication.",
+   "location": "project-documents/user/tasks/918-tasks.sliceplanparser-deprecated-entry-handling.md:140"
+  }
+ ]
+}

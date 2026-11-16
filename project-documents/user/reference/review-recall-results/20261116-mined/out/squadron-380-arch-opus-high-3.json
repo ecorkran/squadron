@@ -1,0 +1,314 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "The scratch worktree changes the review `cwd`, so the PR under review supplies its own rules",
+      "description": "In the code today, one value serves as the tool jail root, the rules root, and the git root: `_resolve_review_cwd` (`src/squadron/cli/commands/review.py:244-258`) returns `review_cwd` and calls `resolve_rules_dir(review_cwd, ...)` with it. `resolve_rules_dir` (`src/squadron/review/rules.py:41-45`) picks up `{cwd}/rules` or `{cwd}/.claude/rules` before it looks at the user's own rules.\n\n\"Isolated checkout for tool-enabled reviews\" says to run the review in a squadron-owned worktree of the PR head. The obvious way to build that is to pass the worktree as `cwd`. Rules would then load from the PR's own `.claude/rules/`. A PR that adds, weakens, or deletes rule files changes the conventions it is reviewed against.\n\nThe document treats PR title, body and threads as \"untrusted text written by third parties\" (Technical Considerations \u2192 Prompt inputs). It never applies that to files inside the PR, and rules can matter more than prose.\n\nThe result is also inconsistent across flags. A review without tools has no worktree, so its rules come from the operator's checkout. A review with tools gets its rules from the PR. The same PR can be reviewed against two different rule sets depending on `--tools`, which breaks \"every existing review flag behaving as it does today.\"\n\nThe architecture should split the roles explicitly:\n- **Jail and file-reading root:** the scratch worktree.\n- **Rules root:** the operator's checkout, config, or user rules. Never the PR head.\n- **Git root for diff and merge-base:** the operator's repository.\n- **Persistence root:** see the persistence finding below.",
+      "file_ref": null,
+      "category": "technology",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#architectural-principles"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`reviewedSha` would record the operator's HEAD, not the PR head that was reviewed",
+      "description": "The document says \"The head sha recorded in the artifact is what was reviewed.\" But `save_review_result` stamps `reviewed_sha=resolve_reviewed_sha(\".\")` (`src/squadron/review/persistence.py:515`), which is HEAD of the process working directory. For a PR review, that is whatever the operator has checked out. The scratch worktree and the namespaced ref are both somewhere else.\n\nSeveral things read that field. `sq review resolve` diffs from `reviewedSha` (`resolution_evidence.py`), and posting uses it to report \"head has since moved.\" With the wrong value, both quietly use the wrong commit. The PR record already holds `head sha`. The persistence target contract needs to carry the reviewed sha itself instead of resolving it from `\".\"`, and the pipeline action's `resolve_reviewed_sha(cwd)` call has to stay consistent with that.",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#technical-considerations"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Reusing `--diff` semantics gives the wrong range, and the base is never fetched",
+      "description": "\"computes the base-to-head range with the same merge-base semantics `--diff` uses\" is not literally possible. `normalize_diff_spec` (`git_utils.py:355`) turns a bare ref into `<ref>...HEAD`, which is relative to HEAD. A review without tools has no checkout, so HEAD is the operator's branch, not the PR. The range has to be built explicitly as `<base>...<namespaced-pr-ref>`, and `assert_reviewable_scope` and `extract_diff_paths` have to run against it.\n\nSeparately, \"Fetching without checkout\" fetches only the head. If the merge-base is computed against the operator's local copy of the base (`main` or `origin/main`), and that copy is stale, the review covers a different range than the host shows. That defeats the stated goal that \"the review matches what the host displays.\" The adapter's resolve step has to fetch the base sha the host reports, and the range should use that sha rather than a local branch name.\n\nThe failure list also includes \"base moved since resolution\" as an error, while Base semantics says base movement is routine and expected. The document should state which base movement counts as an error.",
+      "file_ref": null,
+      "category": "feasibility",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#envisioned-state"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "A PR-keyed filename breaks the code that parses review filenames, and the frontmatter is slice-shaped",
+      "description": "The document says archiving, digest and integrity checks \"apply unchanged.\" But the code that reads reviews depends on the filename `{index}-review.{type}.{slice-name}.md`:\n- `resolution_evidence.py:36-38` reads the review type from a fixed position in the filename.\n- `metrology.py` globs the reviews directory relative to the process cwd.\n- Context Forge's artifact scan uses the index prefix.\n\nA name without an index either breaks these parsers or is silently skipped. Those failures would not be reported as errors.\n\n`format_review_markdown` also hard-codes `slice:`, `project:` and the heading `# Review: {type} \u2014 slice {index}`. With no slice it falls back to `unknown`/`0` (`persistence.py:206-208, 266`), which is exactly the kind of quiet fallback the project rules forbid.\n\nThe \"generic target\" contract therefore has to own four things: the filename, the identity fields in the frontmatter, the heading, and the reviewed sha. The document should list every consumer of the filename and frontmatter that must accept the new shape. Changing the `save_review_result` and `format_review_markdown` signatures also touches `pipeline/actions/review.py:275-303`, which conflicts with \"No pipeline actions \u2026 Nothing else moves.\" Either say that the pipeline caller changes, or keep the old signatures as wrappers.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#technical-considerations"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "\"Current State\" and the rules plan misdescribe how rules are resolved today",
+      "description": "The document says \"Outside such a project the rules and persistence steps have no defined behavior.\" It also says that in an unplanned repo \"the review runs with the template's rules and language auto-detection only.\" Rules resolution is already defined and does not depend on `project-documents/`. The chain is: CLI flag \u2192 config \u2192 `{cwd}/rules` \u2192 `{cwd}/.claude/rules` \u2192 `~/.config/squadron/rules/` (`rules.py:25-48`).\n\nMany enterprise repos already have `.claude/rules/`. The operator's user rules would also apply. The planned \"rules-degradation path\" would either replace this chain, which is a behavior change for `sq review code` that the Constraint section prohibits, or duplicate it. The real open question is the trust root from the FAIL above, not whether a fallback exists.",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#current-state"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`sq review pr` depends on persistence and on posting, but those slices come later",
+      "description": "Slice 2 (`sq review pr`) promises \"full parity with the existing review flags,\" which includes saving. PR-keyed persistence doesn't arrive until slice 3, which is itself \"Sequenced after 916 and 917 land on `main`.\" Until slice 3 lands, slice 2 can only reach `NOT_PERSISTABLE`, so the parity claim can't be tested.\n\nPosting (slice 4) works from \"the saved review,\" so it depends on slice 3 as well. Either:\n- move persistence ahead of `sq review pr`, or\n- narrow slice 2's parity claim to exclude saving.\n\nThe 916/917 sequencing is also written as \"land on `main`.\" The project may use an integration branch as its target, so that should read \"land on the target.\"",
+      "file_ref": null,
+      "category": "dependencies",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#anticipated-slices"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`sq pr create` can't find \"the latest saved review\" in the situations it is meant for",
+      "description": "`sq pr create` runs before the PR exists, so there is no PR number to key a review on. Where it can and can't find a review:\n- **Unplanned repo:** the only pre-PR review is `sq review code --diff`, which today warns that it is not persistable (`review.py:296-313`). There is never a review to cite.\n- **Slice branch:** \"latest\" is undefined. Is it the latest code review, or any review type? The latest by date, or the one whose `reviewedSha` matches the branch tip?\n\nA review of an older commit, cited as \"review provenance,\" breaks the document's own rule that the body asserts nothing its inputs don't support. The architecture needs:\n- a lookup key for pre-PR reviews,\n- a rule that a review only counts as provenance when its `reviewedSha` equals the head being proposed, or the stale state is shown explicitly.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#envisioned-state"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "PR target branch when no integration branch is set is left open, which invites a hard-coded `main`",
+      "description": "\"Squadron's own PR conventions\" says to target the integration branch when one is set, \"and never `main` in that case.\" It says nothing about the unset case. The whole point of this work is unplanned repositories, where `cf config get git.integration_branch` isn't available at all and the default branch is often not `main`.\n\nUnless this is specified, implementers will fall back to the literal `main`, which is a magic default under the project rules. The host's default branch should be an adapter operation, and the precedence should be stated: explicit flag \u2192 integration branch (only where a `cf` project exists) \u2192 the host's default branch.\n\nThe document also doesn't reconcile `sq pr create` with the stated \"merge-to-target rule \u2026 unchanged.\" In squadron's own workflow, slices merge locally in Phase 7. It should say whether `sq pr create` on a squadron slice branch is advisory only, or whether it changes that rule.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#technical-considerations"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The PR body is treated as both untrusted data and a parseable contract that drives the review",
+      "description": "Prompt inputs from the PR: the body is \"untrusted text \u2026 injected as clearly delimited data \u2026 never as instructions.\" Envisioned State: the body has \"a stable section structure that an AI reviewer, including `sq review pr` itself, can parse for intent and claimed verification.\"\n\nBoth statements can hold, but only if the reviewer treats the parsed claims as things to verify, never as context it trusts. The document should say that. It should also drop or define \"parse\": no slice for `sq review pr` includes a body parser, so \"can parse\" is either future work or just the model reading delimited text. If it is the latter, the \"section contract other tooling can rely on\" has no consumer in this initiative and is speculative structure.",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#envisioned-state"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Scope can be cut: thread ingestion and LLM-written PR descriptions are separable and deferrable",
+      "description": "The stated motivation (Slice 916) is PR-centric *review* in enterprise repositories. Two parts carry most of the risk and aren't needed for that:\n- **Unresolved review threads as prompt input.** `gh pr view --json` doesn't expose whether a review thread is resolved. That needs `gh api graphql` (`reviewThreads { isResolved }`), which is exactly the kind of `gh`-specific shape the protocol is told not to leak. It also adds the most untrusted text and the most truncation pressure. Title and body cover \"what the PR claims to do.\"\n- **One-shot model call to write descriptions in `sq pr create`.** This adds a second LLM path with its own traceability problem (Initiative 360's rule). A deterministic body covers the stated value: commit list, linked slice docs, and review provenance with sha.\n\nMy recommendation is to defer thread ingestion and model-written prose until review and posting have been used in practice. That turns six slices of new surface into roughly four.",
+      "file_ref": null,
+      "category": "antipattern",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#anticipated-slices"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Posting doesn't address comment size limits or who owns the prior comment",
+      "description": "GitHub limits a comment body to 65,536 characters. A code review with many findings, plus provenance, can go over that, and the document only lists \"post rejected\" as a generic failure. The rendering step needs a size budget and a rule for what happens when it is exceeded (truncate and link to the artifact, or refuse).\n\n\"Find and update its own prior comment\" by marker also needs an owner rule. If a second operator ran `--post` earlier, their comment has the same marker, and the current operator can't edit it. The rule should be: only comments carrying the marker *and* authored by the current operator are updated; otherwise post a new comment and say so.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#technical-considerations"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Scratch-worktree lifecycle is deferred, but it interacts with squadron's worktree rules",
+      "description": "\"Concurrency with the operator's own worktrees, disk use, and cleanup on failure are the slice-level questions.\" But this is a shared-state decision. A squadron-created `git worktree` shows up in `git worktree list` and interacts with `cf worktree` registration. The project rules tell agents to STOP when they find themselves in an unregistered worktree, and the review agent's jail root is exactly that worktree.\n\nThe architecture should fix the following, rather than leave them to each slice:\n- where the worktree lives (outside the repo),\n- how it is named, so it can't collide with concurrent `sq review pr` runs on the same PR,\n- recovery after SIGINT or a crash (`git worktree prune` plus a removal sweep at startup),\n- how namespaced refs are cleaned up.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#technical-considerations"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Adapter calls are blocking subprocesses: say where they run relative to the async review",
+      "description": "`run_review_with_profile` is async, and the existing git helpers use synchronous `subprocess`. Resolution, fetching, posting, and reading PR metadata through `gh` should run in the synchronous CLI layer, before or after the awaited review, never inside it. Otherwise they break the project rule that async code may only call synchronous code that finishes in under 1 ms. A one-line statement that the adapter is synchronous and is only called outside the event loop would prevent this.",
+      "file_ref": null,
+      "category": "technology",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#technical-considerations"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`review.py` is already over the size guideline, so adding `review pr` there makes it worse",
+      "description": "The `sq review` command module is already far past the ~300-line guideline (its subcommand definitions run beyond line 1100). The PR subcommand should go in its own module, which would share `_resolve_save_outcome` and the save helpers by import. The document's statement that PR review is \"one new top-level CLI group\" doesn't say where `sq review pr` lives.",
+      "file_ref": null,
+      "category": "abstraction",
+      "raw_category": null,
+      "location": "unverified"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "technology",
+      "raw_category": null,
+      "summary": "The scratch worktree changes the review `cwd`, so the PR under review supplies its own rules",
+      "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#architectural-principles",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "`reviewedSha` would record the operator's HEAD, not the PR head that was reviewed",
+      "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#technical-considerations",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "feasibility",
+      "raw_category": null,
+      "summary": "Reusing `--diff` semantics gives the wrong range, and the base is never fetched",
+      "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#envisioned-state",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "A PR-keyed filename breaks the code that parses review filenames, and the frontmatter is slice-shaped",
+      "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#technical-considerations",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "\"Current State\" and the rules plan misdescribe how rules are resolved today",
+      "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#current-state",
+      "location_verified": null
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "dependencies",
+      "raw_category": null,
+      "summary": "`sq review pr` depends on persistence and on posting, but those slices come later",
+      "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#anticipated-slices",
+      "location_verified": null
+    },
+    {
+      "id": "F007",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "`sq pr create` can't find \"the latest saved review\" in the situations it is meant for",
+      "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#envisioned-state",
+      "location_verified": null
+    },
+    {
+      "id": "F008",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "PR target branch when no integration branch is set is left open, which invites a hard-coded `main`",
+      "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#technical-considerations",
+      "location_verified": null
+    },
+    {
+      "id": "F009",
+      "severity": "concern",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "The PR body is treated as both untrusted data and a parseable contract that drives the review",
+      "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#envisioned-state",
+      "location_verified": null
+    },
+    {
+      "id": "F010",
+      "severity": "concern",
+      "category": "antipattern",
+      "raw_category": null,
+      "summary": "Scope can be cut: thread ingestion and LLM-written PR descriptions are separable and deferrable",
+      "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#anticipated-slices",
+      "location_verified": null
+    },
+    {
+      "id": "F011",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "Posting doesn't address comment size limits or who owns the prior comment",
+      "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#technical-considerations",
+      "location_verified": null
+    },
+    {
+      "id": "F012",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "Scratch-worktree lifecycle is deferred, but it interacts with squadron's worktree rules",
+      "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#technical-considerations",
+      "location_verified": null
+    },
+    {
+      "id": "F013",
+      "severity": "note",
+      "category": "technology",
+      "raw_category": null,
+      "summary": "Adapter calls are blocking subprocesses: say where they run relative to the async review",
+      "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#technical-considerations",
+      "location_verified": null
+    },
+    {
+      "id": "F014",
+      "severity": "note",
+      "category": "abstraction",
+      "raw_category": null,
+      "summary": "`review.py` is already over the size guideline, so adding `review pr` there makes it worse",
+      "location": "unverified",
+      "location_verified": null
+    }
+  ],
+  "template_name": "arch",
+  "input_files": {
+    "input": "project-documents/user/architecture/380-arch.pull-request-workflow.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/squadron-380-arch"
+  },
+  "timestamp": "2026-11-16T13:21:53.968261",
+  "model": "claude-opus-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 10,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-opus-5-5",
+  "answering_models": [
+    "claude-opus-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 14,
+    "in_fences": 0,
+    "in_section": 14,
+    "surviving": 14
+  },
+  "effort": "high",
+  "profile": "sdk",
+  "turns": 11,
+  "prompt_tokens": 716563,
+  "cached_tokens": 631315,
+  "cache_write_tokens": 85230,
+  "completion_tokens": 10815,
+  "reasoning_tokens": null,
+  "duration_seconds": 122.88531062495895,
+  "cost_usd": 1.0250818000000002,
+  "cost_basis": "provider"
+}

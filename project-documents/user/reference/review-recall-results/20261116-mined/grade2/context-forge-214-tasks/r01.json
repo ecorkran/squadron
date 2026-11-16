@@ -1,0 +1,75 @@
+{
+ "review": "r01",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Task 5 can change source code but only commits as docs",
+   "description": "Task 5 is rated effort 2 and described as verification, but line 122 says any DIFF that is not a leniency decision is a bug to fix, with a test added to \"the matching test task's file.\" That is source and test change after Task 4C has already committed. The only commit that could hold it is Task 5C (line 126), which is `docs: record slice 214 parity sweep results` and runs only \"if Task 5 changed files.\" A code fix committed under `docs:` breaks the commit-type rule, and its tests land after the owning task's commit point. Fix: route any code fix back to the owning task (2, 3 or 4), re-run that task's tests, and commit it at that task's commit point. Keep Task 5C only for the recorded parity notes.",
+   "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md:119-126"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Task 0 hard-codes `main` and skips the worktree checks",
+   "description": "Line 38 creates the branch from a literal `main`. Line 37 stops and asks the PM if `git.integration_branch` is set. The git rules say the target is whatever the config says and work forks from it. No named rule requires stopping for a configured integration branch, so that stop is an unneeded gate, and the literal is wrong whenever the config is set. This checkout is a worktree (`wt/context-forge-214-tasks`), but Task 0 has no `cf worktree list --json` registration check and no STOP for a target checked out in another tree. Fix: use the value read on line 37 (or `main` if empty) as `{target}`, and add the registration check.",
+   "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md:36-39"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Commit markers are checkbox tasks, not `**Commit**:` lines",
+   "description": "The five commit points (lines 71, 94, 117, 126, 134) are checkbox items named \"Task 2C: Commit\" and so on. The convention is plain `**Commit**:` lines, never checkboxes. As checkboxes, task-checker would tick them like work items, and a commit cannot be verified before it exists. The placement is right: each follows a tested task (2T, 3T, 4T), and 5C and 6C are conditional. Fix: replace each with a plain line under the tested task, for example `**Commit**: feat(core): add slice design heading validator`, and state the condition for the conditional ones.",
+   "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md:71-134"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Unreadable file and unreadable template have no test",
+   "description": "The slice design's Functional Requirements require exit 2 for \"a missing, non-regular or unreadable file\" and for \"a missing or unreadable template,\" each with empty stdout. Task 3 implements the readability preflight (line 77) and the fs-error wrap (line 79). Task 3T's error list (line 91) covers missing template, template with no markers, valid-then-missing file and a directory, but no unreadable file or template. Task 4T's exit-2 list (line 113) has no unreadable case either, so those branches have no test. Add an unreadable-file and an unreadable-template case to 3T and an exit-2 case to 4T. Say how the test makes a file unreadable (for example `chmod 000`) and what it does when run as root, where `chmod 000` does not block reads and the test would pass for the wrong reason.",
+   "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md:84-92"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "The docType check goes through a parser that swallows read errors",
+   "description": "Task 3 line 78 calls `parseFrontmatter` on each file before any heading matching. The parser catches every error and returns `found: false` (its doc comment on line 7 says it never throws). A read failure during that call therefore becomes `reason: 'doctype'` with exit 1, not the exit 2 that slice design line 78 promises for \"every I/O failure.\" The wrap in Task 3 line 79 never sees the error, because the parser has already consumed it. This is the silent-failure path the failure-mode rule forbids. Fix: in Task 3, read the document text first, with errors wrapped in `SliceDesignValidationError`, and only then call `parseFrontmatter`. A file deleted between the two reads would still come back as doctype, so either document that window or derive docType from the text already read. Add a test for whichever outcome is chosen. The parser's CRLF handling is fine (it trims each line, line 24), so this finding is about errors only.",
+   "location": "packages/core/src/introspection/parsers/frontmatterParser.ts:63-65"
+  },
+  {
+   "i": 5,
+   "severity": "NOTE",
+   "title": "\"Original heading text\" should mean the full heading line",
+   "description": "Lines 48, 68 and 75 say `RequiredHeading` and `missing` keep the \"original heading text,\" but the contract is `missing: ## Value` (slice design line 120; JSON line 135). An implementer who stores only the text after the `#`s would print the wrong output. The success criterion \"written as in the template\" settles the intent, and Task 4T line 109 asserts `missing: ## Value`, so tests would catch a mismatch. Still, state in Task 2 that the stored value is the full trimmed heading line.",
+   "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md:48"
+  },
+  {
+   "i": 6,
+   "severity": "NOTE",
+   "title": "Test selection is left open in two places",
+   "description": "Line 108 asks for \"several files ... that pass the bash script today\" without saying how to pick them, and the implementer has to run the script to find out. Line 114 says \"with `--project` or a worktree checkout fixture,\" which describes two different tests, and the easier one may be chosen. Name the file list (or the command that produces it) and pick one fixture approach.",
+   "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md:108-114"
+  },
+  {
+   "i": 7,
+   "severity": "NOTE",
+   "title": "Parity sweep checks verdicts, not missing lists",
+   "description": "Walkthrough step 6 (design lines 211-219) compares only the first output line, so it checks PASS/FAIL. A DIFF in the `missing:` lines of failing designs would not be caught, and step 2's `missing:` comparison is manual. No success criterion requires parity on missing lists, so this is not a gap against the design, but Task 5's \"no unexplained DIFF\" is weaker than it reads. Consider comparing the missing lines for the step 2 broken copy explicitly.",
+   "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md:119-124"
+  },
+  {
+   "i": 8,
+   "severity": "NOTE",
+   "title": "Task 1 is small enough to fold into a neighbouring task",
+   "description": "Task 1 is one constant plus a barrel check, and its only consumer is Task 4 (`validateDesign.ts`). Folding it into Task 4 or the start of Task 2 would remove a task without changing any commit point. Optional.",
+   "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md:41-44"
+  },
+  {
+   "i": 9,
+   "severity": "NOTE",
+   "title": "Session name differs between the task file and the design",
+   "description": "The Context Summary says \"ai-project-guide-old session.\" The slice design says \"ai-project-guide session\" (design lines 38, 156, 231). It may be deliberate, but these files do not settle which name is right. Confirm with the PM before the post-release step uses it.",
+   "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md:31"
+  }
+ ]
+}

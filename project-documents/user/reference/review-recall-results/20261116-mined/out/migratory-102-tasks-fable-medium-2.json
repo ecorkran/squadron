@@ -1,0 +1,189 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Vectorization requirement has no task step or check",
+      "description": "The slice requires \"Both forces are vectorized within each agent's neighborhood \u2014 no nested Python loops\" (slice Technical Requirements, line 395). No step in 3.1 or 4.1 states this constraint and nothing verifies it. Task 4.1 writes the weighted average in index notation (`sum(velocity[i] * leadership[i]) / sum(leadership)`), which a junior implementer can read as an inner loop over neighbors. Add an explicit step to 4.1 (and 3.1) requiring NumPy array operations over the neighbor set with only the outer per-agent loop.",
+      "file_ref": null,
+      "category": "coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:110-122"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Convergence assertion in 5.2 can pass without a working LeadershipForce",
+      "description": "The slice criterion is that \"the herd's mean heading converges toward the leaders' initial heading\". Task 5.2 asserts only that the final mean heading has a positive x-component.\n- **Already true at tick 0:** five leaders at `[4.0, 0.0]` among 50 agents give an expected mean x-velocity of about +0.4 before any tick runs.\n- **Likely holds without leadership:** the flocking forces should roughly preserve mean velocity, so the assertion would probably pass with `LeadershipForce` returning zeros.\n- **Ambiguous metric:** \"mean heading\" could mean the mean of velocities or the mean of unit headings.\n\nStrengthen it by measuring the non-leader agents only, or by asserting that eastward alignment increased relative to the initial state, and name the metric. Task 5.3 has a related weakness: the `or` between heading variance and eastward component lets the implementer pick whichever passes. Fix one primary metric.",
+      "file_ref": null,
+      "category": "test-quality",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:147-154"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Commits are checkbox tasks, and 6.3 is an empty commit",
+      "description": "Commits appear as numbered checkbox tasks (1.3, 2.3, 3.3, 4.3, 5.4, 6.3) instead of plain `**Commit**:` lines. The placement is right: each sits after an implement-and-test pair, matching slice checkpoint 7. Convert 1.3 through 5.4 to plain marker lines. Task 6.3 (lines 180-182) should be removed: nothing is left to commit after 5.4, so it yields an empty or check-off-only commit, and its `docs:` type does not fit a code slice.",
+      "file_ref": null,
+      "category": "commit-markers",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:48-49"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Section 6 and task 5.1 carry redundant work",
+      "description": "- **6.2 (cut):** it repeats the protocol conformance check already done as verify steps in 3.1 and 4.1 and as permanent tests in 3.2 and 4.2.\n- **6.3 (cut):** see the commit finding above.\n- **6.1 (fold):** make the full-suite run the final verify step of Section 5, before its commit marker, and drop Section 6.\n- **5.1 (merge into 5.2):** the 10-agent, 10-step smoke run is subsumed by the 300-tick run of the same five forces. Its step \"Set some agents to high leadership ... to confirm forces interact correctly\" (line 144) has no defined assertion, so a junior implementer cannot tell when it is done.",
+      "file_ref": null,
+      "category": "proportionality",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:169-182"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Epsilon appears as an inline example value in two tasks",
+      "description": "\"epsilon (e.g. 1e-10)\" appears in both 3.1 and 4.1 (line 117). Project conventions say to avoid hard-coded constants and duplicated values. Have 3.1 define one named module-level constant in `herding.py` and have 4.1 reuse it.",
+      "file_ref": null,
+      "category": "conventions",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:86"
+    },
+    {
+      "severity": "PASS",
+      "title": "Functional success criteria are covered",
+      "description": "- **Protocol conformance:** 3.2 and 4.2.\n- **Hand-constructed outputs:** 3.2 uses the `[3.0, 0.0]` case and 4.2 uses the three-agent geometry, both from the slice's verification walkthrough.\n- **Zero-force cases:** no neighbors and zero leadership in 4.2, stationary agent in 3.2.\n- **`active_indices` isolation:** 3.2 and 4.2.\n- **Self-exclusion:** 4.2.\n- **Backward-incompatible updates:** 1.2 and 2.2 update the state and profile call sites, each ending in a full-suite run.\n- **Profile differentiation:** 5.3.\n\nNo scope creep: every task traces to a slice criterion or to the slice's AgentState and BehavioralProfile extension details.",
+      "file_ref": null,
+      "category": "coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:93-132"
+    },
+    {
+      "severity": "PASS",
+      "title": "Sequencing and test-with pattern are respected",
+      "description": "The order is AgentState, BehavioralProfile, MomentumForce, LeadershipForce, then integration, which matches the slice's development approach steps 1-6. There are no circular dependencies. Each implementation task (1.1, 2.1, 3.1, 4.1) is immediately followed by its test task. The slice restates no NFR, so no load-test or CI-gating task is required.",
+      "file_ref": null,
+      "category": "sequencing",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:29-135"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "coverage",
+      "raw_category": null,
+      "summary": "Vectorization requirement has no task step or check",
+      "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:110-122",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "test-quality",
+      "raw_category": null,
+      "summary": "Convergence assertion in 5.2 can pass without a working LeadershipForce",
+      "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:147-154",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "commit-markers",
+      "raw_category": null,
+      "summary": "Commits are checkbox tasks, and 6.3 is an empty commit",
+      "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:48-49",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "proportionality",
+      "raw_category": null,
+      "summary": "Section 6 and task 5.1 carry redundant work",
+      "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:169-182",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "conventions",
+      "raw_category": null,
+      "summary": "Epsilon appears as an inline example value in two tasks",
+      "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:86",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "pass",
+      "category": "coverage",
+      "raw_category": null,
+      "summary": "Functional success criteria are covered",
+      "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:93-132",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "pass",
+      "category": "sequencing",
+      "raw_category": null,
+      "summary": "Sequencing and test-with pattern are respected",
+      "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:29-135",
+      "location_verified": true
+    }
+  ],
+  "template_name": "tasks",
+  "input_files": {
+    "input": "project-documents/user/tasks/102-tasks.herding-and-leadership.md",
+    "against": "project-documents/user/slices/102-slice.herding-and-leadership.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/migratory-102-tasks"
+  },
+  "timestamp": "2026-11-16T12:14:44.588525",
+  "model": "claude-fable-5-2",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 2,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-fable-5-2",
+  "answering_models": [
+    "claude-fable-5-2"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 7,
+    "in_fences": 0,
+    "in_section": 7,
+    "surviving": 7
+  },
+  "effort": "medium",
+  "profile": "sdk",
+  "turns": 3,
+  "prompt_tokens": 107325,
+  "cached_tokens": 14304,
+  "cache_write_tokens": 93017,
+  "completion_tokens": 5010,
+  "reasoning_tokens": null,
+  "duration_seconds": 50.175320875132456,
+  "cost_usd": 1.6920532000000001,
+  "cost_basis": "provider"
+}

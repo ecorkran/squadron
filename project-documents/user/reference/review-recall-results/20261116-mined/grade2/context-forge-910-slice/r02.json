@@ -1,0 +1,33 @@
+{
+ "review": "r02",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "All three WorkflowNavigator.ts \"sites\" belong to the `SliceStatus.status` union that TD-3 excludes",
+   "description": "The inventory lists `WorkflowNavigator.ts` with 3 `=== 'complete'` sites to sweep, and migration step 4 (line 90) sweeps them. In the current source, the only bare literals left in that file are `slice.status === 'complete'` (lines 312 and 345) and `return { ...base, status: 'complete', taskProgress }` (line 588). Here `slice`/`base` are `SliceStatus`, returned by `deriveSliceStatus(): Promise<SliceStatus>`. Those are exactly the workflow-position union that the Excluded section (line 49) and TD-3 (lines 104\u2013106) say must stay untouched, because sweeping them \"implies the two unions are related, which they aren't.\"\n\nThe file's real `NormalizedStatus` comparisons (lines 319, 577, 695) already use `STATUS.*`, and the file already imports `STATUS` (line 13). So the \"likely already imports; confirm\" in step 4 is already settled.\n\nAs written, the implementer has to either break TD-3 or miss the Functional Requirement at line 135 (\"zero matches in the six swept files\"). **Fix:** drop `WorkflowNavigator.ts` from the sweep (0 sites), remove step 4, and make the success-criterion grep exclude `SliceStatus` sites.",
+   "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md:36"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "ConsistencyChecker's frontmatter-write fix values are raw on-disk tokens, the vocabulary TD-2 says is separate",
+   "description": "About 14 of the `ConsistencyChecker.ts` literals are not comparisons. They are `fixAction.detail: { key: 'status', value: 'in-progress' | 'complete' }`, which `updateFrontmatterField()` writes straight into document frontmatter. These are raw frontmatter tokens being written to disk, which is the vocabulary TD-2 (line 102) keeps out of `NormalizedStatus`. The code also mixes the two vocabularies already: the task-file fix at source line 530 writes `'in_progress'` (underscore), while the slice-design, slice-plan, arch and initiative fixes write `'in-progress'`.\n\nIf these values are swept to `STATUS.*`, the on-disk write format depends on the internal normalized enum. Renaming a `STATUS` value later would silently change what `cf check --fix` writes into user documents. That's the cross-vocabulary coupling TD-2 warns against, and it would leave `STATUS.InProgress` and a literal `'in_progress'` side by side in the same rule set.\n\nThe design never separates these write sites from the comparison sites (the table describes all 36 as \"comparisons\"). **Fix:** add a TD that makes an explicit decision for the `detail.value` sites. Either exclude them under TD-2 as raw-token writes, or sweep them deliberately and record why the write format should follow `STATUS`. Either way, note the `'in_progress'`/`'in-progress'` mismatch as out of scope or as a filed issue.",
+   "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md:33"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Site inventory and verification counts don't match the source",
+   "description": "The verification walkthrough's expected numbers are what proves the sweep is complete, but several don't hold:\n- **ProjectModelBuilder.ts (lines 39 and 50):** the doc says its one literal is the `'unknown'` fallback at line 179. Line 179 is actually a comment containing `'not-started'` (\"silently coerced to 'not-started' (TD-2a)\"). The file has no literal to sweep (correct), but the grep in line 135 and step 1 of the walkthrough will match this comment.\n- **ConsistencyChecker.ts:** source line 514 is a comment (`// 'complete' | 'in-progress' | 'not-started'`) that the grep also matches. The current occurrence count is about 33, not 36.\n- **types.ts (line 35):** \"5 (of 8 total)\" doesn't add up. The 8 are 4 in the `STATUS` definition, 3 on the `inferredStatus` union (line 44), and 1 in `SliceStatus.status` (line 269), so 3 are in scope.\n- **\"After\" line (line 151):** it counts 4 `SliceStatus.status` sites, but there is one in `types.ts` plus the three in `WorkflowNavigator.ts` from the first finding. It also ignores the two comment matches.\n\n**Fix:** recount from the source. State the expected \"after\" set exactly: the `STATUS` definition, the `frontmatterSchema.ts` sites, the `SliceStatus` sites, the comments (or say they will be updated), and the `detail.value` sites if they are excluded. That way the grep is a real pass/fail check.",
+   "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md:135-151"
+  },
+  {
+   "i": 6,
+   "severity": "NOTE",
+   "title": "Test coverage relies on the existing suite and a compile-time identity",
+   "description": "The architecture principle \"No behavior changes without tests\" calls for coverage that verifies preserved behavior. The slice uses the existing suite plus the `STATUS.X === 'x'` identity. Since the sweep is type-checked and identical at runtime, that's enough. No new tests are needed, and the slice correctly doesn't add any.",
+   "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md:85"
+  }
+ ]
+}

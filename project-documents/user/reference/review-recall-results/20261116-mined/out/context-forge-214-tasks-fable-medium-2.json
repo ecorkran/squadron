@@ -1,0 +1,189 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Commit points are checkbox tasks, and the last two are conditional",
+      "description": "Tasks 2C, 3C, 4C, 5C and 6C are `- [ ]` checkbox items, not plain `**Commit**:` lines. This has three practical consequences:\n\n- **Final check-offs have no commit.** 5C and 6C run \"only if Task N changed files\". When neither fires, the check-offs for Tasks 5 and 6 are either left uncommitted or need a boxes-only commit. Task 6's own success line (132) requires \"working tree clean after commit\", which then cannot be met.\n- **Commit messages can mislabel the change.** Task 5 may fix a parity bug in code and add a test, but 5C's message is `docs: record slice 214 parity sweep results`. A lint fix in Task 6 would land under `docs: add cf validate design to command reference`.\n- **Lint runs only after all three `feat` commits.** `pnpm lint` first appears in Task 6, so 2C, 3C and 4C are tested but not linted.\n\nSuggested fix:\n- Replace 2C, 3C and 4C with plain `**Commit**: feat(...)` lines.\n- Merge 5C and 6C into one unconditional plain marker after Task 6, with the type chosen by what actually changed.\n- Add `pnpm lint` to the Success lines of Tasks 2T, 3T and 4T.",
+      "file_ref": null,
+      "category": "commit-markers",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md:126-134"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Exit-2 criterion is only partly tested",
+      "description": "The slice's exit-2 requirement (slice design line 171) says each listed case must exit 2 with a stderr message and empty stdout, including under `--json`. Task 4T's exit-2 bullet covers no arguments, a nonexistent path, a valid file before a missing one, and a missing template. The rest are thinner:\n\n- **Non-regular file (directory):** tested in Task 3T (line 91) as a core error type only, not for exit code or empty stdout.\n- **Template with no required headings:** same, core level only. This is the case the design relies on to \"fail loudly\" if the guide changes its marker.\n- **Unreadable file and unreadable template:** no test at any level, although Task 3 implements the readable check.\n\nSuggested fix:\n- Add the directory argument and a marker-less template to the 4T exit-2 bullet; the worktree fixture already used in 4T makes the latter cheap.\n- Add one unreadable-file case to 3T using `chmod 0o000`, skipped when running as root or on Windows.",
+      "file_ref": null,
+      "category": "coverage-gap",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md:113"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Task 0 hard-codes `main` and stops if an integration branch is set",
+      "description": "The branch rule is to fork from whatever `cf config get git.integration_branch` returns, or `main` if empty. The task instead expects empty, hard-codes `main` in the checkout command, and stops for the Project Manager otherwise. No named rule requires that stop. Reword it to create the branch from the value read.",
+      "file_ref": null,
+      "category": "sequencing",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md:37-38"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Task 1 could merge into Task 2",
+      "description": "Task 1 is a one-line constant with its own build check. The design's Development Approach step 1 groups it with the pure validator. Merging is optional and not a problem as written.",
+      "file_ref": null,
+      "category": "proportionality",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md:41-44"
+    },
+    {
+      "severity": "PASS",
+      "title": "Success criteria are covered",
+      "description": "- **Functional:** PASS/FAIL output, the `missing:` lines, the doctype message, multi-file ordering, the `--json` contract and worktree-aware template resolution all map to Tasks 2\u20134 and 4T.\n- **Technical:** normalization unit tests are in 2T, the real-template test asserting `## Overview` and `### Verification Walkthrough` is in 3T, real slice designs including 214 are in 4T, and build, lint and the full suite are in Task 6.\n- **Walkthrough:** steps 1\u20136 including the parity sweep are Task 5.\n- **Scope:** nothing traces outside the design, and the exclusions (`cf check` wiring, env override, guide-side edits) are restated as out of scope.",
+      "file_ref": null,
+      "category": "traceability",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md:46-124"
+    },
+    {
+      "severity": "PASS",
+      "title": "Sequencing and test-with pattern",
+      "description": "The order is constant, pure validator, file layer, CLI, walkthrough, then docs, with no circular dependencies. Each implementation task is followed directly by its test task (2/2T, 3/3T, 4/4T). There is no merge or push task.",
+      "file_ref": null,
+      "category": "sequencing",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md:36-117"
+    },
+    {
+      "severity": "PASS",
+      "title": "Scope, detail and referenced paths",
+      "description": "One task file with seven tasks and three test tasks fits a three-file feature. The regex and normalization detail in Task 2 restates the design's contract and adds nothing beyond it. The slice restates no NFR, so no load test or CI gating task is needed. The existing files the tasks name are all present: `validate.ts`, `guides/types.ts`, `guides/index.ts`, `frontmatterFileValidator.ts`, `validate-worktree-scope.test.ts`, the real template and the bash script. README line 355 lists `cf validate` without subcommands, as the context summary says.",
+      "file_ref": null,
+      "category": "proportionality",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "commit-markers",
+      "raw_category": null,
+      "summary": "Commit points are checkbox tasks, and the last two are conditional",
+      "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md:126-134",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "coverage-gap",
+      "raw_category": null,
+      "summary": "Exit-2 criterion is only partly tested",
+      "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md:113",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "note",
+      "category": "sequencing",
+      "raw_category": null,
+      "summary": "Task 0 hard-codes `main` and stops if an integration branch is set",
+      "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md:37-38",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "note",
+      "category": "proportionality",
+      "raw_category": null,
+      "summary": "Task 1 could merge into Task 2",
+      "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md:41-44",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "pass",
+      "category": "traceability",
+      "raw_category": null,
+      "summary": "Success criteria are covered",
+      "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md:46-124",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "pass",
+      "category": "sequencing",
+      "raw_category": null,
+      "summary": "Sequencing and test-with pattern",
+      "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md:36-117",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "pass",
+      "category": "proportionality",
+      "raw_category": null,
+      "summary": "Scope, detail and referenced paths",
+      "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md",
+      "location_verified": null
+    }
+  ],
+  "template_name": "tasks",
+  "input_files": {
+    "input": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md",
+    "against": "project-documents/user/slices/214-slice.native-slice-design-validation.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/context-forge-214-tasks"
+  },
+  "timestamp": "2026-11-16T12:12:49.672345",
+  "model": "claude-fable-5-2",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 6,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-fable-5-2",
+  "answering_models": [
+    "claude-fable-5-2"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 7,
+    "in_fences": 0,
+    "in_section": 7,
+    "surviving": 7
+  },
+  "effort": "medium",
+  "profile": "sdk",
+  "turns": 7,
+  "prompt_tokens": 211364,
+  "cached_tokens": 106396,
+  "cache_write_tokens": 104962,
+  "completion_tokens": 6107,
+  "reasoning_tokens": null,
+  "duration_seconds": 65.97964875004254,
+  "cost_usd": 1.9456635000000002,
+  "cost_basis": "provider"
+}

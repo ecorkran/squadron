@@ -1,0 +1,225 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "A git failure during range resolution shows up as an ordinary unresolved reason and exit 0",
+      "description": "The failure-mode row at line 164 says that when a reflog read or merge search returns `None`, the resolver treats it as \"this path can't answer\", tries the next path, and emits an INFO line. In the data flow (lines 111\u2013121), a `None` from the `git log --merges --first-parent` search therefore drops into the fast-forward path. That path ends in `NO_LANDING`, `LANDED_ELSEWHERE` or `REFLOG_UNAVAILABLE`. No `RangeUnresolvedReason` member means \"git failed or timed out\".\n\nAs a result, a 30 s `run_git` timeout on a long history:\n- is shown as, for example, `unresolved: no_landing` at INFO level;\n- lets `slice-ranges` exit 0. Line 275 says it \"exits 0 when every slice either resolved or was unresolved for a stated reason\" but also \"exits 1 on a git or store error\". These two statements contradict each other for this case.\n\nThis conflicts with the project's failure-mode rule (failures must be observable at WARNING or above) and with Fail Fast. It also undermines the slice plan's risk statement that \"the persistence has to be right the first time\": a user who sees `no_landing` has no reason to retry before the reflog expires.\n\n**Fix:** Keep \"git returned a result with no matches\" separate from \"git returned `None`\". A `None` should either raise (ERROR, exit 1, per line 275) or produce a separate reason such as `GIT_UNAVAILABLE`, logged at WARNING and never treated as final. Add a `caplog` test for it next to the ones listed at line 349.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:164"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The planned check for the editable-install risk cannot detect it",
+      "description": "The risk at line 375 is that pyright, run with `--pythonpath <live>/.venv/bin/python`, resolves `import squadron` through the editable install to the live `src` instead of the exported tree. Line 380 says \"the in-place-equals-export test (criterion 5) catches a mismatch at HEAD\". It can't. At HEAD the exported `src` and the live `src` are byte-identical, so the type counts match whichever tree pyright reads. Criterion 5 (line 336) and the D5 test (line 216) pass whether or not the risk is real.\n\nThe other mitigation is walkthrough step 4 (line 366), a manual run with no expected type-error value. And \"If they differ, type counts \u2026 become absent\" describes a decision for later, not a mechanism the design specifies.\n\nThe risk matters because D6 (line 220) presents type counts at an export as trustworthy whenever the lockfile matches. If the risk is real, every slice report on squadron itself would show the live tree's type errors as both before and after.\n\n**Fix:** Add an automated test that can tell the two trees apart. For example: in a throwaway repo with a `src` layout and an editable self-install, commit a type error, fix it at HEAD, export the older commit, and assert that the error is counted. Make the result decide D6: if the test fails, type counts at an export are always absent with an `environment_unresolved` reason that names this cause.",
+      "file_ref": null,
+      "category": "testing",
+      "raw_category": null,
+      "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:375-380"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Reports don't say how they handle landings on different target branches in one project record",
+      "description": "The `slice_ranges` record is keyed on `ProjectId`, so worktrees and clones of the same remote share it (line 176). Resolution, though, depends on each checkout's `git.integration_branch`. D2 (line 194) explicitly expects a slice that landed on a worktree branch to be resolved \"in a checkout whose target is that branch\", and the merge at line 122 adds that landing to the same per-slice list. Each `SliceLanding` records its `target_ref` (line 184), but none of the consumers say what to do with a landing whose `target_ref` differs from the current target:\n\n- **`report slice`:** the header at line 281 (\"2 landings on main\") assumes a single target.\n- **D9 attribution (line 243):** \"listed under a slice only when that slice has a resolved landing\" doesn't say whether a landing on another target counts.\n- **`report history` (line 298):** it places a slice's reviews on the row of the landing's `after_sha` in the current target's first-parent history, and leaves out commits that aren't on that line. For a landing on another target, its reviews end up either on no row or uncounted. The closing project-level line only covers slices with *no* resolved landing.\n\nBecause landings are append-only, this situation is guaranteed once a worktree is used (squadron already has `squadron-brownfield`).\n\n**Fix:** State one rule and test it. For example: reports show only landings whose `target_ref` equals the current target and list the rest by name (\"1 landing on squadron-brownfield not shown\"). Reviews for a slice with no landing on the current target go into the project-level line in `report history`.",
+      "file_ref": null,
+      "category": "under-specification",
+      "raw_category": null,
+      "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md#d2--merge-commits-are-searched-on-the-targets-first-parent-line-with-no-fallback-to-main"
+    },
+    {
+      "severity": "NOTE",
+      "title": "A lost `slice_ranges` write is silent",
+      "description": "The design states that concurrent writes aren't supported and gives the signal as \"None\". A lost fast-forward landing can be permanent if the reflog expires before the next run. This is an accepted, documented limitation shared with 400, so it isn't a CONCERN. A cheap improvement: just before `write_slice_ranges`, read the record again and merge the new landings into it. That narrows the race window without adding locking.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:166"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Reading limits and exclusions from the live checkout is a deliberate, documented deviation",
+      "description": "Architecture line 90 says that measuring an exported commit \"reads that commit's config\". D5 does this for rule-set configs (`pyproject.toml`, `ruff.toml`, `eslint.config.*` come from `repo_root`). Limits and exclusions, however, come from the live checkout. The reasons are given: squadron's `.squadron.toml` is gitignored, and both boundaries are measured under the same settings. The cost is acknowledged at line 377. Each record states the settings it used, so comparability stays honest. No change needed.",
+      "file_ref": null,
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:214"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Report modules are described as having \"no git\", but the slice report needs a commit-existence check",
+      "description": "Line 99 says the report assembly modules do \"no git\". The slice-report flow (line 146) and the failure table (line 165), however, have the report check `git cat-file -e` before calling `ensure_snapshot`. Say which injected collaborator does this check (the resolver or `ensure_snapshot`), so the fake used in report tests (line 352) covers it.",
+      "file_ref": null,
+      "category": "under-specification",
+      "raw_category": null,
+      "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:99"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Fresh-clone durability holds on the same machine only",
+      "description": "The slice plan requires that a range \"still resolves after reflog expiry or in a fresh clone\". Merge-commit landings meet this anywhere because they come from topology. Fast-forward landings survive only in the user-level store on the machine that recorded them. Line 176 states this correctly, and given the architecture's local-store design it is the right reading. Criterion 2 (line 333) could say \"on the same machine\" to make it explicit.",
+      "file_ref": null,
+      "category": "integration",
+      "raw_category": null,
+      "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:176"
+    },
+    {
+      "severity": "PASS",
+      "title": "Consistent with the architecture's principles and non-goals",
+      "description": "- **No gate, no score:** reports never run audits or reviews and add no gate or pipeline hook (lines 60, 64). A test asserts that no serialized report has a key containing `score` (D8).\n- **Store:** `slice_ranges` is an optional sibling payload with no schema bump (line 314). It is one coarse record per project, read once and written at most once per command (D1).\n- **Comparability:** measurements are compared only on full identity match, and every break is named with an enum value (D7).\n- **Severity:** review and audit severities stay on their own scales (D8).\n- **Attribution:** commit messages are used only through the accepted merge convention (D9).\n- **Before and after:** the D3 refinement is reflected in the architecture (line 80).\n- **Dependencies:** dependency directions are correct: metrology \u2192 `review.git_utils`, 402, 323.\n- **Prerequisites:** 402 is correctly listed as a hard prerequisite that must be implemented first.",
+      "file_ref": null,
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md#technical-decisions"
+    },
+    {
+      "severity": "PASS",
+      "title": "Scope matches the slice plan entry",
+      "description": "Every major mechanism traces to a success criterion in the slice plan or to a named consumer:\n- durable ranges;\n- `git archive` export with the lockfile gate;\n- per-measurement comparability;\n- the noise-floor display;\n- project-only roll-up for unresolved slices;\n- three report commands;\n- `take_snapshot_at` and `get_slice_ranges` for 420.\n\nThe separate `slice-ranges` command is justified: it records a fast-forward slice's reflog without paying for pyright (D4). The single contract change, `environment_root`, is the minimum needed to measure an exported tree with live tools, and the lighter alternative (symlinking `.venv`) was considered and rejected for a stated reason (line 218). The exclusions are explicit and cut sensibly: no dependency installation, no slice table in `report project`, and no `main` fallback. The architecture states no numeric NFR, so none needs restating here.",
+      "file_ref": null,
+      "category": "proportionality",
+      "raw_category": null,
+      "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md#technical-scope"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "A git failure during range resolution shows up as an ordinary unresolved reason and exit 0",
+      "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:164",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "testing",
+      "raw_category": null,
+      "summary": "The planned check for the editable-install risk cannot detect it",
+      "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:375-380",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "under-specification",
+      "raw_category": null,
+      "summary": "Reports don't say how they handle landings on different target branches in one project record",
+      "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md#d2--merge-commits-are-searched-on-the-targets-first-parent-line-with-no-fallback-to-main",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "note",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "A lost `slice_ranges` write is silent",
+      "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:166",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "summary": "Reading limits and exclusions from the live checkout is a deliberate, documented deviation",
+      "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:214",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "under-specification",
+      "raw_category": null,
+      "summary": "Report modules are described as having \"no git\", but the slice report needs a commit-existence check",
+      "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:99",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "note",
+      "category": "integration",
+      "raw_category": null,
+      "summary": "Fresh-clone durability holds on the same machine only",
+      "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:176",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "pass",
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "summary": "Consistent with the architecture's principles and non-goals",
+      "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md#technical-decisions",
+      "location_verified": null
+    },
+    {
+      "id": "F009",
+      "severity": "pass",
+      "category": "proportionality",
+      "raw_category": null,
+      "summary": "Scope matches the slice plan entry",
+      "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md#technical-scope",
+      "location_verified": null
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md",
+    "against": "project-documents/user/architecture/400-slices.code-quality-measurement.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/squadron-403-design"
+  },
+  "timestamp": "2026-11-16T12:18:28.611820",
+  "model": "claude-opus-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 6,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-opus-5-5",
+  "answering_models": [
+    "claude-opus-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 9,
+    "in_fences": 0,
+    "in_section": 9,
+    "surviving": 9
+  },
+  "effort": "high",
+  "profile": "sdk",
+  "turns": 7,
+  "prompt_tokens": 450170,
+  "cached_tokens": 340971,
+  "cache_write_tokens": 109189,
+  "completion_tokens": 10684,
+  "reasoning_tokens": null,
+  "duration_seconds": 113.7736331669148,
+  "cost_usd": 1.1561574,
+  "cost_basis": "provider"
+}

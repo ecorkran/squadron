@@ -1,0 +1,61 @@
+{
+ "review": "r06",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "FAIL",
+   "title": "Overwrite guard is placed on a function `sq review code` does not call",
+   "description": "T12 adds the archive-and-verify guard to `save_review_file` only. The unmet success criteria are \"Re-running `sq review code <N>` over an edited review file archives the prior content and warns\" and the F003 fail-closed criterion.\n\n- **CLI path:** every review command calls `save_review_result` (`src/squadron/cli/commands/review.py:451`, `:523`, `:610`, `:746`), which writes with its own `path.write_text(...)` at `persistence.py:300` and `:303`. It never goes through `save_review_file`.\n- **Pipeline path:** when `slice_info` is present it also uses `save_review_result` (`src/squadron/pipeline/actions/review.py:255`). `save_review_file` is reached only in the no-`slice_info` fallback (`:272`).\n- **Tests:** T13 exercises `save_review_file` directly, so all three tests would pass while the walkthrough's step 7 still silently destroys the hand note.\n\nFix: T12 should put the guard in one shared write helper used by both `save_review_file` and `save_review_result` (markdown and `as_json` branches). T13 should add a test that re-saves through `save_review_result`.\n\nTwo smaller gaps in the same task:\n- `save_review_result` returns `Path`, not `Path | None`, so the \"return `None` on abort\" contract needs an explicit decision for that caller.\n- The design's \"review content is still printed to the terminal\" on abort has no task step.",
+   "location": "src/squadron/review/persistence.py:303"
+  },
+  {
+   "i": 1,
+   "severity": "FAIL",
+   "title": "Relocation leaves `review/addressed/` importing from the pipeline package",
+   "description": "T3 tells the implementer to keep `verification.py`'s `RoundDiff` import from `pipeline.actions.findings_addressed.screens` after the move, calling it \"the pipeline\u2192review direction\". Once the file lives in `review/addressed/`, that import is review\u2192pipeline. That is the inversion the design's \"Dependency direction (review F002)\" paragraph exists to prevent.\n\n- **Same problem in T5:** `judge_residue_core` takes a `diff` typed `RoundDiff` (`findings_addressed/judge.py:21`, `:94`), so `review/addressed/judge.py` would need the same back-import. T5 does not mention it.\n- **Likely import failure:** importing `squadron.review.addressed.verification` first would trigger `findings_addressed/__init__.py`, which imports back from the still-initialising `review.addressed.verification`. File 2's `review/resolution.py` and the CLI would import in that order.\n- **Why the verify tasks would miss it:** T2/T4/T6/T8 enter through the pipeline package first, so the cycle is not exercised.\n\nFix: move the `RoundDiff` dataclass (`screens.py:34`) into `review/addressed/models.py` in T1, leaving `compute_round_diff` and the screens in the pipeline. Add one check to a verify task: import `squadron.review.addressed` in a fresh interpreter and assert it pulls in no `squadron.pipeline` module.",
+   "location": "src/squadron/pipeline/actions/findings_addressed/verification.py:17"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "T6 demands \"no test rewritten\" but T5 moves the mocked transport",
+   "description": "Both judge suites patch `squadron.pipeline.actions.findings_addressed.judge.run_review_with_profile` (also `tests/pipeline/test_findings_addressed_e2e.py:27`). After T5 the call lives in `review/addressed/judge.py`, so that patch target must change or the mock no longer intercepts the call. T6 says any test edit means \"stop and reconcile with the design\", so a correct extraction halts the implementer.\n\nT7 has the same tension. All four test files import through the package `__init__` (e.g. `tests/pipeline/test_findings_addressed.py:18`), and T7 removes those re-exports without shims.\n\nFix: state in T5\u2013T7 that import paths and patch-target strings are the permitted edits (the design allows \"import-path updates\"), and that assertions and fixtures must not change. T1's \"expected importers\" list should say the test files are updated at T7, not T1.",
+   "location": "tests/pipeline/test_findings_addressed_judge.py:32"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "cf-scanning check (T14) is sequenced after the Part D commit",
+   "description": "The design's Phase 5 note requires the cf `archive/` check \"sequenced before Part D lands\". T14 is numbered after T12/T13, and T13 carries the `fix:` commit, so the archive filename scheme is committed before the go/no-go is known. The task file patches this with \"do not mark T12 done until T14\" in two places, which a sequential executor will hit too late.\n\nFix: move T14 ahead of T12 and delete the two cross-referencing caveats.\n\nT14's first source, `ai-project-guide/tool-guides/context-forge/`, is also absent from this checkout: a glob of `project-documents/ai-project-guide/tool-guides/` returned nothing. The task should name a source that exists, or state its `BLOCKED:` condition directly.",
+   "location": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-1.md:275"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "`reviewedSha` \"both paths\" criterion is only half-tested, and T10 is ambiguous",
+   "description": "The success criterion requires the stamp \"from both the CLI and the pipeline persistence paths\". T11's integration test covers \"`save_review_result` (or the pipeline review action, whichever is more directly testable)\", which is one path.\n\nThe pipeline action has two branches: `save_review_result` (`:255`) and a direct `format_review_markdown` call (`:265`). A stamp resolved inside `save_review_result` covers the first automatically; the second needs its own wiring and its own test. T10 does not distinguish them.\n\nT10 also writes `run_git(..., cwd=...)` for `save_review_result`, which has no `cwd` parameter (`persistence.py:257-267`). The task should say where the working directory comes from.\n\nFix: resolve HEAD in one helper, name both pipeline branches in T10, and make T11 assert the stamp on the no-`slice_info` branch as well.",
+   "location": "src/squadron/pipeline/actions/review.py:253-278"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Part 0 is over-split for a mechanical move",
+   "description": "Eight tasks and four commits cover a relocation the design calls mechanical. T2, T4, T6 and T8 only re-run the existing suite.\n\n- Merge T1+T3 (move models, parsing, verification) with one verify step and one commit.\n- Keep T5+T6 (the extraction is the only real change).\n- Fold T7's export and docstring edits into T5/T6, with T8's full-suite run as the closing step.\n\nThat gives roughly three tasks and two commits. Across both files, 40 tasks for a 3/5 slice is heavy; file 2's wiring-only pairs (T27/T28 for example) are candidates for the same merge.",
+   "location": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-1.md:76-184"
+  },
+  {
+   "i": 6,
+   "severity": "NOTE",
+   "title": "File 2 leaves two success-criteria details untested",
+   "description": "These are outside this file but affect slice coverage.\n\n- T26 tests a judge transport that raises, but not an \"unreadable judge response\" (parse failure), which the F004 criterion names separately.\n- T32 tests metrology's `discover_judge_results` only. The criterion also says \"review discovery\" returns no resolution artifacts, and T17's own `{index}-review.*.md` glob deserves the same assertion.",
+   "location": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-2.md:224-236"
+  },
+  {
+   "i": 7,
+   "severity": "NOTE",
+   "title": "Commit markers are plain lines but not in the `**Commit**:` form",
+   "description": "Markers are written as `- Commit:` sub-bullets. They are correctly not checkboxes and sit after test tasks, but tooling that looks for `**Commit**:` will not see them.",
+   "location": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-1.md:99"
+  }
+ ]
+}

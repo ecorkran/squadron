@@ -1,0 +1,66 @@
+{
+ "case": "context-forge-210-slice",
+ "flaws": [
+  {
+   "id": "F1",
+   "text": "Technical Scope names the helper `isManagedCopilot(filePath)`; Files Changed names it `isManagedCopilotFiles(projectPath)`, a different name and param",
+   "hits": {
+    "r01": [
+     3
+    ],
+    "r02": [
+     7
+    ],
+    "r03": [
+     2
+    ],
+    "r04": [
+     3
+    ],
+    "r05": [
+     3
+    ],
+    "r06": [
+     1
+    ],
+    "r07": [
+     4
+    ],
+    "r08": [
+     3
+    ]
+   }
+  },
+  {
+   "id": "F2",
+   "text": "The parent plan's success criteria (200-slices, entry 210) require the \"Tool guide (`project-documents/user/tool-guides/copilot-vscode/setup-ide.md`) ",
+   "hits": {
+    "r01": [
+     10
+    ],
+    "r02": [
+     9
+    ],
+    "r03": [
+     5
+    ],
+    "r04": [
+     7
+    ],
+    "r05": [
+     5
+    ],
+    "r06": [
+     5
+    ],
+    "r07": [
+     7
+    ],
+    "r08": [
+     6
+    ]
+   }
+  }
+ ],
+ "note": "F1: r02/r03/r06/r07/r08 name the two helper names only as a sub-bullet inside a larger marker-coverage or DRY finding; counted as hits because they name the exact contradiction. F2: all eight findings cite the tool guide path; r01/r03/r04/r05/r08 bundle it with other missing items."
+}

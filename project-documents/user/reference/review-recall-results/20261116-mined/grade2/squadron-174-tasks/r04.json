@@ -1,0 +1,110 @@
+{
+ "review": "r04",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "FAIL",
+   "title": "Restated 1 s listing NFR has no load test task and no CI gate",
+   "description": "The slice restates an NFR: `sq runs list --all` stays under 1 s with a few hundred run-state files (slice lines 506, 644). The breakdown adds no `tests/load/` task. Task 22 checks I/O call counts, which is a proxy. Task 42 is a one-off manual timing. Neither gates on latency. The repo already has `tests/load/` (`test_grep_timeout.py`, `test_usage_reader_loop.py`, and others), but `.github/workflows/ci.yml` does not reference `tests/load`, so existing load tests are not wired to CI either. The design says \"there is still no assertion on time in tests\" (line 651), which conflicts with the rule. Either add a `tests/load/` task (generated few-hundred-file runs directory, time `sq runs list --all`, 1 s threshold) plus a separate CI task that gates on it, or record a waiver of the rule in the design.",
+   "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Step 8 timing ran on an eight-run scratch seed, and the design records a different dataset",
+   "description": "Task 42 runs walkthrough step 8 \"in a scratch HOME\" against the eight seeded runs. The design says step 8 reads the real runs directory and records 0.66\u20130.73 s for 188 files (slice lines 545, 612). Task 42 records no timing at all. The only NFR evidence is either a dataset far smaller than \"a few hundred,\" or a number the task file cannot reproduce. Record file count and wall time for step 8 on a directory of at least a few hundred files.",
+   "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md:511-516"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Walkthrough seed omits three of the eight runs that steps 1 and 4 depend on",
+   "description": "Task 42 says the seed helper writes \"orphan, stale, unowned, gone and junk.\" The design's seed (slice line 557) also includes `paused`, `failed` and `gone-paused`. Step 1 expects `gone-paused` to show `paused`, and step 4 runs `sq runs prune $(id paused)`. A seed built from Task 42's list cannot pass those steps. List all eight.",
+   "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md:512-513"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Live checks for #190 and #165 are skipped, and no task secures them",
+   "description": "Walkthrough steps 6 (kill -9 gives `orphaned`, wait exits 8) and 7 (real foreground stall gives `dispatch stalled:`) are the only end-to-end checks of the two bugs this slice closes. Task 42 makes them conditional and records them as not run. The unit tests use a PID from an exited subprocess and a fake client, and the Task 2 spike covered only the interrupt message sequence. Task 41 closes #190 and #165 in Phase 7. Add an explicit step to run steps 6\u20137 from a plain terminal before closure, and do not bypass the `CLAUDECODE` guard.",
+   "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md:513-516"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Task 29 gives two different return types",
+   "description": "Line 380 says \"Add `resolve_pipeline(name) -> PipelineInfo`.\" Line 383 says it returns `PipelineLocation(name, source, path)`, \"not `PipelineInfo`,\" which matches the design's API Contracts (slice line 394). The design is right. Fix line 380 so the first thing a junior reads is the correct type.",
+   "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md:380"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Task 8 names two different test locations",
+   "description": "Line 129 puts the config tests in `tests/test_config.py`. Line 131 says they \"live in `tests/config/test_keys.py`.\" Keep one path and delete the other.",
+   "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md:129-131"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "Commit points are checkboxes, not `**Commit**:` markers",
+   "description": "Commits are written as `- [x] Commit: ...`, which is a checkbox. The file has no plain-line `**Commit**:` markers, so the no-marker default applies: commit at the end of each top-level task. Instead, commits land at group ends (Tasks 7, 10, 12, 14, and so on), and Tasks 4\u20136, 8\u20139, 11, 13 and 15\u201317 have no commit point. The grouping is defensible because each group ends at a tested point. Convert the commit lines to plain `**Commit**:` lines at those points so cadence does not depend on checkbox state.",
+   "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md:111"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "The run-id in the process-check WARNING is required by the design but owned by no task",
+   "description": "The design's error table requires the WARNING to name \"run and PID\" (slice line 373). Task 9 logs only the PID and says \"the run-id is logged by the caller that has it.\" No task step makes a caller log it, and Task 10 asserts only the PID. `assess_liveness` receives the full state, so it can log the run-id. Assign that to Task 9 and assert the run-id in Task 10's `PID 0` / `-1` tests.",
+   "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md:142"
+  },
+  {
+   "i": 8,
+   "severity": "CONCERN",
+   "title": "Task 16 drops a requirement the spike marked as mandatory",
+   "description": "The Task 2 spike (slice line 619) found the drain \"must read through a fresh iterator, because the timed-out one is closed by the cancellation.\" Task 16 says only \"drain with `_read_turn(idle_s=...)`.\" A junior following it literally would reuse the closed iterator. Add the fresh-iterator requirement to Task 16 and cite the Risk Assessment entry.",
+   "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md:236-237"
+  },
+  {
+   "i": 9,
+   "severity": "CONCERN",
+   "title": "Task 1 hardcodes `main` as the target",
+   "description": "Task 1 reads the integration config, then runs `git checkout -b 174-slice... main` with a literal `main`. The project rule is that the target is the config value, or `main` only if the config is empty. Write `{target}` in the command and state how it is resolved.",
+   "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md:40-43"
+  },
+  {
+   "i": 10,
+   "severity": "CONCERN",
+   "title": "Tasks 11, 25 and 38 are too large for one junior pass",
+   "description": "- **Task 11** (lines 159\u2013175) covers `init_run(owner=)`, `claim` with its LIVE check, `heartbeat`, four recorder write methods, and the D6 error policy across them, in `state.py` and `run_observer.py`. Split it into the state write API and the recorder progress writes with D6.\n- **Task 25** (lines 332\u2013345) rewrites the runs table, the `At`/`Activity` logic, `list -v` and the summary line across `run_views.py` and `commands/runs.py`. Split the renderer from the CLI `-v` and summary.\n- **Task 38** (lines 462\u2013472) combines argument parsing, a duration parser, preview rendering, `--yes` deletion and exit-code mapping. Split the parser and usage errors from the preview, delete and exit flow.",
+   "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md:159-175"
+  },
+  {
+   "i": 11,
+   "severity": "CONCERN",
+   "title": "Two design criteria changed in the task file without updating the design",
+   "description": "1. Task 37 (line 459) replaces the criterion's \"unwritable directory\" with \"a directory where the state file should be.\" The reason is sound: an unwritable directory would also block the other run's deletes. But design line 531 still names an unwritable directory.\n2. Task 41 (lines 503\u2013504) closes #190 and #165 in Phase 7, \"not here.\" Design step 8 (line 638) says to close them in step 8. The task's reading is the safer one, but the design still says otherwise.\n\nRecord both changes in the design so the criteria and the tests agree.",
+   "location": "project-documents/user/slices/174-slice.run-liveness-stall-bounds-pruning-and-readable-listings.md:531"
+  },
+  {
+   "i": 12,
+   "severity": "NOTE",
+   "title": "Stale status and cross-references",
+   "description": "- `projectState` says \"not yet implemented,\" but `status: complete` and every task is checked. Update it.\n- The design calls the spike \"Task 1\" (design lines 244, 624). The breakdown has the spike at Task 2; Task 1 is branch creation.\n- Task 2 says \"if any does, add D5's lock in Task 11\" (lines 59\u201360). Task 11 has no lock step. The design's finding (line 243: `executor.py:1459` writes the batch report, not state) says no lock is needed, so say that in Task 2 and drop the conditional.",
+   "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md:7-9"
+  },
+  {
+   "i": 13,
+   "severity": "NOTE",
+   "title": "`pipelines list -v` wiring file is not named",
+   "description": "Task 27 names `run_views.py` but not `cli/commands/pipelines.py`, where the `-v` option is added (design line 128). Task 30 names that file for `show`. Name it in Task 27 too.",
+   "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md:360-363"
+  },
+  {
+   "i": 14,
+   "severity": "NOTE",
+   "title": "Task 24 duplicates Task 26's piped-output assertion",
+   "description": "The non-TTY \"no ANSI, no `\u2026`\" check in Task 24 is also covered by Task 26's piped case. Keep it in one place. The wide-character test is backed by the design (`cell_len`, D11) and stays.",
+   "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md:328"
+  }
+ ]
+}

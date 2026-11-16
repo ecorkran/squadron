@@ -1,0 +1,207 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "D6 would show \"Findings Not Parsed\" on reviews whose findings were parsed",
+      "description": "D6 makes the `fallback_used` notice render \"whenever `fallback_used` is set, after any findings\". The same change goes into `_display_terminal`, and the `cli/commands/review.py` row at line 75 says the same thing. But `fallback_used=True` does not mean \"findings not parsed\". Slice 919's derived-verdict path sets `fallback_used=True` and `verdictSource: derived` precisely when findings *were* parsed and only the `## Summary` verdict was missing. Under D6, every derived-verdict review, capped or not, would print a \"Findings Not Parsed\" notice under its real findings. That contradicts the artifact and changes output outside this slice's scope.\n\nThe case D6 is meant to protect is \"a PASS with `fallback_used=True`, verdict read, findings not\". As far as I can tell, today's parser can't produce it. The findings-mismatch path only fires for CONCERNS/FAIL with no findings. The only PASS that can carry `fallback_used=True` is a derived one, and that always has findings.\n\nFix: either drop D6 and SC7 (line 292) as handling a case that doesn't exist, or base the notice on whether the model's own findings list was empty, ignoring the synthetic finding (for example, check before `impose_diff_coverage` prepends it). Then add a regression test that a derived-verdict review renders no notice.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:158-162"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "D9's id capture leaves out the `gemini` profile, which uses the OpenAI-compatible path",
+      "description": "D9 (line 185) and the Risk section (lines 359-363) rely on walkthrough step 6 to collect each profile's real `answering_models` before merge, so the strict equivalence rule doesn't flag false substitutions. Step 6 lists sdk, openai, openrouter and local. `gemini` is also a built-in profile on the OpenAI provider type: Google's OpenAI-compatible endpoint, the same code path as D8's `chunk.model`. Slice 906 lists it in the six-profile matrix.\n\nIf Gemini returns a slightly different id form than the one requested, every Gemini review would write `requestedModel` and log a WARNING. That breaks the slice plan's Part C requirement that \"an alias resolving to its own snapshot is not reported as a substitution\" (`900-slices\u2026md:443`). It also breaks D10's promise that `requestedModel` appearing means a real substitution.\n\nFix: add `gemini` to step 6 and to D9's list of profiles to capture. Also say what happens to a profile whose credentials aren't available at walkthrough time. It shouldn't silently go unchecked; record it as uncaptured in the DEVLOG.",
+      "file_ref": null,
+      "category": "integration",
+      "raw_category": null,
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:348-353"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Handling of a missing `chunk.model` is assumed, not stated",
+      "description": "Line 58 treats `ChatCompletionChunk.model` as guaranteed on every chunk. The servers behind the `local` and `gemini` profiles are not OpenAI and may not follow that. D8 already handles an empty value (\"last non-empty\"), and D11 gives a well-defined \"not reported\" result for an empty list. One sentence would close the gap: an absent attribute counts the same as empty and leads to D11, never an exception. A stream cut off before the final Message is a provider failure, which D13 already covers.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:58"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`aiModel` changes meaning in the cross-tool frontmatter contract",
+      "description": "Slice 911 calls review frontmatter a cross-tool contract with context-forge. D5 records a grep of context-forge for `verdictSource` readers, but nothing similar is recorded for `aiModel`. The design says its new meaning is \"the meaning its consumers assumed all along\" without that check. The metrology break for dated OpenAI judges is acknowledged at line 196. Recording a context-forge grep for `aiModel` would put the claim on the same footing as D5.",
+      "file_ref": null,
+      "category": "integration",
+      "raw_category": null,
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:273-274"
+    },
+    {
+      "severity": "PASS",
+      "title": "Part B decision follows the plan's options and the #5 precedent",
+      "description": "The plan asked the design to choose between forcing CONCERNS and failing the run. D4 picks CONCERNS and explains why: CONCERNS already trips `ON_CONCERNS`, and only ever moving PASS down keeps the #5 precedent. Counting failed tool calls as zero reads is a reasonable tightening of the plan's \"zero tool calls\". D5's `IMPOSED` keeps the verdict-source vocabulary closed and is set in one place.",
+      "file_ref": null,
+      "category": "architecture",
+      "raw_category": null,
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:127-156"
+    },
+    {
+      "severity": "PASS",
+      "title": "Scope matches the slice-plan entry",
+      "description": "The plan's exclusions are honoured (the `max_file_size_bytes` default and #114). Diff ordering and `--stat` became issue #137, as the plan allowed. Including D3's skipped-diff case is justified: it's the same failure as truncation, only worse. File-body truncation is correctly left to #138.",
+      "file_ref": null,
+      "category": "scope",
+      "raw_category": null,
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:40-47"
+    },
+    {
+      "severity": "PASS",
+      "title": "CLI/pipeline parity holds by construction",
+      "description": "Every new fact is carried on `ReviewResult` and rendered by the shared `format_review_markdown` and `to_dict()`. That meets the plan's interface-parity requirement without a second code path. The integration requirements at lines 306-309 test it.",
+      "file_ref": null,
+      "category": "architecture",
+      "raw_category": null,
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:78-101"
+    },
+    {
+      "severity": "PASS",
+      "title": "Size fits the work",
+      "description": "Frontmatter carries only the boolean the plan asked for (\"the minimum that lets a gate decide\"). The counts go to the header and JSON, and the design explicitly declines a threshold gate. The two new modules are small, pure and testable, and moving logic out of the 588-line `review_client.py` is warranted. Apart from D6 (above), nothing is speculative or covers a case that doesn't exist. The effort fits the plan's 3/5.",
+      "file_ref": null,
+      "category": "proportionality",
+      "raw_category": null,
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:109-121"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "D6 would show \"Findings Not Parsed\" on reviews whose findings were parsed",
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:158-162",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "integration",
+      "raw_category": null,
+      "summary": "D9's id capture leaves out the `gemini` profile, which uses the OpenAI-compatible path",
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:348-353",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "note",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "Handling of a missing `chunk.model` is assumed, not stated",
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:58",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "note",
+      "category": "integration",
+      "raw_category": null,
+      "summary": "`aiModel` changes meaning in the cross-tool frontmatter contract",
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:273-274",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "pass",
+      "category": "architecture",
+      "raw_category": null,
+      "summary": "Part B decision follows the plan's options and the #5 precedent",
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:127-156",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "pass",
+      "category": "scope",
+      "raw_category": null,
+      "summary": "Scope matches the slice-plan entry",
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:40-47",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "pass",
+      "category": "architecture",
+      "raw_category": null,
+      "summary": "CLI/pipeline parity holds by construction",
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:78-101",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "pass",
+      "category": "proportionality",
+      "raw_category": null,
+      "summary": "Size fits the work",
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:109-121",
+      "location_verified": true
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md",
+    "against": "project-documents/user/architecture/900-slices.maintenance-and-refactoring.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/squadron-927-design"
+  },
+  "timestamp": "2026-11-16T13:20:47.647539",
+  "model": "claude-opus-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 11,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-opus-5-5",
+  "answering_models": [
+    "claude-opus-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 8,
+    "in_fences": 0,
+    "in_section": 8,
+    "surviving": 8
+  },
+  "effort": "high",
+  "profile": "sdk",
+  "turns": 12,
+  "prompt_tokens": 945732,
+  "cached_tokens": 845853,
+  "cache_write_tokens": 99859,
+  "completion_tokens": 9793,
+  "reasoning_tokens": null,
+  "duration_seconds": 109.45577475009486,
+  "cost_usd": 1.1646553,
+  "cost_basis": "provider"
+}

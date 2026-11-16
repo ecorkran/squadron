@@ -1,0 +1,75 @@
+{
+ "review": "r03",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "BulkForce neighbor input (`list[NDArray]`) requires a per-agent Python loop and conflicts with the vectorization/GPU requirement",
+   "description": "Data Flow step 3 (line 88) runs `query_radius(position, radius)` once per active agent. `BulkForce` then takes `neighbor_lists: list[NDArray[np.intp]]`, a ragged Python list. Building it needs a Python loop over agents every tick. Two requirements say otherwise:\n- The slice's own Technical Requirement (line 247): \"No Python-level per-agent loops in the hot path\".\n- The architecture's GPU section (`100-arch.behavior-engine.md:99`): \"bulk array-in/array-out operations with no Python-level per-agent branching, no dynamic allocation\".\n\nEvery behavior slice (101\u2013104) will implement this protocol, so its shape is expensive to change later. Slice 105 can only swap the index behind the interface. It cannot remove the per-agent call pattern that the interface itself requires.\n\n**Fix:** give `SpatialQuery` a bulk query, e.g. `query_radius_bulk(indices, radii)`, that returns a flat CSR-style pair (`neighbor_indices`, `offsets`) or a padded array. Pass that to `BulkForce` in place of `list[NDArray]`. Also say how `max_speed` is gathered for a vectorized clamp, e.g. a `max_speed[profile_indices]` array built from `profiles`. Right now `profiles` is passed only as a Python list.",
+   "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:142-148"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Relationship between `Force` and `BulkForce` is undefined; the per-agent protocol is extra scope",
+   "description": "`tick()` accepts only `forces: list[BulkForce]` (line 185). Yet line 152 says \"the tick loop prefers the bulk variant when available\", and line 248 requires placeholder forces to \"exercise both the `Force` and `BulkForce` protocol paths\". The doc never says how a per-agent `Force` reaches `tick()`. No adapter or wrapper is described, and nothing explains how the tick would detect which protocol a callable follows.\n\nNothing in the slice plan entry or the architecture asks for a per-agent protocol. The architecture names only the BulkForce pattern (line 99).\n\n**Cut:** drop `Force` and keep `BulkForce` as the single protocol. Reference or test implementations can be written as BulkForce. If a per-agent protocol is kept, name and specify the adapter that lifts it into `BulkForce`, and remove \"prefers the bulk variant\".",
+   "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md#force-protocol"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Tick return contract contradicts itself and the architecture's stated contract",
+   "description": "Three places disagree:\n- Scope (line 39) says the tick will \"return updated state\".\n- Data Flow (line 91) and the signature (line 187, `-> None`) say it mutates in place.\n- The architecture says the tick \"Returns the updated state array\" and describes the engine as \"feed in state, get back state\" (`100-arch.behavior-engine.md:68-70`).\n\nMutating in place is a defensible performance choice for the hot path. But the doc should pick one contract, fix line 39, and state the departure from the architecture explicitly. The world server will be written against whichever contract this slice sets.",
+   "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:39"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Remove-agent semantics invalidate caller-held indices; not specified",
+   "description": "`AgentState` add/remove \"resize arrays\" (line 98). The tick takes caller-supplied `active_indices` (line 186). The architecture says the world server owns subset selection (\"The engine does not decide which agents to evaluate \u2014 the caller does\", arch line 49), and that \"register/remove agents\" is part of the engine's narrow interface (arch line 81).\n\nThe slice never says whether removal compacts the arrays (shifting every later index) or swap-removes (moving one agent). It also doesn't say whether the caller gets an index remap. Without that, any active set or index the world server holds is silently wrong after a removal, which breaks the \"no silent fallback\" principle.\n\n**Fix:** state the removal strategy and its return value, e.g. return the old\u2192new index mapping, or document swap-remove and return the moved index.",
+   "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:98"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Parent NFR (tens of thousands of agents on one CPU) is not restated for the tick/force path",
+   "description": "The architecture's design goal (`100-arch.behavior-engine.md:33`) is \"tens of thousands of agents at full behavioral fidelity on a single CPU process\". This slice defines the tick and force path that the goal applies to, but never restates the target. It only says the brute-force query suits the \"hundreds-of-agents scale\".\n\nDeferring the throughput target for the spatial index to slice 105 is fine. The doc should still restate the NFR and say which parts this slice must not preclude: the tick and force interfaces must be able to reach tens of thousands once 105 lands. It should also say that brute force is explicitly exempt here. Otherwise the finding above (per-agent loop) has no stated target to be checked against.",
+   "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:173"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Unused `accelerations` array and brute-force design that cannot use its own precomputation",
+   "description": "**`accelerations` (line 96):** nothing in the data flow or integration reads or writes this N\u00d72 array. Integration applies `velocity += force * dt` directly (lines 90, 208), which implies unit mass. The slice plan entry lists only positions, velocities and profile indices. Cut the array, or define who writes it and why.\n\n**Brute force (line 173):** `build()` \"computes all pairwise distances\", but `query_radius` takes an arbitrary `position`, not an agent index. The precomputed N\u00d7N matrix therefore can't answer the query, and every query recomputes O(n) distances anyway. Drop the pairwise precomputation so `build()` just stores positions. That is lighter and consistent with the interface.",
+   "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:96"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "Initial-state semantics of `AgentState.create` are undefined, but the determinism and subset checks depend on them",
+   "description": "Scope says \"initialize state\" (line 40), but the doc never says how `AgentState.create(n=100, profiles=[profile])` sets positions and velocities: zeros, random, seeded random?\n\n- **Step 3 (determinism):** it compares two independently created states. It only passes if creation is deterministic. If creation is random and unseeded, it fails even when the tick is correct.\n- **Step 5:** it assumes agent 50 is \"nearby\" agent 0, which needs known placement.\n\n**Fix:** specify the creation contract, e.g. explicit position and velocity arrays, or a required seed with no default (per project rules). Also note that the snippet uses `np` without importing it and uses `forces=[...]` as a placeholder.",
+   "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:274-290"
+  },
+  {
+   "i": 7,
+   "severity": "NOTE",
+   "title": "Input validation for `active_indices` and `profile_indices` not stated",
+   "description": "With NumPy fancy-index `+=`, duplicate entries in `active_indices` are silently applied only once. The doc doesn't say whether the tick rejects duplicates or a wrong dtype. Out-of-range indices raise natively. It also doesn't say whether `profile_indices` values beyond `len(profiles)` are checked. A short fail-fast statement is enough. No I/O paths are added, so the hang, timeout and disconnect failure modes don't apply.",
+   "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:177-201"
+  },
+  {
+   "i": 8,
+   "severity": "NOTE",
+   "title": "\"Behavioral slices don't modify the tick loop\" will not hold for environment and inter-profile inputs",
+   "description": "The architecture's \"Environment as input surface\" principle (arch line 47) and Envisioned State step 1 (arch line 64) give the tick an environmental context input. Leaving it out of this slice is correct: the slice plan defers environment. But the absolute claim on line 225 should be softened so later slices aren't seen as violating it.",
+   "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:225"
+  },
+  {
+   "i": 9,
+   "severity": "NOTE",
+   "title": "Integration section is indented four spaces and will render as a code block",
+   "description": "The \"### Integration: Semi-Implicit Euler\" heading and its body are indented by four spaces. In Markdown they render as preformatted text, not as a section.",
+   "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:205-215"
+  }
+ ]
+}

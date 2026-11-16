@@ -1,0 +1,225 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Commit markers are checkboxes and sit after every task group",
+      "description": "All eight commit points are written as `- [ ] Commit: ...` checkbox sub-items (lines 99, 125, 164, 185, 221, 254, 296, 351), not plain `**Commit**:` lines. Task 9.3's \"commit remaining changes\" has no marker or message at all.\n\nThey also follow every top-level task, and the early ones are not working points:\n- **After Task 1:** `concept` is recognized but routes to an empty section shell.\n- **After Tasks 2\u20136:** the flow has preconditions or an interview but no output conventions, so it cannot write a valid document.\n\nThe flow is first runnable after Task 7 and first tested after Task 8. Convert the markers to plain lines and reduce them to about three: after Task 7 (flow fully authored), after 8.6 (walkthrough passed, generated concept included), and after Task 9 (close-out).",
+      "file_ref": null,
+      "category": "commit-markers",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/363-tasks.concept-generation.md:99"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Walkthrough does not verify SC4, SC8 refill, or SC10 on the written document",
+      "description": "Three criteria are authored into the skill text but never checked against output:\n- **SC4 (dropped topics appear nowhere):** Task 4.1 states the rule, but neither 8.1 nor 8.2 checks the generated document for why-now, audience-evolution, or methodology content or gap markers. The decline run in 8.2 is where a spurious gap marker is most likely.\n- **SC8 (mechanical refillability for augment):** 8.4 checks default-stop, the dated append, and byte-identity of populated sections. It never shows that a section holding exactly a `[GAP: ...]` marker gets filled. The 8.1 document has few or no such sections; the 8.2 scratch document has them and is the natural target.\n- **SC10 (per-section sourcing over the full outcome set; every `[INFERRED]` sentence satisfies the rule):** 8.1 only confirms the engagement-questions and inferred-claims lines exist. It does not check one outcome per section, or each `[INFERRED]` sentence against the rule authored in 7.1.\n\nAdd these as check lines inside 8.1, 8.2 and 8.4; no new tasks are needed.",
+      "file_ref": null,
+      "category": "coverage-gap",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/363-tasks.concept-generation.md:304-336"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Selector edit and cross-reference fix touch the same paragraph but are split across Tasks 1 and 7",
+      "description": "The existing argument handling and the sentence \"The concept flow and the initiative-candidates flow are slices 363 and 364\" are adjacent lines inside `## Flow: Comprehension Analysis`. Task 1.1 rewrites the first and Task 7.4 fixes the second six tasks later.\n\n- Between the Task 1 and Task 7 commits, the skill says `concept` is recognized and, in the next sentence, that the concept flow is a future slice.\n- 7.4's success criterion \"no other comprehension-flow text changed\" cannot hold as written, because 1.1 has already edited argument handling inside that section.\n\nMerge 7.4 into 1.1. Reword the criterion to name the two permitted edits in that section: the selector paragraph and the cross-reference sentence.",
+      "file_ref": null,
+      "category": "sequencing",
+      "raw_category": null,
+      "location": "commands/analysis/understand.md:392-393"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Verification tasks duplicate Task 0.2 or the preceding task's own success line",
+      "description": "For a single-file markdown slice rated 3/5, several of the seven verify tasks add no evidence:\n- **6.3** re-runs the same `grep -c '^## User-Provided Concept'` and guide-readable check that 0.2 already ran.\n- **2.2** re-confirms `project.name` is `squadron-ai` and the guide path, both from 0.2. Only the `cf get` name resolution is new; move that one line into 0.2.\n- **1.2 and 4.2** re-read text just written against the same design lines the authoring task's Success line already requires (\"table matches the design row-for-row\"). Fold them into 1.1 and 4.1.\n\nKeep 3.4 (executes the selections against the real graph) and 5.3 (byte-identical question diff, which SC2 needs). Task 9.3's `uv run ruff format .` is also redundant: 8.6 already ran `--check`, and no Python changes in this slice.",
+      "file_ref": null,
+      "category": "proportionality",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/363-tasks.concept-generation.md:120-124"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Task 8.1 depends on the PM being live, which the design does not require",
+      "description": "The design's walkthrough step 3 says only \"answer both engagement questions with real answers\". The task file adds a PM-live requirement and a pre-framing notice. Tasks 8.4 and 8.6 depend on 8.1's document and session, so the walkthrough tail and its commit cannot complete without the PM. The task file should say who supplies the answers if the PM is not present, or state that 8.1 is marked `BLOCKED:` in that case.",
+      "file_ref": null,
+      "category": "task-completability",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/363-tasks.concept-generation.md:48-53"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Task 0.1 asserts the integration target instead of reading it",
+      "description": "\"Integration branch is unset; target is `main`\" is hardcoded, and the branch is created from `main`. CLAUDE.md requires reading `cf config get git.integration_branch` before starting work. Replace the assertion with the read.",
+      "file_ref": null,
+      "category": "conventions",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/363-tasks.concept-generation.md:60-62"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Some failure and absence paths are authored but not exercised",
+      "description": "These match the design's own draft walkthrough, so they are not gaps against it:\n- 8.3 exercises only the renamed-heading failure; guide-absent and tree-absent (SC7), the no-registration stop (precondition 3) and the no-README fallback are never run.\n- \"Absence of a signal is an observation, not a gap\" (SC3) cannot be observed on squadron, where every signal is present.\n- SC12 (\"a concept a PM would edit rather than discard\") has no recorded check.\n\nThe 8.2 scratch tree could cover no-README and no-`tests/` cheaply by deleting those paths before the run.",
+      "file_ref": null,
+      "category": "coverage-gap",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/363-tasks.concept-generation.md:326-330"
+    },
+    {
+      "severity": "PASS",
+      "title": "All success criteria trace to authoring tasks; no scope creep",
+      "description": "- **Traceability:** SC1 \u2192 1.1/8.5; SC2 \u2192 5.1\u20135.3/8.1; SC3 \u2192 3.1\u20133.3/8.1; SC4 \u2192 4.1; SC5 \u2192 5.1/8.2; SC6 \u2192 6.1/8.1/8.4; SC7 \u2192 2.1/6.1/8.3; SC8 \u2192 6.2/8.4; SC9 \u2192 7.2/8.1; SC10 \u2192 7.1/7.3; SC11 \u2192 3.1/8.6.\n- **Scope:** every task maps to a Technical Scope item or an Implementation Note. The slice restates no NFR, so no load-test or CI task is needed.\n- **Sizing:** authoring tasks are 1\u20132/5 with concrete success lines.",
+      "file_ref": null,
+      "category": "coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/363-tasks.concept-generation.md"
+    },
+    {
+      "severity": "PASS",
+      "title": "Design line references and repo anchors are accurate",
+      "description": "- **Design line ranges:** all cited ranges (110\u2013121, 137\u2013148, 158\u2013164, 175\u2013183, 204\u2013210, 297\u2013312, 317\u2013328, 384\u2013392, 397\u2013411, 443, 448) resolve to the intended content. The `[INFERRED]` rule is at 277\u2013279, not 278\u2013280, which is immaterial.\n- **Repo anchors:** the comprehension flow's argument handling and the 363/364 sentence exist at lines 392\u2013393 of the skill file, the shared Gap markers section is at line 262, and `tests/skills/`, `DEVLOG.md` and `360-slices.document-intelligence.md` are all present.",
+      "file_ref": null,
+      "category": "accuracy",
+      "raw_category": null,
+      "location": "commands/analysis/understand.md:387-393"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "commit-markers",
+      "raw_category": null,
+      "summary": "Commit markers are checkboxes and sit after every task group",
+      "location": "project-documents/user/tasks/363-tasks.concept-generation.md:99",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "coverage-gap",
+      "raw_category": null,
+      "summary": "Walkthrough does not verify SC4, SC8 refill, or SC10 on the written document",
+      "location": "project-documents/user/tasks/363-tasks.concept-generation.md:304-336",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "sequencing",
+      "raw_category": null,
+      "summary": "Selector edit and cross-reference fix touch the same paragraph but are split across Tasks 1 and 7",
+      "location": "commands/analysis/understand.md:392-393",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "proportionality",
+      "raw_category": null,
+      "summary": "Verification tasks duplicate Task 0.2 or the preceding task's own success line",
+      "location": "project-documents/user/tasks/363-tasks.concept-generation.md:120-124",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "task-completability",
+      "raw_category": null,
+      "summary": "Task 8.1 depends on the PM being live, which the design does not require",
+      "location": "project-documents/user/tasks/363-tasks.concept-generation.md:48-53",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "conventions",
+      "raw_category": null,
+      "summary": "Task 0.1 asserts the integration target instead of reading it",
+      "location": "project-documents/user/tasks/363-tasks.concept-generation.md:60-62",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "note",
+      "category": "coverage-gap",
+      "raw_category": null,
+      "summary": "Some failure and absence paths are authored but not exercised",
+      "location": "project-documents/user/tasks/363-tasks.concept-generation.md:326-330",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "pass",
+      "category": "coverage",
+      "raw_category": null,
+      "summary": "All success criteria trace to authoring tasks; no scope creep",
+      "location": "project-documents/user/tasks/363-tasks.concept-generation.md",
+      "location_verified": null
+    },
+    {
+      "id": "F009",
+      "severity": "pass",
+      "category": "accuracy",
+      "raw_category": null,
+      "summary": "Design line references and repo anchors are accurate",
+      "location": "commands/analysis/understand.md:387-393",
+      "location_verified": true
+    }
+  ],
+  "template_name": "tasks",
+  "input_files": {
+    "input": "project-documents/user/tasks/363-tasks.concept-generation.md",
+    "against": "project-documents/user/slices/363-slice.concept-generation.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/squadron-363-tasks"
+  },
+  "timestamp": "2026-11-16T12:11:41.901772",
+  "model": "claude-fable-5-2",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 4,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-fable-5-2",
+  "answering_models": [
+    "claude-fable-5-2"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 9,
+    "in_fences": 0,
+    "in_section": 9,
+    "surviving": 9
+  },
+  "effort": "medium",
+  "profile": "sdk",
+  "turns": 5,
+  "prompt_tokens": 225543,
+  "cached_tokens": 112608,
+  "cache_write_tokens": 112929,
+  "completion_tokens": 8312,
+  "reasoning_tokens": null,
+  "duration_seconds": 83.40705037489533,
+  "cost_usd": 2.1623892000000002,
+  "cost_basis": "provider"
+}

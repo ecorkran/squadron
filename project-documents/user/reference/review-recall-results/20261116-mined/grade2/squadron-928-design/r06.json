@@ -1,0 +1,40 @@
+{
+ "review": "r06",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "D8 \"pack ships no Codex content\" needs the pack source, which doctor does not read",
+   "description": "D8 says a pack with no agents content reports `WARN \u2014 pack ships no Codex content` instead of \"not installed\", and walkthrough step 7 (line 279) tests that. But the status interface the design defines is `installed_path(entry, root)` (line 104), and it only looks at the install root. To tell \"not installed\" apart from \"has no `agents/`\", doctor has to resolve the pack source. For `github:` packs that means `clone_github`, which runs `git clone` with no timeout. That would make `check_skill_packs` do network I/O and possibly hang, yet its docstring says \"Pure: reads the manifest and the filesystem only\". The design does not list this I/O path or its failure modes (hang, clone failure, offline), and it does not say how doctor gets the information.\n\n**What to cut:** drop the \"ships no Codex content\" distinction from doctor. Report agents rows as installed / not installed from `installed_path` alone. The install command already fails loudly with the right message (D2), so doctor does not need to predict that. If the distinction stays, limit it to bundled and local sources, say so, and report github packs as \"unknown\". The plan entry only asked for `skills install/uninstall --ide`, so per-target doctor rows are extra scope. They are the main reason effort went from 2/5 to 3/5 (line 310), and the 900 guidelines ask for \"lighter-weight\" slices.",
+   "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md:140"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Installing into the shared agents root can take over and later delete files the pack does not own",
+   "description": "The agents flow calls `write_skill_dirs(agents_dir, root)`, which uses `shutil.copytree(..., dirs_exist_ok=True)`. D3 (line 123) itself says `~/.agents/skills` \"is shared with every other skill source\". Suppose `~/.agents/skills/mypack-x/` already exists from some other source, such as a `cf` install or the user's own skill, and no receipt for this pack claims it. Then install silently overwrites its `SKILL.md`. It also records that file in the new receipt, so a later `skills uninstall` deletes a file squadron never owned. That is the #65 ownership problem the design says receipts guard against (line 176). Validation happens before any write (D3), but it does not check for this case.\n\nA second gap: an `OSError` partway through the copy leaves files on disk with no receipt. That is worse in a shared root than under a Claude prefix directory.\n\n**Fix:** add to D3 that a target skill directory which already exists and is not listed in this pack's previous receipt is an error, collected with the other violations before anything is written. Say how a mid-copy failure is handled, or explicitly accept it as an existing limitation.",
+   "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md:93-97"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "D10 picks allow-rule commands by \"reaches the network\", which grants unsandboxed, no-prompt execution to setup commands no skill runs",
+   "description": "D9 correctly says a matching `allow` rule runs the command \"outside Codex's sandbox with no prompt \u2014 network and unrestricted filesystem\". But D10 makes every row that needs the network a rule alternative, and that includes `sq skills install` (github source) and possibly `sq auth login`. Neither is called by any shipped agent skill. Allowing `sq skills install` lets the Codex model write into `~/.agents/skills`, which Codex loads in later sessions, with no prompt. Allowing `auth login` lets it run a credential flow with no prompt.\n\nThe plan asks to *enumerate* the commands that reach the network. It does not ask to auto-allow all of them. **Fix:** make the `allow` alternatives the commands the shipped agent skills actually call (`review`, `run`, `pr`, plus `metrology` if a skill uses it). List the other network commands in the same README section as \"run from a terminal\" or under `decision = \"prompt\"`.",
+   "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md:155-166"
+  },
+  {
+   "i": 3,
+   "severity": "NOTE",
+   "title": "D5 changes what the receipt's `pack_name` field means, though not its schema",
+   "description": "`write_receipt` names the file from `receipt.pack_name`, and `install.py` already sets that field to `receipt_name(...)`. So an agents receipt's `pack_name` will hold `mypack-agents`, not the manifest pack name. \"Schema unchanged\" (line 113) is accurate, but the design should say the field now holds the receipt key. Otherwise the installer's `_write_install_receipt`, which passes `result.pack_name`, will keep writing to `mypack.toml` and overwrite the Claude receipt.",
+   "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md:134"
+  },
+  {
+   "i": 4,
+   "severity": "NOTE",
+   "title": "The pack-format contract is close to a new capability",
+   "description": "The 900 architecture excludes new features, and slice 912 was moved out of 900 for that reason. The `agents/` pack-layout rule (D2, lines 196-204) is a new external contract. Keeping it here is defensible: it finishes slice 925's parity work, fixes a silent-failure bug (#125), and the plan entry explicitly offered \"a pack-format declaration\" as an acceptable outcome. No change needed. This is noted for consistency with how 912 was handled.",
+   "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md:121"
+  }
+ ]
+}

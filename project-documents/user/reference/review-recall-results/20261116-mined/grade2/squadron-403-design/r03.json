@@ -1,0 +1,54 @@
+{
+ "review": "r03",
+ "findings": [
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "A git failure during range resolution is reported as a misleading reason, at INFO, and contradicts the exit-code contract",
+   "description": "The failure-mode table says a `None` from the merge search or reflog read means \"this path can't answer\", and the next path is tried. `None` covers a non-zero exit and also the 30 s timeout. Suppose `git log --merges --first-parent` times out on a slice that was merged with a merge commit. The resolver falls through to the fast-forward path and reports `NO_LANDING` (branch deleted) or `LANDED_ELSEWHERE` (branch still local, because `M^2` is not on the first-parent line). The user sees a confident wrong reason, not \"git failed\".\n\nThis causes three problems:\n- It conflicts with line 275: \"Exits 1 on a git or store error.\"\n- It is the silent-fallback pattern CLAUDE.md forbids.\n- It logs at INFO. The failure-mode rule requires WARNING or higher for each failure mode.\n\n**Fix:** separate \"git ran and found nothing\" (an empty result, so try the next path) from \"git failed or timed out\" (`None`, so raise a `SliceRangeError` naming the call, log at ERROR, and exit 1). Add a `caplog` test that uses a forced timeout on the merge search.",
+   "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:164"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "The mitigation for the editable self-install risk cannot detect that risk",
+   "description": "The risk: pyright, run with the live `.venv`, might resolve `import squadron` through the editable install's `.pth`. That would type-check the live `src`, not the exported tree. The mitigation says criterion 5's export-equals-in-place test \"catches a mismatch at HEAD\".\n\nAt HEAD, the exported `src` and the live `src` are byte-identical. Pyright gives the same result whichever copy it resolves, so the test passes whether or not the risk is real. Walkthrough step 4 gives no expected values, so it cannot detect the risk either. The fallback (\"if they differ, type counts become absent\") has no runtime trigger. It is a design change left to a manual observation.\n\n**Fix:** add a test that can tell the two copies apart. For example, use a throwaway repo with an editable install of itself, an older commit containing a type error in module A that is reachable only through an import from module B, and a live tree where that error is fixed. Assert that the export reports the error. Alternatively, pass pyright an explicit `extraPaths`/execution root that points at the export, and say so in D6.",
+   "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:375-381"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Git calls in the reports belong to no module, and the history ordering call has no failure handling",
+   "description": "The Component Structure says the report assembly modules do \"No git\". Two report behaviours need git:\n- **Missing-commit check:** line 165 checks a stored landing's commit with `git cat-file -e` before `ensure_snapshot`.\n- **History ordering:** `report history` orders snapshots \"by the target's first-parent history\" and counts off-line snapshots (line 298). That needs a `git rev-list --first-parent <target>` walk over the whole history.\n\nNeither call is assigned to a module or injected as an argument. Line 103 lists only the store, the resolver and `ensure_snapshot`. The failure table has no row for the first-parent walk: if it times out or returns `None` on a long history, does the report fail, or does it print snapshots in some fallback order?\n\n**Fix:**\n1. Put both calls behind an injected git-query interface, or fold `cat-file -e` into `ensure_snapshot`.\n2. Add a failure-mode row for the history walk, stating whether a timeout exits 1 or prints an explicit marker.\n3. Name where that walk runs.",
+   "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:99"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Audit runs are paired on prompt hash only, not on the full instrument identity",
+   "description": "D8 pairs the baseline run at `before_sha` with the latest run at `after_sha` \"under the same `audit_prompt_hash`\". 323 defines the instrument as prompt hash plus model: `AuditRun` carries `model`, and 323 says the floor must be re-measured when either changes. If the model changed between the two boundary audits, `compute_delta` would compare outputs from different instruments against a floor measured for one of them. That breaks the architecture rule \"Reports compare measurements only when that whole identity matches, and flag the rest\".\n\n**Fix:** require an equal `model` as well. If the models differ, show a named break (an `instrument_changed` marker), the same way D7 treats static rows. If `compute_delta` already rejects mixed models, state that and cite it.",
+   "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:236"
+  },
+  {
+   "i": 6,
+   "severity": "NOTE",
+   "title": "D3's claim that fork equals the pre-landing target for fast-forwards is not unconditional",
+   "description": "The claim fails when a branch was created from another unlanded branch X (the reflog \"Created from\" points into X), and X then landed before this slice fast-forwarded. The target just before this landing is X's tip, not the fork, so `before = fork` counts X's commits as this slice's. The landing is stored forever, and D2 rejects the `main` fallback for the same kind of reason. Either qualify the sentence or note this case as a known limit under Risk. Squadron's workflow forbids branching from another unit's branch, which makes the case rare, but other projects may not follow that rule.",
+   "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:201"
+  },
+  {
+   "i": 7,
+   "severity": "NOTE",
+   "title": "Coverage comparability needs a field that D7 does not list",
+   "description": "401 tells 403 that coverage is \"compared only when the tool identity and report path match\". D7's identity list (metric, language, tool, rule set, environment) leaves out report path. Exports always have coverage absent, so this matters only for in-place snapshots compared in `report history`. Add report path to D7's coverage identity, or state why it isn't needed.",
+   "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:228"
+  },
+  {
+   "i": 8,
+   "severity": "NOTE",
+   "title": "Concurrent writes can permanently lose a fast-forward landing, with no signal",
+   "description": "The row admits last-write-wins and gives the signal as \"None\". A lost merge-commit landing is found again on the next run. A lost fast-forward landing is gone for good once its reflog expires, and that is exactly the case this record exists to protect. Following 400's precedent is reasonable. A cheap improvement: re-read the record just before writing, and log a WARNING if it changed since the command first read it.",
+   "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:166"
+  }
+ ]
+}

@@ -1,0 +1,82 @@
+{
+ "review": "r03",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "FAIL",
+   "title": "3.7 commit gate cannot pass; adoptionBuild.integration.test.ts is deleted only at 4.1",
+   "description": "Task 3.3 makes `createContextPipeline` take one parameter. Task 3.7 then requires `pnpm -r test` and `pnpm typecheck` to pass before committing 3.3\u20133.6. But no task in 3.x touches `adoptionBuild.integration.test.ts`, and it is deleted only at 4.1 (task lines 144, 148). Line 68 calls `createContextPipeline(dir, { adoptionStateWrites, squadronProbe: fakeProbe })`. After 3.3 that is a type error if tests are in the typecheck, and its brownfield cases (3\u20136, 8, 9, 11\u201313) assert the prompt swap, Adoption Facts, state writes or `AdoptionError`. Those behaviors are gone at 3.3, so those cases will fail at 3.7. Fix: add deleting this file to 3.3. It has no dependents in 3.x.",
+   "location": "packages/core/tests/adoption/adoptionBuild.integration.test.ts:68"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "The services-import grep in 3.3 fails on a comment the task does not mention",
+   "description": "Line 9 is a comment: \"contracts.ts only (never adoption/index.ts)\". The 3.3 success check (task line 109), `grep -rn \"adoption/\\|detection/\" packages/core/src/services`, matches it, so the check prints a line even when every import is gone. Task 3.3 says only to remove imports. Add: delete the comment on line 9, since it describes a boundary that no longer exists.",
+   "location": "packages/core/src/services/ContextIntegrator.ts:9"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Commit points are checkbox items, not `**Commit**:` markers",
+   "description": "The commits are written as `- [ ] **2.3 Commit** \u2026` and `- [ ] Commit: \u2026` at lines 79, 99\u2013101, 134, 148, 155, 163, 169, 186 and 206. The convention is plain `**Commit**:` lines at working, tested points, never checkboxes. A checkbox commit also conflicts with the required order (implement, task-checker, then commit): the box cannot be checked before the commit that contains it. Convert each to a plain line after its section's last verified step. The resulting cadence (2.3, 3.2a, 3.7, 4.1\u20134.4, 5.1, plus 6.3 if needed) is reasonable.",
+   "location": "project-documents/user/tasks/268-tasks.pure-cf-build.md:79"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "The build-order note in section 3 is wrong, and the 4.x gates may read a stale dist",
+   "description": "Line 87 says only mcp-server typecheck fails between 3.4 and 3.6. That is not true. `packages/cli/src/commands/build.ts:84` still passes a second argument, so cli fails from the 3.4 build until 3.5, and mcp-server (`contextTools.ts:100`) fails until 3.6. Correct the note. Also, cli and mcp-server typecheck against core's `dist/`, but the task rebuilds core only at 3.4. Sections 4.1\u20134.4 change core exports, so their `pnpm typecheck` gates may check against a stale build. Either state that the root typecheck builds core first (I did not verify this) or add `pnpm --filter @context-forge/core build` to each 4.x gate.",
+   "location": "project-documents/user/tasks/268-tasks.pure-cf-build.md:87"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "The purity test covers two adoption.state values, but the criterion says \"whatever it holds\"",
+   "description": "The design criterion (design line 189) is that a Phase 0 brownfield build returns the concept prompt and writes nothing, \"whatever adoption.state holds\". Task 5.1 runs the CLI with no toml and with `in_progress`, and MCP with `in_progress`. `complete` and `declined` are never run, though the build reads neither. The full value set is `ADOPTION_STATES` in `packages/core/src/config/ConfigKeys.ts:28`. Have the CLI path iterate over that constant, not a literal list.",
+   "location": "project-documents/user/tasks/268-tasks.pure-cf-build.md:179"
+  },
+  {
+   "i": 5,
+   "severity": "NOTE",
+   "title": "The mutation check in 5.1 is not required by any criterion",
+   "description": "Adding a temporary `writeFileSync` to the test, confirming failure and reverting is a hand edit to a test file, and it can be left in place. No success criterion or design decision (D5) asks for it. Keep it as an explicit one-off manual check with a named revert, or drop it.",
+   "location": "project-documents/user/tasks/268-tasks.pure-cf-build.md:185"
+  },
+  {
+   "i": 6,
+   "severity": "NOTE",
+   "title": "Paths mix `packages/core/\u2026` and `core/\u2026`",
+   "description": "Most items use `core/src/\u2026` and `cli/\u2026`. Items 2.1, 6.1 and 6.2 use `packages/\u2026`. The real paths are under `packages/`. Say once at the top that paths are relative to `packages/`, or use full paths throughout.",
+   "location": "project-documents/user/tasks/268-tasks.pure-cf-build.md:90"
+  },
+  {
+   "i": 7,
+   "severity": "NOTE",
+   "title": "Task 1.1 does not check for an unregistered worktree",
+   "description": "This checkout is a git worktree (`\u2026/wt/context-forge-268-tasks`). The project rules require `cf worktree list --json` to show the checkout as registered, and stop-and-ask otherwise. Task 1.1 checks only that `pwd` is \"the repo root\", which means something different inside a worktree. Add the registration check as a sub-bullet.",
+   "location": "project-documents/user/tasks/268-tasks.pure-cf-build.md:53"
+  },
+  {
+   "i": 8,
+   "severity": "NOTE",
+   "title": "Later-phase golden coverage is one case",
+   "description": "The criterion says \"greenfield, already-planned and later-phase builds are byte-identical\" (design line 190). The golden set is greenfield at Phase 0 and planned at Phase 4, which follows D6. That is probably enough: the removed code renders output only when the adoption fields are set (`SectionBuilder.ts:160`, `ContextTemplateEngine.ts:113`), and those are set only on brownfield Phase 0 builds. If the PM wants more, add a second later phase. Otherwise, note in the golden test why one phase suffices.",
+   "location": "project-documents/user/tasks/268-tasks.pure-cf-build.md:73"
+  },
+  {
+   "i": 9,
+   "severity": "NOTE",
+   "title": "The 6.2 export audit has no mechanical check",
+   "description": "\"For each symbol still exported \u2026 confirm there is a production consumer\" is a judgment step with no command. Suggest listing the export names in `packages/core/src/adoption/index.ts` and `packages/core/src/detection/index.ts`, grepping each name outside its own module, and comparing the result to the design's Interfaces Required list.",
+   "location": "project-documents/user/tasks/268-tasks.pure-cf-build.md:200"
+  },
+  {
+   "i": 10,
+   "severity": "NOTE",
+   "title": "The 6.3 walkthrough omits the scratch-repo preconditions",
+   "description": "Step 1 of the design requires a repo with more than 2000 source lines, no `project-documents/user/architecture` artifacts, `cf init`, and Phase 0. Task 6.3 says only \"a scratch brownfield repo under /tmp\". The reference to the design is enough to find these, but list them here, because they are what make the check mean something.",
+   "location": "project-documents/user/tasks/268-tasks.pure-cf-build.md:204"
+  }
+ ]
+}

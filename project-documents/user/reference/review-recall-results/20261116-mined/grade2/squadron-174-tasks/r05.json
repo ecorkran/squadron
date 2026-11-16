@@ -1,0 +1,40 @@
+{
+ "review": "r05",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Commit markers are written as checkboxes, not `**Commit**:` lines",
+   "description": "All 17 commit points are written as `- [ ] Commit: ...` checklist items (Tasks 7, 10, 12, 14, 18, 20, 22, 22a, 24, 26, 28, 31, 35, 37, 39, 40, 42). The convention is a plain `**Commit**: ...` line, never a checkbox. Their placement is good: each sits after an implementation-plus-test pair, at a working point. Only the form needs converting.",
+   "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md:112"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Task 2 replaces the design's fallbacks with stop-and-ask gates, leaving the fallbacks untasked",
+   "description": "The slice design already decides both spike outcomes, but Task 2 says \"stop and ask the Project Manager\" for each:\n- **No `ResultMessage` after interrupt:** the design (Mitigation Strategies) says D7 narrows to \"always mark unusable\" and the design is updated.\n- **A state write off the loop thread:** D5 says `StateManager` gains a per-run `threading.Lock`.\n\nProject rules treat a PM-wait step as invalid unless a named rule requires it, so an implementer will skip the stop. Nothing then tasks the lock, and only Task 16's vague \"adjust to the Task 2 spike findings\" covers the interrupt case. Replace the two stops with conditional sub-items that apply the design's fallbacks.\n\nThe D5 grep will return several hits to classify in `src/squadron/pipeline` (`executor.py:1459`, `emit.py:141`, `actions/dispatch.py:361`, `actions/branch.py:46`, `actions/commit.py:59`, `actions/review.py:427,528,548`).",
+   "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md:54-60"
+  },
+  {
+   "i": 2,
+   "severity": "NOTE",
+   "title": "Task 22a's wall-clock assertion contradicts a sentence in the design",
+   "description": "The design's Special Considerations says \"There is still no assertion on time in tests.\" Task 22a adds `MAX_LISTING_S = 1.0`. The load test is correct given the restated NFR (design line 505) and the load-tier rule, so the design sentence is what should change. Add a sub-item to Task 22a, or to Task 42's design update, to amend it.",
+   "location": "project-documents/user/slices/174-slice.run-liveness-stall-bounds-pruning-and-readable-listings.md:648"
+  },
+  {
+   "i": 3,
+   "severity": "NOTE",
+   "title": "Small design details with no explicit task item",
+   "description": "- **Run-id in the process-check WARNING:** Task 9 defers it to \"the caller that has it\", but no later task (19, 21, 33) assigns it. The design's error table requires a WARNING naming both run and PID.\n- **`sq pipelines list -v` option:** Task 27 describes the `-v` rendering in `run_views.py` but never adds the option in `cli/commands/pipelines.py`. Task 25 does this explicitly for runs.\n- **Config reader call sites:** Task 8 adds the typed readers, but Tasks 13 and 15 do not say they read the interval and timeout through them (D1: \"validated where it is read\").\n- **Task 5 success criterion:** it can only be checked after Task 6. Move the grep to Task 6.\n- **Task 16 success line:** \"adjust to the Task 2 spike findings\" is an instruction, not a verifiable criterion.",
+   "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md:140-142"
+  },
+  {
+   "i": 4,
+   "severity": "NOTE",
+   "title": "Task 42 mixes code and close-out under a `docs:` commit",
+   "description": "The walkthrough seed helper under `tests/pipeline/` is new code, but it is committed as `docs: record slice 174 verification`. Give it its own `test:` commit or fold it into an earlier one. The task also marks the slice design `status: complete` during Phase 6, before code review and Phase 7 integration.",
+   "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md:521-527"
+  }
+ ]
+}

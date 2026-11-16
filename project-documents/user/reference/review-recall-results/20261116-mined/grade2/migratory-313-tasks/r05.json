@@ -1,0 +1,61 @@
+{
+ "review": "r05",
+ "findings": [
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Integration tests do not pin `dt`, so the reflect-flip test can fail as written",
+   "description": "`SimulationManager` takes `dt` as a constructor argument (`src/migratory_server/simulation.py:63`), and the server passes `1.0 / tick_rate` (`src/migratory_server/server.py:129`). Task 3.4's shared setup never states a `dt`.\n- **Reflect flip:** `test_reflect_policy_flips_velocities_at_edges` puts an agent at `(99, 50)` with velocity `(10, 0)` and steps once. It only crosses `x = 100` if `dt > 0.1`; at any `tick_rate` above 10 the assertion `vx < 0` fails.\n- **50-step tests:** the OPEN drift test has the same dependency on start offset, speed and `dt`.\n\nAdd an explicit `dt` (e.g. `dt=1.0`) or start positions and speeds that guarantee crossing to the shared setup.",
+   "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:226-232"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Commit markers are checkboxes in standalone tasks, and the 4.3 commit is at an untested point",
+   "description": "- **Format:** all five commits (Tasks 1.5, 2.4, 3.6, 4.3, 5.5) are written as `- [ ] **Commit:** ...` inside their own \"Commit\" tasks. Markers must be plain `**Commit**:` lines, never checkboxes. Convert each to a plain line at the end of its section and drop the five commit tasks.\n- **Untested point:** Task 4.3 (lines 283-286) commits the `policy: wrap` change to both shipped configs after only a `python -c` load check. The full suite does not run until Task 5.1. `tests/test_config.py:45` loads `config/default.yaml` and `tests/test_main.py:70` starts the server on it, so the behaviour change should be tested before the commit. Move the Task 5.1 `pytest` run ahead of the 4.3 commit.",
+   "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:93-96"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Walkthrough can leave `config/test.yaml` off `wrap`, breaking SC12",
+   "description": "Task 5.2 steps 6\u20137 edit `config/test.yaml` to `reflect`, then `open`. Step 8 says to restore \"whichever policy you want to keep (recommend `wrap`)\". SC12 requires `wrap`, so this is not optional. Nothing afterwards checks the file, and Task 5.5 stages only docs, so a stray edit stays in the working tree. Change step 8 to \"restore `policy: wrap` and confirm `git diff config/test.yaml` is empty\".",
+   "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:304-306"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Task file is overweight for a 2/5 slice",
+   "description": "The file has 22 tasks, five commits and about 30 named tests for one enum, one field, one roughly 40-line module and one call site. Suggested cuts and merges:\n- **Merge 1.1 and 1.2:** a three-line enum and a one-line field in the same file.\n- **Merge 4.1 and 4.2:** the same one-line YAML edit and the same verify command.\n- **Drop 5.1:** it duplicates 3.5; one full-suite run after the config change is enough.\n- **Trim tests in 2.3:** drop the \"dispatches and does not raise\" parametrized test (line 171), which every other test already covers. Merge the two OPEN no-op tests, and parametrize the four reflect edge tests.\n- **Drop the \"Confirm\" step in 3.2 (line 209):** \"zero import-time \u2026 overhead\" is not verifiable and contradicts the Notes (line 329), which say the import is unconditional. The mock test in 3.4 already proves the behaviour.\n- **Fold commits:** the Section 4 commit can join Section 3's or the final one; three or four commits suffice.",
+   "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md"
+  },
+  {
+   "i": 6,
+   "severity": "NOTE",
+   "title": "Round-trip test asserts less than SC5 states",
+   "description": "SC5 says reloading the emitted YAML \"produces an equal `ServerConfig`\". `test_bounds_policy_yaml_round_trip` only asserts that the policy matches. Asserting `reloaded == original` as well would cover the criterion as written at no extra cost.",
+   "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:88"
+  },
+  {
+   "i": 7,
+   "severity": "NOTE",
+   "title": "Viewer steps in Task 5.2 are not completable by an AI implementer",
+   "description": "Steps 5\u20137 need visual observation in the Three.js viewer. SC14 is defined as manual, so this follows the slice. A headless equivalent would let the implementer check these off: a short WebSocket client that samples snapshots for 30\u201360 seconds and checks positions against the bounds.",
+   "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:303-305"
+  },
+  {
+   "i": 8,
+   "severity": "NOTE",
+   "title": "Frontmatter says `status: complete` while every checkbox is unchecked",
+   "description": "The file is marked complete, and `src/migratory_server/bounds_enforcement.py` already exists, but no task is checked off. Either the status or the checkboxes are stale. Task 5.3 also instructs setting this same field to `complete`.",
+   "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:9"
+  },
+  {
+   "i": 9,
+   "severity": "NOTE",
+   "title": "CHANGELOG and status tasks do not trace to a success criterion",
+   "description": "Tasks 5.3 and 5.4 are ordinary slice housekeeping, and the startup log line in Task 3.3 traces to walkthrough step 4. None is scope creep worth cutting. Task 3.5 names `test_force_builder.py` and `test_clients.py` as likely call sites; the one it does not name is `tests/test_repulsor_integration.py:53`, which the \"any other file\" clause and the pytest run will catch.",
+   "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:310-320"
+  }
+ ]
+}

@@ -1,0 +1,243 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "PASS",
+      "title": "Slice plan scope is fully covered",
+      "description": "Every item in slice plan entry 129 maps to a design element:\n- **Part A:** the port to `openai_codex`, bundled-binary-first resolution (D2), the `codex` extra (D1), effort via `ReasoningEffort` closing #171 (D5), and per-turn usage (D6).\n- **Part B:** the missing-package error, the doctor row, the model-list marker and the README update.\n- **Part C:** browser and `--device-code` login, account email and plan in status, and logout.\n\nNothing assigned is dropped or deferred. The additions beyond the plan (D4 sandbox validation, D8 turn-status checks) are small and belong to the port.",
+      "file_ref": null,
+      "category": "scope",
+      "raw_category": null,
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:32-44"
+    },
+    {
+      "severity": "PASS",
+      "title": "Auth model and dependency directions align with the architecture",
+      "description": "The HLD's Authentication Patterns section says squadron does not unify authentication and each provider's credential resolution is self-contained. `InteractiveLogin` is an optional capability implemented only by the Codex strategy, delegates to the Codex runtime, and adds no squadron token store, so that statement stays true. The CLI depends on the Protocol through `isinstance`, not on profile names, as the slice plan requires (\"a capability on the strategy, not a profile-name check\"). Function-local SDK imports keep the provider registering without the extra, which preserves \"register at import time\".",
+      "file_ref": null,
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:88-89"
+    },
+    {
+      "severity": "PASS",
+      "title": "No architecture NFR applies; startup cost is addressed",
+      "description": "The HLD states no latency or throughput target for provider turns or auth commands. The design still states where the runtime subprocess is spawned, that it is paid once per agent, and which commands never spawn it.",
+      "file_ref": null,
+      "category": "nfr",
+      "raw_category": null,
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:82"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Logout and the login start phase have no timeout or failure handling",
+      "description": "The failure table and D7 bound three things: `thread.run`, `handle.wait()`, and \"runtime start + `account()`\". Two new I/O paths are left out:\n- **`sq auth logout`:** runtime start plus `AsyncCodex.logout()` has no timeout key, no failure row, and no stated behaviour if the RPC fails or the runtime dies. The test list names only \"logout\", with no failure case.\n- **Login before `wait()`:** `codex.login_timeout_s` is defined as bounding `handle.wait()` only. Runtime start plus the `login_chatgpt()` / `login_chatgpt_device_code()` request is unbounded.\n- **Runtime exit during `wait()`:** a transport close while waiting on login has a row for turns but not for login. The design does not say whether the handle is cancelled or what the exit message is.\n\nFix without adding keys: reuse `codex.account_timeout_s` (or rename it to a general RPC timeout) for logout and login start, and add those rows to the table.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:116-135"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The `OPENAI_API_KEY` verification step is under-specified and can destroy the user's login",
+      "description": "Step 0 gates the whole slice on a live check whose procedure is \"unset `~/.codex/auth.json`\". The fallbacks are a `CODEX_HOME`-style location \"only if the runtime supports one\", otherwise \"a machine without a login\".\n- **Destructive reading:** read literally, the step removes the developer's real credential file.\n- **Unresolved facts:** the design does not establish whether the runtime supports a relocated home, and an implementing agent has no second machine.\n- **Open contract:** the four `OAuthFileStrategy` methods have two possible shapes until the check runs, so the design does not fix their behaviour.\n\nThe design should settle the isolation mechanism now. It should state whether the runtime honours a home override and require the check to run only against that throwaway location, never the real file. It should also say which outcome applies if the check cannot be run in isolation. The fail-explicit default is to remove the fallback.",
+      "file_ref": null,
+      "category": "under-specification",
+      "raw_category": null,
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:232"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "SDK version bound is contradictory and the drift guard may never run",
+      "description": "D1 specifies `openai-codex>=0.159.3,<1`, while D1 and Special Considerations (line 231) both say the upper bound is undecided and left to the PM. Project rules make a design step that waits on PM confirmation invalid, so the design should state the bound and drop the deferral.\n\nThe chosen `<1` also gives no protection for a 0.x SDK that the design itself says has a moving generated surface. The stated mitigation is the real-types test (line 200), which is \"skipped when the extra is absent\". The design never says the dev or CI dependency set installs the `codex` extra. If it does not, that test always skips and \"a drifted SDK surface fails loudly\" is not met. Either add the extra to the dev/CI group, or cap at the next minor release.",
+      "file_ref": null,
+      "category": "dependencies",
+      "raw_category": null,
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:97"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`--timeout` duplicates `codex.login_timeout_s`",
+      "description": "The login wait has two controls: a config key and an `sq auth login --timeout` override. The slice plan asks for neither. The project's no-magic-defaults rule justifies the config key; nothing requires the flag. Cut `--timeout` from the CLI surface (line 149) and from the `InteractiveLogin.login` discussion. The Protocol's `timeout` parameter can stay, fed from config.",
+      "file_ref": null,
+      "category": "proportionality",
+      "raw_category": null,
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:108"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`missing_extra_hint()` is built on a resolver that raises for two different reasons",
+      "description": "`resolve_codex_runtime()` raises `ProviderError` both when the package is missing and when no binary exists. `missing_extra_hint()` and the doctor row consume it, but the design does not say how they tell the cases apart. Returning a typed result or distinct error subclasses would avoid matching on message text. The gap is narrow because the extra pins the bundled binary.\n\nA related case: `sq auth status` with `auth.json` present but the extra absent will report \"authenticated\" and log a WARNING on every run (line 126). State whether that is intended.",
+      "file_ref": null,
+      "category": "under-specification",
+      "raw_category": null,
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:112"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Dependency on slice 931 is not in the slice plan entry",
+      "description": "The plan lists `Dependencies: [128]`. The design also depends on slice 931 from another initiative for `AgentConfig.effort`, `applies_effort` and `core/usage.py`. It is declared in the frontmatter and Prerequisites, and 931's status is `complete`, so nothing is blocked. The slice plan entry should be updated to match.",
+      "file_ref": null,
+      "category": "dependencies",
+      "raw_category": null,
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:6"
+    },
+    {
+      "severity": "NOTE",
+      "title": "\"Provides to Other Slices\" lists interfaces with no consumer",
+      "description": "The frontmatter correctly records `interfaces: []` because no planned slice consumes `InteractiveLogin`, `ExtraRequirement` or `CodexRuntime`. All three are still justified inside this slice by the ban on profile-name dispatch and the single-resolver requirement, so no cut is needed. The section could be reduced to one line.",
+      "file_ref": null,
+      "category": "proportionality",
+      "raw_category": null,
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:178-181"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "pass",
+      "category": "scope",
+      "raw_category": null,
+      "summary": "Slice plan scope is fully covered",
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:32-44",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "pass",
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "summary": "Auth model and dependency directions align with the architecture",
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:88-89",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "pass",
+      "category": "nfr",
+      "raw_category": null,
+      "summary": "No architecture NFR applies; startup cost is addressed",
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:82",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "Logout and the login start phase have no timeout or failure handling",
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:116-135",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "under-specification",
+      "raw_category": null,
+      "summary": "The `OPENAI_API_KEY` verification step is under-specified and can destroy the user's login",
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:232",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "dependencies",
+      "raw_category": null,
+      "summary": "SDK version bound is contradictory and the drift guard may never run",
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:97",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "concern",
+      "category": "proportionality",
+      "raw_category": null,
+      "summary": "`--timeout` duplicates `codex.login_timeout_s`",
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:108",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "note",
+      "category": "under-specification",
+      "raw_category": null,
+      "summary": "`missing_extra_hint()` is built on a resolver that raises for two different reasons",
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:112",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "note",
+      "category": "dependencies",
+      "raw_category": null,
+      "summary": "Dependency on slice 931 is not in the slice plan entry",
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:6",
+      "location_verified": true
+    },
+    {
+      "id": "F010",
+      "severity": "note",
+      "category": "proportionality",
+      "raw_category": null,
+      "summary": "\"Provides to Other Slices\" lists interfaces with no consumer",
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:178-181",
+      "location_verified": true
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md",
+    "against": "project-documents/user/architecture/100-slices.orchestration-v2.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/squadron-129-design"
+  },
+  "timestamp": "2026-11-16T13:09:21.298433",
+  "model": "claude-fable-5-2",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 7,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-fable-5-2",
+  "answering_models": [
+    "claude-fable-5-2"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 10,
+    "in_fences": 0,
+    "in_section": 10,
+    "surviving": 10
+  },
+  "effort": "medium",
+  "profile": "sdk",
+  "turns": 8,
+  "prompt_tokens": 534956,
+  "cached_tokens": 415561,
+  "cache_write_tokens": 119383,
+  "completion_tokens": 8287,
+  "reasoning_tokens": null,
+  "duration_seconds": 84.52297420799732,
+  "cost_usd": 2.3254865999999996,
+  "cost_basis": "provider"
+}

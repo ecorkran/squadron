@@ -1,0 +1,68 @@
+{
+ "review": "r05",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Per-point spatial query and ragged neighbor lists force a per-agent Python loop in the hot path",
+   "description": "`SpatialQuery.query_radius(position, radius)` answers for one position, so `tick()` must call it once per active agent from Python. Its output reaches `BulkForce` as `neighbor_lists: list[NDArray]` (line 145), a ragged Python list that a bulk force can only consume by iterating per agent. `profiles: list[BehavioralProfile]` (line 146) has the same problem: per-agent `max_speed` and `query_radius` need a Python lookup per agent, not an array gather.\n\nThis conflicts with:\n- the slice's own requirement at line 247 (\"No Python-level per-agent loops in the hot path\");\n- the architecture's \"Efficient large-scale evaluation\" goal (vectorized, \"not object-by-object iteration\");\n- the architecture's GPU compute path consideration (\"bulk array-in/array-out\u2026 no Python-level per-agent branching\").\n\nIt also undercuts the pluggable-spatial-queries principle. Slice 105 must swap in a spatial hash \"behind the existing query interface\", but a per-point interface keeps the per-agent loop whatever the index is. Fixing it later means changing the protocol that 101\u2013104 forces are written against.\n\nSuggested change: make the protocol bulk, e.g. `query_radius(indices, radii)` returning a flat pair or CSR representation (`neighbor_idx`, `offsets`). Expose profile parameters as per-profile arrays gathered through `profile_indices`.",
+   "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:158-171"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Force pipeline is described three inconsistent ways",
+   "description": "- **Per-agent vs bulk:** Data Flow step 4 (line 89) describes per-agent forces. `tick()` accepts only `forces: list[BulkForce]` (line 185). Line 152 says the tick \"prefers the bulk variant when available\", implying a mixed dispatch the signature cannot express.\n- **Unreachable requirement:** line 248 requires placeholder forces to \"exercise both the `Force` and `BulkForce` protocol paths\", but `tick()` has no `Force` path.\n- **Integration scope:** line 152 justifies the full-population N\u00d72 return as \"add force to velocity for all\", while lines 90\u201391 and 215 say integration applies only to `active_indices`.\n- **Return value:** line 39 says the tick will \"return updated state\"; the signature returns `None` and mutates in place.\n\nSlices 101\u2013104 implement against this protocol, so the contract must be single-valued. Recommendation: cut the per-agent `Force` protocol from this slice, since nothing consumes it, or specify one adapter that wraps a `Force` as a `BulkForce`. Then pick one return shape. A K\u00d72 array aligned to `active_indices` avoids allocating N\u00d72 per force per tick when the active subset is small, which is the case subset evaluation exists for.",
+   "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:89"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Spatial query contract leaves result order and self-inclusion undefined",
+   "description": "The protocol does not say whether returned indices are ordered, or whether the querying agent appears in its own result. A position-only query cannot exclude self.\n\n- **Order:** floating-point force sums depend on summation order. The slice plan requires slice 105 to show behavioral output \"identical before and after the swap\". A spatial hash that returns neighbors in bucket order will not match brute force bit-for-bit unless the protocol mandates an order, such as ascending index.\n- **Self-inclusion:** left open, every force in 101\u2013104 must guess. Cohesion and alignment averages differ depending on whether self is included.\n\nBoth gaps bear on the architecture's \"Tick determinism\" goal and on 105's stated acceptance criterion.",
+   "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:165-170"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Architecture scale target not restated; brute-force build is heavier than needed",
+   "description": "The architecture's NFR for the tick path is \"tens of thousands of agents at full behavioral fidelity on a single CPU process\". The slice mentions only \"the hundreds-of-agents scale this slice targets\". It does not restate the architecture target or say that slice 105 owns closing the gap.\n\nThe brute-force design also precomputes all pairwise distances in `build()`:\n- That is an N\u00d7N float64 matrix, roughly 800 MB at 10K agents.\n- It is computed in full even when `active_indices` selects three agents.\n\nA lighter option meets the same requirement: store positions in `build()` and compute distances only for queried agents (K\u00d7N). This costs less code and less memory, and makes subset ticks proportionally cheaper.\n\nRestate the NFR, and give the agent count at which this slice's implementation is expected to stop being usable.",
+   "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:173"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Agent removal and `active_indices` have no identity or validity contract",
+   "description": "The architecture's system-level interface is \"tick the simulation forward, query agent state, register/remove agents\", with the world server choosing the active subset by index. The slice says only that add/remove \"resize arrays\".\n\n- **Removal semantics:** it does not say whether removal compacts (shifting every later index) or swap-removes (moving the last agent). In both cases the indices the world server holds for variable-rate schedules silently point at different agents after a removal.\n- **Index validity:** behaviour is undefined for duplicate entries in `active_indices`, out-of-range `profile_indices`, or non-positive `dt`. NumPy fancy-index `+=` applies a duplicated index once, without error. The project rule is to fail explicitly.\n\nState the removal semantics and what the caller must do to remap, and list which inputs `tick()` validates.",
+   "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:98"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "State initialization unspecified; determinism walkthrough is not meaningful as written",
+   "description": "`AgentState.create(n=100, profiles=[profile])` appears only in the walkthrough. Nothing defines how initial positions and velocities are set, and it takes a profile list although `AgentState` stores `profile_indices`.\n\n- If initialization is random and unseeded, `state_a` and `state_b` differ and the assertion fails.\n- If it is all zeros, every agent is coincident and the check exercises nothing.\n\nDefine the constructor (explicit arrays in, or an explicit seed) so the \"Tick determinism\" criterion at line 240 is testable.",
+   "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:274-283"
+  },
+  {
+   "i": 6,
+   "severity": "NOTE",
+   "title": "`accelerations` array is carried but never used",
+   "description": "The architecture and slice plan list positions, velocities and profile indices. The slice adds `accelerations` (N\u00d72), but no step of the data flow reads or writes it, and forces are summed transiently. Cut it, or state its purpose and whether a subset tick leaves inactive rows stale.",
+   "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:96"
+  },
+  {
+   "i": 7,
+   "severity": "NOTE",
+   "title": "No environment/context parameter on `tick()` or the force protocols",
+   "description": "The architecture's tick \"receives the current agent state array, environmental context, and an optional active-agent subset\", and \"Environment as input surface\" is a stated principle. The slice plan does not assign environment work to (100), so omitting it is in scope. But lines 203 and 225 claim the interface will not need retrofitting and that later slices \"don't modify the tick loop\". That will not hold for 106/107. Add a sentence acknowledging the planned signature extension so the stability claim is not overstated.",
+   "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:180-187"
+  },
+  {
+   "i": 8,
+   "severity": "NOTE",
+   "title": "Formatting and small specification gaps",
+   "description": "- The \"Integration: Semi-Implicit Euler\" section is indented four spaces, so it renders as a code block, not as a heading and prose.\n- The clamp is not defined as vector-magnitude or per-component.\n- Step 5 of Data Flow (line 90) lists the clamp after the position update, while line 209 clamps before it. Semi-implicit Euler requires the latter.",
+   "location": "project-documents/user/slices/100-slice.agent-state-and-tick-function.md:205-215"
+  }
+ ]
+}

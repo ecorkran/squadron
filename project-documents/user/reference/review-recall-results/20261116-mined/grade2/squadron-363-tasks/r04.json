@@ -1,0 +1,110 @@
+{
+ "review": "r04",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Walkthrough does not check SC3, SC4, or SC10 in the written document",
+   "description": "Task 4.1 authors the dropped-topics rule (lines 172\u2013174), but no walkthrough step searches the output for why-now, audience-evolution, or methodology content, which SC4 requires. SC10 needs the per-section outcome set and every `[INFERRED]` sentence checked against the rule; 8.1 only confirms the two provenance lines exist. SC3's citation rule is checked for two sections only. Add one document-level check per criterion to 8.1.",
+   "location": "project-documents/user/tasks/363-tasks.concept-generation.md:304-318"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "SC7 stop paths are only partly exercised",
+   "description": "8.3 tests only a renamed heading. Not exercised: the guide-absent or unreadable stop, the whole-tree-absent case that must name the setup step (6.1, lines 226\u2013228), and the unresolvable-project-name stop (2.1, lines 110\u2013113). SC7 also says the flow never writes to a substitute layout, and 8.3 checks nothing-written only for the rename case. Add scratch runs for the absent guide and the unresolvable name.",
+   "location": "project-documents/user/tasks/363-tasks.concept-generation.md:326-330"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "SC8 refill path is never run",
+   "description": "SC8 requires augment to fill only empty or `[GAP: ...]` Refined Concept sections. 8.4 re-runs against the 8.1 document, where both questions were answered, so nothing is gap-marked. It checks only that populated sections stay byte-identical. The gap-marked output from 8.2 sits in a scratch copy that 8.4 never touches. Add a step that augments a gap-marked document and confirms the gaps fill and populated sections do not change.",
+   "location": "project-documents/user/tasks/363-tasks.concept-generation.md:332-336"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "No task authors the draft-and-write step or orders the gates before it",
+   "description": "5.2 refers to \"drafting\" and \"the file write,\" 6.1 to \"before any write,\" and 6.2 to an existence check. No task says how the document is drafted from the 4.1 mapping, and none fixes the order: confirmation, contract checks, existence check, write. SC9 and SC12 cannot pass without a write step. The design names drafting (line 228) but never specifies it. Add one authoring task for drafting and writing. Run the existence check before the interview; otherwise a stop at 6.2 comes after the questions have been asked and their answers discarded. Keep the guide-layout read at write time, as precondition 2 specifies.",
+   "location": "project-documents/user/tasks/363-tasks.concept-generation.md:202-213"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "8.3 says \"point the check at it\" with no mechanism",
+   "description": "The skill reads a fixed guide path and the task defines no override, so a junior agent cannot carry out this step as written. The design's walkthrough step 5 (design line 418) has the same wording. Specify the method 8.2 already uses: copy the whole tree to scratch, rename the heading in that copy, and run the flow there. The real guide is never touched.",
+   "location": "project-documents/user/tasks/363-tasks.concept-generation.md:327"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "0.1 hard-codes the target and skips the required reads",
+   "description": "The task states \"integration branch is unset; target is `main`\" as fact. The git rules require reading `cf config get git.integration_branch` and using its value as the target before branching. If the checkout is a git worktree, the rules also require confirming an entry for it in `cf worktree list --json` and stopping for the PM if there is none. Make both reads steps in 0.1 and drop the asserted value.",
+   "location": "project-documents/user/tasks/363-tasks.concept-generation.md:60"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "Commit markers are checkbox items",
+   "description": "All eight markers (lines 99, 125, 164, 185, 221, 254, 296, 351) are written as `- [ ] Commit: ...`, so they appear as work items that can be checked off. Rewrite each as a plain line: `**Commit**: feat: ...`.",
+   "location": "project-documents/user/tasks/363-tasks.concept-generation.md:99"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "Commit markers fall after almost every task, and most land on non-working states",
+   "description": "Eight markers cover ten task groups. After 1.2, the `concept` argument routes into an empty shell. After 2.2, the flow has preconditions only. After 5.3 and 6.3, it has no write step. None of those is a working, tested point. Only 7.4 (flow complete) and 8.6 (walkthrough verified) qualify. Keep markers at those two points and remove the rest.",
+   "location": "project-documents/user/tasks/363-tasks.concept-generation.md:99-351"
+  },
+  {
+   "i": 8,
+   "severity": "CONCERN",
+   "title": "Tail ordering commits check-offs and notes on their own",
+   "description": "9.1 (status and slice-plan check-offs) and 9.2 (DEVLOG entry) run after the 8.6 marker commit, so the 9.3 commit holds only check-offs and notes. The commit rules forbid that. Move the 8.6 marker to after 9.2 so the final commit includes them, and make 9.3 verification and hand-off only.",
+   "location": "project-documents/user/tasks/363-tasks.concept-generation.md:370-375"
+  },
+  {
+   "i": 9,
+   "severity": "CONCERN",
+   "title": "Verify-only steps duplicate each other; the file is heavy for one skill-file edit",
+   "description": "The file has 10 task groups and 31 numbered sub-tasks for one skill file plus one generated document. Seven are verify-only (0.2, 1.2, 2.2, 3.4, 4.2, 5.3, 6.3), and premise facts (the `project.name` value, the guide's section-title grep, the signals) are re-checked in 0.2, 2.2, 3.4, and 6.3. Cut 1.2 into 1.1 and 4.2 into 4.1, since both are design-diffs the authoring step already covers. Fold 2.2 and 6.3 into 0.2 as the single premise check. Keep 3.4 (it executes the authored jq selections) and 5.3 (verbatim questions, SC2). The `pytest tests/skills/` run in 8.6 has no success criterion behind it; keep it only if that suite covers `understand.md`.",
+   "location": "project-documents/user/tasks/363-tasks.concept-generation.md"
+  },
+  {
+   "i": 10,
+   "severity": "NOTE",
+   "title": "SC12 has no mapped check",
+   "description": "SC12 (the output is something a PM would edit rather than discard) appears in no task. 8.1's success line is \"every listed check passes,\" and SC12 is a judgment. Record that judgment explicitly in 8.1's outcome, or drop the criterion as unverifiable.",
+   "location": "project-documents/user/slices/363-slice.concept-generation.md:374"
+  },
+  {
+   "i": 11,
+   "severity": "NOTE",
+   "title": "Forward references to provenance vocabulary",
+   "description": "Tasks 3\u20135 use provenance outcome names and the declined-questions line, which 7.3 defines at lines 281\u2013289. The design defines them too, so an implementer can proceed. Note the dependency, or move the outcome list earlier.",
+   "location": "project-documents/user/tasks/363-tasks.concept-generation.md:193-194"
+  },
+  {
+   "i": 12,
+   "severity": "NOTE",
+   "title": "8.4 names no augment input",
+   "description": "\"When told to augment\" gives no text to append, so the run is not repeatable. 8.4 also edits the real generated concept that 8.6 commits. Specify the appended input, and decide whether the augmented file is the one to commit.",
+   "location": "project-documents/user/tasks/363-tasks.concept-generation.md:332-336"
+  },
+  {
+   "i": 13,
+   "severity": "NOTE",
+   "title": "Commit summary length",
+   "description": "7.4's commit message is about 81 characters against the ~72 target. Shorten it. Also note that 8.6 bundles the skill change and the generated `user/` document under `feat:`; split them if the generated document should be `docs:`.",
+   "location": "project-documents/user/tasks/363-tasks.concept-generation.md:296"
+  },
+  {
+   "i": 14,
+   "severity": "NOTE",
+   "title": "Citation drift in 7.1",
+   "description": "7.1 cites design lines 278\u2013280 for the `[INFERRED]` rule. The rule sits at lines 277\u2013279. Harmless, but fix it. The other design line citations I checked resolve correctly.",
+   "location": "project-documents/user/tasks/363-tasks.concept-generation.md:259"
+  }
+ ]
+}

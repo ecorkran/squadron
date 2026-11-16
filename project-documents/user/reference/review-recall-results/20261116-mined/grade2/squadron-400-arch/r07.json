@@ -1,0 +1,103 @@
+{
+ "review": "r07",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Fork-point vs. merge-commit snapshot credits other people's work to the slice",
+   "description": "The Envisioned State says \"a slice's before and after is the snapshot at its fork point against the snapshot at its merge.\" Technical Considerations repeats it (\"fork point to merge commit\"). While the slice branch is open, the target keeps moving: fixes land directly on the target (the document says so itself), and other slices merge into it. So the merge commit contains all of that work, and diffing it against the fork point puts every metric change from that work onto this slice. The clean comparison is the merge commit against its first parent, or the merge-base against the branch tip, so the target's own drift stays out.\n\nTwo other cases are not handled:\n- **Fast-forward merges** have no merge commit.\n- **Squash or rebase merges** lose the topology the attribution relies on.\n\nThis choice decides whether per-slice numbers are right at all. The document leaves the mapping source to a slice, but the comparison rule it does state is the wrong one.",
+   "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#envisioned-state"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "\"One snapshot record per commit\" contradicts tool, rule-set and environment identity",
+   "description": "The principles say \"the record keys on project and commit SHA\" and the Envisioned State says \"one snapshot record per commit.\" The document also says:\n- Lint and type counts may be recorded \"either or both\" under the project rule set and a reference rule set.\n- A different tool version makes a different measurement.\n- Exclusions change every metric.\n\nRe-measuring the same commit with an upgraded tool, a different rule set or a changed exclusion set therefore gives a second, valid, different snapshot of the same commit. The document doesn't say whether that second snapshot overwrites the first, sits beside it (which then means the key is not project+SHA), or is refused. The before/after report needs to know which snapshot to pick for a commit. Define the identity tuple explicitly, for example project, SHA, instrument hash, and say how readers choose among several snapshots of one commit.",
+   "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#architectural-principles"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "\"Measured at any commit\" vs. \"doesn't modify the measured repository\" leaves checkout strategy undefined",
+   "description": "The document says the snapshot works at any commit and does not modify the repository. It also says the snapshot at a slice's fork point is needed after the fact. Measuring a commit other than HEAD means one of three things, and the document picks none:\n- checking it out, which modifies the working tree;\n- creating a temporary `git worktree`, which writes to `.git/worktrees`;\n- exporting via `git archive`, which breaks tools that need the project's config or a virtualenv.\n\nThe principle that a dirty tree is \"either refused or recorded with an explicit dirty marker\" is also left open, and that choice decides whether pipeline-attached snapshots can run at all on an agent's in-progress tree. The adapter contract needs these decisions before the keystone slice.",
+   "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#envisioned-state"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Type-error counts aren't deterministic: they depend on the installed environment",
+   "description": "Design Goals promise that \"every snapshot metric gives the same value on the same commit with the same tool versions.\" Pyright (and mypy, tsc, etc.) results depend heavily on which dependencies are installed and which interpreter is resolved. On a brownfield repo with no environment set up, almost every third-party import becomes `reportMissingImports`, so the count is noise. The document treats this environment problem only under coverage. Type checking has the same problem, and the document doesn't name it there. Either the snapshot records the environment (interpreter, lockfile hash, whether dependencies were resolved), or type counts are recorded as absent with a reason when dependencies aren't installed. Otherwise the \"absent is not zero\" principle is broken the other way: a number gets written that isn't really measured.",
+   "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#design-goals"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Running project tests and tooling on brownfield code is a load-bearing security decision deferred to a slice",
+   "description": "\"Whether the snapshot ever installs or runs project dependencies \u2026 is a slice decision with real security and environment cost.\" Running a brownfield project's test suite, or a type checker that loads its plugins, executes arbitrary code from that repository. 440 offers the baseline automatically at CF handoff, so this is reached by default for code nobody has vetted. That is an architectural trust-boundary decision, not a slice detail. The architecture should either rule it out (read existing coverage reports only) or require sandboxing, so the adoption-baseline slice doesn't inherit an unbounded risk.",
+   "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#technical-considerations"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Per-language adapter contract is heavier than the metrics need",
+   "description": "The document makes \"each language a pluggable adapter\" for every metric, and requires a second language adapter \"proving the contract wasn't Python-shaped.\" Its own text says language-agnostic tools exist for duplication and line counts. Multi-language analyzers such as lizard also cover cyclomatic complexity and function length across many languages, using one definition. That removes the \"adapters must agree on what cyclomatic complexity means\" problem the document raises.\n\nOnly lint and type counts are truly per-language. Cut the general adapter contract down:\n- one shared multi-language tool for complexity, function length and file length;\n- one for duplication;\n- per-language plug-ins only for lint and type counts.\n\nThis also makes the \"additional language adapters\" slice much smaller.",
+   "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#technical-considerations"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "Review ingest has no idempotency or deduplication rule, and the store is one file per record",
+   "description": "\"An ingest step reads review files into the store as normalized finding records.\" The 320 store (`src/squadron/metrology/store.py`) writes one JSON file per record with a uuid-based id. Every query is a glob-and-load of the whole directory (`_iter_records`), and nothing enforces uniqueness. The document doesn't say:\n- what happens when the same review file is ingested twice;\n- what happens when a review is re-run and overwrites the file;\n- what happens when historical reviews are bulk-ingested.\n\nWithout a natural key (for example review file + `reviewedSha` + finding id), rollups double-count. If each finding is its own record, a few hundred historical reviews produce thousands of files, and every report re-parses all of them, along with every snapshot and audit record. Either store one record per review with the findings inline (as `AuditRun` does), or state the dedup key. Note the store-scan cost as something to validate.",
+   "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#envisioned-state"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "Category mapping ignores that most `sq review` output is not code review, and that PASS findings aren't defects",
+   "description": "Scope says \"code-review findings.\" But review files under `project-documents/user/reviews/` also include architecture, slice and task reviews. Their categories (consistency, completeness, feasibility, extension-points\u2026) don't fit `AuditCategory` (type-contract-debt, test-debt, documentation-drift\u2026). The document doesn't say whether ingest filters to code reviews only, or whether non-code reviews would all fall into `other` and inflate it.\n\nIt also doesn't say whether `PASS`/`NOTE` findings count. The Design Goals example \"error-handling findings: 4 from review\" makes no sense if PASS entries are counted as findings.\n\nFinally, the Current State says category \"is `None` on many findings.\" The structured frontmatter that ingest would read actually writes `\"uncategorized\"` (`src/squadron/review/models.py:401`). The read-side mapper has to treat that sentinel as \"absent\", not as a raw category.",
+   "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#technical-considerations"
+  },
+  {
+   "i": 8,
+   "severity": "CONCERN",
+   "title": "Automatic snapshots at fork/merge put slow, failure-prone work on the branch action",
+   "description": "A pipeline branch action exists (`src/squadron/pipeline/actions/branch.py`, ENTER/MERGE), so this is buildable. But a snapshot that runs complexity, duplication, lint, type check and optionally tests on a large repo can take minutes. The document requires that a failure \"never fail the pipeline step,\" but it says nothing about timeouts, cancellation, or whether the snapshot runs synchronously inside the merge step. The rules require failure modes to be enumerated: what happens if a tool hangs, and is the record then written as absent-with-reason for \"timed out\"? Bound the snapshot with a configured timeout, and decide whether it runs inline or after the step.",
+   "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#technical-considerations"
+  },
+  {
+   "i": 9,
+   "severity": "CONCERN",
+   "title": "420 cannot use snapshots as specified: replays aren't project commits and there is no library API",
+   "description": "\"420 reads snapshots \u2026 to score implementation replays. Neither writes these record types. This component is the only writer.\" A replay's output is code produced in a scratch tree. It may never be committed to the project, and it may sit under a different identity. Snapshots key on `ProjectId` + commit SHA, and the only producer described is a CLI command. For 420 to get a snapshot of replay output, it has to call this component's snapshot logic programmatically on a path or temporary commit. That needs:\n- a callable snapshot service, not just CLI registration through 100;\n- a way to key snapshots of non-project or ephemeral commits.\n\nWithout both, 420 will either fork the snapshot logic or need the record key redesigned.",
+   "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#envisioned-state"
+  },
+  {
+   "i": 10,
+   "severity": "NOTE",
+   "title": "Project-declared limits and exclusions vs. \"without editing the project's config files\"",
+   "description": "Limits and exclusions \"come from project config,\" but adoption must work \"without editing the project's config files.\" For brownfield projects this means limits are always undeclared, so length checks are distributions only. That is acceptable, but say it explicitly. Also name which config is meant: squadron's per-project config via `get_config`, or the measured project's own files. The answer decides whether \"no limits set\" is the normal brownfield case.",
+   "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#design-goals"
+  },
+  {
+   "i": 11,
+   "severity": "NOTE",
+   "title": "`MetrologyRecord` keeps growing optional sibling payloads",
+   "description": "Following 322/323/177, this adds two more optional fields to `MetrologyRecord` (`src/squadron/metrology/models.py:261`), plus matching `write_*`/`iter_*` methods on `MetrologyStore`. That makes eight payload siblings in one envelope and one store class. It's consistent with what exists and needs no migration. But each initiative now edits the shared envelope and store class, which goes against the open/closed principle. Consider making this initiative's records the point where a type-to-payload registry or a discriminated union is introduced, rather than adding further siblings.",
+   "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#architectural-principles"
+  },
+  {
+   "i": 12,
+   "severity": "NOTE",
+   "title": "Review files already carry `reviewedSha`; use it for commit attribution",
+   "description": "The document says ingest ties findings to a commit \"where known,\" but doesn't name the source. Review persistence already stamps `reviewedSha` as HEAD at review time (`src/squadron/review/persistence.py:172`), and omits it when git can't answer. Name it as the attribution source. Historical reviews that predate slice 306 have no stamp; they should be marked unattributed rather than given a date-guessed commit.",
+   "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#current-state"
+  },
+  {
+   "i": 13,
+   "severity": "NOTE",
+   "title": "Baseline handoff wording reads as a dependency on downstream 440",
+   "description": "The frontmatter lists `dependencies: [100, 320]`. But the Envisioned State and the baseline slice describe the work in terms of \"440's capability probe.\" The direction should be that 440 consumes a stable baseline command or record that 400 defines. Word the slice so 400 publishes a contract and makes no assumptions about how 440's probe is shaped.",
+   "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#anticipated-slices"
+  }
+ ]
+}

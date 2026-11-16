@@ -1,0 +1,243 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Task 21 changes the `list_run_summaries` return type without updating its only caller before the Task 22 commit",
+      "description": "Task 21 makes `list_run_summaries` return `RunListing(rows, unavailable)` and removes the per-run \"pipeline unavailable\" WARNING. Its only caller, `runs.py:27`, treats the result as a list of summaries and is not touched until Task 25. The Task 22 commit therefore lands with `sq runs list` broken or failing `pyright`, and with no unavailable-pipeline signal at all until Task 25 adds the summary line.\n\nFix: add a Task 21 step that adapts `runs.py` (and the `run_views` entry point) to read `listing.rows`. Either move the stderr summary line from Task 25 into Task 21, or say explicitly that the signal is absent between the two commits.",
+      "file_ref": null,
+      "category": "sequencing",
+      "raw_category": null,
+      "location": "src/squadron/cli/commands/runs.py:27"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Task 22a's seeding instruction collides with the keep-10 prune inside `init_run`, and its bound is thinner than stated",
+      "description": "`init_run` calls `self.prune(pipeline_name)`, which deletes completed/failed runs beyond 10 per pipeline (`state.py:547-562`). Task 22a says only \"seed a few hundred run-state files through `StateManager`\" with a mix of completed and failed runs, then asserts the row count equals the seeded readable count. A junior implementer who seeds naively gets a count mismatch that is hard to diagnose. The 199 helpers already solve this (`tests/pipeline/run_listing_support.py:3-6`: begin all runs before finalizing any), but 22a does not point to them.\n\nFix:\n- Tell the task to seed through `run_listing_support.begin`/`end` in begin-all-then-finalize order, or spread runs across pipeline names.\n- Give the file count as a named constant; \"a few hundred\" is not a number.\n- Reword \"generous enough for CI jitter\": the design's only measurement is 0.67 s for 188 runs for the whole CLI, so `MAX_LISTING_S = 1.0` has about 1.5\u00d7 headroom at best, on shared runners across two Python versions.",
+      "file_ref": null,
+      "category": "testability",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/state.py:264"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "No task logs the run-id for an unknown process check",
+      "description": "The design requires the unknown-PID case to be \"logged at WARNING with the run-id and PID\" (the error table at line 373 repeats it as \"WARNING naming run and PID\"). Task 9 logs the PID only and defers the run-id to \"the caller that has it\". None of the callers' tasks (19 wait, 21 listing, 33 prune) includes that log, and Task 10 asserts only the PID warning.\n\nFix: have `assess_liveness`, which holds the `RunState`, emit the WARNING with run-id and PID when `process_alive` returns `None`, and assert it in Task 10. One implementation point covers all three consumers.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/slices/174-slice.run-liveness-stall-bounds-pruning-and-readable-listings.md:175"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Spike outcome handling: a stop the design already resolves, and an unverifiable success criterion in Task 16",
+      "description": "Task 2 says to stop and ask the Project Manager if no `ResultMessage` arrives after `interrupt()`. The design already decides that case (lines 621 and 261): the fallback is \"always mark unusable\", the step fails, and the design is updated. The stop is unnecessary and halts the slice on a planned branch.\n\nTask 16's only success line (line 243), \"adjust to the Task 2 spike findings if they differ from the design\", is not checkable.\n\nFix:\n- Replace the Task 2 stop with: record the finding, update the design's risk section, and implement Task 16 as always-unusable.\n- Give Task 16 concrete criteria: usable when interrupt and drain complete; `unusable_reason` set and ERROR logged otherwise; `DispatchStalledError` raised in both cases.\n- The D5 stop (line 59-60) is a real design fork (a per-run lock). If it is kept, express it as a `BLOCKED:` line, not an ask.",
+      "file_ref": null,
+      "category": "task-clarity",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md:54-56"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Task 39 does not assert exit 1 for a failed deletion at the CLI level",
+      "description": "D9 says \"The command exits 1 if any deletion failed\". Task 37 covers the failed count in `apply_prune` and Task 38 implements the exit code, but Task 39 lists exit 1 only for the live-run refusal. One more case in Task 39 would close it.",
+      "file_ref": null,
+      "category": "test-coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md:488-492"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Task 42 adds a test seed helper inside a `docs:` commit, after the walkthrough it supports",
+      "description": "The seed helper under `tests/pipeline/` (orphan, stale, unowned, gone and junk runs) is code and would be committed as `docs: record slice 174 verification`. The same fixtures are needed by Tasks 22 and 39. Creating the helper in Task 22 as an extension of `run_listing_support.py` puts it in a `feat`/`test` commit and avoids duplicate seeding logic.",
+      "file_ref": null,
+      "category": "commit-hygiene",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md:521-527"
+    },
+    {
+      "severity": "PASS",
+      "title": "Success criteria coverage",
+      "description": "Apart from the run-id log above, every criterion maps to a task:\n- **Liveness:** owner and `running` on all three SDK paths (13\u201314); owner in the creating write (11\u201312); `active_step`/`active_item` set and cleared (5, 7, 11\u201312); D3 rows (9\u201310).\n- **Wait and listing:** orphaned exit 8 and the stale policy (19\u201320); unowned v4 behaviour (20, 22); the I/O-bounds extension with 20 running runs (22).\n- **Foreground stall:** 15\u201318.\n- **Prune:** selection and protection rules (33\u201335, 38\u201339).\n- **Output:** summary line and `-v` (25\u201326); width fitting (23\u201326); pipelines list (27\u201328); show (29\u201331).\n- **Close-out:** docs and the architecture paragraph (40); the orphan-resume issue (41).\n\nNo task lacks a design source, so there is no scope creep.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/slices/174-slice.run-liveness-stall-bounds-pruning-and-readable-listings.md:484-540"
+    },
+    {
+      "severity": "PASS",
+      "title": "Load test and CI gating for the restated NFR",
+      "description": "The slice restates the listing-time NFR, and Task 22a adds `tests/load/test_run_listing_scale.py` with a wall-clock assertion. The task states the CI gating explicitly, and it holds: `pyproject.toml:82` sets `testpaths = [\"tests\"]` and CI runs `uv run pytest` unfiltered, so the four existing `tests/load/` files are already gated the same way. No separate wiring task is needed.",
+      "file_ref": null,
+      "category": "nfr",
+      "raw_category": null,
+      "location": ".github/workflows/ci.yml:38"
+    },
+    {
+      "severity": "PASS",
+      "title": "Sequencing, test-with pattern and commit markers",
+      "description": "- **Dependencies:** respected and non-circular. `ActiveItem` is defined in Task 4 before the executor uses it, liveness (9) precedes `claim` (11), wait/listing (19\u201321) and prune (33), and `columns` (23) precedes all three renderers.\n- **Tests:** each implementation task is followed directly by its tests, or carries them inline (8, 18, 32).\n- **Commits:** the `**Commit**:` markers are plain lines at tested points, and the observer refactor has its own commit as the design requires. The one exception is the Task 22 commit noted above.\n- **Phase 7 work:** no merge or push appears as a task, and closing #190/#165 is correctly deferred to Phase 7.",
+      "file_ref": null,
+      "category": "sequencing",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md"
+    },
+    {
+      "severity": "PASS",
+      "title": "Proportionality and task sizing",
+      "description": "Forty-three tasks in one file suit a slice with six scope areas, five new modules and a schema bump. Tasks are scoped to one module or one command each. Step detail quotes the design's contract strings and constants without dictating internals. No task needs splitting or merging.",
+      "file_ref": null,
+      "category": "proportionality",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "sequencing",
+      "raw_category": null,
+      "summary": "Task 21 changes the `list_run_summaries` return type without updating its only caller before the Task 22 commit",
+      "location": "src/squadron/cli/commands/runs.py:27",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "testability",
+      "raw_category": null,
+      "summary": "Task 22a's seeding instruction collides with the keep-10 prune inside `init_run`, and its bound is thinner than stated",
+      "location": "src/squadron/pipeline/state.py:264",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "No task logs the run-id for an unknown process check",
+      "location": "project-documents/user/slices/174-slice.run-liveness-stall-bounds-pruning-and-readable-listings.md:175",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "task-clarity",
+      "raw_category": null,
+      "summary": "Spike outcome handling: a stop the design already resolves, and an unverifiable success criterion in Task 16",
+      "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md:54-56",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "test-coverage",
+      "raw_category": null,
+      "summary": "Task 39 does not assert exit 1 for a failed deletion at the CLI level",
+      "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md:488-492",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "commit-hygiene",
+      "raw_category": null,
+      "summary": "Task 42 adds a test seed helper inside a `docs:` commit, after the walkthrough it supports",
+      "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md:521-527",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "pass",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "Success criteria coverage",
+      "location": "project-documents/user/slices/174-slice.run-liveness-stall-bounds-pruning-and-readable-listings.md:484-540",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "pass",
+      "category": "nfr",
+      "raw_category": null,
+      "summary": "Load test and CI gating for the restated NFR",
+      "location": ".github/workflows/ci.yml:38",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "pass",
+      "category": "sequencing",
+      "raw_category": null,
+      "summary": "Sequencing, test-with pattern and commit markers",
+      "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md",
+      "location_verified": null
+    },
+    {
+      "id": "F010",
+      "severity": "pass",
+      "category": "proportionality",
+      "raw_category": null,
+      "summary": "Proportionality and task sizing",
+      "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md",
+      "location_verified": null
+    }
+  ],
+  "template_name": "tasks",
+  "input_files": {
+    "input": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md",
+    "against": "project-documents/user/slices/174-slice.run-liveness-stall-bounds-pruning-and-readable-listings.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/squadron-174-tasks"
+  },
+  "timestamp": "2026-11-16T13:09:21.710149",
+  "model": "claude-fable-5-2",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 14,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-fable-5-2",
+  "answering_models": [
+    "claude-fable-5-2"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 10,
+    "in_fences": 0,
+    "in_section": 10,
+    "surviving": 10
+  },
+  "effort": "medium",
+  "profile": "sdk",
+  "turns": 15,
+  "prompt_tokens": 544502,
+  "cached_tokens": 388880,
+  "cache_write_tokens": 155610,
+  "completion_tokens": 8261,
+  "reasoning_tokens": null,
+  "duration_seconds": 83.8722770831082,
+  "cost_usd": 2.8987417000000004,
+  "cost_basis": "provider"
+}

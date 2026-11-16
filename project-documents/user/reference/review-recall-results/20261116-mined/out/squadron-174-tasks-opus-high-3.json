@@ -1,0 +1,189 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "PASS",
+      "title": "Success criteria coverage and traceability",
+      "description": "Each Functional Requirement has a task:\n- **Owner, claim and heartbeat:** Tasks 11\u201314.\n- **Owner written by the creating write:** Tasks 11/12 and Task 14's new-run case.\n- **`active_step` and `active_item` set and cleared:** Tasks 11/12.\n- **Orphaned listing and wait exit 8:** Tasks 19\u201322.\n- **v4 file treated as unowned:** Tasks 8, 20, 22.\n- **Stale behaviour in list, wait and prune:** Tasks 20, 22, 35.\n- **Foreground stall:** Tasks 15\u201318.\n- **Every prune rule:** Tasks 33\u201339.\n- **Summary line and `-v`:** Tasks 21, 25, 26.\n- **Width fitting:** Tasks 23\u201326.\n- **`pipelines list` and `show`:** Tasks 27\u201331.\n- **Listing time:** Task 22a and the walkthrough.\n\nEach Technical Requirement test also has a home. That includes the I/O-bounds test with exactly 20 `process_alive` calls (Task 22), the fake-client stall tests (Task 17) and the mode-`000` show test (Task 31).\n\nDocs, the D12 architecture paragraph and the orphan-resume issue are covered by Tasks 40\u201341. No task falls outside the design's scope.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md:31-33"
+    },
+    {
+      "severity": "PASS",
+      "title": "Sequencing and dependencies",
+      "description": "The dependencies run in the right order, and none are circular:\n- `ActiveItem` is defined in Task 4, before Task 5 uses it, and Task 8 is told not to redefine it.\n- `assess_liveness` (Task 9) comes before `claim` (Task 11), which uses it.\n- The config readers (Task 8) come before the `RunHeartbeat` wiring (Task 13).\n- `RunListing` (Task 21) and `cli/columns` (Task 23) both come before the renderers that consume them (Tasks 25, 27, 38).\n- The observer refactor commits on its own, as design step 2 requires.",
+      "file_ref": null,
+      "category": "sequencing",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md:72-217"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Commit markers are written as checkboxes",
+      "description": "All 17 commit lines use the checklist form `- [ ] Commit: \\`...\\``. Examples are lines 112, 157, 187, 264, 344, 414, 493 and 527.\n\nCommit markers must be plain `**Commit**:` lines and never checkboxes. As written, a task-checker can tick them, and the project rule says to \"never make a commit that only checks boxes.\" Change each one to `**Commit**: \\`<message>\\``.\n\nThe places where the commits fall are fine. Each comes after a tested unit, not after every task and not only at the end.",
+      "file_ref": null,
+      "category": "task-format",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md:112"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Task 2 adds Project Manager stop points that override decisions the design already made",
+      "description": "Task 2 has two \"stop and ask the Project Manager\" outcomes, and the design has already settled both:\n- **No `ResultMessage` after interrupt:** the Mitigation Strategies say D7's fallback applies, the decision \"narrows to 'always mark unusable'\", and the design is updated.\n- **A state write off the loop thread:** D5 says \"`StateManager` gains a per-run `threading.Lock` around load, modify and write.\"\n\nProject rule says a step that waits on Project Manager confirmation is invalid unless a named rule requires it. More importantly, because the task stops, no task implements either fallback. A junior agent who hits either case has no work item to follow.\n\nReplace each stop with the design's response:\n- For the interrupt, add a conditional sub-item to Task 16: always mark the session unusable, and update D7.\n- For the threading case, add a conditional sub-item to Task 11 that adds the per-run lock, with a test.",
+      "file_ref": null,
+      "category": "design-fidelity",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md:54-60"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "No task logs the run-id for `process_alive` warnings",
+      "description": "The design (Technology Choices, and the error-handling table row \"WARNING naming run and PID\") requires an unknown process check to be logged with both the run-id and the PID.\n\nTask 9 logs only the PID and says \"the run-id is logged by the caller that has it.\" None of the callers' tasks do that: not `assess_liveness` (Task 9), not wait (Task 19), not the listing (Task 21), not prune (Task 33). Neither the PID-0 nor the PID-`-1` test in Task 10 asserts a run-id.\n\nThe simplest fix is in Task 9: `assess_liveness` already holds the state, so it logs the WARNING with `run_id` whenever `process_alive` returns `None`. Task 10 then asserts the run-id appears in the record.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md:140-142"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Task 22a's timing assertion contradicts a line in the design",
+      "description": "The review checklist requires a `tests/load/` test because the slice restates 199's listing target as a Success Criterion, so adding Task 22a is correct. Task 22a asserts that `MAX_LISTING_S = 1.0` holds in-process.\n\nHowever, the design's Special Considerations say \"There is still no assertion on time in tests\" (slice line 648). Update that sentence in the slice design so the two documents agree.\n\nThe CI claim in Task 22a checks out: `pyproject.toml:82` sets `testpaths = [\"tests\"]`, and `.github/workflows/ci.yml:38` runs `uv run pytest`. The load test is therefore gated on both matrix Pythons and in the hermetic job, so no separate CI wiring task is needed.",
+      "file_ref": null,
+      "category": "nfr",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md:308-320"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`resolve_pipeline` tests come two tasks after its implementation",
+      "description": "Task 29 adds `resolve_pipeline` and refactors `load_pipeline` onto it. Its unit tests are only in Task 31, after the `show` command in Task 30. Since the refactor must leave `load_pipeline`'s behaviour and error text unchanged, add a test sub-item to Task 29: the existing loader tests pass, plus `resolve_pipeline` unit tests. Task 31 then keeps only the `show` CLI tests.",
+      "file_ref": null,
+      "category": "test-pattern",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md:392-414"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "pass",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "Success criteria coverage and traceability",
+      "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md:31-33",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "pass",
+      "category": "sequencing",
+      "raw_category": null,
+      "summary": "Sequencing and dependencies",
+      "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md:72-217",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "task-format",
+      "raw_category": null,
+      "summary": "Commit markers are written as checkboxes",
+      "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md:112",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "design-fidelity",
+      "raw_category": null,
+      "summary": "Task 2 adds Project Manager stop points that override decisions the design already made",
+      "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md:54-60",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "No task logs the run-id for `process_alive` warnings",
+      "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md:140-142",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "nfr",
+      "raw_category": null,
+      "summary": "Task 22a's timing assertion contradicts a line in the design",
+      "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md:308-320",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "note",
+      "category": "test-pattern",
+      "raw_category": null,
+      "summary": "`resolve_pipeline` tests come two tasks after its implementation",
+      "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md:392-414",
+      "location_verified": true
+    }
+  ],
+  "template_name": "tasks",
+  "input_files": {
+    "input": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md",
+    "against": "project-documents/user/slices/174-slice.run-liveness-stall-bounds-pruning-and-readable-listings.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/squadron-174-tasks"
+  },
+  "timestamp": "2026-11-16T13:19:04.872987",
+  "model": "claude-opus-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 8,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-opus-5-5",
+  "answering_models": [
+    "claude-opus-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 7,
+    "in_fences": 0,
+    "in_section": 7,
+    "surviving": 7
+  },
+  "effort": "high",
+  "profile": "sdk",
+  "turns": 9,
+  "prompt_tokens": 384517,
+  "cached_tokens": 286382,
+  "cache_write_tokens": 98125,
+  "completion_tokens": 7669,
+  "reasoning_tokens": null,
+  "duration_seconds": 80.82658299989998,
+  "cost_usd": 0.9963671,
+  "cost_basis": "provider"
+}

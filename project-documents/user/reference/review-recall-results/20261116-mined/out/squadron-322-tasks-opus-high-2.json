@@ -1,0 +1,261 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "T13's fallback cannot meet the non-empty-offers guarantee",
+      "description": "T13 says to \"reuse 320's existing result-discovery surface\". If no such surface exists, it says to \"scope this task to the store-recorded samples only and note the gap\". It also says to ask the Project Manager.\n\n320 has no such surface. `resolve_target` (capture.py:68) only resolves one target, either a path or an index with `--type`. Nothing lists every review file for a given `JudgeConfigId`. The store (`store.py:160-191`) holds only sampled results, so by definition it never holds an unsampled one. Following the fallback means `select_residual_offers` always returns an empty list. That breaks the success criterion \"a graduated config with unsampled results yields a non-empty offer set\" and makes T14's main test impossible to pass.\n\n**Fix:** Have T13 own a small scan. Glob the reviews directory (the same `_REVIEWS_SUBDIR` that `resolve_target` uses), run `derive_judge_config_id` on each file, compare the result to the graduation's identity, and subtract any `result_ref.relative_review_path` already present in `list_samples`. Remove the \"store-only\" fallback and the ask-the-PM escape. The design already settled that 322 adds a selection surface (slice design, fact 3).",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "src/squadron/metrology/capture.py:68-130"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "T7's numbered precedence contradicts its own success criterion",
+      "description": "Rule 1 (`n < floor` \u2192 `INSUFFICIENT_EVIDENCE`) is checked before rule 4 (`match_rate <= tighten_rate` \u2192 `TIGHTEN`). In that order, `TIGHTEN` can never be reached below the floor. The parenthetical in rule 4 and the next bullet then tell the implementer to do the opposite. A junior implementer gets two conflicting specs.\n\n**Fix:** Rewrite the order as:\n1. `match_rate <= tighten_rate` \u2192 `TIGHTEN`\n2. `n < floor` \u2192 `INSUFFICIENT_EVIDENCE`\n3. unversioned \u2192 `INSUFFICIENT_EVIDENCE`\n4. `match_rate >= graduate_rate` \u2192 `GRADUATE`\n5. otherwise \u2192 `HOLD`\n\nAlso state explicitly what an unversioned cell with a low match rate returns. The design only forbids `GRADUATE` for unversioned cells, so `TIGHTEN` is the consistent answer. Then delete the corrective prose.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:115-123"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The runtime-drawn-model limitation and the `--json` note assertion are missing",
+      "description": "The success criterion requires \"the runtime-drawn-model limitation is stated where the recommendation is produced (asserted: the note is present in output, including `--json`)\". The design says the note must state that a step drawing its model from a 180 pool cannot track the drawn model.\n\n- T9 only specifies the \"this template paired with this model / choose together at config time\" wording, with nothing about the runtime pool.\n- T16's `--json` test only checks that the output parses back into `RecommendationReport`. It never checks that `model_dimension_note` is present.\n\n**Fix:** Add the runtime-pool sentence to T9's note requirement. Add a T16 assertion that every cell in the parsed `--json` output has a non-empty `target.model_dimension_note`.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:147"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "No task covers the malformed `judge:` block, but the coverage check says one does",
+      "description": "The design's Failure Modes table requires that a malformed `judge:` block (a non-numeric floor) be \"flagged, not silently defaulted\", with a WARNING naming the template.\n\n`resolve_thresholds` calls `float(pass_floor)`, so a non-numeric value raises `ValueError`. Under T7 as written, `read_current_thresholds` would crash `recommend`. T7 says nothing about this case, and T8 has no test for it. The Coverage Check line \"malformed judge block (inherited from `resolve_thresholds`, exercised in T8)\" is false.\n\n**Fix:** In T7, catch `ValueError`/`TypeError` from `resolve_thresholds`, log a WARNING naming the template, and return `current=None`. Add a T8 test that asserts this through `caplog`. Correct the coverage line.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/actions/judge.py:54-57"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "T11 creates an import cycle and leaves no way to update a graduation in place",
+      "description": "- **Import cycle.** `JudgeConfigId` lives in `models.py` (line 67). T3's `GraduatedConfig` in `calibration_models.py` has to import it from there. T11 then adds `graduated_config: GraduatedConfig | None` to `MetrologyRecord` in `models.py`, which means `models.py` imports `calibration_models.py`. That is a circular import. **Fix:** say where `GraduatedConfig` should live. Defining it in `models.py` and re-exporting it from `calibration_models` is the simplest option.\n- **Idempotent update has no target.** T15 requires updating an existing graduation \"in place\" so there is still one record. But T11's `find_graduation` returns a `GraduatedConfig` with no record id, and `write_graduation` always generates a new id. The store's `_record_path` and `generate_sample_id` (store.py:58-61, 100) are sample-specific, so nothing addresses an existing record. **Fix:** either derive a deterministic record id from (`JudgeConfigId`, `artifact_level`), or have `find_graduation` return the record id as well.\n- **Wrong matcher to reuse.** T11 should say not to reuse `_judge_config_matches` (store.py:64-77). That function ignores the hash when the filter's hash is `None`, which is exactly the loose matching that version-scoping forbids.\n- **Unclear placement.** T11 lists `write_graduation` under both `graduation.py` and as a `MetrologyStore` method. Pick one.",
+      "file_ref": null,
+      "category": "data-model",
+      "raw_category": null,
+      "location": "src/squadron/metrology/models.py:67-111"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "T13/T14 leave the lapse signal unspecified",
+      "description": "T13 says to \"return enough information (or have the CLI re-derive it\u2026)\". T14 then asserts \"on whatever signal T13 produces\". So the lapsed-graduation criterion is tested against a contract nobody has defined, and an implementer can pass T14 vacuously.\n\n**Fix:** Define the return shape in T13. For example, `select_residual_offers` returns a per-graduation result with `offers`, `status: Literal[\"due\", \"exhausted\", \"lapsed\"]` and `skipped_pruned: int`. Then point T14 and T15 at those fields. This also covers the \"no offers due\" line for exhausted configs, which T15's CLI step currently leaves out.",
+      "file_ref": null,
+      "category": "testability",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:203"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Commit markers come after every task, including untested implementation tasks",
+      "description": "There are 17 `**Commit**:` markers, one per task. Implementation tasks T1, T3, T5, T7, T9, T11, T13 and T15 each commit before their tests exist, so those points are not tested. The guidance is to commit at working, tested points, not after every task.\n\n**Fix:** Keep one marker after each test task (T2, T4, T6, T8, T10, T12, T14, T16, T17) and remove the eight markers on implementation tasks. Merging T3/T4 and T5/T6 into single tasks would also be fair, since both are thin.",
+      "file_ref": null,
+      "category": "process",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:39"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The Context Summary's task numbers don't match the actual tasks",
+      "description": "The summary says \"calibration core (T5-T8), graduation + offers (T9-T12), CLI shells + config keys (T13-T16)\". The actual tasks are: config keys T5/T6, calibration T7\u2013T10, graduation T11\u2013T14, CLI T15/T16. Update the line so implementers aren't misdirected.",
+      "file_ref": null,
+      "category": "documentation",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:25"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The no-mutation check is run twice",
+      "description": "T10 (unit) and T16 (CLI) both snapshot the template, config and store bytes around `recommend`. The criterion needs only one of these. The CLI-level check is the stronger one because it covers the real entry point, so T10's copy could be dropped.",
+      "file_ref": null,
+      "category": "proportionality",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:248"
+    },
+    {
+      "severity": "PASS",
+      "title": "Hash narrowing comes first and is tested in both directions",
+      "description": "T1/T2 come before all evidence-dependent work, as the design asks. T2 tests both edit directions through the public `derive_judge_config_id`, not just the private helper. T17 step 5 covers it again end to end.",
+      "file_ref": null,
+      "category": "sequencing",
+      "raw_category": null,
+      "location": "src/squadron/metrology/identity.py:298"
+    },
+    {
+      "severity": "PASS",
+      "title": "The new record type needs no store migration",
+      "description": "`list_samples` already filters `record_type != RECORD_TYPE_SAMPLE`. Adding `graduated_config` records therefore can't affect 321's `agreement_report` input, which meets the \"existing records load unchanged\" integration requirement. No load-test or CI-gating task is needed, because the slice states no NFR.",
+      "file_ref": null,
+      "category": "integration",
+      "raw_category": null,
+      "location": "src/squadron/metrology/store.py:181"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "T13's fallback cannot meet the non-empty-offers guarantee",
+      "location": "src/squadron/metrology/capture.py:68-130",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "T7's numbered precedence contradicts its own success criterion",
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:115-123",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "The runtime-drawn-model limitation and the `--json` note assertion are missing",
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:147",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "No task covers the malformed `judge:` block, but the coverage check says one does",
+      "location": "src/squadron/pipeline/actions/judge.py:54-57",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "data-model",
+      "raw_category": null,
+      "summary": "T11 creates an import cycle and leaves no way to update a graduation in place",
+      "location": "src/squadron/metrology/models.py:67-111",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "testability",
+      "raw_category": null,
+      "summary": "T13/T14 leave the lapse signal unspecified",
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:203",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "concern",
+      "category": "process",
+      "raw_category": null,
+      "summary": "Commit markers come after every task, including untested implementation tasks",
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:39",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "note",
+      "category": "documentation",
+      "raw_category": null,
+      "summary": "The Context Summary's task numbers don't match the actual tasks",
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:25",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "note",
+      "category": "proportionality",
+      "raw_category": null,
+      "summary": "The no-mutation check is run twice",
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:248",
+      "location_verified": true
+    },
+    {
+      "id": "F010",
+      "severity": "pass",
+      "category": "sequencing",
+      "raw_category": null,
+      "summary": "Hash narrowing comes first and is tested in both directions",
+      "location": "src/squadron/metrology/identity.py:298",
+      "location_verified": true
+    },
+    {
+      "id": "F011",
+      "severity": "pass",
+      "category": "integration",
+      "raw_category": null,
+      "summary": "The new record type needs no store migration",
+      "location": "src/squadron/metrology/store.py:181",
+      "location_verified": true
+    }
+  ],
+  "template_name": "tasks",
+  "input_files": {
+    "input": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md",
+    "against": "project-documents/user/slices/322-slice.calibration-to-threshold-feedback.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/squadron-322-tasks"
+  },
+  "timestamp": "2026-11-16T12:21:23.424977",
+  "model": "claude-opus-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 7,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-opus-5-5",
+  "answering_models": [
+    "claude-opus-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 11,
+    "in_fences": 0,
+    "in_section": 11,
+    "surviving": 11
+  },
+  "effort": "high",
+  "profile": "sdk",
+  "turns": 8,
+  "prompt_tokens": 480379,
+  "cached_tokens": 363425,
+  "cache_write_tokens": 116942,
+  "completion_tokens": 7303,
+  "reasoning_tokens": null,
+  "duration_seconds": 79.28256470896304,
+  "cost_usd": 1.1547924,
+  "cost_basis": "provider"
+}

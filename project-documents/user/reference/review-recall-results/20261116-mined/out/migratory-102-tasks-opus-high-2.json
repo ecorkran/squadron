@@ -1,0 +1,207 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Technical requirement \"no nested Python loops\" has no task step, and the LeadershipForce step hints at a loop",
+      "description": "The slice's Technical Requirements (slice line 395) say: \"Both forces are vectorized within each agent's neighborhood \u2014 no nested Python loops.\" No task mentions this. Task 4.1 writes the core formula as `sum(velocity[i] * leadership[i]) / sum(leadership)`. A junior implementer could reasonably code that as an inner `for i in neighbors` loop, which is exactly the nested loop the slice forbids.\n\nFix: add a step to 4.1 that uses numpy indexing over the neighbor array. For example, `w = state.leadership[nbrs]; weighted = (state.velocities[nbrs] * w[:, None]).sum(axis=0) / w.sum()`. Then add \"no per-neighbor Python loop\" to 4.1's Verify line. Task 3.1 has no neighbor dimension, so it already meets the requirement with its per-agent loop.",
+      "file_ref": null,
+      "category": "coverage-gap",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:113-119"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The convergence assertion can pass at tick 0, so it doesn't show convergence toward the leaders' heading",
+      "description": "The slice's functional criterion (slice lines 389\u2013391) says the herd's mean heading \"converges toward the leaders' initial heading\". Task 5.2 only asserts that the final mean heading \"has positive x-component\". At setup, 5 of 50 agents already move east at `[4.0, 0.0]` and the other 45 have random velocities, so the mean x-component is likely positive before any tick runs. The test would pass even if LeadershipForce did nothing.\n\nFix: make the assertion compare against the initial state, or set a threshold. Options:\n- The final eastward alignment (mean of cos(heading)) must be clearly greater than the initial value.\n- The final value must exceed a fixed threshold.\n- Exclude the leaders from the initial random draw so the baseline mean is near zero.",
+      "file_ref": null,
+      "category": "test-adequacy",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:147-154"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The profile-differentiation test uses \"or\" where the slice walkthrough requires both conditions",
+      "description": "Verification walkthrough step 4 (slice lines 474\u2013476) says the herding run \"should show lower heading variance \u2026 **and** eastward bias\", and the flocking-only run \"should show no directional preference\". Task 5.3 asserts \"herding heading variance < flocking heading variance, **or** herding mean eastward component > flocking mean eastward component\". Either condition alone can pass by chance on a single seed. The task also calls this \"statistically measurable\", but one seeded run is not a statistical test.\n\nFix: assert both conditions, as the walkthrough states. Also either drop the word \"statistically\" or run a small number of seeds.",
+      "file_ref": null,
+      "category": "test-adequacy",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:160-161"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Commit markers are checkbox tasks, and the final commit only checks boxes",
+      "description": "Commit points must be plain `**Commit**:` lines, never checkbox items. This file makes each commit a numbered checkbox task: 1.3 (lines 48\u201349), 2.3 (73\u201374), 3.3 (103\u2013104), 4.3 (134\u2013135), 5.4 (164\u2013165) and 6.3 (180\u2013182). The five section commits sit at sensible working, tested points that match slice line 523. The fix is the format: replace each with a plain line such as `**Commit**: feat: add per-agent leadership array to AgentState`.\n\nTask 6.3 (\"Git add any remaining changes \u2026 `docs: complete slice 102`\") does no real work. Its commit would only hold check-offs. Remove it and let section 5's commit be the last one.",
+      "file_ref": null,
+      "category": "commit-cadence",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:48-49"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Unit tests check direction only, but the slice asks for exact output on hand-built inputs",
+      "description": "The slice criterion is \"Each force produces the correct output for hand-constructed inputs\" (slice line 384).\n- **Known-geometry test in 4.2:** it only checks that the force \"biases toward agent 1's heading\". The exact value is easy to compute: `(0.1\u00b7[0,1] + 0.9\u00b7[1,0]) / 1.0 \u2212 [0,0] = [0.9, 0.1]` with `leadership_weight=1.0`. Assert it with `np.testing.assert_allclose`.\n- **Uniform-leadership test:** it says the result \"should be similar to plain velocity averaging\". \"Similar\" can't be asserted. With equal weights the result is exactly `(mean(neighbor_v) \u2212 v) \u00b7 w`, so assert that.",
+      "file_ref": null,
+      "category": "test-adequacy",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:126-127"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Redundant protocol checks and a vague smoke test",
+      "description": "- **Repeated conformance checks:** `isinstance(..., BulkForce)` is checked four times, in 3.1 and 3.2 (MomentumForce) and in 4.1 and 4.2 (LeadershipForce). Task 6.2 (lines 176\u2013178) checks both again, so it can be deleted.\n- **Task 5.1:** it has no assertion beyond \"runs without error\". Its step \"set some agents to high leadership \u2026 to confirm forces interact correctly\" has no measurable outcome. Task 5.2 already runs `tick()` with all five forces, so 5.1 adds little. Either fold it into 5.2 or reduce it to a plain no-exception smoke test with no leadership-setup step.\n- **Task 6.1:** the step \"No warnings about missing fields or deprecated patterns\" (line 174) can't be checked. Drop it, or name the specific warning filter.",
+      "file_ref": null,
+      "category": "proportionality",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:141-145"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Epsilon is an inline example value, not a shared constant",
+      "description": "Tasks 3.1 (line 86) and 4.1 (line 117) each give \"epsilon (e.g. 1e-10)\" inline. The project rule says \"Avoid hard-coded constants and duplicated values.\" Tell the implementer to define one module-level constant in `herding.py` and use it in both forces, so the value isn't duplicated.",
+      "file_ref": null,
+      "category": "code-structure",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:86"
+    },
+    {
+      "severity": "PASS",
+      "title": "Functional criteria coverage and sequencing",
+      "description": "Each criterion maps to a task:\n\n| Slice criterion | Task(s) |\n|---|---|\n| BulkForce conformance | 3.2, 4.2 |\n| Zero force with no neighbors | 4.2 |\n| Zero force for a stationary agent | 3.2 |\n| Zero force when all neighbors have zero leadership | 4.2 |\n| Zero-sum epsilon guard (risk mitigation) | 4.1 line 117 |\n| Self-exclusion | 4.2 |\n| `active_indices` isolation | 3.2, 4.2 |\n| AgentState create/add/remove | 1.1\u20131.2 |\n| Required profile fields, with call sites updated | 2.1\u20132.2 |\n| Flocking forces reused unmodified | 5.1\u20135.3 |\n\nThe order is State \u2192 Profile \u2192 Momentum \u2192 Leadership \u2192 Integration, matching slice lines 502\u2013521. No task falls outside the slice's scope.",
+      "file_ref": null,
+      "category": "coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:29-135"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "coverage-gap",
+      "raw_category": null,
+      "summary": "Technical requirement \"no nested Python loops\" has no task step, and the LeadershipForce step hints at a loop",
+      "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:113-119",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "test-adequacy",
+      "raw_category": null,
+      "summary": "The convergence assertion can pass at tick 0, so it doesn't show convergence toward the leaders' heading",
+      "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:147-154",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "test-adequacy",
+      "raw_category": null,
+      "summary": "The profile-differentiation test uses \"or\" where the slice walkthrough requires both conditions",
+      "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:160-161",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "commit-cadence",
+      "raw_category": null,
+      "summary": "Commit markers are checkbox tasks, and the final commit only checks boxes",
+      "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:48-49",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "test-adequacy",
+      "raw_category": null,
+      "summary": "Unit tests check direction only, but the slice asks for exact output on hand-built inputs",
+      "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:126-127",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "proportionality",
+      "raw_category": null,
+      "summary": "Redundant protocol checks and a vague smoke test",
+      "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:141-145",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "note",
+      "category": "code-structure",
+      "raw_category": null,
+      "summary": "Epsilon is an inline example value, not a shared constant",
+      "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:86",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "pass",
+      "category": "coverage",
+      "raw_category": null,
+      "summary": "Functional criteria coverage and sequencing",
+      "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:29-135",
+      "location_verified": true
+    }
+  ],
+  "template_name": "tasks",
+  "input_files": {
+    "input": "project-documents/user/tasks/102-tasks.herding-and-leadership.md",
+    "against": "project-documents/user/slices/102-slice.herding-and-leadership.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/migratory-102-tasks"
+  },
+  "timestamp": "2026-11-16T12:25:34.393073",
+  "model": "claude-opus-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 2,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-opus-5-5",
+  "answering_models": [
+    "claude-opus-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 8,
+    "in_fences": 0,
+    "in_section": 8,
+    "surviving": 8
+  },
+  "effort": "high",
+  "profile": "sdk",
+  "turns": 3,
+  "prompt_tokens": 104609,
+  "cached_tokens": 23564,
+  "cache_write_tokens": 81041,
+  "completion_tokens": 5393,
+  "reasoning_tokens": null,
+  "duration_seconds": 54.72980595799163,
+  "cost_usd": 0.7613867000000001,
+  "cost_basis": "provider"
+}

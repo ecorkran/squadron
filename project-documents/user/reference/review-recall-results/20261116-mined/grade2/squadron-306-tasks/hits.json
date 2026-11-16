@@ -1,0 +1,18 @@
+{
+ "case": "squadron-306-tasks",
+ "flaws": [
+  {
+   "id": "F1",
+   "text": "Design SC (line 372-373): \"A failed **or unverifiable** archive copy aborts the overwrite: the original review file is byte-identical afterward\". T12 ",
+   "hits": {
+    "r05": [
+     8
+    ],
+    "r07": [
+     3
+    ]
+   }
+  }
+ ],
+ "note": "Only r05 i8 and r07 i3 name the untested copy-succeeds-then-read-back-fails branch of T13; other T12 findings (r01, r04, r08 etc.) mention verify/abort but about the wrong save path, not missing test coverage."
+}

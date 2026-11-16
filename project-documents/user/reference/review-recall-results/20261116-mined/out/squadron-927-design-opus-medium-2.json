@@ -1,0 +1,153 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "D9 mitigation skips the `gemini` profile, the one most likely to report false substitutions",
+      "description": "Plan Part C (slice plan line 443) says design \"must decide what counts as 'differs' for providers that return a dated or routed variant of the requested id \u2026 so an alias resolving to its own snapshot is not reported as a substitution.\"\n\nD9 chooses an exact rule and relies on Phase 6 to catch false positives: it will capture \"one review per configured profile (sdk, openai, openrouter, local)\". The same four profiles appear in Verification Walkthrough step 6 (lines 348\u2013353) and in the Mitigation Strategies (line 363). `gemini` is missing from all three, but it is a registered profile (`ProviderType.GEMINI`, with `[aliases.gemini]` in `data/models.toml`). Slice 906 also lists it in the six-profile matrix.\n\nGemini is the profile most likely to break the exact rule. Its default aliases use preview and variant ids such as `gemini-3.1-pro-preview-customtools` and `gemini-3-flash-preview`. If its OpenAI-compatible endpoint reports a shortened, prefixed or base form of the id, every gemini review will write `requestedModel:` and log a WARNING. It would also take on a new metrology judge identity. That is the risk the design names at line 359, on a profile it never checks.\n\nFix: add `gemini` to the D9 capture list, walkthrough step 6, and the mitigation. Better, derive the list from the registered profiles rather than writing it out by hand, so a new profile can't be skipped again.",
+      "file_ref": null,
+      "category": "integration",
+      "raw_category": null,
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:185"
+    },
+    {
+      "severity": "NOTE",
+      "title": "\"Not reported\" doesn't separate Codex from a stamping regression",
+      "description": "D11 treats an empty `answering_models` the same way for every provider: a Run Digest line and no WARNING. For Codex that is right. For the SDK and OpenAI-compatible providers, D8 says they always report, so an empty list there means the stamping broke. The artifact would still state the gap, so this isn't a silent fallback. But the case is never logged and no test asserts it.\n\nA cheap fix: log a WARNING only when a provider that is supposed to report returns nothing. Not required by the slice plan.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md#d11--not-reported-keep-the-requested-id-say-so-in-the-artifact"
+    },
+    {
+      "severity": "PASS",
+      "title": "Part B decision fits the plan and the verdict model",
+      "description": "The plan asked design to choose between forcing CONCERNS and failing the run. D4 chooses CONCERNS, gives its reasons, and keeps the \"model did read files\" carve-out the plan requires. D5 adds `VerdictSource.IMPOSED` and checks for consumers: no reader in context-forge, and slice 917's validator doesn't check `verdictSource`. D6 catches the side effect where a degraded parse would be hidden by the synthetic finding.",
+      "file_ref": null,
+      "category": "architecture",
+      "raw_category": null,
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md#d4--truncated-and-unread-cap-pass-to-concerns-dont-fail-the-run"
+    },
+    {
+      "severity": "PASS",
+      "title": "Part A: frontmatter carries the minimum fact a gate needs, and the paths stay in parity",
+      "description": "The plan said \"design picks the minimum that lets a gate decide.\" D1 and D2 put one boolean in frontmatter, using the same three states as `location_verified`. The counts go in the header and JSON. D3 adds the case where the diff was dropped entirely by the total-injection limit, which the plan missed. Both the CLI and pipeline paths go through `run_review_with_profile` and then `format_review_markdown`, so they produce the same keys.",
+      "file_ref": null,
+      "category": "integration",
+      "raw_category": null,
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md#d2--difftruncated-is-present-exactly-when-the-review-had-a-diff"
+    },
+    {
+      "severity": "PASS",
+      "title": "Scope, deferrals and size are proportionate",
+      "description": "Ordering the diff and adding `--stat` were allowed only \"if design shows it is small\", and D7 defers them to #137 with a reason. Each new module (`coverage.py`, `snapshot.py`) has one purpose and one consumer. The design keeps `review_client.py` (588 lines) from growing further and declines to extract injection code, which isn't this slice's job. The new mechanisms match an effort of 3/5.",
+      "file_ref": null,
+      "category": "scope",
+      "raw_category": null,
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md#technical-scope"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "integration",
+      "raw_category": null,
+      "summary": "D9 mitigation skips the `gemini` profile, the one most likely to report false substitutions",
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:185",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "note",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "\"Not reported\" doesn't separate Codex from a stamping regression",
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md#d11--not-reported-keep-the-requested-id-say-so-in-the-artifact",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "pass",
+      "category": "architecture",
+      "raw_category": null,
+      "summary": "Part B decision fits the plan and the verdict model",
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md#d4--truncated-and-unread-cap-pass-to-concerns-dont-fail-the-run",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "pass",
+      "category": "integration",
+      "raw_category": null,
+      "summary": "Part A: frontmatter carries the minimum fact a gate needs, and the paths stay in parity",
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md#d2--difftruncated-is-present-exactly-when-the-review-had-a-diff",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "pass",
+      "category": "scope",
+      "raw_category": null,
+      "summary": "Scope, deferrals and size are proportionate",
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md#technical-scope",
+      "location_verified": null
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md",
+    "against": "project-documents/user/architecture/900-slices.maintenance-and-refactoring.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/squadron-927-design"
+  },
+  "timestamp": "2026-11-16T13:01:24.625635",
+  "model": "claude-opus-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 5,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-opus-5-5",
+  "answering_models": [
+    "claude-opus-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 5,
+    "in_fences": 0,
+    "in_section": 5,
+    "surviving": 5
+  },
+  "effort": "medium",
+  "profile": "sdk",
+  "turns": 6,
+  "prompt_tokens": 466598,
+  "cached_tokens": 378437,
+  "cache_write_tokens": 88151,
+  "completion_tokens": 4543,
+  "reasoning_tokens": null,
+  "duration_seconds": 64.0344171251636,
+  "cost_usd": 0.8724666000000001,
+  "cost_basis": "provider"
+}

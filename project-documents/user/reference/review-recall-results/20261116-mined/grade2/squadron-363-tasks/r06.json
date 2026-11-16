@@ -1,0 +1,61 @@
+{
+ "review": "r06",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "SC4 (dropped topics appear nowhere) has no verification step",
+   "description": "Task 4.1 adds the dropped-topics rule to the skill, and 4.2 only checks the mapping table row by row. None of the walkthrough checks in 8.1 or 8.2 confirm that the written `000-concept.squadron.md` has no why-now, audience-evolution or methodology-preference content and no gap markers for those topics. SC4 is a claim about the output document, so a skill that states the rule but still emits a `[GAP: why now]` would pass every check in this file. The decline path (8.2) is where a model is most likely to gap-mark these topics. Add one check to both 8.1 and 8.2: grep the written document for those topics and for any gap marker that names them, and expect zero hits.",
+   "location": "project-documents/user/tasks/363-tasks.concept-generation.md:304-324"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "SC10 is only partly verified: no check of per-section sourcing or the `[INFERRED]` rule",
+   "description": "SC10 needs three things: (a) one sourcing outcome per section, drawn from the full outcome set; (b) the engagement-questions and inferred-claims lines; (c) every `[INFERRED]` sentence meeting the checkable rule. 8.1 checks only (b) and the graph's `project.name`. Nothing confirms the Section sourcing line has one outcome for each of the seven sections, each from the allowed set. Nothing reviews each `[INFERRED]` sentence in the body against the rule from 7.1: it is derived from a named field, it is not a restatement, and it is listed in provenance. Add both checks to 8.1.",
+   "location": "project-documents/user/tasks/363-tasks.concept-generation.md:315-316"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "SC7 is only partly exercised: the absent and unreadable guide cases are never run",
+   "description": "SC7 names three failure modes: guide absent, guide unreadable, and section title missing. Task 8.3 runs only the renamed-heading case. The absent-guide stop, which names the path or the `cf init` / `/cf:onboard` setup step (6.1 Check 1, 2.1 Precondition 2), is authored but never run. It costs almost nothing to cover: point the check at a scratch path that does not exist and confirm the stop message and that no file is written. Add it as a second case in 8.3.",
+   "location": "project-documents/user/tasks/363-tasks.concept-generation.md:326-330"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "SC8's refillability test is never exercised; 8.4 checks only the preservation half",
+   "description": "SC8 requires \"mechanical refillability for augment\": augment fills sections that are empty or hold exactly a `[GAP: ...]` marker. 8.4 augments the 8.1 document, in which both questions were answered, and checks only that populated sections stay byte-identical. It never confirms that a gap-only section gets filled, or that a section with a gap marker plus other text is left alone. The decline-path document from 8.2 already has gap markers where Q1 and Q2 content would go. Augmenting that scratch document, and answering the questions this time, would cover the fill half with no new setup.",
+   "location": "project-documents/user/tasks/363-tasks.concept-generation.md:332-336"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Commit markers are checkboxes, not plain `**Commit**:` lines",
+   "description": "All eight commit markers (lines 99, 125, 164, 185, 221, 254, 296 and 351) are written as `- [ ] Commit: ...` checklist items. Markers must be plain `**Commit**:` lines, never checkboxes. As written, each commit point becomes an item to check off, which invites a commit that only checks boxes. The placement is fine: every marker follows a verification subtask, so each commit lands at a tested point. Convert the markers to plain lines. Optionally merge some, such as Tasks 4 and 5, or 6 and 7, to cut the near one-per-task rate.",
+   "location": "project-documents/user/tasks/363-tasks.concept-generation.md:99"
+  },
+  {
+   "i": 5,
+   "severity": "NOTE",
+   "title": "SC12 has no traceable checkpoint",
+   "description": "SC12 (\"a concept a PM would edit rather than discard\") is not tied to any step. The PM is already present for 8.1, so the cheapest trace is to record their edit-or-discard reaction in the 9.2 DEVLOG entry. This should not become a separate approval step.",
+   "location": "project-documents/user/tasks/363-tasks.concept-generation.md:304-318"
+  },
+  {
+   "i": 6,
+   "severity": "NOTE",
+   "title": "Two of the three confirmation outcomes are never exercised",
+   "description": "Only the extracted-and-corrected outcome runs (8.1). Refused/unavailable (extracted-unconfirmed) and the \"never stalls\" rule can be folded into 8.2 at no extra cost: decline the confirmation along with both questions. No success criterion requires this, so it is optional.",
+   "location": "project-documents/user/tasks/363-tasks.concept-generation.md:320-324"
+  },
+  {
+   "i": 7,
+   "severity": "NOTE",
+   "title": "Verification subtasks 1.2 and 4.2 repeat their authoring subtask's success line",
+   "description": "1.2 re-checks the routing table that 1.1's success line already covers. 4.2 (lines 181-184) re-checks row-by-row fidelity that 4.1's success line already states. Unlike 2.2, 3.4 and 6.3, which actually run something against the repo, these two add nothing beyond a re-read. Merge each into its parent subtask.",
+   "location": "project-documents/user/tasks/363-tasks.concept-generation.md:94-98"
+  }
+ ]
+}
