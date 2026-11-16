@@ -41,7 +41,7 @@
 
 [aliases.fable]
 profile = "sdk"
-model = "claude-fable-5-1"
+model = "claude-fable-5-2"
 private = true
 cost_tier = "subscription"
 notes = "Max sub"
