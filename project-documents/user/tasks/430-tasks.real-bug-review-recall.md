@@ -3,11 +3,33 @@ docType: tasks
 slice: real-bug-review-recall
 project: squadron
 lld: user/slices/430-slice.real-bug-review-recall.md
-dependencies: [420, 421, 424, 425, 402]
-projectState: Slices 420–426 complete (replay stack built and frozen). Slice 430 design approved with D7, D11, D13 decided by the PM on 20261116; architecture and slice plan amended. The hand-run recall data is committed under user/reference/review-recall-results/. Target is main (git.integration_branch empty).
+dependencies:
+- 420
+- 421
+- 424
+- 425
+- 402
+projectState: Slices 420–426 complete (replay stack built and frozen). Slice 430 design
+  approved with D7, D11, D13 decided by the PM on 20261116; architecture and slice
+  plan amended. The hand-run recall data is committed under user/reference/review-recall-results/.
+  Target is main (git.integration_branch empty).
 dateCreated: 20261116
 dateUpdated: 20261116
 status: not_started
+turns: 29
+promptTokens: 1824515
+cachedTokens: 1718353
+cacheWriteTokens: 106120
+completionTokens: 31862
+durationSeconds: 310.7
+costUsd: 1.830358
+usageRounds: 1
+pricedRounds: 1
+usageByModel:
+  claude-opus-5-5:
+    rounds: 1
+    costUsd: 1.8303576000000001
+    completionTokens: 31862
 ---
 
 ## Context Summary
