@@ -2,7 +2,7 @@
 docType: devlog
 project: squadron
 dateCreated: 20260218
-dateUpdated: 20261115
+dateUpdated: 20261116
 ---
 
 # Development Log
@@ -10,6 +10,14 @@ dateUpdated: 20261115
 A lightweight, append-only record of development activity. Newest entries first.
 
 Older entries: project-documents/user/archive/devlog/ (one file per quarter).
+
+## 20261116
+
+### Slice 430: Real-Bug Review Recall — Tasks Complete
+
+- **Delivered:** `project-documents/user/tasks/430-tasks.real-bug-review-recall.md` (31 tasks, 245 lines, 13 commit markers). Order: records and store, case files and `cases add`, decisions parser, recipes, import, hit rule/scoring/report with the section 1 and 5 reproduction tests, then `_stage`, stage runner, `run`, `label`, docs.
+- **Design gaps for Task 1 to write into the design:** recall payload models go in `metrology/recall_*_models.py` (`MetrologyRecord` never imports `benchmark/`); the lock is `BenchmarkLock.acquire(..., "recall", ...)`, not `bench_lock`; timeout refusal uses `check_review_timeout`; a recipe matches imported entries by alias and live entries by `entry_key`; overrides live in `user/reference/review-recall-overrides.yaml`; `commands/sq/benchmark.md` gets the recall subcommands; stale "PM to confirm" text removed.
+- **Next:** PM approval, then Phase 6 on branch `430-slice.real-bug-review-recall`.
 
 ## 20261115
 
