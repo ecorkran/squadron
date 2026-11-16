@@ -14,101 +14,102 @@ aiProfile: sdk
 status: complete
 dateCreated: 20261116
 dateUpdated: 20261116
-reviewedSha: ce11459f7696a9124ee63e0526da55a30f385b2d
+reviewedSha: 72121a87cf53f51bfe9187f82912d983e45a0caa
+revision_number: 1
 toolsGiven: [read_file, list_files, grep]
-toolCallsMade: 15
+toolCallsMade: 8
 effort: xhigh
-turns: 16
-promptTokens: 793723
-cachedTokens: 670946
-cacheWriteTokens: 122759
-completionTokens: 72209
-durationSeconds: 320.2
-costUsd: 0.191365
+turns: 9
+promptTokens: 314473
+cachedTokens: 203233
+cacheWriteTokens: 111232
+completionTokens: 83337
+durationSeconds: 355.3
+costUsd: 0.184485
 costBasis: provider
 runId: run-20261116-p5-c59b9eb6
 squadronVersion: 0.24.31
 findings:
   - id: F001
-    severity: pass
-    category: verification
-    summary: "Cited symbols and amendments match the code"
-    location: "project-documents/user/tasks/430-tasks.real-bug-review-recall.md:39"
+    severity: concern
+    category: consistency
+    summary: "Task 30 makes the live D11 call that the task file says no task makes"
+    location: "project-documents/user/tasks/430-tasks.real-bug-review-recall.md:264"
   - id: F002
-    severity: pass
+    severity: concern
     category: coverage
-    summary: "Coverage and sequencing of the main criteria"
-    location: "project-documents/user/slices/430-slice.real-bug-review-recall.md"
+    summary: "Live stage identity is never derived from the alias config"
+    location: "project-documents/user/tasks/430-tasks.real-bug-review-recall.md:219"
   - id: F003
     severity: concern
-    category: spec-conflict
-    summary: "Task 22 says \"sum\" where the criterion is a union"
-    location: "project-documents/user/tasks/430-tasks.real-bug-review-recall.md:199"
+    category: coverage
+    summary: "The live path never writes the comb input file or the raw-output sidecar"
+    location: "project-documents/user/tasks/430-tasks.real-bug-review-recall.md:203"
   - id: F004
     severity: concern
-    category: sequencing
-    summary: "Task 18's fallback edits a case file after import, which changes its record ids"
-    location: "project-documents/user/tasks/430-tasks.real-bug-review-recall.md:177"
+    category: consistency
+    summary: "The fixture case file the walkthrough uses is never created in the repo"
+    location: "project-documents/user/tasks/430-tasks.real-bug-review-recall.md:95"
   - id: F005
     severity: concern
-    category: sequencing
-    summary: "Task 25 uses a \"run loop helper\" that no earlier task creates"
-    location: "project-documents/user/tasks/430-tasks.real-bug-review-recall.md:222"
+    category: testing
+    summary: "Task 23's leak verdicts are not asserted with a WARNING log"
+    location: "project-documents/user/tasks/430-tasks.real-bug-review-recall.md:212-213"
   - id: F006
     severity: concern
-    category: granularity
-    summary: "Task 27 is too large for one task"
-    location: "project-documents/user/tasks/430-tasks.real-bug-review-recall.md:232"
+    category: consistency
+    summary: "Task 3 changes the `combs` key type from the design without a recorded correction"
+    location: "project-documents/user/tasks/430-tasks.real-bug-review-recall.md:76"
   - id: F007
     severity: concern
-    category: test-coverage
-    summary: "Some D8 modes have no named test"
-    location: "project-documents/user/tasks/430-tasks.real-bug-review-recall.md:216"
+    category: sizing
+    summary: "Tasks 21 and 24 each bundle too many deliverables; scoring has no split plan"
+    location: "project-documents/user/tasks/430-tasks.real-bug-review-recall.md:192"
   - id: F008
-    severity: concern
-    category: traceability
-    summary: "The Context Summary points the `cases add` and import D8 tests at the wrong tasks"
-    location: "project-documents/user/tasks/430-tasks.real-bug-review-recall.md:49"
+    severity: note
+    category: sequencing
+    summary: "`extra_locations` has two triggers, and Task 17's store is built before Task 16 writes it"
+    location: "project-documents/user/tasks/430-tasks.real-bug-review-recall.md:174"
   - id: F009
-    severity: concern
-    category: test-coverage
-    summary: "No test for \"two live aliases with the same settings are one row\""
-    location: "project-documents/user/slices/430-slice.real-bug-review-recall.md:508"
+    severity: note
+    category: consistency
+    summary: "The case-id input list is ambiguous"
+    location: "project-documents/user/tasks/430-tasks.real-bug-review-recall.md:70"
   - id: F010
-    severity: concern
-    category: criterion-coverage
-    summary: "The D11 bound criterion is checked only on a fake set"
-    location: "project-documents/user/slices/430-slice.real-bug-review-recall.md:519"
+    severity: note
+    category: consistency
+    summary: "The `recall_fetch_timeout_s` default duplicates the sandbox's fixed bound"
+    location: "project-documents/user/tasks/430-tasks.real-bug-review-recall.md:102"
   - id: F011
-    severity: concern
-    category: spec-gap
-    summary: "Task 16 leaves the overrides schema, labeler name and grade precedence unspecified"
-    location: "project-documents/user/tasks/430-tasks.real-bug-review-recall.md:164"
+    severity: note
+    category: consistency
+    summary: "Conflicts between person labelers are not defined"
+    location: "project-documents/user/tasks/430-tasks.real-bug-review-recall.md:245"
   - id: F012
-    severity: concern
-    category: conventions
-    summary: "Task 23 puts the template in the wrong directory, and task paths name no root"
-    location: "project-documents/user/tasks/430-tasks.real-bug-review-recall.md:205"
+    severity: note
+    category: scope
+    summary: "Task 30's \"any mismatch fixed\" has no bound"
+    location: "project-documents/user/tasks/430-tasks.real-bug-review-recall.md:263"
   - id: F013
     severity: note
-    category: granularity
-    summary: "Task 2 is too granular and could fold into its first consumer"
-    location: "project-documents/user/tasks/430-tasks.real-bug-review-recall.md:66"
+    category: sizing
+    summary: "Some tasks are small enough to merge"
+    location: "project-documents/user/tasks/430-tasks.real-bug-review-recall.md:68"
   - id: F014
-    severity: note
-    category: granularity
-    summary: "Task 29 is a check-only task that repeats checks in Tasks 9 and 24"
-    location: "project-documents/user/tasks/430-tasks.real-bug-review-recall.md:247"
+    severity: pass
+    category: coverage
+    summary: "Every success criterion and D8 row has a task, except the leak warning"
+    location: "project-documents/user/slices/430-slice.real-bug-review-recall.md:486"
   - id: F015
-    severity: note
-    category: ambiguity
-    summary: "Two `write_record` functions exist; Task 6 should name the store method"
-    location: "src/squadron/metrology/store.py:436"
+    severity: pass
+    category: sequencing
+    summary: "Sequencing has no cycles, and the existing code the tasks name is present"
+    location: "src/squadron/benchmark/bench_lock.py:54"
   - id: F016
-    severity: note
-    category: design-correction
-    summary: "Task 1 leaves the D13 fallback sentence in the design"
-    location: "project-documents/user/slices/430-slice.real-bug-review-recall.md:406"
+    severity: pass
+    category: process
+    summary: "Test-with pattern and commit markers follow the rules"
+    location: "project-documents/user/tasks/430-tasks.real-bug-review-recall.md:92"
 ---
 
 # Review: tasks — slice 430
@@ -118,81 +119,75 @@ findings:
 
 ## Findings
 
-### [PASS] Cited symbols and amendments match the code
+### [CONCERN] Task 30 makes the live D11 call that the task file says no task makes
 
-I checked the symbols in the Context Summary: `BenchmarkLock.acquire` (`benchmark/bench_lock.py:62`), `check_review_timeout` (`grading_config.py:27`), `pair_seed` and `compare_pair` (`paired_stats.py:62, 88`), `MIN_PAIRED_CASES = 5` (`paired_stats.py:23`), `EXIT_CAP_REACHED` (`benchmark_grade.py:49`), `ReviewBudget` and `GradeCapReached` (`grade_budget.py`), `render_bound` (`grade_plan.py:240`), `run_auth_check`, `resolve_sq_path`, `build_leak_rules`, `leak_scan.scan`, `transcript_source_for`, `ConfigKey.type_`, `TemplateOutput.DECISIONS`, `run_review_with_profile`, and `HistoryFreeSandbox(start_sha=)`. The `--diff`, `--output-path` and `--no-save` flags exist. The D7 architecture amendment (`420-arch.model-benchmark.md:36`) and the D11 plan amendment (`420-slices.model-benchmark.md:165`) are already present, so Task 1's removal of "PM to confirm" text is consistent.
+The Context Summary (line 39) says the live D11 run is walkthrough step 7 and "no task runs it." Design D11 (line 393) says it is not an implementation task. Task 30's D11 bound item runs `sq benchmark recall run --set real-bugs-nonsquadron ... --max-cost 0.000001 --call-cost 1`. That makes one real stage call on the real store and writes its run record, which step 7 was meant to create. Task 24's test (line 221) already checks the bound on the committed `haiku-sol-luna-opus.yaml` over a fake 14-case set, so the live call adds little. Spend is pre-authorized, so this is a consistency problem, not an approval one. Either drop the live invocation and rely on Task 24's test, or state in the Context Summary and D11 that Task 30 makes one call and what step 7 then resumes from.
 
-### [PASS] Coverage and sequencing of the main criteria
+### [CONCERN] Live stage identity is never derived from the alias config
 
-Most functional criteria trace to a task: case files and sets (Task 11), import counts and idempotence (Tasks 14–17), the section 1 reproduction (Task 22), pool and fan-out (Task 22), the hit gate (Task 18), bound, caps, resume and retry (Tasks 26–27), leak verdicts (Tasks 24, 27), the stub-kind run (Task 27), and `report --json` (Task 22). Dependencies run forward with no cycles. There are 16 commit markers, each at a tested point, and each implementation task has tests except Tasks 29 and 31. The design restates no NFR, so no load test is required.
+Task 24 expands recipes "to live stage keys," and Task 18 depends on `config_key` and `entry_key` for live entries. A live key needs model, profile, template hash, `tool_use`, `max_output_tokens` and configured effort. D10 specifies the imported side; no task says how an alias produces these on the live side. The likely sources exist: `ReviewerRef` (`src/squadron/metrology/grade_models.py:78`) and `template_content_hash` (`src/squadron/metrology/identity.py:287`). The task should name them and say where `tool_use` and `max_output_tokens` come from. Otherwise the implementer invents the mapping, and a wrong mapping silently splits or merges rows against the imported ones.
 
-### [CONCERN] Task 22 says "sum" where the criterion is a union
+### [CONCERN] The live path never writes the comb input file or the raw-output sidecar
 
-Task 22 says to "sum their run-1 bug-hits" across the four recipes. D2 (`430-slice…md:189`) defines fan-out as a union: a known bug counts once if any reviewer's kept finding hits it. RESULTS.md section 5 reports `N/14` "aggregated over all four reviewers" (`RESULTS.md:112–126`), so the denominator is distinct bugs, and a sum can exceed 14. Change "sum" to "union". The "14 uncombed" baseline is not in section 5's table, so the test should compute it from the records rather than assert it.
+(a) Task 22 says `_stage` "reads upstream findings" from `--input FILE`, but no task says who writes that file. For a two-stage comb, stage two's input must be stage one's kept findings (design D2, line 188). Task 23 lists the `_stage` argv and not the input file. (b) Design D4 (line 232) says every entry's `raw_ref` is a sha256 in the `REVIEWS` sidecar. Task 13 does this for imports only (line 148). Task 23 writes live output to `recall-out/` (line 210), and no task moves it into `ContentSidecars` (`src/squadron/metrology/content_sidecars.py:45`) before the entry is stored. Assign both to Task 23.
 
-### [CONCERN] Task 18's fallback edits a case file after import, which changes its record ids
+### [CONCERN] The fixture case file the walkthrough uses is never created in the repo
 
-D1 makes `case_id` a hash of the resolved locations (`430-slice…md:145`), so adding an `extra_locations` entry gives a new case id. D4 derives run record ids from `(case_id, run_index)` (`430-slice…md:241`). Tasks 14–17 write run records under the old id. Task 18's "add an `extra_locations` entry" fallback would orphan those records and change set membership, and no step re-imports. Either run the gate check before the import commit, or state the consequence: a new case version, `cases add` again, and a re-import into a new set version.
+Task 6 builds the fixture repo "in a temp dir" and "writes `case.yaml` beside it," so the case file lands in a temporary directory. Design walkthrough step 5 (line 570), which Task 30 runs on the real store (line 262), calls `cases add tests/benchmark/recall/fixtures/bug_repo/case.yaml`. No task creates that path. The step fails, or it records a case whose `repo:` points at a deleted temp path. Name a stable output location (git-ignored if generated), and have Task 30 run the build before step 5.
 
-### [CONCERN] Task 25 uses a "run loop helper" that no earlier task creates
+### [CONCERN] Task 23's leak verdicts are not asserted with a WARNING log
 
-Task 25 puts the sandbox-per-case lifecycle "in the run loop helper". The run loop is built in Task 27, which comes after Task 25, and no module or function is named for the helper. Name where it lives, or move the lifecycle into Task 27.
+D8's leak row (design line 310) requires a WARNING for `leaked` and `scan_unavailable`. Context Summary line 51 says every D8 row is asserted on outcome and log. Task 23's outcome bullet logs WARNING, but the leak tests (line 213) check only the verdict ("→ `leaked`", "is recorded so"). Add the WARNING assertion to those tests. Also, Task 9 (line 118) covers the ERROR for a `git show` failure but not the timeout case that Task 7 tests (line 105).
 
-### [CONCERN] Task 27 is too large for one task
+### [CONCERN] Task 3 changes the `combs` key type from the design without a recorded correction
 
-Task 27 covers the serial loop, the bound, both caps, `--case`, resume, orphan ingest with leak scan, `--retry-harness`, the lock, and `write_record` failure. Its test file lists about nine scenarios, and it adds an end-to-end test. Split it into: (a) bound, caps, `--case`, resume and wiring; (b) orphan ingest, retry, lock and `write_record` failure; (c) the end-to-end test. Task 22's reproduction suites could also be their own task.
+Design D4 (`project-documents/user/slices/430-slice.real-bug-review-recall.md:220`) specifies `combs: dict[(entry_key, chain_key), StageEntry]`. Task 3 uses the string `"<entry_key>|<chain_key>"`. The string is the right choice, since a tuple cannot be a JSON object key. But Task 1's edit list (line 60) does not include it, so the design keeps the tuple, and line 41 ("later tasks follow the corrections") does not cover it. Add it to Task 1's list.
 
-### [CONCERN] Some D8 modes have no named test
+### [CONCERN] Tasks 21 and 24 each bundle too many deliverables; scoring has no split plan
 
-Technical Requirements (`430-slice…md:524`) require a test asserting outcome and log for every D8 row. These are not named in any task:
-- Leak verdict `scan_unavailable`. Task 24 tests `leaked` and `confined` only (design row at `:310`).
-- The orphan path that repeats the call with a WARNING. Task 27 tests ingest only (design row at `:311`).
-- The auth preflight refusal's ERROR log. Task 26 lists "auth failure" without a log assertion (design row at `:304`).
-- A `HistoryFreeSandbox` build failure. Tasks 9 and 25 do not name it (design row at `:309`).
-- A failing `git show` without a timeout, with its ERROR log. Task 8 tests only the timeout (design row at `:319`).
-Add each to the named task's test list.
+Task 21 covers text and JSON rendering, the `report` command, three test files, and both reproduction suites with the pool and fan-out checks. Implementation Notes step 4 (design line 609) calls the reproduction tests the first point where the PM gets a result, so they should be their own task. Task 24 (line 218) covers expansion, stored-key drops, retry-pending, auth preflight, five refusals, bound arithmetic, rendering and a committed-recipe test. Split it into expansion and drops, then refusals, preflight and bound. Tasks 18–20 all write `scoring.py` (lines 178, 183, 188), which the design lists as one module. The project keeps source files near 300 lines where practical, so name a split or accept the overrun.
 
-### [CONCERN] The Context Summary points the `cases add` and import D8 tests at the wrong tasks
+### [NOTE] `extra_locations` has two triggers, and Task 17's store is built before Task 16 writes it
 
-It says the `cases add` and import rows are tested in "Tasks 9, 19, 20". Task 9 is the sandbox and Tasks 19 and 20 are scoring. `cases add` is Task 10 (with Task 8), and import is Tasks 14–17.
+Task 10 (line 124) adds `extra_locations` where the case text or graded hits cite a file. Task 17 (line 174) adds them when an imported HIT fails the gate. Name one trigger. The gate test is the mechanical one, so Task 10 should transcribe the markdown and leave gate misses to Task 17. Task 17 also says the temp store is built "by Tasks 13–15," but Task 16 writes the records. Changing a case file changes its `case_id` (design line 145), which is harmless before Task 30 (Task 10, line 127); say so in Task 17.
 
-### [CONCERN] No test for "two live aliases with the same settings are one row"
+### [NOTE] The case-id input list is ambiguous
 
-This is a Functional Requirements criterion. Task 19 tests that live and imported rows stay separate, and Task 22 tests display. No task asserts that two live aliases with the same `config_key` and `effort_sent` collapse into one row. Add it to Task 19's tests.
+Design D1 says "any change gives a new case id" (line 145), but the hashed fields are listed as (kind, repo name, base, head, host repo, bugs with resolved locations). Task 2 repeats the list without saying whether a bug's id, description or proof is included. Those are the fields most likely to be edited once records exist. Fix the exact field list in Task 2 now.
 
-### [CONCERN] The D11 bound criterion is checked only on a fake set
+### [NOTE] The `recall_fetch_timeout_s` default duplicates the sandbox's fixed bound
 
-The criterion says `run` with `haiku-sol-luna-opus` on `real-bugs-nonsquadron` prints its bound. Task 27 checks the bound on a fake 14-case set, and Task 31 says step 7 is not run. Nothing shows the bound on the real set. Either amend the criterion to match D11 (step 7 prints it), or add a Task 31 check on the real set. Note that the first call always runs (the overshoot term), so that check spends one call.
+Task 7 describes the key's default of 120 as "the per-command bound HistoryFreeSandbox uses." Design D7 (line 285) says the sandbox keeps its own fixed 120-second bound and is unchanged, so the key does not drive it. Two places hold 120 with no link. Describe the key as independent and define its default once in `config/keys.py`.
 
-### [CONCERN] Task 16 leaves the overrides schema, labeler name and grade precedence unspecified
+### [NOTE] Conflicts between person labelers are not defined
 
-Task 16 creates `review-recall-overrides.yaml` and writes the adjudications "as person labels", with no schema, no labeler name, and no rule for whether a person grade beats an imported grade. D3 sets person-over-import precedence for hits only. Grades drive real share and the person-checked count (D5), so the junior would have to guess. Specify all three.
+Task 15 (line 161) gives person labels precedence over import labels but says nothing about two person labelers. Task 28's `label --hit` does not refuse a key that is already labelled, so a later `person:<name>` label can displace the `person:results-section-12` adjudication. Design line 470's "newest write wins" allows that. Decide whether it is intended and say so in Task 28.
 
-### [CONCERN] Task 23 puts the template in the wrong directory, and task paths name no root
+### [NOTE] Task 30's "any mismatch fixed" has no bound
 
-Task 23 says `data/templates/comb.yaml`. The existing templates live under `src/squadron/data/templates/`. Most task paths (`metrology/…`, `config/keys.py`, `benchmark/…`, `cli/commands/…`) also omit `src/squadron/`, and only Task 9 writes it out. Name the root once and write `src/squadron/data/templates/comb.yaml`.
+A walkthrough mismatch could require reworking Tasks 2–27, and the item does not limit the fix. State that a fix belongs in the owning task, and that anything beyond it is recorded as `BLOCKED:` under the item.
 
-### [NOTE] Task 2 is too granular and could fold into its first consumer
+### [NOTE] Some tasks are small enough to merge
 
-It is one config key with one test. Fold it into Task 8, where `derive_locations` first uses it. Its default of 120 repeats the value of the sandbox's `SANDBOX_COMMAND_TIMEOUT_SECONDS` (used at `history_free_sandbox.py:51`). State that the two are separate knobs, as the design intends.
+Tasks 2, 3 and 4 are three small model modules with one test file each. Task 6's smoke test checks only the fixture builder and could fold into Task 7. Merging is optional, and the Task 5 commit already covers Tasks 2–5.
 
-### [NOTE] Task 29 is a check-only task that repeats checks in Tasks 9 and 24
+### [PASS] Every success criterion and D8 row has a task, except the leak warning
 
-Tasks 9 and 24 already check their own diffs. Task 29 adds `grade_models.py` and the `sq review code` module. Fold it into Task 31 so all gates sit in one place.
+Each functional and technical criterion maps to a task: 17 cases and four sets (10), import counts and idempotence (13–16), sections 1 and 5 reproduction (21), `run` bound, caps, resume and retry (23–26), leak verdicts (23, 27), hit rule (17), `label` (28), real share (19), `report --json` schema (21), the stub-kind seam (8, 27), and the D11 recipe file (12). The one gap is the leak WARNING noted above. No NFR is restated, so no load-test or CI-gate task is needed. No task lacks a criterion; the CHANGELOG bullet in Task 29 follows the project's bug-fix convention.
 
-### [NOTE] Two `write_record` functions exist; Task 6 should name the store method
+### [PASS] Sequencing has no cycles, and the existing code the tasks name is present
 
-`MetrologyStore.write_record(record_id, record)` is the method meant. `benchmark/replay_records.py:89` has a different `write_record(deps, …)`. Task 6 says "rewrite via `write_record`" (line 93), and Task 27's failure handling depends on which one is meant.
+Each dependency comes earlier: the registry (8) precedes `cases add` (9), the store (5) precedes import (16), the parser (11) precedes comb import (14), and `_stage` (22) precedes the stage runner (23). The existing symbols the tasks rely on are present: `BenchmarkLock`, `check_review_timeout`, `pair_seed`, `compare_pair`, `write_record` in `metrology/store.py`, `TemplateOutput.DECISIONS`, `run_auth_check`, `resolve_sq_path`, `transcript_source_for`, and the committed `comb.yaml` and `RESULTS.md`. `MIN_PAIRED_CASES` is 5 in `paired_stats.py`, and Task 20 correctly uses the runbook's 8 instead.
 
-### [NOTE] Task 1 leaves the D13 fallback sentence in the design
+### [PASS] Test-with pattern and commit markers follow the rules
 
-The PM decided D13, so the "If not, …" fallback is now dead text. Remove it in the same edit as the "PM to confirm" sentence. Task 1's grep check would not catch it.
+Every implementation task has a test item directly after it. The 16 `**Commit**:` markers are plain lines at tested points (after Tasks 1, 5, 6, 9, 10, 11, 12, 16, 21, 22, 23, 26, 27, 28, 29 and 30). Task 21's commit spans Tasks 17–21, which is acceptable. Every checklist item carries a `[ ]` box, and no task merges or pushes.
 
 ### Run Digest
 
-- Response length: 11098 chars
+- Response length: 11375 chars
 - Response is newline-free: no
-- Tool calls made: 15
+- Tool calls made: 8
 - Tool calls failed: 0
 - Stop reason: end_turn
 - Output budget: backend default
@@ -200,10 +195,10 @@ The PM decided D13, so the "If not, …" fallback is now dead text. Remove it in
 - Settings sources: project
 - Reasoning characters: 0
 - Effort: xhigh
-- Turns: 16
-- Tokens — prompt / cached / cache write / completion / reasoning: 793723 / 670946 / 122759 / 72209 / not computed
-- Duration: 320.2 s
-- Cost: $0.19 (provider)
+- Turns: 9
+- Tokens — prompt / cached / cache write / completion / reasoning: 314473 / 203233 / 111232 / 83337 / not computed
+- Duration: 355.3 s
+- Cost: $0.18 (provider)
 - `## Summary` located: yes
 - `## Findings` located: yes
 - Finding-shaped matches — whole response: 16
