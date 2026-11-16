@@ -163,7 +163,7 @@ PM decision after 426. The replay stack (421–426) stays as built and gets no f
      - `run` prints its cost bound before the first call, stops at its cap with exit 2, and resumes.
      - The rule for when a finding hits a known bug is stated and tested. Findings it cannot decide are listed for a person and not counted.
      - The first recipe measured live is haiku-xhigh and sol in parallel, then a luna comb, then an opus-high comb (RESULTS.md sections 10–13: fan-out plus opus-high comb kept every found known bug at 86% real). The comb prompt is a first draft and is versioned with its records.
-   - **Dependencies:** [421, 425] (sandbox, record store, cap and bound code, review call); 402 normalized findings.
+   - **Dependencies:** [420, 421, 424, 425] (effort sent, sandbox and scrubbed environment, leak scan, record store, cap and bound code); 402 normalized findings.
    - **Interfaces:** Provides stored real-bug cases, per-stage review and comb records, recipe scoring and the recall report. Consumed by 432 and 433.
    - **Risk Level:** Medium (the hit rule; the graded-real share is agent-graded and needs a human-checked sample)
    - **Relative Effort:** 3/5
