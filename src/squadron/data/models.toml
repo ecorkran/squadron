@@ -21,8 +21,9 @@
 #                reasoning effort sent on every request (reasoning_effort on an
 #                OpenAI-compatible agent, effort on the SDK; "none" disables
 #                reasoning). Absent means none is sent and the backend default
-#                applies. No built-in alias sets it: define a variant such as
-#                glm-flash-low in ~/.config/squadron/models.toml instead.
+#                applies. Only the fixed-effort Claude variants below set it; for any
+#                other model, define a variant such as glm-flash-low in
+#                ~/.config/squadron/models.toml.
 #   [aliases.<name>.pricing]  (optional sub-table)
 #     input, output, cache_read, cache_write — USD per 1M tokens
 #
@@ -77,6 +78,64 @@ notes = "Max sub"
 [aliases.haiku]
 profile = "sdk"
 model = "claude-haiku-5-5"
+private = true
+cost_tier = "subscription"
+notes = "Max sub"
+
+# Fixed-effort variants. The review-recall benchmark compares models at a stated
+# effort, so a measured result names one of these aliases and stays reproducible.
+[aliases.haiku-xhigh]
+profile = "sdk"
+model = "claude-haiku-5-5"
+effort = "xhigh"
+private = true
+cost_tier = "subscription"
+notes = "Max sub"
+
+[aliases.sonnet-medium]
+profile = "sdk"
+model = "claude-sonnet-5-5"
+effort = "medium"
+private = true
+cost_tier = "subscription"
+notes = "Max sub"
+
+[aliases.sonnet-high]
+profile = "sdk"
+model = "claude-sonnet-5-5"
+effort = "high"
+private = true
+cost_tier = "subscription"
+notes = "Max sub"
+
+[aliases.opus-medium]
+profile = "sdk"
+model = "claude-opus-5-5"
+effort = "medium"
+private = true
+cost_tier = "subscription"
+notes = "Max sub"
+
+[aliases.opus-high]
+profile = "sdk"
+model = "claude-opus-5-5"
+effort = "high"
+private = true
+cost_tier = "subscription"
+notes = "Max sub"
+
+[aliases.fable-medium]
+profile = "sdk"
+model = "claude-fable-5-2"
+effort = "medium"
+private = true
+cost_tier = "subscription"
+notes = "Max sub"
+
+[aliases.fable-high]
+profile = "sdk"
+model = "claude-fable-5-2"
+effort = "high"
 private = true
 cost_tier = "subscription"
 notes = "Max sub"

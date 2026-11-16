@@ -287,8 +287,24 @@ def test_effort_is_none_when_unset_or_unknown(tmp_path: Path) -> None:
         assert model_effort(None) is None
 
 
-def test_no_builtin_alias_sets_effort() -> None:
-    assert all("effort" not in alias for alias in load_builtin_aliases().values())
+# The only built-in aliases that pin an effort. Every other built-in leaves it
+# unset so the backend default applies; a new fixed-effort alias is added here.
+FIXED_EFFORT_BUILTINS = {
+    "haiku-xhigh": "xhigh",
+    "sonnet-medium": "medium",
+    "sonnet-high": "high",
+    "opus-medium": "medium",
+    "opus-high": "high",
+    "fable-medium": "medium",
+    "fable-high": "high",
+}
+
+
+def test_only_fixed_effort_builtins_set_effort() -> None:
+    with_effort = {
+        name: alias["effort"] for name, alias in load_builtin_aliases().items() if "effort" in alias
+    }
+    assert with_effort == FIXED_EFFORT_BUILTINS
 
 
 # ---------------------------------------------------------------------------
