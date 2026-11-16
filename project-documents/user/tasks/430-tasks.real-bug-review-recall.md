@@ -59,8 +59,8 @@ revision_number: 2
 ### Task 1: Commit the task file, correct the design, create the branch
 - [ ] Read the target: `cf config get git.integration_branch` (its value, or `main` when empty). Check out the target. If `git status --short` lists this task file, commit it by path as `docs: revise slice 430 tasks`
   - [ ] Success: `git status --short` does not list the task file
-- [ ] Edit `user/slices/430-slice.real-bug-review-recall.md` so it states each design-gap bullet in the Context Summary: Component Structure (model homes, scoring modules), D1, D2, D4 (`combs` key), D9 (lock name, timeout check), D10 (overrides path), D12 (seed), API Contracts, D3 (among `person` labelers the newest `updated` wins; no disagreement listing), the report identity rule (D4: (`config_key`, `effort_sent`); `entry_key` only for `run`'s stored-entry check) and a Non-functional line (recall runs serially under D9 as a PM-run benchmark, so it has no load-test tier). Remove the "PM to confirm" sentences in D11 and D13, D13's "If not, the three squadron cases list their files in `extra_locations`..." sentence, and "pending PM confirmation" in walkthrough step 7
-  - [ ] Success: `grep -n "PM to confirm\|pending PM\|bench_lock\|squadron history not read" project-documents/user/slices/430-slice.real-bug-review-recall.md` finds nothing; the design names `metrology/recall_*_models.py`, the string `combs` key, the three scoring modules, `BenchmarkLock`, `check_review_timeout`, the overrides path, the entry-selection rule, the person-labeler rule and the no-load-test line
+- [ ] Edit `user/slices/430-slice.real-bug-review-recall.md` so it states each design-gap bullet in the Context Summary: Component Structure (model homes, the scoring modules, and the modules `stage_identity.py`, `leak_check.py` and `run_loop.py`, which the component table lacks), D2 and D11 (the comb alias is `luna-r`, the OpenRouter alias RESULTS.md section 5 measured; plain `luna` is the Codex alias, which was not measured), D4 (`combs` key), D9 (lock name, timeout check), D10 (overrides path), D12 (seed), D3 (among `person` labelers the newest `updated` wins, PM-approved 20261116; no disagreement listing), the report identity rule (D4: (`config_key`, `effort_sent`); `entry_key` only for `run`'s stored-entry check) and a Non-functional line (recall runs serially under D9 as a PM-run benchmark, so it has no load-test tier). Remove the "PM to confirm" sentences in D11 and D13, D13's "If not, the three squadron cases list their files in `extra_locations`..." sentence, and "pending PM confirmation" in walkthrough step 7
+  - [ ] Success: `grep -n "PM to confirm\|pending PM\|bench_lock\|squadron history not read" project-documents/user/slices/430-slice.real-bug-review-recall.md` finds nothing; the design names `metrology/recall_*_models.py`, the string `combs` key, the three scoring modules, `BenchmarkLock`, `check_review_timeout`, the overrides path, the entry-selection rule, the person-labeler rule, the no-load-test line, `luna-r` in D2 and D11 and the three missing modules in the component table
 
 **Commit**: `docs: correct slice 430 design for model homes, lock, entry selection`
 
@@ -125,7 +125,7 @@ revision_number: 2
 - [ ] `tests/benchmark/recall/fixtures/proof_files.json`: proof sha → file list, captured with `git show --name-only --format=` for every commit proof in the 17 case files, so tests can derive locations with a fake runner and no git
 - [ ] `user/reference/review-recall-sets.md`: one `##` heading per set (the set name), each followed by a fenced block listing one case-file path per line, relative to `user/reference/review-recall-cases/`. The sets: `real-bugs` (17), `real-bugs-original` (first 10, 14 bugs), `real-bugs-original-no-u103` (9, 13), `real-bugs-nonsquadron` (14)
 - [ ] Test `test_committed_cases.py`: every committed case file passes the schema check (fake runner, no git); counts 17 cases / 21 bugs; each set list, parsed in that exact format, resolves to existing files with the stated counts
-  - [ ] Success: tests pass. Case locations that Task 15's gate test finds missing are added in Task 15's commit. The real store is not written here; it is first written in Task 30, so a case-file edit before then needs no record migration
+  - [ ] Success: tests pass. Case locations that Task 15's gate test finds missing are added when that test runs and are committed at the marker after Task 20. The real store is not written here; it is first written in Task 30, so a case-file edit before then needs no record migration
 
 **Commit**: `docs: add the 17 real-bug case files and set lists`
 
@@ -138,8 +138,8 @@ revision_number: 2
 **Commit**: `feat: add lenient comb decisions parser`
 
 ### Task 10: Recipes (D2) and recipe files
-- [ ] `benchmark/recall/recipe.py`: `Recipe` (name, reviewers, pool, combs); loader refuses empty reviewers, `pool: true` with one reviewer. `required_stages(recipe)`: per reviewer one review stage, plus one comb stage per chain prefix (luna, then luna>opus-high)
-- [ ] Recipe files under `user/reference/review-recall-recipes/`: `haiku-xhigh`, `sol`, `sonnet-high`, `sonnet`, `luna` (single reviewers); `haiku-sol-opus` (fan-out haiku-xhigh + sol, comb `[opus-high]`); `haiku-sol-pool` (pool); `haiku-sol-luna-opus` (D11: fan-out, combs `[luna, opus-high]`). Section 5's recipes are built in the reproduction test (Task 20), not committed
+- [ ] `benchmark/recall/recipe.py`: `Recipe` (name, reviewers, pool, combs); loader refuses empty reviewers, `pool: true` with one reviewer. `required_stages(recipe)`: per reviewer one review stage, plus one comb stage per chain prefix (luna-r, then luna-r>opus-high)
+- [ ] Recipe files under `user/reference/review-recall-recipes/`: `haiku-xhigh`, `sol`, `sonnet-high`, `sonnet`, `luna` (single reviewers); `haiku-sol-opus` (fan-out haiku-xhigh + sol, comb `[opus-high]`); `haiku-sol-pool` (pool); `haiku-sol-luna-opus` (D11: fan-out, combs `[luna-r, opus-high]`). Section 5's recipes are built in the reproduction test (Task 20), not committed
 - [ ] Tests `test_recipe.py`: refusals; stage expansion for fan-out + two-stage comb; every committed recipe file loads
   - [ ] Success: tests pass
 
@@ -152,8 +152,8 @@ revision_number: 2
   - [ ] Success: tests pass
 
 ### Task 12: Import comb outputs (D10)
-- [ ] Part 2: `20261113-comb/out/<comb>/<case>-<reviewer>-<run>.json`; attach to the review entry of that case/reviewer/run; `luna-r+opus-high` becomes chain luna-r then opus-high (parent = the luna-r entry). Comb config per D10's comb table (`comb.yaml@9bc108a6#<folder>`). Decisions from the stored output via Task 9's parser; missing ids `UNDECIDED` (no DROP default)
-- [ ] Tests `test_import_combs.py` on the real files: 480 comb entries; the two-stage chain key has two parts; two comb folders that differ only by name have different `config_key`s
+- [ ] Part 2: `20261113-comb/out/<comb>/<case>-<reviewer>-<run>.json`; attach to the review entry of that case/reviewer/run; `luna-r+opus-high` becomes chain luna-r then opus-high (parent = the luna-r entry). Comb config per D10's comb table (`comb.yaml@9bc108a6#<folder>`). Decisions from the stored `raw_output` via Task 9's parser. F-ids are positional within each comb call (a stage-two call renumbers only the findings stage one kept), so map every F-id to its finding through the file's `refs`, never by number. Ignore the `P*` entries in `decisions`: those stage-one drops are already in stage one's entry. An id with no verdict is `UNDECIDED` (no DROP default)
+- [ ] Tests `test_import_combs.py` on the real files: 480 comb entries; the two-stage chain key has two parts; two comb folders that differ only by name have different `config_key`s; on a two-stage file where stage one kept two findings, stage two's decisions land on exactly those two findings and the others keep stage one's DROP
   - [ ] Success: tests pass
 
 ### Task 13: Import grading passes, hit labels and overrides (D3, D5, D10)
@@ -176,7 +176,7 @@ revision_number: 2
   - [ ] Success: tests pass
 
 ### Task 16: Scoring — recipe outputs per (case, run) (D2, D3, D8)
-- [ ] `benchmark/recall/scoring.py` (pure, no I/O): entry selection per the Context Summary rule, with live identities from an injected `StageIdentityResolver` protocol (`resolve(alias, stage_kind) -> (config_key, effort_sent)`), so this module imports nothing from Tasks 21–22; per (case, run) build each reviewer's final kept set in lower and upper form (`UNDECIDED` → drop / keep; stage-one `UNDECIDED` not sent to stage two); failed comb → zero kept; group by stage identity (`config_key`, `effort_sent`); drop (case, run) on any `harness_failure`, `leaked` or `scan_unavailable` entry, counting by reason; incomplete pairs left out and listed; fan-out = union; pool = per-member values kept for the mean
+- [ ] `benchmark/recall/scoring.py` (pure, no I/O): entry selection per the Context Summary rule, with live identities from an injected `StageIdentityResolver` protocol (`resolve(alias, stage_kind) -> (config_key, effort_sent)`), so this module imports nothing from Tasks 21–22; per (case, run) build each reviewer's final kept set in lower and upper form (`UNDECIDED` → drop / keep; stage-one `UNDECIDED` not sent to stage two; stage-one `DROP` stays `DROP` and is never sent; a stage-one `KEEP` takes its stage-two verdict through the finding id); failed comb → zero kept; group by stage identity (`config_key`, `effort_sent`); drop (case, run) on any `harness_failure`, `leaked` or `scan_unavailable` entry, counting by reason; incomplete pairs left out and listed; fan-out = union; pool = per-member values kept for the mean
 - [ ] Tests `test_scoring_outputs.py` with hand-built runs: fan-out union, pool, two-stage chain with a stage-one `UNDECIDED`, harness and leak drops, superseded entries ignored, incomplete coverage listed, live+imported → two flagged rows; with a stub resolver, a recipe naming alias B scores a live entry stored under alias A with the same `config_key` and `effort_sent` as one row
   - [ ] Success: tests pass
 
@@ -197,14 +197,14 @@ revision_number: 2
 
 ### Task 20: `report` command and reproduction tests
 - [ ] `report --recipe FILE... --set NAME[@V] [--runs N] [--json]` in the CLI, wiring store reads to the scoring modules and the renderer, with a resolver that knows no live aliases (imported entries match by alias; Task 22 swaps in the live resolver)
-- [ ] Reproduction tests `test_reproduce_results.py` on imported real records (temp store as in Task 15): section 1 bug-hits 16/12/7/4 of 42 and runs with a hit 14/12/7/4 of 30 over `real-bugs-original`, runs 1..3; 13/9/4/1 of 39 over `real-bugs-original-no-u103`. Section 5 known kept: for each comb, build in the test one fan-out recipe of haiku-xhigh, sol, sonnet-high and sonnet with that one comb; its run-1 bugs found (union across the four reviewers) over `real-bugs-original` is opus-high 14, luna-r 14, sol 10, sonnet-high 8, against 14 for the same fan-out uncombed. `haiku-sol-opus` and `haiku-sol-pool` on run 1 report with no "Left out" and pool = mean of the two single rows
+- [ ] Reproduction tests `test_reproduce_results.py` on imported real records (temp store as in Task 15): section 1 bug-hits 16/12/7/4 of 42 and runs with a hit 14/12/7/4 of 30 over `real-bugs-original`, runs 1..3; 13/9/4/1 of 39 over `real-bugs-original-no-u103`. Section 5 known kept: for each comb, build in the test one fan-out recipe of haiku-xhigh, sol, sonnet-high and sonnet with that one comb; its run-1 count of kept findings carrying a `HIT` label, summed over the four reviewers (so a bug two reviewers found counts twice; RESULTS.md section 5's "known kept"), over `real-bugs-original` is opus-high 14, luna-r 14, sol 10, sonnet-high 8, against 14 for the same fan-out uncombed. Distinct bugs found is 8 for the uncombed fan-out, opus-high and luna-r. `haiku-sol-opus` and `haiku-sol-pool` on run 1 report with no "Left out" and pool = mean of the two single rows
   - [ ] Success: all tests pass
 
 **Commit**: `feat: add recall hit rule, scoring and report reproducing hand-run tables`
 
 ### Task 21: `comb` template and `_stage` command (D6)
 - [ ] `src/squadron/data/templates/comb.yaml` (the built-in template directory the loader reads): the prompt from `user/reference/review-recall-results/20261113-comb/comb.yaml` unchanged, with `output: decisions`
-- [ ] Hidden `_stage --template comb --input FILE --output FILE`: reads the input file Task 23a writes (a JSON list of `RecallFinding`), renders `F1..Fn` (the `comb.py render` format), calls `run_review_with_profile` with `allowed_tools: [read_file, list_files, grep]`, writes output (raw text, decisions, usage) to `--output` only after the model call returns
+- [ ] Hidden `_stage --template comb --input FILE --output FILE`: reads the input file Task 23a writes (a JSON list of `RecallFinding`), renders `F1..Fn` by position in the input list, F1 being the first (the `comb.py render` format), calls `run_review_with_profile` with `allowed_tools: [read_file, list_files, grep]`, writes output (raw text, decisions, usage) to `--output` only after the model call returns
 - [ ] Tests `test_stage_command.py` with a stubbed `run_review_with_profile`: rendered input matches `comb.py render` on one real case; output written; no output file when the call raises
   - [ ] Success: tests pass
 
@@ -219,7 +219,7 @@ revision_number: 2
 
 ### Task 23a: Stage runner and outcomes (D6, D8)
 - [ ] `benchmark/recall/stage_runner.py`: `run_stage(...) -> StageEntry`. Build a `ScrubbedEnvironment` with the alias profile's `CredentialGrant` only; cwd = sandbox; argv from the kind's `review_argv` or the `_stage` argv, using the `resolve_sq_path()` path passed in; timeout `benchmark.review_timeout_s`; output under `recall-out/<record id>/<stage key>.json`. For a comb, first write the parent entry's kept findings (review findings, or the previous comb's `KEEP`s; `UNDECIDED` not sent) to `recall-out/<record id>/<stage key>.input.json`
-- [ ] After the call: parse the output (review findings → `RecallFinding` with content keys; comb → Task 9 parser), store the raw output in the `REVIEWS` sidecar (`ContentSidecars`) and set `raw_ref`; `config` from Task 22; `effort_sent` from the output's usage record (`read_effort_sent`, `pipeline/usage_capture.py`), null when not recorded
+- [ ] After the call: parse the output (review findings → `RecallFinding` with content keys; comb → Task 9 parser over the rendered F-ids, then each F-id mapped to its `finding_id` by position in the comb input file), store the raw output in the `REVIEWS` sidecar (`ContentSidecars`) and set `raw_ref`; `config` from Task 22; `effort_sent` from the output's usage record (`read_effort_sent`, `pipeline/usage_capture.py`), null when not recorded
 - [ ] Outcomes: no start / no output file → `harness_failure` + exit code + stderr tail; timeout or unparseable output → `config_failure`; comb partial → `ok` with `UNDECIDED`s; each logged WARNING with case, run, stage
 - [ ] The entry's `leak` comes from an injected `LeakChecker` (`check(stage_context) -> RecallLeakVerdict`); Task 23b supplies it
 - [ ] Tests `test_stage_runner.py` (fake runner, stub `LeakChecker`), each asserting outcome and WARNING log: subprocess cannot start; exits without output file; review timeout; review output unparseable; comb timeout; comb output with no decision line; comb partial. Also: comb input file holds only the parent's kept findings; `raw_ref` resolves in the sidecar
@@ -252,7 +252,7 @@ revision_number: 2
 
 ### Task 27: `run` command and end-to-end test (D6, D9, Integration Requirements)
 - [ ] `run` in the CLI with the API Contracts options: `recall_lock()`; plan refusals; preflight; print bound; `run_pending`; exit 0 complete, `EXIT_CAP_REACHED` capped (print remaining), 1 refused or error; "0 stages to run" when nothing is pending; `--case NAME` filters
-- [ ] Tests `tests/cli/test_benchmark_recall_run.py` (fake services): bound printed before the first call; exit codes 0/1/2; lock held by a live process → ERROR with pid, exit 1; dead owner → WARNING, taken over
+- [ ] Tests `tests/cli/test_benchmark_recall_run.py` (fake services): bound printed before the first call; `run` with the committed `haiku-sol-luna-opus.yaml` on the `real-bugs-nonsquadron` case files (loaded into a temp store) prints its bound and makes no call; exit codes 0/1/2; lock held by a live process → ERROR with pid, exit 1; dead owner → WARNING, taken over
 - [ ] End-to-end test `test_run_end_to_end.py` on the fixture repo with a scripted `sq` subprocess: two review entries with leak verdicts, a leaking call recorded `leaked` and dropped from `report` with the drop counted; a stub kind registered in the registry runs one stage
   - [ ] Success: tests pass
 
