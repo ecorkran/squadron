@@ -16,21 +16,21 @@ projectState: Slices 420–426 complete (replay stack built and frozen). Slice 4
 dateCreated: 20261116
 dateUpdated: 20261116
 status: not_started
-turns: 38
-promptTokens: 3113287
-cachedTokens: 2969103
-cacheWriteTokens: 144124
-completionTokens: 53323
-durationSeconds: 489.0
-costUsd: 2.813832
-usageRounds: 2
-pricedRounds: 2
+turns: 48
+promptTokens: 4792203
+cachedTokens: 4617673
+cacheWriteTokens: 174448
+completionTokens: 77194
+durationSeconds: 683.4
+costUsd: 3.863646
+usageRounds: 3
+pricedRounds: 3
 usageByModel:
   claude-opus-5-5:
-    rounds: 2
-    costUsd: 2.8138316000000008
-    completionTokens: 53323
-revision_number: 1
+    rounds: 3
+    costUsd: 3.863645600000001
+    completionTokens: 77194
+revision_number: 2
 ---
 
 ## Context Summary
