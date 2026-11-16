@@ -3,10 +3,12 @@ docType: review
 layer: project
 reviewType: tasks
 slice: real-bug-review-recall
+targetKind: slice
+rulesSource: project
 conventionsSource: AGENTS.md
 projectRules: []
 project: squadron
-verdict: FAIL
+verdict: CONCERNS
 verdictSource: stated
 sourceDocument: project-documents/user/tasks/430-tasks.real-bug-review-recall.md
 aiModel: claude-haiku-5-5
@@ -14,102 +16,100 @@ aiProfile: sdk
 status: complete
 dateCreated: 20261116
 dateUpdated: 20261116
-reviewedSha: 4cce3af0f528475ae961f7033d6e034b5e1d7db2
-revision_number: 2
+reviewedSha: 37c1b6fcff325a4536616367650551b154c50eab
 toolsGiven: [read_file, list_files, grep]
-toolCallsMade: 21
+toolCallsMade: 15
 effort: xhigh
-turns: 22
-promptTokens: 693666
-cachedTokens: 562344
-cacheWriteTokens: 131308
-completionTokens: 78370
-durationSeconds: 343.2
-costUsd: 0.22202
+turns: 16
+promptTokens: 787374
+cachedTokens: 656714
+cacheWriteTokens: 130644
+completionTokens: 79394
+durationSeconds: 368.3
+costUsd: 0.188127
 costBasis: provider
-runId: run-20261116-p5-c59b9eb6
 squadronVersion: 0.24.31
 findings:
   - id: F001
     severity: fail
-    category: sequencing
-    summary: "Tasks 16 and 20 depend on live stage identity that Task 22 builds later"
-    location: "project-documents/user/tasks/430-tasks.real-bug-review-recall.md:171"
+    category: correctness
+    summary: "Two-stage comb composition and finding-id mapping are unspecified"
+    location: "project-documents/user/tasks/430-tasks.real-bug-review-recall.md"
   - id: F002
     severity: concern
-    category: consistency
-    summary: "Report entry selection contradicts D4's identity rule"
-    location: "project-documents/user/tasks/430-tasks.real-bug-review-recall.md:48"
+    category: traceability
+    summary: "Task 1 cites design-gap bullets the Context Summary does not contain"
+    location: "project-documents/user/tasks/430-tasks.real-bug-review-recall.md"
   - id: F003
     severity: concern
-    category: sizing
-    summary: "Task 2 is too large, and its enum handling is not specified"
-    location: "project-documents/user/tasks/430-tasks.real-bug-review-recall.md:71"
+    category: scope
+    summary: "Person-vs-person precedence is a new rule with no design basis"
+    location: "project-documents/user/slices/430-slice.real-bug-review-recall.md:212"
   - id: F004
     severity: concern
-    category: sizing
-    summary: "Task 23 bundles too many concerns"
-    location: "project-documents/user/tasks/430-tasks.real-bug-review-recall.md:210"
+    category: correctness
+    summary: "The D11 recipe's `luna` comb does not match the measured comb"
+    location: "project-documents/user/slices/430-slice.real-bug-review-recall.md:186"
   - id: F005
     severity: concern
-    category: sizing
-    summary: "Task 8 has no stop condition and commits data known to be incomplete"
-    location: "project-documents/user/tasks/430-tasks.real-bug-review-recall.md:115"
+    category: coverage
+    summary: "No command-level test for the D11 \"run prints its bound\" criterion"
+    location: "project-documents/user/tasks/430-tasks.real-bug-review-recall.md"
   - id: F006
     severity: concern
-    category: verification
-    summary: "Set list file format is undefined, but a test parses it"
-    location: "project-documents/user/tasks/430-tasks.real-bug-review-recall.md:117"
+    category: sizing
+    summary: "Task 8 is too large for one commit"
+    location: "project-documents/user/tasks/430-tasks.real-bug-review-recall.md"
   - id: F007
     severity: concern
-    category: verification
-    summary: "Final validation omits two files the design says must be unchanged"
-    location: "project-documents/user/tasks/430-tasks.real-bug-review-recall.md:262"
+    category: sequencing
+    summary: "Task 8 defers part of its output to a Task 15 commit that does not exist"
+    location: "project-documents/user/tasks/430-tasks.real-bug-review-recall.md"
   - id: F008
     severity: concern
-    category: scope-creep
-    summary: "Person-labeler disagreement listing and newest-wins are not in the design"
-    location: "project-documents/user/tasks/430-tasks.real-bug-review-recall.md:153"
+    category: sizing
+    summary: "Task 13 bundles four grading formats, an overrides file and precedence rules"
+    location: "project-documents/user/tasks/430-tasks.real-bug-review-recall.md"
   - id: F009
     severity: note
-    category: process
-    summary: "Task 1 commit message describes a file that already has history"
-    location: "project-documents/user/tasks/430-tasks.real-bug-review-recall.md:60"
+    category: traceability
+    summary: "The set-list markdown is not in the design and has no consumer"
+    location: "project-documents/user/tasks/430-tasks.real-bug-review-recall.md"
   - id: F010
     severity: note
-    category: scope-creep
-    summary: "Duplicate-reviewer refusal in Task 10 is not in the design"
-    location: "project-documents/user/tasks/430-tasks.real-bug-review-recall.md:132"
+    category: traceability
+    summary: "Several modules are missing from the design's component table"
+    location: "project-documents/user/slices/430-slice.real-bug-review-recall.md:92-107"
   - id: F011
     severity: note
-    category: verification
-    summary: "D11 criterion is met only at plan level, and walkthrough paths are ambiguous"
-    location: "project-documents/user/tasks/430-tasks.real-bug-review-recall.md:223"
+    category: coverage
+    summary: "Task 20's uncombed baseline of 14 is unverified"
+    location: "project-documents/user/reference/review-recall-results/RESULTS.md:108"
   - id: F012
     severity: note
-    category: verification
-    summary: "Task 27 end-to-end test does not cover each D8 mode"
-    location: "project-documents/user/tasks/430-tasks.real-bug-review-recall.md:241"
+    category: commit-cadence
+    summary: "One commit marker covers six tasks"
+    location: "project-documents/user/tasks/430-tasks.real-bug-review-recall.md:203"
   - id: F013
     severity: note
-    category: verification
-    summary: "Load-test tier may apply to the sandbox and model-call paths"
-    location: "project-documents/user/tasks/430-tasks.real-bug-review-recall.md:210"
+    category: sizing
+    summary: "Tasks 2a–2c are granular"
+    location: "project-documents/user/tasks/430-tasks.real-bug-review-recall.md"
   - id: F014
     severity: pass
     category: coverage
-    summary: "Every D8 failure mode maps to a task with a test"
-    location: "project-documents/user/tasks/430-tasks.real-bug-review-recall.md:226"
+    summary: "Coverage of criteria and failure modes"
+    location: "project-documents/user/tasks/430-tasks.real-bug-review-recall.md"
   - id: F015
     severity: pass
-    category: process
-    summary: "Commit markers sit at working, tested points"
-    location: "project-documents/user/tasks/430-tasks.real-bug-review-recall.md:65"
+    category: traceability
+    summary: "Named code and data references resolve"
+    location: "project-documents/user/tasks/430-tasks.real-bug-review-recall.md"
   - id: F016
     severity: pass
     category: coverage
-    summary: "Design success criteria are covered, subject to the findings above"
-    location: "project-documents/user/slices/430-slice.real-bug-review-recall.md:486"
+    summary: "No load-test tier required"
+    location: "project-documents/user/slices/430-slice.real-bug-review-recall.md"
 ---
 
 # Review: tasks — slice 430
@@ -119,75 +119,82 @@ findings:
 
 ## Findings
 
-### [FAIL] Tasks 16 and 20 depend on live stage identity that Task 22 builds later
+### [FAIL] Two-stage comb composition and finding-id mapping are unspecified
 
-Task 16's test "a recipe naming alias B scores a live entry stored under alias A … as one row" needs the alias's live `config_key` and `entry_key`. The Context Summary rule (line 48) matches live entries that way. Those values come from `live_stage_config` in Task 22 (line 205). That function needs the `comb` template hash, which only exists after Task 21 (line 197). Task 20's `report` command (line 190) also needs the live identity to select entries, even though its reproduction tests use imported entries only. Fix: move the identity part of Task 22 and all of Task 21 ahead of Task 16. Alternatively, inject an alias-to-identity resolver into the pure scoring modules and test it with a stub.
+Task 12 imports the `luna-r+opus-high` chain from "decisions from the stored output via Task 9's parser; missing ids UNDECIDED". Task 16 says stage-one `UNDECIDED` is not sent to stage two. Task 21 renders `F1..Fn` in "the comb.py render format". The hand-run data does not behave that way:
+- Stage two receives only the refs stage one kept (`comb.py:83-86`).
+- Findings are renumbered by position (`comb.py:50-57`, `:100`). The F-ids map back to refs only through the stored `refs` object (`:123`).
+- Stage-one drops are written as `P{n}` DROP entries in the `decisions` dict (`:117-119`, `:124`), not in `raw_output`.
 
-### [CONCERN] Report entry selection contradicts D4's identity rule
+Consequences: (a) stage-two F-ids must be mapped to original finding ids through `refs`, or decisions attach to the wrong findings; (b) a stage-one drop is absent from stage two's output, so the "missing → UNDECIDED" rule would wrongly make it UNDECIDED; it must be DROP in the chain. The design's "imports directly" (D2, line 188) and "passes findings through by id" (D3, line 211) are not true of the hand-run files without this mapping. The Task 12 test that checks "chain key has two parts" does not catch it.
 
-The Context Summary says a recipe stage matches a live entry when `entry_key` is equal. `entry_key` includes configured effort (design line 239). Design D4 (line 238) says report identity is (`config_key`, `effort_sent`), and that aliases with the same model and settings that send the same effort are one row. Under the Context Summary rule, two aliases with different configured efforts that send the same effort would be two rows. Task 16's test (line 171) asserts D4's behaviour and would fail under this rule. Fix: report selection uses (`config_key`, `effort_sent`). Keep `entry_key` only for `run`'s stored-entry check, and write both into the design in Task 1.
+Fix: state a chain-composition rule in Tasks 12, 16 and 23a (stage-one DROP → DROP, UNDECIDED → UNDECIDED, KEEP → stage-two verdict via id map). Have Task 12 map through the stored `refs`. Have Task 21 label findings by their `finding_id`, not by position. Add a test: stage one keeps two findings, and stage-two decisions land on those ids while the rest stay DROP.
 
-### [CONCERN] Task 2 is too large, and its enum handling is not specified
+### [CONCERN] Task 1 cites design-gap bullets the Context Summary does not contain
 
-One task writes three payload modules with about 15 classes, enums and helpers, plus three test files. Split it into 2a (case models and ids), 2b (run models and ids) and 2c (label models), each with its tests. The Python rules in this repo ask for one class per model file, while the task groups them in `*_models.py`. The task should state which convention applies. Also, `RecallLeakVerdict` is described as "424's verdicts plus confined, not_scanned". It should reuse 424's `LeakVerdict` members (`NO_LEAK_DETECTED`, `SCAN_UNAVAILABLE`, as used in `src/squadron/benchmark/leak_scan.py`) instead of retyping their strings.
+Task 1 says to write "each design-gap bullet in the Context Summary" and lists D1, API Contracts, the D3 person-labeler rule, and a Non-functional line. The Context Summary has bullets for payload homes, the combs key, scoring modules, lock name, timeout refusal, pair seed, entry selection, overrides path, slash-command parity and stale text. It has none for D1, API Contracts, the person rule, or the Non-functional line. An executor cannot write the D1 or API Contracts gap from the text given. Add those bullets with their content, or remove the items from Task 1.
 
-### [CONCERN] Task 23 bundles too many concerns
+### [CONCERN] Person-vs-person precedence is a new rule with no design basis
 
-Task 23 covers the scrubbed subprocess, argv construction, the comb input file, output parsing, sidecar storage, `effort_sent`, six outcome mappings, a leak scan with ten inputs and four verdicts, and about nine test scenarios. Split it into 23a (subprocess and outcomes, with their tests) and 23b (leak verdicts and scan inputs, with their tests).
+D3 says only "Precedence: person over import passes." Task 13 adds "among person labelers the newest `updated` wins", with a test, and Task 1 would write it into D3. No success criterion needs it, and it settles a question the design left open. Take it to the PM as a decision, or drop it and list a person-vs-person disagreement as a conflict, as imports already do.
 
-### [CONCERN] Task 8 has no stop condition and commits data known to be incomplete
+### [CONCERN] The D11 recipe's `luna` comb does not match the measured comb
 
-Task 8 authors 17 YAML files, reads `origin` remotes and manifests from six external repos, and captures `proof_files.json` with `git show`. It gives no instruction for a missing repo, remote, manifest or commit. The design treats a missing repo as a run-time harness failure (D8), not a fallback for authoring, so the implementer could guess values. Also, the commit at line 121 happens before Task 15 (line 166) finds graded-hit files missing from `extra_locations`, so the commit ships known-incomplete data. Fix: add a `BLOCKED:` stop for unreachable repos or commits. Either hold Task 8's commit until Task 15's gate test passes, or say in the commit that locations are completed in Task 15.
+D2's example and the D11 recipe (`haiku-sol-luna-opus`, Task 10) use comb `luna`. In RESULTS.md the measured comb is `luna-r` (14/14 known kept, line 117; two-stage `luna-r+opus-high`, line 127). Plain `luna` is a Codex reviewer alias (line 32). The first live recipe would then run a different alias from the one measured, and imported `luna-r` entries would never match it. Name the comb `luna-r` in D2, D11 and Task 10, after confirming `luna-r` is a registered alias. I did not check the alias registry.
 
-### [CONCERN] Set list file format is undefined, but a test parses it
+### [CONCERN] No command-level test for the D11 "run prints its bound" criterion
 
-Task 8 writes `user/reference/review-recall-sets.md` with "the file list for each set", and its test checks that each list "resolves to existing files with the stated counts". The task never defines the format, so the test must parse a format nobody specified. Fix: define the format (for example, one heading per set with a fenced list of relative paths), and have the test parse that exact format.
+The design criterion (slice design line 519) says `run` with the D11 recipe on `real-bugs-nonsquadron` prints its bound. Task 24 tests the plan function on that set. Task 27 tests bound printing with other fixtures. Task 30 skips walkthrough step 7 because it spends money. No task invokes `run` with the committed recipe and set. Add a Task 27 test that calls `run` with fake services, the committed `haiku-sol-luna-opus.yaml` and the nonsquadron set. It should assert the bound line prints before the first call and that no call is made. No model call is involved.
 
-### [CONCERN] Final validation omits two files the design says must be unchanged
+### [CONCERN] Task 8 is too large for one commit
 
-The design's technical requirement (design line 527) says `HistoryFreeSandbox`, `ReviewerRef`, `build_leak_rules` and `sq review code` are unchanged. Task 30's diff covers only `metrology/grade_models.py` and `cli/commands/review.py`. It omits `src/squadron/replay/history_free_sandbox.py` (`HistoryFreeSandbox` at line 71) and `src/squadron/benchmark/leak_rules.py` (`build_leak_rules` at line 51). Add both paths to the final `git diff --stat`.
+Task 8 hand-writes 17 case files, reads each repo's `origin` remote and head manifest, captures `proof_files.json` for every proof, writes four set lists, and adds a parser test. Those reads depend on repos on the PM's machine, and one failure blocks the whole commit. Split it: 8a the 10 original cases, 8b the 7 batch-2 cases, 8c the set lists and their test. Each part gets its own check.
 
-### [CONCERN] Person-labeler disagreement listing and newest-wins are not in the design
+### [CONCERN] Task 8 defers part of its output to a Task 15 commit that does not exist
 
-Task 13 adds "among person labelers the record with the newest `updated` wins", and Task 28 lists person disagreements in `label`. Design line 212 sets only person-over-import precedence. Newest-write-wins appears in the design only for storage (line 470). The disagreement listing is new command output that no design criterion asks for. Cut it, or record the decision in the design before building it.
+Task 8's success line says gate-found locations "are added in Task 15's commit". Task 15 has no `**Commit**:` marker; its code lands in the commit after Task 20. Task 8's `extra_locations` are also known incomplete until Task 15's gate test runs. Give Task 15 its own marker after its gate test passes, and make the Task 8 wording say the extras are finalized there.
 
-### [NOTE] Task 1 commit message describes a file that already has history
+### [CONCERN] Task 13 bundles four grading formats, an overrides file and precedence rules
 
-The file already has commits (`4cce3af0`, `e87807dc`, `72121a87`). The pending change is a revision, so the message `docs: add slice 430 tasks` is misleading. Use `docs: revise slice 430 tasks`.
+Task 13 covers four pass formats with different schemas (`issues`/`members`, `matched`/`new_issues`, and `matched` refs to issue ids), the merge rule and conflict listing, hit labels, a new overrides file with its own schema, two precedence rules and five tests. Split it into 13a (the four passes, labels, merge, conflicts) and 13b (overrides file and person precedence).
 
-### [NOTE] Duplicate-reviewer refusal in Task 10 is not in the design
+### [NOTE] The set-list markdown is not in the design and has no consumer
 
-D2 does not call for refusing duplicate reviewers. The check is harmless, but it is an addition. Keep it only if it is wanted.
+Task 8 creates `user/reference/review-recall-sets.md`, which only a test parses. The design has `cases add` take file lists (walkthrough step 1: "repeat with the file lists"), and D1 rejects markdown parsing for cases. Either add the sets file to the design and have the walkthrough use it, or keep the lists in the test only.
 
-### [NOTE] D11 criterion is met only at plan level, and walkthrough paths are ambiguous
+### [NOTE] Several modules are missing from the design's component table
 
-The criterion "`run` with it on `real-bugs-nonsquadron` prints its bound" (design line 519) is tested at plan level in Task 24 with a fake runner. Task 27 covers bound printing with fake services. No task runs the CLI against the nonsquadron set, and Task 30 skips step 7. This is consistent with D11. Separately, the design's walkthrough uses `recipes/…` paths (design lines 552–590), while Task 10 writes recipes to `user/reference/review-recall-recipes/`. Task 30 should give the full path.
+Tasks 22, 23b and 25 add `stage_identity.py`, `leak_check.py` and `run_loop.py`. None appears in the table. Task 16's `scoring_metrics.py` and `scoring_paired.py` are covered by the Context Summary but not the table. Task 1 should add them.
 
-### [NOTE] Task 27 end-to-end test does not cover each D8 mode
+### [NOTE] Task 20's uncombed baseline of 14 is unverified
 
-Design Implementation Approach step 5 (design line 610) asks for an end-to-end run "including a leaking call and each D8 mode". Task 27 covers only the leak and the stub kind. Each D8 mode is covered by unit tests in Tasks 23, 25 and 26, so the success criterion is met. Add the others to Task 27 only if you want the end-to-end run to exercise them.
+Task 20 asserts "against 14 for the same fan-out uncombed" (task file line 200). The design gives only the four comb figures. A text search of RESULTS.md for "uncombed", "without a comb" and "no comb" found nothing. Confirm the figure from the data, or drop the assertion.
 
-### [NOTE] Load-test tier may apply to the sandbox and model-call paths
+### [NOTE] One commit marker covers six tasks
 
-The Python rules require at least one `tests/load/` test for code on network or environment-layer paths. The sandbox, the scrubbed subprocess and the model-call path may qualify. The design restates no NFR, so the reviewer criteria do not force a load-test task. Decide whether these paths count and record it in the design. If they do, add a load-test task and a CI gate.
+The marker after Task 20 covers the hit rule, scoring, metrics, paired intervals and report. Each part is tested, so this is allowed. A marker after Task 18 would give a reviewable commit point for the scoring work.
 
-### [PASS] Every D8 failure mode maps to a task with a test
+### [NOTE] Tasks 2a–2c are granular
 
-All rows of both D8 tables have a task that asserts the outcome and the log level: auth preflight (24), subprocess and output failures (23), sandbox and fetch (25), leak verdicts (23), orphan, retry and `write_record` (26), `cases add` (5, 7), import (11, 13), and lock (27). The incomplete-stage row is covered by Task 16.
+Each of the three record-model tasks is one module with one test file, under a shared convention. Merging them into one task would cut three headers and three commit-cadence decisions. Optional.
 
-### [PASS] Commit markers sit at working, tested points
+### [PASS] Coverage of criteria and failure modes
 
-There are 16 plain-line `**Commit**:` markers, none as checkboxes. Each follows a group that ends in passing tests. Groups without markers (for example 11–13, 15–19) are followed by a marker within the same run of work. Each implementation task is followed by its tests.
+Every design success criterion has a task and test, except the D11 command-level bound (above). The "18th case is one YAML file" criterion is covered only implicitly by Task 7's happy path. Every D8 row in both tables has a task that asserts its outcome and log. Tests follow their implementation in the same task. The dependency order has no cycles. Task 22 deliberately comes after Task 20, with Task 20's report switched to the live resolver later.
 
-### [PASS] Design success criteria are covered, subject to the findings above
+### [PASS] Named code and data references resolve
 
-Case files and sets (8, 7), import counts and idempotence (11–14), section 1 and section 5 reproduction (20), recipes and pool (10, 17, 20), undecided ranges and paired intervals (17–19), run refusals, bound, caps, resume and retry (24–27), leak verdicts (23), the hit rule (15), real share (17), the `RecallKind` seam (6, 27), and `report --json` (19) each map to a task. The unmapped items are the issues above.
+I confirmed by search: `read_effort_sent`, `check_review_timeout`, `pair_seed`, `compare_pair`, `MIN_PAIRED_CASES` (5, as the Context Summary says), `BenchmarkLock.acquire`, `resolve_alias_profile`, `run_auth_check`, `build_leak_rules`, `uv_cache_dir`, `installed_package_location`, `map_historical_category`, `template_content_hash` (returns `str | None`, which Task 22 handles), `get_all_aliases`, `resolve_sq_path`, `ReviewBudget`, `GradeCapReached`, `EXIT_CAP_REACHED`, the `LeakVerdict` members, `TemplateOutput.DECISIONS`, `HistoryFreeSandbox`, `ScrubbedEnvironment`, `CredentialGrant`, `ReviewerRef`. Files confirmed: `cli/commands/review.py`, `config/keys.py`, `commands/sq/benchmark.md`, `CHANGELOG.md`, `tests/benchmark/slice_repos.py`, `tests/benchmark/test_config_keys.py`, `comb.py`, `comb.yaml`. The Task 30 `git diff --stat` checks are therefore not vacuous.
+
+### [PASS] No load-test tier required
+
+The design restates no latency, throughput or resource NFR. Recall runs serially by design (D9), so no `tests/load/` task or CI gate is needed.
 
 ### Run Digest
 
-- Response length: 10446 chars
+- Response length: 11427 chars
 - Response is newline-free: no
-- Tool calls made: 21
+- Tool calls made: 15
 - Tool calls failed: 0
 - Stop reason: end_turn
 - Output budget: backend default
@@ -195,10 +202,10 @@ Case files and sets (8, 7), import counts and idempotence (11–14), section 1 a
 - Settings sources: project
 - Reasoning characters: 0
 - Effort: xhigh
-- Turns: 22
-- Tokens — prompt / cached / cache write / completion / reasoning: 693666 / 562344 / 131308 / 78370 / not computed
-- Duration: 343.2 s
-- Cost: $0.22 (provider)
+- Turns: 16
+- Tokens — prompt / cached / cache write / completion / reasoning: 787374 / 656714 / 130644 / 79394 / not computed
+- Duration: 368.3 s
+- Cost: $0.19 (provider)
 - `## Summary` located: yes
 - `## Findings` located: yes
 - Finding-shaped matches — whole response: 16
