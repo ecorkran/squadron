@@ -275,7 +275,7 @@ Status: decided
 - `review_tree_diff` in 425 stays as it is (no-tools grading in its own sandbox).
 
 ### D7 — The sandbox holds head with its ancestry back to base, and nothing later
-Status: pending-pm
+Status: decided
 - **Needs an architecture amendment.** The architecture says recall runs "in a history-free sandbox at the diff's head", and describes that sandbox as "one commit, no refs to later history". Recall's sandbox holds `head` and its ancestry back to `base`.
   - It needs that ancestry because `sq review code --diff <base>` rewrites a bare ref to the merge-base form `<base>...HEAD`, which needs a path from `head` back to `base`.
   - The smaller alternative, fetching only `base` and `head` at depth 1, leaves no merge base, so the production command fails.
@@ -388,7 +388,7 @@ Status: decided
 - The import is idempotent. Run record and label record ids are deterministic, and a second import changes nothing.
 
 ### D11 — The first live recipe is a PM-run walkthrough step on the non-squadron cases
-Status: pending-pm
+Status: decided
 - The first recipe is haiku-xhigh and sol in parallel, then a luna comb, then an opus-high comb, one run. Its recipe file is committed with this slice, and it runs on case set `real-bugs-nonsquadron`. That set is the 14 cases outside squadron's own repo, following the measurement-slices rule that no task runs against squadron's own history.
 - Run serially (D9), it takes the sum of its calls. That is about 10 minutes per case at the hand-run median times, so over an hour for 14 cases. The measurement rule says no task needs hours. So this design makes the run walkthrough step 7, run by the PM after the slice, not an implementation task. Its report is appended to RESULTS.md as a new section, with the date.
 - **PM to confirm** that this changes the plan's criterion "The first recipe measured live is ...". It would become "The first recipe is committed and ready; the PM runs it after the slice". The plan entry is updated to match once the PM confirms.
@@ -401,7 +401,7 @@ Status: decided
 - Graded-real share gets no interval. It is agent-graded, and the report already marks it as first-pass.
 
 ### D13 — `cases add` reads squadron's own commits for three cases
-Status: pending-pm
+Status: decided
 - D1 derives bug locations from each proof commit's file list. For the three squadron cases (932, 175, 197), that is `git show --name-only` on four squadron commits (`5e384226`, `0a850c0a`, `af50b937`, `366250ba`). It runs no review, build or test against squadron's history, and takes seconds.
 - The measurement-slices rule says no task runs against squadron's own history. **PM to confirm** that reading commit metadata for case records is outside that rule. If not, the three squadron cases list their files in `extra_locations` with the reason "squadron history not read (measurement rule)", and their locations are not derived.
 

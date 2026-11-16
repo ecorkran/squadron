@@ -33,6 +33,8 @@ This component answers "does model X at effort Y do this job as well as model Z,
 
 PM decision after slices 420–426. The implementation replay stack is built and stays, with no further work on it: each data point costs dollars and hours and few cases qualify (squadron's own suite takes about 18 minutes a run), so its reports say "too few cases". The second half measures with what is cheap and already recorded: reviewer recall on real escaped bugs (430), a report over recorded pipeline runs (431), the same recall method on documents (432), and one answers table per category (433). Two rules follow. No task runs against squadron's own history or needs hours. Every measured run prints its cost bound first and stops at a cap.
 
+Reviewer recall's sandbox holds the diff's head and its ancestry back to base, and nothing later; "one commit" describes the replay sandbox. (Slice 430 D7: `sq review code --diff <base>` needs a merge base. Fetching a commit brings its ancestors only, so the fix cannot be present.)
+
 ## Design Goals
 
 - **Compare configs on identical work.** Every config sees the same start commit, the same task text and the same environment. The case, not the config, is the unit of difficulty.
