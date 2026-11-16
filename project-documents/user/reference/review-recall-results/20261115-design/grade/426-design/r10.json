@@ -1,0 +1,54 @@
+{
+ "review": "r10",
+ "findings": [
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Statements about edits to 421, 424 and 425 contradict each other",
+   "description": "- **The claim:** Technical Scope says \"No edits to 424 or 425\", because 424 already provides `CaseKindRunner.requalify` and 425 already provides `bootstrap_mean_interval`.\n- **Contradicting lines:**\n  - Line 451 says `tests/benchmark/` passes unchanged \"except where D8 routes re-qualification and D17 extracts the interval\". That implies the interval helper is not yet extracted.\n  - D17 and Consumes say `bench_report` (425's module) \"gains the per-kind grouping and the pairwise section\".\n  - Line 321 widens 424's `CaseDrop.reason`.\n  - D8 says a slice case set \"now plans instead of refusing (424 D5)\". That is a change to 424's behaviour, or to its registry contract.\n  - Whether `requalify` already exists on the seam is not settled. D8 says `SliceCaseRunner.requalify` \"calls\" it, but the wording does not say 424 defines it.\n- **Why it matters:** Slices 424 and 425 are the providers on the other side of these integration points. They need an unambiguous statement of what 426 modifies and what it assumes already exists.\n- **Fix:** Add one table of every touchpoint in 421, 424, 425, 177 and 422. For each, mark it as \"consumed as-is\" or \"modified here (what, and why no provider change is needed)\". Drop the \"No edits\" claim, or make it true.",
+   "location": "project-documents/user/slices/426-slice.slice-cases.md:42"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "The judge cost bound is labelled an upper bound but can understate",
+   "description": "- **The architecture requirement:** Design Goals say a run \"states its upper bound in dollars before any dispatch\". Cost says judging is estimated from observed costs, and that the stated bound includes overshoot.\n- **The gap:** D16 multiplies every call by one figure, the largest observed `DiffJudgment` cost for the alias or `--judge-cost`. It then prints `at most $3.88`.\n  - Judge prompts contain the task text, which can run to tens of KB (line 527), plus two diffs. The over-size limit allows prompts up to 400k characters.\n  - A per-call figure observed on small cases, or typed in by the user on a first run, does not bound a call near the limit.\n  - The final \"one call of overshoot\" is also priced at that same figure.\n- **Fix:** The bound is printed after every pair prompt has been built, so each pair's prompt length is already known. Derive a cost-per-character rate from observed judgments, or from `--judge-cost` as a rate for a stated prompt size. Price each pair by its own length, and price the overshoot at the longest pair. Alternatively, print \"estimate\", not \"at most\".",
+   "location": "project-documents/user/slices/426-slice.slice-cases.md:289-296"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "The judge command's own I/O paths have no failure-mode handling",
+   "description": "- **Covered:** D15 and D16 cover failed judge calls. They are left unrecorded, logged at ERROR, retried on rerun and counted. They also cover a missing run cap and a `tip_sha` absent from `--repo`.\n- **Not covered:** these new I/O paths in `diff_judge_runner` have no stated handling.\n  - A `git diff start..tip` in the user's checkout that fails or times out for a reference or replay diff. This is different from a missing sha.\n  - A failed sidecar write for a normalized diff.\n  - A failed or truncated diff read.\n  - A second `judge` run, or a `run` or `grade`, contending for `<id>.judge.lock`. The doc says only \"same process lock\" without naming wait, fail or timeout.\n  - A store write failing after a call has been paid for.\n- **Why it matters:** The project's Failure-Mode Enumeration rule says each failure must be explicit and observable. D6 enumerates these for the build side (git failures become `harness_error`), but nothing parallel exists for judging.\n- **Fix:** Add a short list. A git failure for a case makes that case \"not judged, ERROR log, counted as harness-failed, retried on rerun\". A held lock makes the command refuse, naming the lock. Add one test asserting the log signal for the git-failure case.",
+   "location": "project-documents/user/slices/426-slice.slice-cases.md#D15 \u2014 Absences in judging"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "The design carries scope that can be cut or deferred",
+   "description": "- **Restated dependency lists:** Prerequisites, Interfaces Required, \"Consumes from Other Slices\" and Technical Scope restate the same dependencies four times. Keep Prerequisites and the touchpoint table recommended in the first finding. Delete the rest.\n- **Speculative \"Provides\":** `normalize` \"for any consumer that shows implementation diffs\" and slice cases \"usable by 427 if planted defects are drawn from slice diffs\" have no consumer today. Cut them. The `CfRegistration` and `judge_pair` provisions are real, because this slice uses them.\n- **Unused record field:** `max_prompt_chars` is stored on every `DiffJudgment`. Nothing reads it, because the limit is already on `OverSizeCase` and in the report line.\n- **Undescribed flag:** `--keep` on `slice-cases build` appears only in the CLI signature and is not described anywhere. Define it or cut it.\n- **Effort estimate:** \"Effort: 3/5\" looks light for the work. It covers about 13 new modules, four record types, three cross-slice extractions, a live spike that can block the slice, a new judge runner, and report changes. If the effort number drives sequencing, re-estimate it.",
+   "location": "project-documents/user/slices/426-slice.slice-cases.md:414-428"
+  },
+  {
+   "i": 5,
+   "severity": "NOTE",
+   "title": "The reference is `tip_sha`, where the architecture says \"landing commit\"",
+   "description": "The architecture's Envisioned State says \"the landing commit is the reference\". D2 uses `tip_sha` and gives a sound reason: on a merge landing, `fork..after` includes unrelated target work. The deviation is justified and documented. The next architecture revision should say \"slice branch tip\".",
+   "location": "project-documents/user/slices/426-slice.slice-cases.md#D2 \u2014 Landing and reference selection"
+  },
+  {
+   "i": 6,
+   "severity": "NOTE",
+   "title": "Lockfile and changelog filenames are hardcoded in a layer the doc keeps language-neutral",
+   "description": "The Component Structure says build and qualify reach the language only through the adapter. `diff_normalize.py` hardcodes `uv.lock`. That is acceptable under the Python-only scope, since the constants are defined once. A second language would need the lockfile name to move onto the adapter. Record that in the design as a known follow-up.",
+   "location": "project-documents/user/slices/426-slice.slice-cases.md#D11 \u2014 Diff normalization for the judge"
+  },
+  {
+   "i": 7,
+   "severity": "NOTE",
+   "title": "The frontmatter `dependencies` list omits 403 and 177",
+   "description": "The body names 403 (`slice_ranges`) and 177 (judge core, `ReplaySandbox`) as hard prerequisites, but the frontmatter lists only `[421, 422, 424, 425]`. If tooling orders work from the frontmatter, the mismatch could hide a dependency.",
+   "location": "project-documents/user/slices/426-slice.slice-cases.md:6"
+  }
+ ]
+}

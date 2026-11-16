@@ -1,0 +1,207 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "ExtraRequirement is a new cross-cutting Protocol with one implementer",
+      "description": "The slice plan asks for a `sq model list` marker and a doctor row. It does not ask for a new Protocol in `providers/base.py`. D9 adds the runtime_checkable `ExtraRequirement`, and `CodexProvider` is the only implementer. The goal of avoiding a profile-name check is sound. But D9 spends a lot of text on routing doctor and `model list` through both `ensure_provider_loaded` and `get_provider`, and on separating hint source from detail source. Slice 128 already gave providers a capability-declaration surface. Either extend it with an optional install-hint field, or cut D9 to one method on the provider and drop the Protocol and its \"Provides to Other Slices\" claim. The \"pattern future providers can implement\" benefit has no planned consumer, as the frontmatter `interfaces: []` comment admits.",
+      "file_ref": null,
+      "category": "proportionality",
+      "raw_category": null,
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md#Technical Decisions (D9)"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Three timeout config keys plus a CLI override exceed what the slice must deliver",
+      "description": "D7 registers `codex.turn_timeout_s`, `codex.login_timeout_s`, and `codex.account_timeout_s`, and also adds `sq auth login --timeout`. Every hang case needs a bound, and that part is justified. The slice does not need all of these as user-tunable config. `account_timeout_s` only guards a best-effort email/plan display. A single internal bound would meet that requirement. `--timeout` and `login_timeout_s` duplicate each other's purpose. Keep `turn_timeout_s` as config and give login one knob, either the flag or the key. Drop `account_timeout_s` as a key.",
+      "file_ref": null,
+      "category": "proportionality",
+      "raw_category": null,
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md#D7"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Restated or speculative material can be trimmed",
+      "description": "Several items add length without meeting a requirement:\n- The \"Runtime startup cost\" paragraph sets no target and says so. It does not restate an architecture NFR either. Reduce it to the one fact that matters: spawning is confined to turn, login/logout, and status.\n- The \"Relationship to the architecture's auth model\" section is useful and should stay, but cut it to two sentences.\n- D8's turn-status checking and the removal of `or \"\"` go beyond the plan entry. They tie to issue #15 and are reasonable, but the plan entry does not assign them. Label this as intentional added scope, or defer it.\n- The `--device-code` error-on-non-interactive-profile test and the \"byte-for-byte unchanged\" criterion are fine. The separate real-types SDK test is justified.",
+      "file_ref": null,
+      "category": "proportionality",
+      "raw_category": null,
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md#Data Flow"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Slice 931 is a dependency, but the parent plan entry lists only 128",
+      "description": "The slice plan entry for 129 says `Dependencies: [128]`. Frontmatter and the Prerequisites section add slice 931 for `AgentConfig.effort`, `applies_effort`, and `core/usage.py`. Slice 931 is not in the architecture slice plan, so the plan and design disagree. The design is correct to depend on it, because effort and usage cannot work without it. Reconcile the plan entry so the dependency graph stays authoritative.",
+      "file_ref": null,
+      "category": "dependencies",
+      "raw_category": null,
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:6"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`ThreadTokenUsageUpdated` plan wording versus the design's `TurnResult.usage` source",
+      "description": "The plan says \"record per-turn token usage if `ThreadTokenUsageUpdated` provides it\". The design uses `TurnResult.usage.last` instead, which is simpler, and never mentions the notification event. The design should state that it deliberately replaces the event-based approach. It should also say what happens when `usage` is None, which the table already covers. This is a documentation gap, not a scope drop.",
+      "file_ref": null,
+      "category": "scope-alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md#D6"
+    },
+    {
+      "severity": "PASS",
+      "title": "Layering, dependency direction, and auth-model alignment",
+      "description": "The architecture (Authentication Patterns) says each provider's credential resolution is self-contained and squadron does not unify authentication. The design acknowledges that `InteractiveLogin` is net-new. It keeps the capability optional, delegates to the Codex runtime, and stores no credentials. D3 keeps `AuthStrategy` unchanged, respecting ISP and slice 128's ban on string dispatch. SDK types are confined to `agent.py` and `login.py`, and the module graph imports cleanly without the extra.",
+      "file_ref": null,
+      "category": "architecture",
+      "raw_category": null,
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md#Relationship to the architecture's auth model"
+    },
+    {
+      "severity": "PASS",
+      "title": "Failure-mode enumeration for new I/O paths",
+      "description": "The runtime spawn, turn, login wait, and `account()` paths each have an explicit timeout or error handling and an observable signal. Teardown, transport-closed state reset, and cancel-on-timeout are covered. Each row has a test. The parent architecture states no NFR for these paths, so none needs restating.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md#Failure Modes \u2014 Codex Turn"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Pre-implementation verification of the OPENAI_API_KEY fallback",
+      "description": "Resolving the key-fallback question as the first task, with both outcomes specified, avoids a silent \"authenticated but fails\" path. The Version upper bound is left as a Project Manager call. That does not block design approval, but it should be settled before the `pyproject.toml` edit.",
+      "file_ref": null,
+      "category": "risk",
+      "raw_category": null,
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md#Special Considerations"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "proportionality",
+      "raw_category": null,
+      "summary": "ExtraRequirement is a new cross-cutting Protocol with one implementer",
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md#Technical Decisions (D9)",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "proportionality",
+      "raw_category": null,
+      "summary": "Three timeout config keys plus a CLI override exceed what the slice must deliver",
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md#D7",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "proportionality",
+      "raw_category": null,
+      "summary": "Restated or speculative material can be trimmed",
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md#Data Flow",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "dependencies",
+      "raw_category": null,
+      "summary": "Slice 931 is a dependency, but the parent plan entry lists only 128",
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:6",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "scope-alignment",
+      "raw_category": null,
+      "summary": "`ThreadTokenUsageUpdated` plan wording versus the design's `TurnResult.usage` source",
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md#D6",
+      "location_verified": null
+    },
+    {
+      "id": "F006",
+      "severity": "pass",
+      "category": "architecture",
+      "raw_category": null,
+      "summary": "Layering, dependency direction, and auth-model alignment",
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md#Relationship to the architecture's auth model",
+      "location_verified": null
+    },
+    {
+      "id": "F007",
+      "severity": "pass",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "Failure-mode enumeration for new I/O paths",
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md#Failure Modes \u2014 Codex Turn",
+      "location_verified": null
+    },
+    {
+      "id": "F008",
+      "severity": "note",
+      "category": "risk",
+      "raw_category": null,
+      "summary": "Pre-implementation verification of the OPENAI_API_KEY fallback",
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md#Special Considerations",
+      "location_verified": null
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md",
+    "against": "project-documents/user/architecture/100-slices.orchestration-v2.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/squadron-129-design"
+  },
+  "timestamp": "2026-11-16T09:25:19.754226",
+  "model": "claude-sonnet-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 3,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-sonnet-5-5",
+  "answering_models": [
+    "claude-sonnet-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 8,
+    "in_fences": 0,
+    "in_section": 8,
+    "surviving": 8
+  },
+  "effort": "medium",
+  "profile": "sdk",
+  "turns": 4,
+  "prompt_tokens": 221758,
+  "cached_tokens": 106563,
+  "cache_write_tokens": 115189,
+  "completion_tokens": 3626,
+  "reasoning_tokens": null,
+  "duration_seconds": 31.033006666926667,
+  "cost_usd": 0.5083547,
+  "cost_basis": "provider"
+}

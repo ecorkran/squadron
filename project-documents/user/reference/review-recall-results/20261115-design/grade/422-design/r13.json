@@ -1,0 +1,40 @@
+{
+ "review": "r13",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Environment-resolution failures can blame the case for harness faults",
+   "description": "The architecture's \"Absent is not zero\" principle says a failure the harness caused must not be charged to the case. A lockfile that no longer resolves does disqualify the case.\n\nThe slice maps 421's `EnvironmentResolutionError` to the case-blaming `CandidateRejection.environment_unresolved`, with the reason only in `detail`. That error can cover a network outage, a PyPI timeout or a hung install, as well as a lockfile that is genuinely unresolvable. Only suite timeouts, `SuiteRunError` and `CodeHostError` are routed to `harness_error`.\n\nA transient install failure would therefore be recorded as a rejection and counted in the yield report. It would also be reused on the next build, because only `harness_error` is excluded from reuse. That biases the yield low.\n\nThe design needs an explicit split. Resolution failures from the case's own content (a lockfile that does not resolve) become `environment_unresolved`. Install timeouts and network errors become `harness_error` and are never reused. This depends on 421's error carrying a discriminator, and the slice should state that dependency.",
+   "location": "project-documents/user/slices/422-slice.fix-case-qualification-and-yield-report-keystone.md#Patterns and Conventions"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Yield counts are undefined when a commit has records under several environments or rule versions",
+   "description": "The record id includes the environment digest. Both a changed environment (for example a new interpreter) and a bumped `FAIRNESS_RULE_VERSION` leave older records in the store: \"the store holds the latest per environment\".\n\nD12 says the yield report \"reads `FixQualification` records for the given projects\", but it does not say which record counts when a commit has several. Two consequences follow:\n- Candidates can be double-counted, or counted under a stale rule.\n- The success criterion \"number of records equals number of closing commits\" stops holding after any re-qualification.\n\nD12 needs to define the counted record per commit. For example, the latest record per `(project, commit)` at the current `rule_version`, with stale ones excluded or flagged. The success criterion should be stated against that definition.",
+   "location": "project-documents/user/slices/422-slice.fix-case-qualification-and-yield-report-keystone.md#D10 \u2014 Qualification records"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Harness-failure handling is under-specified for the new I/O paths",
+   "description": "The design lists the harness failures it knows about and says they are logged at ERROR and recorded as `harness_error`. It does not say whether each one stops the build or only that candidate:\n- The `build` command exits 1 on \"a harness failure that stops the build (for example, `gh` missing)\". It never says which failures stop the build and which continue to the next candidate.\n- A per-issue `gh` timeout, auth failure or rate limit across ~50 candidates is not covered.\n- The boundary resolver imports arbitrary project packages. A hang, a `sys.exit` or an import-time crash is covered only by \"resolver import failure \u2192 `boundary_undecidable`\". There is no timeout, and \"resolver crash\" is tested only as `harness_error`. A crash that is really import-time failure of the project would then be mis-classified as a harness fault.\n- The `git show` and `git log` calls against the user's checkout have no stated failure handling.\n\nAdd a short failure table for the new I/O paths: `gh` issue fetch, install, resolver, trace and test runs, and git reads. Each row should give the timeout source, the recorded outcome, and whether the build continues or aborts. The tests for observable signals can then be written against it.",
+   "location": "project-documents/user/slices/422-slice.fix-case-qualification-and-yield-report-keystone.md#API Contracts"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Design carries surface area the slice plan does not assign to 422",
+   "description": "The 422 plan entry covers discovery, frozen text, hidden and superseded sets, the fairness rule, repeated qualification, records, and the yield report with separability. The design adds several things beyond that. These can be cut or deferred:\n- The `/sq:benchmark` slash command and `commands/sq/benchmark.md`. The plan does not assign it to 422, and the CLI already delivers every result.\n- `--json` on `yield`, `--keep`, and `--commit SHA \u2026` on `build`. They are debugging conveniences that nothing downstream consumes. Walkthrough step 6 uses `--json` only to read the case-set version, which `fix-cases show` or `build` output could print.\n- The \"Rejected:\" paragraphs in D1, D3, D6, D8 and D12. Several restate rejections the architecture already made (perturbation, per-case all-or-nothing) and could be one line each.\n- The `reference_is_pull_request` and `multiple_closing_commits` rejection machinery. Keep both only if the counts are expected to matter. The slice itself says the count \"shows whether it is worth adding\".\n\nThe core mechanisms (closure digests, the dual static and dynamic trace, patch interception) are required by the architecture's fairness rule and per-node sets, so they are proportionate.",
+   "location": "project-documents/user/slices/422-slice.fix-case-qualification-and-yield-report-keystone.md#Technical Scope"
+  },
+  {
+   "i": 4,
+   "severity": "NOTE",
+   "title": "The design says 421 is \"used unchanged\" but also extends 421 types",
+   "description": "Integration Requirements say 421's sandbox, records and suite runner \"are used unchanged\". The slice also adds `fix_qualification` to `MetrologyRecord`, new `BenchmarkRecordStore` methods, and a registration in 421's `benchmark/registry.py`. These are additive and match the sibling-payload pattern in the architecture, and the component list already states them. The sentence should be narrowed to \"no changes to existing behavior\" so it doesn't contradict the component list.",
+   "location": "project-documents/user/slices/422-slice.fix-case-qualification-and-yield-report-keystone.md#Integration Requirements"
+  }
+ ]
+}

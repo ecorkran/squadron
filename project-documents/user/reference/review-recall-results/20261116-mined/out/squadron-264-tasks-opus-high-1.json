@@ -1,0 +1,279 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "SC6 is only half met, yet the slice is marked complete",
+      "description": "SC6 has two parts: (a) a materialized `cf_workflow_status` executor returns real status, and (b) \"a dispatch with a tool-capable non-SDK model can call `cf_build_context` and receive assembled context (walkthrough \u00a74).\"\n\n- Part (a) is covered by Task 8.2 and Task 9.1 step 2.\n- Part (b) is only mentioned in a note under 9.3 as \"remains open\". In the same item, the task file and slice design are set to `status: complete`.\n\nSo the slice gets marked complete with one of its success criteria unmet. The `sq run` CLAUDECODE guard is a real reason to defer, but the deferral should be visible. Fix:\n\n- Add an unchecked task, e.g. \"9.5 Walkthrough step 4 (standard terminal)\", with a `BLOCKED:` line giving the CLAUDECODE-guard reason.\n- Do not set `status: complete` until 9.5 is done, or set a status that shows step 4 is still open.",
+      "file_ref": null,
+      "category": "coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md:286-292"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Two design rules have no test: transport errors and non-text blocks",
+      "description": "The design says each failure-mode row \"has a test asserting the observable signal\" (slice design line 149\u2013150). SC2 also requires results to map \"per the Result mapping rules\". Two rules are implemented but never tested:\n\n1. **Protocol/transport error (`McpError`, closed stream) \u2192 `is_error=True` plus WARNING.** Task 4.3 implements it. Task 5 has no test for it, and 5.4 lists only timeout, isError and spawn failure for the WARNING checks.\n2. **\"Non-text blocks are noted by type in the content.\"** Task 4.2 implements it. The fake server has no tool that returns a non-text block, so no test can reach this path.\n\nFix: add two tools to the Task 3 fixture.\n- A `crash` tool that calls `os._exit(1)` partway through the call, for the closed-stream case.\n- A `mixed` tool that returns a `TextContent` block plus an `ImageContent` block.\n\nThen add the matching cases to Task 5.1 and 5.4. In the transport case, assert the WARNING via `caplog`. In the mixed case, assert that the content names the non-text block's type.",
+      "file_ref": null,
+      "category": "coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md:102-111"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Timeout test needs a PID mechanism the fixture task never builds",
+      "description": "Task 5.2 needs the server child's PID. It offers two options: \"the fake server printing it to a temp file at startup\" or \"scan for the fixture's command line\". Task 3 builds the fixture and includes neither. Its tool list is echo, fail, sleep and empty, with an ~80-line cap.\n\nA junior implementer reaching 5.2 would have to go back and change a fixture that Task 3 already committed. They would also have to choose between two strategies with very different reliability. Scanning command lines is flaky when tests run in parallel.\n\nFix: move the PID mechanism into Task 3. For example, the fake server writes `os.getpid()` to a path given by an env var or argv, and the 3.2 helper passes that path. Then make 5.2 specify one method: read the PID file, then assert the process is gone (`os.kill(pid, 0)` raises `ProcessLookupError`).",
+      "file_ref": null,
+      "category": "sequencing",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md:167-169"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Live-test availability gate is ambiguous and can hang offline",
+      "description": "Task 8.1 says the gate should \"attempt to launch the configured `cf.mcp_command` server (or detect a launchable command)\". Those are two different strategies, and the cheaper one breaks the requirement.\n\nIf the gate only checks for the binary (e.g. `shutil.which(\"npx\")`), then a machine with node but no network passes the gate. The test then runs `npx -y @context-forge/mcp`, which tries to fetch the package. It fails or stalls until timeout instead of skipping, and the full suite goes red. That breaks SC7 and the design's \"skip when the server cannot be launched\" rule.\n\nThe gate also runs at module scope, so every full-suite run (including 9.2) does a real spawn and possibly a package fetch while tests are being collected.\n\nFix: pick one strategy, a real launch with `initialize()` bounded by `cf.mcp_timeout_s`, and skip on any failure. Put it in a module-scoped fixture rather than at import time, so the cost is paid only when the module's tests are selected.",
+      "file_ref": null,
+      "category": "test-reliability",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md:256-259"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Merge step is written into the task file",
+      "description": "Task 9.4 merges the slice branch into the target, and the Task 9 success criteria include \"plus the merge commit\".\n\nThe current squadron project rules (`squadron/CLAUDE.md` \u2192 Git Rules \u2192 Merging) say merging happens only in Phase 7, after the code review passes. They also say to \"never write a merge or push as a task, sub-item, or Success Criteria in a task file.\" This worktree's managed CLAUDE.md is an older copy that still says \"a slice branch merges into the target when its implementation is done\", so the two rule sets disagree.\n\nNone of the slice's success criteria needs a merge, so 9.4 doesn't trace to anything. Fix: remove 9.4 and the merge-commit wording from Task 9's success criteria. Phase 6 should end with the work committed on the slice branch.",
+      "file_ref": null,
+      "category": "process",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md:293-300"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Tasks 1 and 2 are split too finely",
+      "description": "Adding two config keys (effort 1/5) and testing their two defaults (effort 1/5) are separate tasks with separate commits. Merge them into one task: the keys and their default tests, one commit.\n\nRelatedly, Task 4 commits the bridge after only a manual smoke check, before Task 5 tests it. With per-task commits that's allowed, but it isn't a tested point.",
+      "file_ref": null,
+      "category": "proportionality",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md:70-96"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Task 3 cites the wrong tasks as fixture users",
+      "description": "\"Tasks 5, 6 both need a real stdio peer.\" Task 6 (`cf_tools.py`) never uses the fake server, and Task 7 mocks the transport. The fixture's users are Task 4 (manual smoke) and Task 5. Fix the reference so the dependency picture is right.",
+      "file_ref": null,
+      "category": "clarity",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md:100"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Unclear who sets the spawned process's env",
+      "description": "Two tasks claim the same job:\n- Task 4.1 says the bridge uses `get_default_environment()` as the spawned process's env, and also that \"callers construct `StdioServerParameters`.\"\n- Task 6.3 (line 207) has the caller pass `env=get_default_environment()`.\n\nThe SDK already uses that default when `env` is None. Say that the caller owns `env` and the bridge passes `StdioServerParameters` through untouched. Otherwise an implementer may write merge or override logic in the bridge.",
+      "file_ref": null,
+      "category": "clarity",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md:129-131"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Executor-level round-trip is only tested live",
+      "description": "SC3 says \"an executor returns the server's text\" against the fake server. Task 5 calls `call_mcp_tool` directly, and Task 7 mocks the transport. The full executor path (config \u2192 `shlex.split` \u2192 `StdioServerParameters(cwd=\u2026)` \u2192 real spawn) is exercised only by the availability-gated Task 8.2.\n\nTask 7.3's assertions on the mock arguments cover most of the risk, so this is acceptable. If wanted, one cheap fix: point `cf.mcp_command` at `sys.executable fake_mcp_server.py`, have the fixture also answer as `workflow_status`, and run the materialized executor against it.",
+      "file_ref": null,
+      "category": "coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md:228-243"
+    },
+    {
+      "severity": "PASS",
+      "title": "SC1, SC2 (mapping half), SC4, SC5 and SC7 are covered",
+      "description": "Where each criterion is covered:\n- **SC1:** Task 6's success criteria plus Tasks 7.1 and 7.4 (`validate_allowed_tools` accepts `cf_workflow_status`, rejects `cf_bogus`).\n- **SC2 mapping:** one test per tool in Task 7.2, including the no-`None`-padding case for `cf_build_context`.\n- **SC4:** Tasks 5.3 and 5.4.\n- **SC5:** Task 8.1, which reads CF argument names from the `cf_tools` constants (single source).\n- **SC7:** Task 9.2.\n\nThe missing-argument row of the failure-mode table is tested with a \"transport not called\" check in Task 7.3. No task falls outside the slice scope except 9.4 (flagged above).",
+      "file_ref": null,
+      "category": "coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md:216-251"
+    },
+    {
+      "severity": "PASS",
+      "title": "Sequencing, layering and test-with pattern",
+      "description": "- The order (config \u2192 fixture \u2192 bridge \u2192 bridge tests \u2192 descriptors \u2192 descriptor tests \u2192 contract test \u2192 close-out) respects every dependency, with no cycles.\n- Each implementation task is followed directly by its test task.\n- The context summary keeps the design's key facts in front of a junior implementer: one-way layering, errors returned as values, no silent no-ops, CF argument names in one table, no project identity in schemas, teardown left to the SDK, and unconditional registration.\n- The file has no `**Commit**:` markers, and committing per task follows the project's per-task cadence.",
+      "file_ref": null,
+      "category": "sequencing",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md:53-55"
+    },
+    {
+      "severity": "PASS",
+      "title": "No NFR, so no load test needed",
+      "description": "The slice restates no non-functional requirement. `cf.mcp_timeout_s` is a per-call safety cap, not a throughput or latency target. No `tests/load/` task or CI gating task is needed.",
+      "file_ref": null,
+      "category": "nfr",
+      "raw_category": null,
+      "location": "project-documents/user/slices/264-slice.context-forge-mcp-tool-bridge.md:217-232"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "coverage",
+      "raw_category": null,
+      "summary": "SC6 is only half met, yet the slice is marked complete",
+      "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md:286-292",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "coverage",
+      "raw_category": null,
+      "summary": "Two design rules have no test: transport errors and non-text blocks",
+      "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md:102-111",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "sequencing",
+      "raw_category": null,
+      "summary": "Timeout test needs a PID mechanism the fixture task never builds",
+      "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md:167-169",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "test-reliability",
+      "raw_category": null,
+      "summary": "Live-test availability gate is ambiguous and can hang offline",
+      "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md:256-259",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "process",
+      "raw_category": null,
+      "summary": "Merge step is written into the task file",
+      "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md:293-300",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "proportionality",
+      "raw_category": null,
+      "summary": "Tasks 1 and 2 are split too finely",
+      "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md:70-96",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "note",
+      "category": "clarity",
+      "raw_category": null,
+      "summary": "Task 3 cites the wrong tasks as fixture users",
+      "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md:100",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "note",
+      "category": "clarity",
+      "raw_category": null,
+      "summary": "Unclear who sets the spawned process's env",
+      "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md:129-131",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "note",
+      "category": "coverage",
+      "raw_category": null,
+      "summary": "Executor-level round-trip is only tested live",
+      "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md:228-243",
+      "location_verified": true
+    },
+    {
+      "id": "F010",
+      "severity": "pass",
+      "category": "coverage",
+      "raw_category": null,
+      "summary": "SC1, SC2 (mapping half), SC4, SC5 and SC7 are covered",
+      "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md:216-251",
+      "location_verified": true
+    },
+    {
+      "id": "F011",
+      "severity": "pass",
+      "category": "sequencing",
+      "raw_category": null,
+      "summary": "Sequencing, layering and test-with pattern",
+      "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md:53-55",
+      "location_verified": true
+    },
+    {
+      "id": "F012",
+      "severity": "pass",
+      "category": "nfr",
+      "raw_category": null,
+      "summary": "No NFR, so no load test needed",
+      "location": "project-documents/user/slices/264-slice.context-forge-mcp-tool-bridge.md:217-232",
+      "location_verified": true
+    }
+  ],
+  "template_name": "tasks",
+  "input_files": {
+    "input": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md",
+    "against": "project-documents/user/slices/264-slice.context-forge-mcp-tool-bridge.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/squadron-264-tasks"
+  },
+  "timestamp": "2026-11-16T10:06:24.686712",
+  "model": "claude-opus-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 2,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-opus-5-5",
+  "answering_models": [
+    "claude-opus-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 12,
+    "in_fences": 0,
+    "in_section": 12,
+    "surviving": 12
+  },
+  "effort": "high",
+  "profile": "sdk",
+  "turns": 3,
+  "prompt_tokens": 114923,
+  "cached_tokens": 44189,
+  "cache_write_tokens": 70730,
+  "completion_tokens": 9214,
+  "reasoning_tokens": null,
+  "duration_seconds": 93.88990999991074,
+  "cost_usd": 0.7596024,
+  "cost_basis": "provider"
+}

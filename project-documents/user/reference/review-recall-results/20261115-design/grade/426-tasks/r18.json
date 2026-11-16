@@ -1,0 +1,40 @@
+{
+ "review": "r18",
+ "findings": [
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Slice index and landing sha have no structured source on a `BenchmarkCase`",
+   "description": "- Task 24 runs `sq run P6 <index>`. Task 25's `requalify` and Task 15's `slice_qualification_for` key on (project, index, landing, digest). Both need the slice index and `landing_after_sha` from a `BenchmarkCase`.\n- Task 18 stores them only inside `CaseProvenance.source_ref = \"slice:<index>@<sha>\"` plus the slice name. No task says where they are read back from.\n- An implementer will parse that display string. That breaks the project rule against using labels as logical structure, and the parsing rules (lenient, tested against real input).\n- Name the source in Task 18 or Task 24: a structured provenance field if 421 has one, otherwise one parse and format pair defined once. Add a round-trip test over a realistic `source_ref`.\n- Task 15's `slice_qualification_for(store, case, environment)` also differs from the design's `(case, environment)`. Task 1's design corrections should list that signature change.",
+   "location": "project-documents/user/tasks/426-tasks.slice-cases.md:168"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Yield-row wiring into the build command belongs to no task",
+   "description": "- Task 21 prints the yield rows \"until then print the lines only\" and says Task 22 supplies them. Task 22's only implementation step edits `yield_report.py`.\n- Task 22's success line is \"Task 21's command prints the rows\". Nothing edits `benchmark_slice.py` to call them, and no test covers the build command's output with rows.\n- Add an explicit step to Task 22 to call the rows from `slice-cases build`, with a CLI test asserting the rows appear after the candidate lines. Alternatively move yield rows before Task 21.",
+   "location": "project-documents/user/tasks/426-tasks.slice-cases.md:201-209"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Live-chain tasks have no dead end when no case qualifies",
+   "description": "- Task 23 passes when zero cases qualify, because it only requires recording the rejection counts.\n- Task 26 then needs `--case <case-id>`, and Task 41 steps 4\u20137 need Task 26's benchmark. No task says what to do with no qualified case.\n- Add a `BLOCKED:` line in Task 26 for the case where Task 23 produced no qualified case. Name the yield finding as evidence, so the PM can decide on relaxing a rejection rule, as the design's mitigation section says. Without it, the implementer will improvise or loop.",
+   "location": "project-documents/user/tasks/426-tasks.slice-cases.md:216"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Task file is overweight: fine-grained splits and extra load tests",
+   "description": "- **Load tests:** The design restates no NFR, so no `tests/load/` task is required. Context Summary line 53 adds two load tests anyway: the eight-way concurrent `invoke` in Task 24 (line 223) and the 200-pair slow-dispatcher plan in Task 33 (line 276). No success criterion needs either.\n  - Keep the hung-dispatcher and timeout assertions, which trace to the failure-mode criterion.\n  - Drop the 200-pair run, and fold the concurrency check into Task 24's ordinary isolation tests (distinct homes, no shared registry path).\n- **Qualification tasks:** Tasks 15\u201319 build one function (`qualify_slice_candidate`) across five tasks with five test files. Merge Task 17 (repeats) into Task 18 (selection and case). Merge Task 19 (harness errors) into the wrapper step of the earlier stages, keeping its four-failure test.\n- **Judge-plan tasks:** Tasks 31 and 32 both build `plan_judge` and can be one task. Tasks 33 and 34 (bound, cap, lock, resume, over-size records) can also be one.\n- **Step detail:** Several steps prescribe layout the design does not need. Examples are the conditional \"if the file would pass ~300 lines, put it in a sibling module\" notes in Tasks 3, 11 and 12, and the Task 14 temp-directory mechanics. Task 42's line-count check already covers file splitting.",
+   "location": "project-documents/user/tasks/426-tasks.slice-cases.md:53"
+  },
+  {
+   "i": 5,
+   "severity": "NOTE",
+   "title": "Case-set membership rule and its test disagree",
+   "description": "- Task 20 says \"existing members of the set kept\". Its test asserts the case set \"holds exactly the qualified ids\".\n- These agree only when the set starts empty. A previously qualified case that later becomes a `harness_error` stays in the set under the stated rule.\n- State which behavior is intended, and make the test cover a pre-populated set.",
+   "location": "project-documents/user/tasks/426-tasks.slice-cases.md:196-197"
+  }
+ ]
+}

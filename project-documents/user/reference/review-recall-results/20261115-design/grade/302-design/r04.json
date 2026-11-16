@@ -1,0 +1,26 @@
+{
+ "review": "r04",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "The structured-output constraint the slice plan assigns to this slice has been dropped",
+   "description": "The slice plan entry for 302 (`300-slices...md:53`) says: \"Each template uses a structured-output constraint for the score field and a score-with-rationale prompt shape.\" One of its success criteria (`:59`) is \"The score-with-rationale shape is enforced by the template's structured output.\" The architecture makes the same commitment (Technical Considerations, reliability item (b)). The code expects this slice to deliver it too: the docstring of `_extract_criteria` in `parsers.py` says \"The structured-output/JSON variant is slice 302.\"\n\nThe design instead relies only on prose instructions in the prompt (a `## Rationale` heading plus lenient `score:` lines) and says the score is \"not a new parser target.\" Nothing enforces the rationale. If the model leaves it out, the score is still accepted. Assigned scope is being deferred without saying so.\n\nTo fix, either:\n- specify the structured-output mechanism (schema or `response_format` for providers that support it, and what happens for providers that don't), or\n- record the deferral explicitly, with a reason, in the slice plan.",
+   "location": "project-documents/user/slices/302-slice.design-phase-judge-templates.md:152-183"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "The `sq review` CLI cannot run judge templates or produce a threshold-derived verdict",
+   "description": "The Value section says \"a pipeline step (or the `sq review` CLI) can run `template: judge.slice-vs-arch` ... and receive a numeric score, a threshold-derived verdict\". Functional Requirement 3 (`:277-282`) and Verification step 3 (`:361-368`) depend on the same claim. The existing code does not support it:\n- `cli/commands/review.py` registers only `slice`, `arch`, `tasks`, `code` and `list` subcommands. There is no `slice-vs-arch` subcommand and no `--template` option, and `review_slice` hardcodes the template name `\"slice\"`.\n- `enforce_judge` and `resolve_thresholds` are called only from `pipeline/actions/review.py`. A judge template run through the CLI would come back with `verdict=UNKNOWN`, because no `## Summary` is emitted and nothing derives a verdict from the score.\n\nMeanwhile, Component Structure (`:107`) says \"No other module changes.\" The design needs to pick one:\n- limit the deliverable to the pipeline `review` action, and rewrite FR3 and Verification step 3 to use a pipeline step, or\n- add the CLI change (template selection plus judge enforcement) to scope and list it.\n\nThe note at `:376-379` that defers the \"exact CLI invocation shape\" to implementation hides this gap rather than resolving it.",
+   "location": "project-documents/user/slices/302-slice.design-phase-judge-templates.md:31-35"
+  },
+  {
+   "i": 2,
+   "severity": "NOTE",
+   "title": "The failure-mode table leaves out two of the architecture's enumerated modes",
+   "description": "The architecture lists these failure modes: unparseable response, score absent or out of range, missing or unreadable ground-truth file, provider unavailable, and injected ground truth over the cap. The table covers most of them but has no row for:\n- a ground-truth file that `TEMPLATE_INPUTS` resolves to a path that does not exist or cannot be read;\n- an injection-cap overflow.\n\nBoth are handled by existing 300/301 paths, so no new code is needed. However, the \"No silent pass: every row above...\" claim (`:402`) reads as complete when it isn't. Add the two rows marked \"Not new\" so the table matches what the architecture requires.",
+   "location": "project-documents/user/slices/302-slice.design-phase-judge-templates.md:394-400"
+  }
+ ]
+}

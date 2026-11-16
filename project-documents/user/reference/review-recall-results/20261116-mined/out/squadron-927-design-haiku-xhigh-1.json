@@ -1,0 +1,315 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Part B and the answering-model turn depend on a \"#92 recovery turn\" that the architecture assigns to slice 924",
+      "description": "Lines 105, 206 and 380 assume a recovery turn already exists. `TurnCapture` folds across it, and `impose_diff_coverage` must run after it. The slice still declares no prerequisites (line 53, `dependencies: []`). The architecture describes no existing recovery turn. The only one it specifies is slice 924 Part A, a format-repair turn, which is not started (project-documents/user/architecture/900-slices.maintenance-and-refactoring.md:414-418). Slice 924 also has to say which `verdictSource` value its repair-turn verdicts carry, and 927 adds `imposed` to that vocabulary. The slice should either name the existing mechanism it depends on, or declare 924 as a dependency and state the landing order: what the cap sees if 924 lands later, and whether the repair turn's model enters `answering_models`.",
+      "file_ref": null,
+      "category": "dependencies",
+      "raw_category": null,
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:105"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Non-reporting providers keep the requested id in `aiModel`, which the no-silent-fallback principle does not allow without a readable marker",
+      "description": "D11 writes the requested id as `aiModel` when no provider reports an answering model. The slice says this is \"not a silent fallback\" because the digest discloses it (line 200). The digest is the only disclosure. The field still reads as an authoritative model name, and the slice's own Value says metrology keys judge identity on `aiModel` (line 29). Codex judges are therefore pooled under the requested id, with nothing in the field metrology reads. That is the failure the slice exists to fix (line 28). The project rule is \"never use silent fallback values\" and to use \"obviously-placeholder values\" instead. Rejecting `aiModel: unknown` because it would collapse Codex judges is a fair reason. The slice should either add a marker metrology can read, or record this as a stated exception to the rule along with what metrology does when `answering_models == []`.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:198-202"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "A missing failure count fails open in the Part B formula",
+      "description": "D4 computes successful calls as `(tool_calls_made or 0) - (failed_tool_calls or 0)`. The Patterns section (line 216) says counts use `is None` checks and never `or 0`. If `tool_calls_made` is set and `failed_tool_calls` is `None`, every call counts as successful. The cap then does not fire, and an unread truncated PASS survives. The slice does not say whether that pairing can occur. It should show that it cannot, because both are assigned together, or handle an unknown failure count explicitly. The test list at line 289 should add that mixed-`None` state.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:131"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The synthetic finding has no `location`, which the 904 contract does not allow",
+      "description": "Line 152 says the synthetic finding carries no `location`. Entry 904 requires `location:` on every finding, PASS included, with `unverified` as the explicit \"I don't know\" token. It also says ensemble-review dedupe keys on location (project-documents/user/architecture/900-slices.maintenance-and-refactoring.md:68-76). A location-less finding gives that dedupe a null key. The slice should use `location: unverified`, or state that squadron-authored findings are exempt from the 904 contract and say how ensemble dedupe treats them.",
+      "file_ref": null,
+      "category": "integration",
+      "raw_category": null,
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:152"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Three new frontmatter values reach context-forge with no check, and the Value overstates what a PASS guarantees",
+      "description": "The slice calls `diffTruncated`, `requestedModel` and `verdictSource: imposed` \"all additive\" (line 273). The architecture names this exact risk for 927 (900-slices.maintenance-and-refactoring.md:444, \"adds frontmatter fields that context-forge gates read\"). Its 911 note treats frontmatter additions as a cross-tool contract to check before the schema is settled (line 146). D5 checks context-forge readers for `verdictSource` only (line 156). The same check should cover the other two keys, and the slice should record whether `cf validate frontmatter` accepts unknown keys. Separately, the Value (line 27) says a PASS means the model \"saw the whole diff or read files with its tools.\" One successful read satisfies that even when the truncated tail was never read. The architecture accepts that trade-off for tool-enabled runs (line 442). The Value should say that gates must read `diffTruncated` together with `toolCallsMade`.",
+      "file_ref": null,
+      "category": "integration",
+      "raw_category": null,
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:273"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Part B changes the outcome of `until: pass` loops, and the slice does not mention loops",
+      "description": "The architecture's pipeline shape uses `until: pass` on code reviews (\"implementation \u2192 code review until pass\", 900-slices.maintenance-and-refactoring.md:122). Under D4, a PASS over an unread truncated diff becomes CONCERNS. A code-review loop on such a diff cannot converge without tools. It runs to `max`, and `on_exhaust` decides the outcome. The slice covers the checkpoint consequence (walkthrough step 4, line 339) but not loop convergence. The slice should add the loop consumer to Integration Points and state the expected result for `fail` and `checkpoint`, the two `on_exhaust` modes the architecture says stop the run correctly (900-slices.maintenance-and-refactoring.md:122).",
+      "file_ref": null,
+      "category": "integration",
+      "raw_category": null,
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:269"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`answering_models` is a string literal shared across three modules",
+      "description": "D8 and the Patterns section make `metadata[\"answering_models\"]` a string literal, following `stop_reason`. Two provider agents write the key and `TurnCapture` reads it, so it is a cross-layer lookup. The project rule is to define a lookup value once and reference it everywhere (CLAUDE.md, \"Never scatter comparison values across code\"). The slice should define one constant that all three modules import. The existing `stop_reason` literal is precedent to change, not to copy.",
+      "file_ref": null,
+      "category": "conventions",
+      "raw_category": null,
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:217"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The answering-model verification omits gemini, and the OpenRouter routed case is deferred without a stated default",
+      "description": "The architecture's provider matrix lists six profiles: sdk, openai, openrouter, gemini, local and openai-oauth (900-slices.maintenance-and-refactoring.md:96). D9 and walkthrough step 6 (line 348) capture answering ids for four of them. Gemini is absent, and the slice does not say which D8 path it uses. The architecture asks the design to decide the OpenRouter case. The slice defers routed forms, such as a dropped `vendor/` prefix or a `:free` suffix, to live capture (line 359). That is a defensible choice, but the rule is exact by default, so every unmatched form on a profile is reported as a substitution until capture is done. The slice should add gemini to the capture, name its stamping path, and state the expected result for each profile. Step 6 currently gives one generic expectation.",
+      "file_ref": null,
+      "category": "verification",
+      "raw_category": null,
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:185"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Two names differ from the architecture, and the slice does not record the reconciliation",
+      "description": "The architecture asks for `requestedModel` / `model` (900-slices.maintenance-and-refactoring.md:443) and describes the frontmatter key as `model:` (line 440). The slice keeps `aiModel:` (line 191), which it says is the existing key (line 21). It also measures characters where the architecture named `diffBytes` (line 441; D1 explains the unit). Both choices look right, but neither is recorded as a departure from the parent. The slice should name each parent term it replaces. The parent's current-state wording should also be corrected, so the next implementer does not follow it.",
+      "file_ref": null,
+      "category": "documentation",
+      "raw_category": null,
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:191"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The OpenAI-direct identity change has no metrology check",
+      "description": "D10 says OpenAI-direct judges change metrology identity once, from `gpt-5` to `gpt-5-2025-08-07`, and calls that correct. It does not say what happens to existing calibration history under `gpt-5`: whether it is left split or re-keyed. No walkthrough step checks metrology after the change. The slice should state the outcome for existing data and add a check that a dated answer groups under the new identity.",
+      "file_ref": null,
+      "category": "integration",
+      "raw_category": null,
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:196"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Mostly proportionate; the artifact examples and the conventions list can be cut",
+      "description": "The 13 decisions are justified by the architecture's scope, and no mechanism looks unnecessary. The Artifact Contract section (lines 221-267) repeats the D4 synthetic finding, the D10 frontmatter and the D1 JSON. It could keep one YAML example and drop the rest. The \"Patterns and Conventions\" list (lines 212-217) restates conventions from slices 265, 266, 918 and 919. Its first bullet, \"emitted only when they apply,\" conflicts with D2, which writes `diffTruncated: false` on every diff review. D2 is the intended exception, so the bullet should say so.",
+      "file_ref": null,
+      "category": "scope",
+      "raw_category": null,
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md#implementation-details"
+    },
+    {
+      "severity": "PASS",
+      "title": "Scope and exclusions match the architecture entry",
+      "description": "Parts A, B and C are all in scope. Diff ordering and `--stat` go to an issue, which the entry allows when they are not small. `max_file_size_bytes` defaults and #114 are excluded, as the entry requires. Nothing the entry assigns to this slice is dropped. The architecture states no NFR for this path.",
+      "file_ref": null,
+      "category": "scope",
+      "raw_category": null,
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md#technical-scope"
+    },
+    {
+      "severity": "PASS",
+      "title": "The truncated-unread outcome is an allowed option and is recorded in the artifact",
+      "description": "D4 chooses CONCERNS with a synthetic finding and `verdictSource: imposed`, not a failed run. The architecture allows either option. The outcome is recorded in frontmatter and the header, not only in a log. A successful tool call keeps the model's verdict, as the entry requires.",
+      "file_ref": null,
+      "category": "architecture",
+      "raw_category": null,
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:127"
+    },
+    {
+      "severity": "PASS",
+      "title": "The CLI and pipeline paths share one result path",
+      "description": "Both paths call `run_review_with_profile` and the same formatter, so the new keys agree across them. This meets the architecture's requirement that the behavior hold on both paths.",
+      "file_ref": null,
+      "category": "integration",
+      "raw_category": null,
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:101"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "dependencies",
+      "raw_category": null,
+      "summary": "Part B and the answering-model turn depend on a \"#92 recovery turn\" that the architecture assigns to slice 924",
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:105",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "Non-reporting providers keep the requested id in `aiModel`, which the no-silent-fallback principle does not allow without a readable marker",
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:198-202",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "A missing failure count fails open in the Part B formula",
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:131",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "integration",
+      "raw_category": null,
+      "summary": "The synthetic finding has no `location`, which the 904 contract does not allow",
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:152",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "integration",
+      "raw_category": null,
+      "summary": "Three new frontmatter values reach context-forge with no check, and the Value overstates what a PASS guarantees",
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:273",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "integration",
+      "raw_category": null,
+      "summary": "Part B changes the outcome of `until: pass` loops, and the slice does not mention loops",
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:269",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "concern",
+      "category": "conventions",
+      "raw_category": null,
+      "summary": "`answering_models` is a string literal shared across three modules",
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:217",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "concern",
+      "category": "verification",
+      "raw_category": null,
+      "summary": "The answering-model verification omits gemini, and the OpenRouter routed case is deferred without a stated default",
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:185",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "note",
+      "category": "documentation",
+      "raw_category": null,
+      "summary": "Two names differ from the architecture, and the slice does not record the reconciliation",
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:191",
+      "location_verified": true
+    },
+    {
+      "id": "F010",
+      "severity": "note",
+      "category": "integration",
+      "raw_category": null,
+      "summary": "The OpenAI-direct identity change has no metrology check",
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:196",
+      "location_verified": true
+    },
+    {
+      "id": "F011",
+      "severity": "note",
+      "category": "scope",
+      "raw_category": null,
+      "summary": "Mostly proportionate; the artifact examples and the conventions list can be cut",
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md#implementation-details",
+      "location_verified": null
+    },
+    {
+      "id": "F012",
+      "severity": "pass",
+      "category": "scope",
+      "raw_category": null,
+      "summary": "Scope and exclusions match the architecture entry",
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md#technical-scope",
+      "location_verified": null
+    },
+    {
+      "id": "F013",
+      "severity": "pass",
+      "category": "architecture",
+      "raw_category": null,
+      "summary": "The truncated-unread outcome is an allowed option and is recorded in the artifact",
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:127",
+      "location_verified": true
+    },
+    {
+      "id": "F014",
+      "severity": "pass",
+      "category": "integration",
+      "raw_category": null,
+      "summary": "The CLI and pipeline paths share one result path",
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:101",
+      "location_verified": true
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md",
+    "against": "project-documents/user/architecture/900-slices.maintenance-and-refactoring.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/squadron-927-design"
+  },
+  "timestamp": "2026-11-16T09:39:45.397532",
+  "model": "claude-haiku-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 8,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 1,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-haiku-5-5",
+  "answering_models": [
+    "claude-haiku-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 14,
+    "in_fences": 0,
+    "in_section": 14,
+    "surviving": 14
+  },
+  "effort": "xhigh",
+  "profile": "sdk",
+  "turns": 9,
+  "prompt_tokens": 594082,
+  "cached_tokens": 440515,
+  "cache_write_tokens": 153555,
+  "completion_tokens": 72127,
+  "reasoning_tokens": null,
+  "duration_seconds": 318.73581041698344,
+  "cost_usd": 0.27950231000000003,
+  "cost_basis": "provider"
+}

@@ -1,0 +1,153 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Load tests are added with no NFR behind them and no CI gate",
+      "description": "The Context Summary announces \"two small\" load tests: concurrent `SliceCaseRunner.invoke` in Task 24 and the 200-pair slow/hung dispatcher in Task 33. The slice design has no NFR section, so these tests trace to no requirement.\n\nThe tests are also not in `tests/load/`, and no task wires them into CI. The slice-level checks require a CI gating task whenever a load test exists.\n\nThe behaviors themselves are worth testing. The concurrency test backs the \"distinct scrubbed homes\" failure-mode claim, and the hung-dispatcher test backs the failure-mode rule. Pick one fix:\n- Keep both as ordinary unit tests under `tests/benchmark/` and drop the \"load test\" wording from line 53, Task 24 and Task 33.\n- Or move them to `tests/load/` and add a CI wiring task.\n\nI recommend the first, since the design restates no NFR.",
+      "file_ref": null,
+      "category": "scope",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/426-tasks.slice-cases.md:53"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Qualification and judge-plan work is split into more tasks and test files than the design needs",
+      "description": "Tasks 15\u201319 build one function, `qualify_slice_candidate`, across five tasks with five test files:\n- `test_slice_qualify_checks`\n- `test_slice_qualify_sets`\n- `test_slice_qualify_repeats`\n- `test_slice_qualify_case`\n- `test_slice_qualify_errors`\n\nTasks 16, 17 and 18 each add a few lines to one function, and none is a working or committed point. The single commit arrives at Task 19.\n\nMerge 16 and 17 into one \"sandboxes, test sets, repeats\" task. Merge 18 and 19 into one \"regression selection, case and harness errors\" task. Use one or two test files.\n\nThe same pattern appears at lines 264-282. Tasks 31\u201334 all extend `plan_judge` and `diff_judge_runner.py` with four test files, and Task 33's 200-pair test is described in more detail than the criteria need. Merge 31 and 32 into one planning task. Merge 33 and 34 into one \"bound, cap, lock, resume\" task.\n\nAt 42 tasks and about 45 test files for an effort-3 slice, the breakdown is heavy. Merging cuts overhead without dropping any success criterion.",
+      "file_ref": null,
+      "category": "proportionality",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/426-tasks.slice-cases.md:167-191"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Task 21 and Task 22 are coupled",
+      "description": "Task 21 says \"until then print the lines only\", and Task 22's success item says \"Task 21's command prints the rows\". That means Task 22 edits Task 21's command. Both sit under one commit, so the sequencing is workable. Putting the yield-row task before the command task would remove the stub.",
+      "file_ref": null,
+      "category": "sequencing",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/426-tasks.slice-cases.md:201-209"
+    },
+    {
+      "severity": "PASS",
+      "title": "Success criteria coverage",
+      "description": "Each functional, technical and integration criterion maps to a task:\n- **Build:** the build, qualified-case fields and rejection fixtures map to Tasks 6, 13\u201320, 23.\n- **Runner and cf:** the scrubbed-home replay, cf registration and unchanged cf project list map to Tasks 4, 9, 10, 24\u201326.\n- **Normalization and judge:** `normalize` on a real diff, the reference line, over-size, forfeits and harness-absent cases, the refusals, bound, cap and resume map to Tasks 7, 27\u201335.\n- **Report and walkthrough:** the per-kind report, the mixed fix and slice integration, and walkthrough steps 1\u20138 map to Tasks 36\u201339, 23, 26, 41.\n\nThe failure-mode signals are asserted in Tasks 4, 12, 13, 19, 24, 30, 31 and 34. I found no tasks without a source in the design. The edits to 424 are called out in Task 1 and traced to D8.",
+      "file_ref": null,
+      "category": "coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/426-tasks.slice-cases.md:58-343"
+    },
+    {
+      "severity": "PASS",
+      "title": "Sequencing, commit markers and blocking",
+      "description": "The dependency order holds:\n- Tasks 2\u20137 need nothing from 421\u2013425 and are committed before the Task 8 gate, with `BLOCKED:` handling.\n- The cf spike comes first after the gate.\n- Records come before discovery, qualification before build, build before the runner, the runner before the judge, and the judge before the report.\n\n`**Commit**:` markers sit at tested, working points. There are no merge or push tasks, and the live runs carry no approval waits.",
+      "file_ref": null,
+      "category": "sequencing",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/426-tasks.slice-cases.md:121-138"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "scope",
+      "raw_category": null,
+      "summary": "Load tests are added with no NFR behind them and no CI gate",
+      "location": "project-documents/user/tasks/426-tasks.slice-cases.md:53",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "proportionality",
+      "raw_category": null,
+      "summary": "Qualification and judge-plan work is split into more tasks and test files than the design needs",
+      "location": "project-documents/user/tasks/426-tasks.slice-cases.md:167-191",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "note",
+      "category": "sequencing",
+      "raw_category": null,
+      "summary": "Task 21 and Task 22 are coupled",
+      "location": "project-documents/user/tasks/426-tasks.slice-cases.md:201-209",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "pass",
+      "category": "coverage",
+      "raw_category": null,
+      "summary": "Success criteria coverage",
+      "location": "project-documents/user/tasks/426-tasks.slice-cases.md:58-343",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "pass",
+      "category": "sequencing",
+      "raw_category": null,
+      "summary": "Sequencing, commit markers and blocking",
+      "location": "project-documents/user/tasks/426-tasks.slice-cases.md:121-138",
+      "location_verified": true
+    }
+  ],
+  "template_name": "tasks",
+  "input_files": {
+    "input": "project-documents/user/tasks/426-tasks.slice-cases.md",
+    "against": "project-documents/user/slices/426-slice.slice-cases.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261115-design/wt/426-tasks"
+  },
+  "timestamp": "2026-11-16T07:06:29.277141",
+  "model": "claude-sonnet-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 2,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-sonnet-5-5",
+  "answering_models": [
+    "claude-sonnet-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 5,
+    "in_fences": 0,
+    "in_section": 5,
+    "surviving": 5
+  },
+  "effort": "medium",
+  "profile": "sdk",
+  "turns": 3,
+  "prompt_tokens": 152169,
+  "cached_tokens": 33886,
+  "cache_write_tokens": 118279,
+  "completion_tokens": 4693,
+  "reasoning_tokens": null,
+  "duration_seconds": 39.53055779216811,
+  "cost_usd": 0.5242123000000001,
+  "cost_basis": "provider"
+}

@@ -1,0 +1,225 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Commit markers are checkboxes, not plain `**Commit**:` lines",
+      "description": "All 17 commit points are written as checklist items (`- [ ] Commit: ...`): lines 112, 157, 187, 217, 264, 286, 306, 320, 344, 368, 386, 414, 456, 472, 493, 508 and 527. Commit markers must be plain `**Commit**: ...` lines, never checkboxes. As written, task-checker will treat a commit as a box to check off. Where the commits fall is fine: each one closes a tested group. Only the format needs to change.",
+      "file_ref": null,
+      "category": "task-format",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md:112"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Task 2 stops for the Project Manager on outcomes the design has already decided",
+      "description": "The design already says what happens in both spike outcomes:\n- **No `ResultMessage` after interrupt:** D7 narrows to \"always mark unusable\" and the design is updated (Mitigation Strategies).\n- **A state write runs off the loop thread:** `StateManager` gains a per-run `threading.Lock` (D5).\n\nTask 2 instead says \"stop and ask the Project Manager\" for both, and no task implements either fallback. Task 16's \"adjust to the Task 2 spike findings\" only partly covers the first case. Replace the two stops with conditional sub-items:\n- If no result arrives, Task 16 always sets `unusable_reason` and Task 17's first fake expects an unusable session.\n- If a state write runs off-thread, add the per-run lock to Task 11, with a test.",
+      "file_ref": null,
+      "category": "sequencing",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md:54-60"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Task 21 does not add liveness injection to `list_run_summaries`, but Tasks 22 and 22a need it",
+      "description": "Today `list_run_summaries` takes only `pipeline`, `include_all`, `load_definition` and `load_report`. Two later tasks assume more:\n- Task 22 asserts \"`process_alive` called exactly 20 times\".\n- Task 22a says \"with the real `process_alive`\".\n\nBoth assume the function takes injected `now`, `hostname` and `process_alive`, as D8 does for `wait_for_run`. Task 21 never says to add them. Without them, a junior implementer would call `os.kill` and `socket.gethostname()` directly, and the call-count assertion can't be written without monkeypatching. Task 21 should add the three injected parameters, with the real functions as defaults, and read `hostname` once per call (Special Considerations).",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/run_listing.py:115-122"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The new config keys are never wired to the code that uses them",
+      "description": "Task 8 adds a typed reader for each key that raises on values `<= 0`. No later task says to call those readers:\n- **Task 15** passes `idle_s=foreground_idle_timeout_s` but doesn't say where the value comes from. The existing pattern is `_background_idle_timeout_s()`, which calls `get_typed_config` with the session's cwd, and Task 15 should name it. As written, the implementer may hard-code the value or skip D1's validation.\n- **Task 13** builds `RunOwner.current(...)` and `RunHeartbeat(..., interval)` without saying to read `pipeline.run_heartbeat_interval_s` through the Task 8 reader.\n\nNo test checks that a configured value reaches either consumer. The success criterion \"silent longer than `pipeline.foreground_idle_timeout_s`\" depends on this wiring. Add one line to each task naming the reader, plus one test per key showing that a configured value is used.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "src/squadron/pipeline/sdk_session.py:327-331"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Task 25's column order contradicts the UI spec",
+      "description": "Task 25 lists \"Run ID, Status (never shrink), Pipeline, Target, At, Started, Activity\". The UI Specifications show Run ID, Pipeline, Target, **Status**, At, Started, Activity. The wording also suggests only Status never shrinks, but the spec and D11 say Run ID and Status both never shrink. Rewrite the line in the spec's order and mark both columns as non-shrinkable.",
+      "file_ref": null,
+      "category": "spec-consistency",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md:348-351"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Task 22a adds a timing assertion the design says doesn't exist",
+      "description": "The design restates an NFR: `sq runs list --all` must stay under 1 s with a few hundred run files. The load-test tier in `.claude/rules/python.md` requires a test for it, so Task 22a is right to add one. But Special Considerations still says \"There is still no assertion on time in tests\". Update that sentence in the design so the two documents agree.\n\nCI gating checks out. `.github/workflows/ci.yml:38` runs `uv run pytest`, `pyproject.toml:82` sets `testpaths = [\"tests\"]`, and no marker deselects `tests/load/`. The test is gated without a separate wiring task.",
+      "file_ref": null,
+      "category": "spec-consistency",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md:308-320"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Task 42 runs walkthrough step 8 against the wrong directory",
+      "description": "Task 42 runs steps 1\u20135 and 8 \"in a scratch HOME\". The design defines step 8 as a read-only timing run against the real runs directory, compared with 199's 0.67 s for 188 runs. In a scratch HOME it measures a handful of seeded runs instead. Run step 8 separately, read-only, against the real runs directory.",
+      "file_ref": null,
+      "category": "verification",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md:521-524"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Tasks 11\u201312 may leave existing callers broken at their commit",
+      "description": "D13's signature makes `owner` a keyword-only argument with no default. If Task 11 matches it exactly, the existing `init_run` calls in `cli/commands/run.py` stop working until Task 13 rewires them, so the Task 12 commit won't pass pyright or the tests. Task 11 should either update the existing callers to pass `owner=None`, or say that this happens before the Task 12 commit.",
+      "file_ref": null,
+      "category": "sequencing",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md:161-163"
+    },
+    {
+      "severity": "PASS",
+      "title": "Success-criteria coverage and test-with pattern",
+      "description": "- **Functional, technical and integration criteria:** each one maps to a task. That covers owner, claim and heartbeat; active step and item; orphaned and stale in list, wait and prune; the foreground stall; prune protections; the summary line; terminal fitting; pipelines list and show; and the listing-time load test. The technical tests (D3 rows, `process_alive`, `RunHeartbeat`, the observer call order, the `sdk_session` fakes, dispatch mapping, `plan_prune`/`apply_prune`, `fit_widths`, the I/O-bounds extension) are each assigned too.\n- **Test-with pattern:** each test task directly follows its implementation task. Tasks 29\u201330 share Task 31, and Task 32 includes its own tests.\n- **Scope:** nothing is out of scope. Branch creation, the baseline run and the close-out issue are standard process.\n- **Merge and size:** no merge is written as a task. The number of tasks is reasonable for the six sub-features.",
+      "file_ref": null,
+      "category": "coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md:31-33"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "task-format",
+      "raw_category": null,
+      "summary": "Commit markers are checkboxes, not plain `**Commit**:` lines",
+      "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md:112",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "sequencing",
+      "raw_category": null,
+      "summary": "Task 2 stops for the Project Manager on outcomes the design has already decided",
+      "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md:54-60",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "Task 21 does not add liveness injection to `list_run_summaries`, but Tasks 22 and 22a need it",
+      "location": "src/squadron/pipeline/run_listing.py:115-122",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "The new config keys are never wired to the code that uses them",
+      "location": "src/squadron/pipeline/sdk_session.py:327-331",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "spec-consistency",
+      "raw_category": null,
+      "summary": "Task 25's column order contradicts the UI spec",
+      "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md:348-351",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "spec-consistency",
+      "raw_category": null,
+      "summary": "Task 22a adds a timing assertion the design says doesn't exist",
+      "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md:308-320",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "note",
+      "category": "verification",
+      "raw_category": null,
+      "summary": "Task 42 runs walkthrough step 8 against the wrong directory",
+      "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md:521-524",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "note",
+      "category": "sequencing",
+      "raw_category": null,
+      "summary": "Tasks 11\u201312 may leave existing callers broken at their commit",
+      "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md:161-163",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "pass",
+      "category": "coverage",
+      "raw_category": null,
+      "summary": "Success-criteria coverage and test-with pattern",
+      "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md:31-33",
+      "location_verified": true
+    }
+  ],
+  "template_name": "tasks",
+  "input_files": {
+    "input": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md",
+    "against": "project-documents/user/slices/174-slice.run-liveness-stall-bounds-pruning-and-readable-listings.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/squadron-174-tasks"
+  },
+  "timestamp": "2026-11-16T10:02:22.452562",
+  "model": "claude-opus-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 9,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-opus-5-5",
+  "answering_models": [
+    "claude-opus-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 9,
+    "in_fences": 0,
+    "in_section": 9,
+    "surviving": 9
+  },
+  "effort": "high",
+  "profile": "sdk",
+  "turns": 10,
+  "prompt_tokens": 654983,
+  "cached_tokens": 547481,
+  "cache_write_tokens": 107488,
+  "completion_tokens": 9908,
+  "reasoning_tokens": null,
+  "duration_seconds": 105.44652191712521,
+  "cost_usd": 1.1682849,
+  "cost_basis": "provider"
+}

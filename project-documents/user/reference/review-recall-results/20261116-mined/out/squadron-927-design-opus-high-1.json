@@ -1,0 +1,225 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "PASS",
+      "title": "Slice plan scope delivered; deferrals are ones the plan allows",
+      "description": "- Part A: the plan asked for \"the minimum that lets a gate decide\". The design puts one boolean, `diffTruncated`, in frontmatter and the character counts in the header and JSON (D1). D1 also explains why it measures characters, not the `diffBytes` the plan suggested: `_truncate` compares string length, so a bytes field would name a unit the code never measured.\n- Part B: the plan offered two outcomes. The design picks CONCERNS plus a synthetic finding and gives its reasons (D4).\n- Part C: the plan asked when a different id counts as a substitution. D9 answers with an exact snapshot rule that reports a substitution when unsure.\n- Ordering and `--stat` are moved to #137 with a reason, as the plan allows when the work is not small.\n- The plan's two exclusions are kept: the `max_file_size_bytes` defaults, and #114.\n- D3 adds one more case: a diff skipped entirely by the total-injection limit. It is the same failure in its worst form and needs no new branch.\n\nThis is a maintenance bug fix, which fits the 900 scope.",
+      "file_ref": null,
+      "category": "scope",
+      "raw_category": null,
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:31-47"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "An imposed CONCERNS feeds a fix prompt that code changes cannot satisfy",
+      "description": "D4 (line 137) only looks at the `on-concerns` checkpoint. It does not look at `loop:` bodies. Under slice 910 Part A, a loop gating on `until: review.pass` hands the last review's findings to the next dispatch as a fix prompt. When the diff is truncated and the reviewer made no tool calls, that prompt will contain the synthetic `review-coverage` finding (\"Raise review.max_file_size_bytes, narrow the diff, or use a tool-enabled model\"). The implementing agent cannot fix that by editing code. The truncation condition stays true, or gets worse as fixes add lines to the diff, so the loop spends every iteration and then exhausts.\n\nIn the other direction, `until: review.concerns_or_better` exits successfully on the imposed CONCERNS. That fits what CONCERNS means, but the design should say so.\n\nIntegration Points should state what happens on both loop conditions. For the `review.pass` case, pick one:\n- keep the `review-coverage` finding out of the fix prompt, or\n- accept that the loop exhausts, and say that `on_exhaust: checkpoint` is the expected outcome.\n\nAdd a success criterion for whichever is chosen.",
+      "file_ref": null,
+      "category": "integration",
+      "raw_category": null,
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md#integration-points"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`model_substituted: false` states something nobody measured when the provider reports no model",
+      "description": "D10 says JSON always carries `model_substituted`, as `false` when it does not apply. D11 (lines 198-202) covers providers that report nothing, such as Codex. In that case `answering_models` is `[]` and nothing was measured, yet JSON would still say `model_substituted: false`. The design's own convention (line 216) is that \"`None` means 'not reported' and is never replaced by a plausible value\", and the project rule forbids silent fallback values. A program reading `--output json` cannot tell \"verified the same model\" from \"provider never said\".\n\nSet `model_substituted` to `null` when `answering_models == []`. That needs one extra branch in the property. Frontmatter has a similar gap: a missing `requestedModel` does not show the \"not reported\" case. D11 chose that deliberately and records it in the Run Digest, so it needs no change. JSON has no such reason to report a value nobody measured.",
+      "file_ref": null,
+      "category": "data-contract",
+      "raw_category": null,
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:193"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The `answering_models` metadata key is a bare string in three places",
+      "description": "Line 217 makes metadata keys \"string literals, matching the existing `stop_reason`/`tools_given` stamps\". The new key `answering_models` is written by two providers and read in `TurnCapture`'s folding loop (D8, line 174). That is a lookup value in three places, which the project rule forbids: \"define it once (enum, constant, or config) and reference that definition everywhere.\" If one copy is mistyped, `answering_models` comes back empty. D11 would then report \"not reported\", which is exactly the silent wrong answer this slice is meant to remove. Copying the existing pattern does not make it acceptable.\n\nDefine the new key as a module constant that both providers and `turn_capture` import, as the design already does for `<synthetic>` and the snapshot regex. Moving the existing keys over can be left for later.",
+      "file_ref": null,
+      "category": "conventions",
+      "raw_category": null,
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:217"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Any successful tool call turns off the cap; the Value statement claims more than that",
+      "description": "The Value section says a PASS will mean the model \"saw the whole diff or read files with its tools\". D4 (line 131) counts any successful tool call. A single Glob or Grep therefore turns off the cap even if no file was read. The plan's wording is \"did read files\". Count-only tool telemetry probably can't separate read tools from others, so the rule is a reasonable approximation. Restate the Value line as \"made at least one successful tool call\" so that context-forge and Amoeba are not told more than the slice guarantees.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:27"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`impose_diff_coverage` is called \"pure\" but changes the result in place",
+      "description": "The component table calls it \"pure and unit-testable\". D4 has it set `verdict` and `verdict_source` and insert a finding at the front, all on `result` itself. Either return a new result, or describe it as a function that only touches `result` (no I/O, no other state). That avoids confusion in the tasks phase.",
+      "file_ref": null,
+      "category": "design-clarity",
+      "raw_category": null,
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:69"
+    },
+    {
+      "severity": "PASS",
+      "title": "`VerdictSource.IMPOSED` is safe to add",
+      "description": "Slice 916 found that squadron's verdict gates are allowlists, so a new value can be silently mishandled. That risk applies to `Verdict`, and this design leaves `Verdict` alone. `VerdictSource` is only assigned by the parser, has no internal code branching on it, and D5 found no reader in context-forge. The new value only ever lowers PASS. Slice 917's COMMIT validator accepts CONCERNS, as the design notes.",
+      "file_ref": null,
+      "category": "dependencies",
+      "raw_category": null,
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:154-156"
+    },
+    {
+      "severity": "PASS",
+      "title": "Failure modes listed for the new provider read paths",
+      "description": "This slice adds no new I/O: it reads extra fields from messages the providers already stream. Each way that can go wrong has a stated handling:\n- **Provider reports nothing:** D11.\n- **Subagent and `<synthetic>` placeholder messages:** D8.\n- **Empty `chunk.model`:** the last non-empty value is used.\n- **More than one model answers:** D12, with a WARNING.\n- **Recovery turn:** counts accumulate across it (line 380).\n- **Provider failure mid-stream:** D13.\n\nEach case is visible, either as a WARNING or in the artifact. The parent architecture states no NFRs, so there is no target to restate.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:168-212"
+    },
+    {
+      "severity": "PASS",
+      "title": "Size fits the plan's effort estimate",
+      "description": "The design has thirteen decisions for a 3/5-effort slice. Each one answers a specific gap:\n- D2 makes `diffTruncated` tri-state, which is needed to tell a clean review from an artifact written before this slice.\n- D6 stops the synthetic finding from hiding a degraded parse.\n\nNothing is configurable without a user. Extracting injection into its own module is explicitly left out (line 379). The new `models/snapshot.py` contains one function, kept with the other model-id code rather than in the review package.\n\nD10 changes the metrology identity for dated OpenAI snapshots. That change is acknowledged and is the right identity for calibration.",
+      "file_ref": null,
+      "category": "proportionality",
+      "raw_category": null,
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md#technical-decisions"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "pass",
+      "category": "scope",
+      "raw_category": null,
+      "summary": "Slice plan scope delivered; deferrals are ones the plan allows",
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:31-47",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "integration",
+      "raw_category": null,
+      "summary": "An imposed CONCERNS feeds a fix prompt that code changes cannot satisfy",
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md#integration-points",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "data-contract",
+      "raw_category": null,
+      "summary": "`model_substituted: false` states something nobody measured when the provider reports no model",
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:193",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "conventions",
+      "raw_category": null,
+      "summary": "The `answering_models` metadata key is a bare string in three places",
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:217",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Any successful tool call turns off the cap; the Value statement claims more than that",
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:27",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "design-clarity",
+      "raw_category": null,
+      "summary": "`impose_diff_coverage` is called \"pure\" but changes the result in place",
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:69",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "pass",
+      "category": "dependencies",
+      "raw_category": null,
+      "summary": "`VerdictSource.IMPOSED` is safe to add",
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:154-156",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "pass",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "Failure modes listed for the new provider read paths",
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:168-212",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "pass",
+      "category": "proportionality",
+      "raw_category": null,
+      "summary": "Size fits the plan's effort estimate",
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md#technical-decisions",
+      "location_verified": null
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md",
+    "against": "project-documents/user/architecture/900-slices.maintenance-and-refactoring.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/squadron-927-design"
+  },
+  "timestamp": "2026-11-16T10:04:48.127318",
+  "model": "claude-opus-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 9,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 209,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-opus-5-5",
+  "answering_models": [
+    "claude-opus-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 9,
+    "in_fences": 0,
+    "in_section": 9,
+    "surviving": 9
+  },
+  "effort": "high",
+  "profile": "sdk",
+  "turns": 10,
+  "prompt_tokens": 843880,
+  "cached_tokens": 739845,
+  "cache_write_tokens": 104017,
+  "completion_tokens": 9218,
+  "reasoning_tokens": null,
+  "duration_seconds": 106.60360762500204,
+  "cost_usd": 1.1652062,
+  "cost_basis": "provider"
+}

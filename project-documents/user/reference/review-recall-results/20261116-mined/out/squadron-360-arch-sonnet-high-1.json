@@ -1,0 +1,260 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "Index-range decision contradicts the current naming convention",
+      "description": "The document says outputs draw from the \"reserved\" 940-949 range. It says overflow into 950+ is \"sanctioned\" and that no convention change is needed. The current convention says otherwise:\n- `file-naming-conventions.md:514` says \"Existing files numbered under the former 940-949 analysis range keep their names\". The range is retired.\n- Lines 510-511 say an analysis for an initiative takes the initiative's base index, so `360-analysis.*` is the preferred form. Otherwise it is numbered 900-989.\n- Lines 244 and 579 say 900-989 \"never continues into 990-999\", and 990-999 are standing slices assigned by hand. Taking \"remaining slots in the 900 band\" would eventually collide with 990 (standing fixes).\n\nThe \"no change to `file-naming-conventions.md`\" claim is also false. The convention governs where generated documents are indexed, and the architecture violates it. The entire index-allocation design needs redoing. This is a Resolved Design Decision, so it must be fixed before slice design.",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md#Output-Conventions"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "\"Both capabilities write `docType: analysis`\" is wrong for Capability 1",
+      "description": "Output Conventions says \"Both capabilities write to the existing `user/analysis/` directory with the existing `docType: analysis`\". Capability 1 also writes `project-documents/user/project-guides/000-concept.{project}.md` (`docType: concept`). It may write an initiative plan with `docType: initiative-plan` in the same directory. Those need their own naming and status handling, and the document doesn't give them any.",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md#Capability-1-Outputs"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Index allocation and re-run behaviour are unspecified for a prompt-only skill",
+      "description": "\"Incrementing per run\" has no owner. A skill is a markdown prompt, and the delivery section rules out CLI changes. Index selection is therefore left to the LLM, which has to scan the directory. `user/analysis/` also holds `*-review.*` files, which makes \"next free number\" ambiguous.\n\nThe `tech-debt-audit` precedent treats each run as an independent sample. An overview is a living deliverable. Regenerating it creates `{index+1}-analysis.overview.md` and leaves no way to tell which one is current.\n\nRe-running Capability 1 has the same gap. `000-concept` may already exist, and the document never says whether the skill refuses, appends, or overwrites it. The sacred \"User-Provided Concept\" section is exactly what a naive re-run would clobber.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md#Output-Conventions"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Capability 2 contradicts its own \"derive, never invent\" rule",
+      "description": "Design Goals say the client document \"is not a place where new claims about the project appear\". The translation rules say \"every claim traces to an input artifact\". Inputs, however, say that when the concept is absent the skill sources purpose \"from the initiative plan plus interview\". Interview answers are not an input artifact, and this is the tested common path.\n\nThe Benefits field is \"derived from initiative descriptions\" and recast \"as outcomes not features\". That recasting is the inference the rules forbid. Nothing in the output schema records provenance, so the trace claim can't be audited.\n\nRisks / Open Questions come from initiative plan notes and are \"stated honestly\" in a document meant for clients. There is no filter for internal-only content such as tech debt or security notes.",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md#Capability-2"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Audience-variant handling is stated two incompatible ways",
+      "description": "Translation rules say \"Emphasis is a generation parameter\" and that client, management and colleague readings share one document. Resolved Design Decisions say \"one neutral document... An emphasis parameter is added only if real use demonstrates the need\". Either a parameter exists in the design or it doesn't. The Capability 2 section should defer it, as the decision does.\n\nThe topic-suffix form `{index}-analysis.overview.{topic}.md` also conflicts with the convention `nnn-analysis.{topic}.md`. It makes the topic `overview.{topic}`.",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md#Translation-rules"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Reading the graph \"by grep\" is not workable, and the hardest step is a black box",
+      "description": "\"Grep for the needed section before reading; never load the whole file\" assumes the JSON is line-structured. A minified or single-line `knowledge-graph.json` returns the whole file from any grep hit. The document names no extraction mechanism, and it rules out CLI changes.\n\nFile-level nodes are the filter, but for a large repo that can still be thousands of nodes. There is no cap, sampling rule, or aggregation strategy.\n\nFlow step 5 and the initiative-plan-candidates output derive initiatives \"from layer boundaries and complexity clustering\". Layers are architectural groupings, not units of work. No algorithm or heuristic is given. This is the \"magic happens\" step, and it is the highest-risk deliverable. I'd defer the candidates, or cut them down to listing layers and hotspots in the analysis document.\n\n\"Initial Technical Direction: Graph (languages, frameworks, dependencies)\" does not match the documented graph shape. `nodes[]` has only `languageNotes?`, and `edges[]` are internal imports. Neither gives package-level dependencies or framework identification.",
+      "file_ref": null,
+      "category": "feasibility",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md#The-understand-anything-Output-Contract"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Upstream contract is unversioned and has no failure handling for a shape mismatch",
+      "description": "The contract is pinned to v2.8.1 facts: Phase 6 tour-builder, Phase 7 `mv` to `.trash-<epoch>`, 7-day purge, issue #301. The document defines no check against `meta.json` or the plugin version. It also doesn't say what the skill does when `tour[]` is empty, a field is renamed, or `layers[]` doesn't cover every file. CLAUDE.md says to fail explicitly and avoid silent fallbacks, so this needs a stated behaviour.\n\nCLAUDE.md also says parser fixtures must use real production format. The document has no test strategy for either skill. It needs at least a real committed sample graph for the consumer side and a fixture-based check of the \"unknown, not invented\" behaviour.\n\nStaleness handling has the same gap. `gitCommitHash` may be missing, may not be an ancestor of HEAD after a rebase, or may sit in a shallow clone. \"Commit distance\" is undefined in those cases, and so is the uncommitted-changes case.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md#The-understand-anything-Output-Contract"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Hygiene policy is inconsistent with tracking the graph",
+      "description": "Goal: \"Leave the working tree clean\". The policy then tracks `knowledge-graph.json`, a file the document itself calls large. It also tracks `meta.json`, which changes on every analysis run. That means large diffs, merge conflicts when two branches re-analyse, and constant churn.\n\n`intermediate/` is neither ignored nor tracked, and the document says only that squadron \"does not touch it\". This leaves the scratch-versus-artifact line unfinished. Whether to track the graph is a user decision. Squadron should not mandate it by editing the user's `.gitignore` on their behalf.\n\nPrecondition 1 says to \"verify the plugin is installed\" and \"report the exact command to run (`/understand`)\". The principle, though, says the graph is data and not a dependency. A teammate can commit the graph without having the plugin, and nothing in the document explains how a skill could detect plugin installation. Drop the install check and key on graph presence.",
+      "file_ref": null,
+      "category": "antipattern",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md#Working-tree-hygiene"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Delivery claims are inconsistent or unverified",
+      "description": "- **Dependency [100]:** Dependencies lists \"[100] CLI command registration for any command surface\", while Delivery says \"no installer, manifest, or CLI change\". Both can't be true. Either drop [100] or say what it provides.\n- **`/sq:overview` installation:** The document doesn't establish how `commands/sq/overview.md` gets installed. Existing `commands/sq/*.md` files were not checked against an installer or manifest. \"No installer change\" is asserted only for Capability (a).\n- **Dispatcher rationale:** The document keeps Capability (b) out of the analysis dispatcher because that would make its name inaccurate. But Capability (a) writes a concept document and initiative-plan candidates. Those are not \"analysis\" either. `commands/sq/analysis.md` describes its skills as audits.",
+      "file_ref": null,
+      "category": "dependencies",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md#Delivery"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Interview question set is inconsistent between flow and table",
+      "description": "Flow step 4 lists \"business context\" and \"known constraints\". The scope table has no business-context row and folds constraints into Development Approach. \"Interview fills only what the graph cannot answer\" conflicts with \"Solution Approach: Graph + interview confirmation\", because a confirmation is a question about structure. This is deferred to slice design as an open question, but the principle and table should agree first.",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md#Interview-scope"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The two capabilities are independent and bundled only by output location",
+      "description": "The Overview says the capabilities \"share that shape and nothing else\", and Dependencies confirms Capability 2 has no external dependency. They share no code, input, or consumer. Bundling them in one initiative lets the riskier Capability 1 delay the simpler Capability 2. Consider separate slice tracks, or sequence Capability 2 first, since it is the fully specified one.",
+      "file_ref": null,
+      "category": "antipattern",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md#Overview"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "Index-range decision contradicts the current naming convention",
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md#Output-Conventions",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "\"Both capabilities write `docType: analysis`\" is wrong for Capability 1",
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md#Capability-1-Outputs",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "Index allocation and re-run behaviour are unspecified for a prompt-only skill",
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md#Output-Conventions",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "Capability 2 contradicts its own \"derive, never invent\" rule",
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md#Capability-2",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "Audience-variant handling is stated two incompatible ways",
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md#Translation-rules",
+      "location_verified": null
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "feasibility",
+      "raw_category": null,
+      "summary": "Reading the graph \"by grep\" is not workable, and the hardest step is a black box",
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md#The-understand-anything-Output-Contract",
+      "location_verified": null
+    },
+    {
+      "id": "F007",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "Upstream contract is unversioned and has no failure handling for a shape mismatch",
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md#The-understand-anything-Output-Contract",
+      "location_verified": null
+    },
+    {
+      "id": "F008",
+      "severity": "concern",
+      "category": "antipattern",
+      "raw_category": null,
+      "summary": "Hygiene policy is inconsistent with tracking the graph",
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md#Working-tree-hygiene",
+      "location_verified": null
+    },
+    {
+      "id": "F009",
+      "severity": "concern",
+      "category": "dependencies",
+      "raw_category": null,
+      "summary": "Delivery claims are inconsistent or unverified",
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md#Delivery",
+      "location_verified": null
+    },
+    {
+      "id": "F010",
+      "severity": "note",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "Interview question set is inconsistent between flow and table",
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md#Interview-scope",
+      "location_verified": null
+    },
+    {
+      "id": "F011",
+      "severity": "note",
+      "category": "antipattern",
+      "raw_category": null,
+      "summary": "The two capabilities are independent and bundled only by output location",
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md#Overview",
+      "location_verified": null
+    }
+  ],
+  "template_name": "arch",
+  "input_files": {
+    "input": "project-documents/user/architecture/360-arch.document-intelligence.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/squadron-360-arch"
+  },
+  "timestamp": "2026-11-16T10:16:23.309143",
+  "model": "claude-sonnet-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 10,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 2,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-sonnet-5-5",
+  "answering_models": [
+    "claude-sonnet-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 11,
+    "in_fences": 0,
+    "in_section": 11,
+    "surviving": 11
+  },
+  "effort": "high",
+  "profile": "sdk",
+  "turns": 11,
+  "prompt_tokens": 558240,
+  "cached_tokens": 471308,
+  "cache_write_tokens": 86918,
+  "completion_tokens": 9286,
+  "reasoning_tokens": null,
+  "duration_seconds": 80.5248330840841,
+  "cost_usd": 0.48830390000000007,
+  "cost_basis": "provider"
+}

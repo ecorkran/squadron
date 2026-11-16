@@ -1,0 +1,33 @@
+{
+ "review": "r16",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Discovery-stage rejections are never persisted as `SliceQualification` records",
+   "description": "The first functional criterion requires a `SliceQualification` for every slice index in the `slice_ranges` record. Task 13 returns `multiple_landings` and `branch_contains_merges` only as `DiscoveryResult` entries. Task 15 writes records for the pre-sandbox checks, and Task 19 writes them for harness errors. Task 20 says `build_slice_cases` prints \"one result line per candidate\" and records the stopping candidate as `harness_error`. No task writes a stored record for a discovery rejection. Task 22's yield rows count rejections \"from stored `SliceQualification`s\" and promise one count per `SliceCandidateRejection` value. So the two rejections the design says are \"candidates to relax if they dominate\" would be missing from the yield report.\n\nThere is also a keying problem. The record id includes `landing_after_sha`, and a `multiple_landings` slice has no single landing. Add a step to Task 13 or 20 that writes a `rejected` `SliceQualification` for each discovery rejection, and decide which landing sha keys a `multiple_landings` record. Add tests that these records exist and appear in the yield rows.",
+   "location": "project-documents/user/tasks/426-tasks.slice-cases.md:196"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Qualification and judge-plan work is split into more tasks and test files than the slice needs",
+   "description": "Tasks 15\u201319 each add one stage to the same `qualify_slice_candidate` function, with five separate test files. Tasks 31\u201334 do the same for `diff_judge_runner.py`, with four test files. These are single-function increments with no commit between them.\n- **Qualification:** merge Task 17 (repeats) into Task 18 (regression selection and case), which are the same pipeline tail. Keep Tasks 15 and 16 as the pre-sandbox and sandbox stages, and keep Task 19's error wrapping. Use one `test_slice_qualify.py` with a section per stage.\n- **Judge plan:** merge Tasks 31 and 32 (plan inputs, refusals, pairs and counts) into one task. Merge Tasks 33 and 34 (bound, cap, lock, resume) into one. Use one test file for each pair.\n\nThis cuts about four tasks and about five test files without losing any criterion.",
+   "location": "project-documents/user/tasks/426-tasks.slice-cases.md:167-191"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Two load-style tests trace to no success criterion or stated NFR",
+   "description": "The slice design states no NFR, but the Context Summary (line 53) adds \"load tests\". One is the eight-concurrent-`invoke` test in Task 24. The other is the 200-pair slow-dispatcher plan in Task 33. Neither maps to a Functional, Technical or Integration requirement, and neither sits in `tests/load/` or is gated in CI.\n\nKeep the parts the criteria do need: per-invoke home isolation, and a hung dispatcher cut at `timeout_s` with an ERROR log and the pair left unrecorded. Drop the 200-pair run and the \"load test\" framing, or name the requirement it serves.",
+   "location": "project-documents/user/tasks/426-tasks.slice-cases.md:223"
+  },
+  {
+   "i": 3,
+   "severity": "NOTE",
+   "title": "Branch-step failure in `SliceCaseRunner.invoke` has no test",
+   "description": "Task 24's implementation bullet treats \"a `CfRegistrationError` or a failed branch step\" as a harness absence logged at ERROR. The test bullet covers only a failing `cf set arch`. Add a case where `git branch --show-current` or the detached-HEAD branch creation fails. It should assert the harness absence, the ERROR log, and that the invoker double is never called. That makes the failure-mode rule hold for each new I/O step.",
+   "location": "project-documents/user/tasks/426-tasks.slice-cases.md:223"
+  }
+ ]
+}

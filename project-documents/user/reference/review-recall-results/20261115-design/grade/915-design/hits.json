@@ -1,0 +1,4 @@
+{"case":"915-design","flaws":[
+{"id":"F1","text":"Part A changes first_unfinished_step but design accounts for only two resume callers; run.py has four (653 finalize-as-COMPLETED, 799, 1102, 1159)","hits":{"r03":[3],"r07":[3],"r08":[5],"r10":[5],"r13":[4],"r18":[5]}},
+{"id":"F2","text":"Part C adds pause WARNING to _execute_loop_body only; _execute_loop_step also short-circuits on PAUSED (executor.py:1136), and Part B covers both shapes","hits":{"r09":[4],"r10":[3],"r11":[3],"r13":[3],"r15":[4]}}
+],"note":"r18-5 counted for F1 though hedged (asks to confirm prompt-only callers unaffected); r02-7, r11-5 (interfaces/helper hops) not counted."}

@@ -1,0 +1,47 @@
+{
+ "review": "r03",
+ "findings": [
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Re-execution semantics of the resumed round are unspecified and may re-trigger the same pause",
+   "description": "D1 rationale 2 says that after a human chooses Continue, \"proceed\" means \"the next round, not the next step.\" D1's consequence and D3's flow then resume at the paused round N, via `range(start_iteration, max + 1)`. The doc never says whether round N is re-run from its first body step or only from the point after the checkpoint.\n\nIf round N is re-run from the start, the dispatch and review that produced CONCERNS run again. An `on-concerns` checkpoint can then fire again on the same round, and the user is paused repeatedly. The design also does not say how this interacts with 911's `revision_number:`, or whether round N's artifacts are written twice. The Verification Walkthrough step 3 expects \"rounds 2\u20133 execute,\" so it assumes full re-execution without examining it.\n\nAdd an explicit statement of what resume re-runs inside the paused round. Add a Success Criterion for the \"checkpoint fires again on the re-run\" case. Either the rerun is intended and documented, or it is avoided.",
+   "location": "project-documents/user/slices/915-slice.loop-checkpoint-pause-resume-correctness.md#D1 and #D3"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Silent clamp and ignore paths for the resume coordinate violate the no-silent-fallback rule, and bad-state cases are unenumerated",
+   "description": "D3 says `start_from_iteration` is \"clamped to `>= 1` when the target step is a loop, and ignored (with a DEBUG log) when the target step is not a loop.\" Project rules forbid silent fallbacks and require failure modes to be observable at WARNING or above. The design does not handle these cases:\n- A paused loop step whose recorded `iteration` is 0 or missing. The clamp hides a corrupt or legacy state file instead of failing.\n- A recorded iteration greater than `max`, for example because the pipeline definition changed between pause and resume. `range(start_iteration, max + 1)` is then empty, so the loop runs zero rounds and the step probably reports success. That is the same silent-skip failure class as #48.\n- Several `StepState` entries for the same step name. A loop paused at round 1 and resumed, then paused again at round 2, leaves two paused entries. `resume_iteration_for` does not say which entry it returns. The document describes `first_unfinished_step` as a status filter but never defines this lookup's tie-break.\n\nReplace the clamp with an explicit error (or a WARNING plus a defined behavior), and define \"latest entry for the step\" for the lookup. Add tests that assert the observable signal for each case, per the failure-mode rule.",
+   "location": "project-documents/user/slices/915-slice.loop-checkpoint-pause-resume-correctness.md#D3"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Part A changes a predicate with four callers, but the design wires and analyzes only two",
+   "description": "The Risk section says `first_unfinished_step` is \"the single predicate behind both resume paths.\" It is called from four places in `run.py`:\n- the explicit `--resume` path;\n- the implicit paused-run path;\n- the prompt-only `--next` handler, `_handle_prompt_only_next`;\n- the prompt-only `--step-done` handler, `_handle_step_done`.\n\nThe prompt-only handlers are neither named nor analyzed. `_handle_step_done` records the first \"unfinished\" step as done. After Part A, a PAUSED or FAILED step recorded in a prompt-only run is returned again instead of the following step. That changes prompt-only behavior, and it may or may not be intended. The Component Structure table, the Success Criteria, and the regression test cover only the two resume paths.\n\nState what happens in the prompt-only flows, or scope Part A so they are unchanged. Add a test for each affected caller. Relatedly, `first_unfinished_step` and `resume_iteration_for` are two queries that the CLI must compose consistently at each call site. One query returning a (step name, iteration) pair would remove the drift risk and avoid duplicating the pairing at every site.",
+   "location": "project-documents/user/slices/915-slice.loop-checkpoint-pause-resume-correctness.md#Risk-Assessment and #Component-Structure"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "The pause-time WARNING is misleading once Parts A and B land, and the real failure signals are in the wrong place",
+   "description": "D4's mandatory WARNING says rounds were \"not run\" every time a loop pauses at an inner checkpoint. After D1, a pause is a normal, resumable state, not an abandonment. A WARNING on every expected `on-concerns` pause is noisy and describes something that no longer happens. The design's own claim that it \"stays correct even if a future change to D1 makes abandonment intentional\" justifies it only for a hypothetical.\n\nThe failure that stays dangerous after the fix is the resume path not re-entering correctly, which is the set of cases in the clamp finding above. Put the WARNING-level signals there. Downgrade the pause-time message to INFO, or cut it. The resume-time INFO is fine. This also trims scope that the slice does not need: the DEBUG ignore path and one of the two mandatory signals.",
+   "location": "project-documents/user/slices/915-slice.loop-checkpoint-pause-resume-correctness.md#D4"
+  },
+  {
+   "i": 5,
+   "severity": "NOTE",
+   "title": "FAILED-status inclusion extends beyond issue #48 but is justified",
+   "description": "Including `FAILED` in the resumable set goes beyond the reported bug. The doc argues it is the same mechanism and flags the behavior change under Risk, so it is reasonable. The denylist form also correctly leaves `SKIPPED` counted as complete. The sketch is a denylist, while the prose says \"in a terminal-complete status.\" Aligning the two wordings would avoid confusion. Sequencing Part A as a separate commit, as the Risk section proposes, is a good bisect boundary.",
+   "location": "project-documents/user/slices/915-slice.loop-checkpoint-pause-resume-correctness.md#D2"
+  },
+  {
+   "i": 6,
+   "severity": "NOTE",
+   "title": "Project fix-workflow classification should be stated",
+   "description": "The project's fix rules say a fix gets its own slice only when it is a vertical slice of functionality. Part B adds a new capability, re-entry at a recorded iteration, with a new executor parameter and a first reader for persisted state. That plausibly justifies a slice. A one-line statement that this is a slice rather than a standing-fixes task group, and why, would close the question. This is informational, because the slice plan presumably assigned the slice.",
+   "location": "project-documents/user/slices/915-slice.loop-checkpoint-pause-resume-correctness.md#Overview"
+  }
+ ]
+}

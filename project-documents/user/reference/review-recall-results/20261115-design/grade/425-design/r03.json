@@ -1,0 +1,54 @@
+{
+ "review": "r03",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Grading gets its own cap, which breaks the architecture's single-cap spend rule",
+   "description": "Architecture 420 has two relevant statements. The Design Goals say a run \"states its upper bound in dollars before any dispatch and stops at its own cap, which covers grading and judging as well as the replays\". The Cost consideration says the run-level cap covers grading and judging. D9 replaces this with a per-`grade`-invocation cap and says so: \"This departs from the architecture\". The requirement it leaves unmet is a single stated bound for a benchmark's total spend. Total spend becomes the run cap plus an open-ended number of grade invocations, each with its own cap. 424 (line 258) already follows D9, but the architecture text is unchanged. Other slices (426 judging, 427) will read the architecture and inherit the contradiction.\n\nThree details weaken the \"bound\" further:\n- When the store has no prior review cost, the per-review figure comes from the user's `--review-cost`. The printed bound is then a user-supplied guess and says so (\"The figure is an estimate\").\n- A review that raises or times out under `asyncio.wait_for` (D7) returns no `ReviewOutcome`, so no `cost_usd` exists. D9 only covers `cost_usd=None` for reviews that returned. Money spent on failed reviews is therefore not counted against the cap.\n- A cap hit between floor runs writes no reference record (D8). A rerun repays the floor runs already spent.\n\nRecommendation: amend the architecture's Cost section in the same change so the architecture states the per-invocation model. Alternatively, have `grade` draw from the run's remaining cap. Charge a failed or timed-out review at the per-review figure. Persist reference floor runs incrementally so a rerun does not repay them.",
+   "location": "project-documents/user/slices/425-slice.grading-and-paired-report.md:220-236 (D9)"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "A failed grading review voids the objective grade, which couples the LLM signal to the objective one",
+   "description": "Architecture 420 says \"Objective before opinion\", and that LLM signals are \"reported beside them \u2026 never folded into them\". Under D7, `review_failed` is a harness absence, and a harness absence drops the case from every config's comparison (D13, D16). The review also runs first in the pipeline, so a review failure ends `grade_one` before any test runs. A reviewer timeout, a rate limit or an `UNKNOWN` verdict therefore removes an otherwise measurable hidden-test and regression result from the objective table. For a reference, one failed floor run out of three drops the whole case (D8).\n\nThis ties the objective comparison's n to an unmeasured reviewer's reliability. It also wastes the paid replays for that case. Recommendation: record the review as absent on the grade (the review columns show \"not measured\" for that subject) and still run the objective steps. Only the review-findings section should exclude that subject. Reserve case-dropping for failures that make the objective grade invalid.",
+   "location": "project-documents/user/slices/425-slice.grading-and-paired-report.md:205-211 (D7), :213-218 (D8), :306 (D16)"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Report row identity omits `tool_use` and `max_output_tokens`, contradicting the slice's own dependency statement",
+   "description": "The 420 dependency bullet says report rows group by 420's D6 identity rule (model, profile, effort sent, `tool_use`, `max_output_tokens`). D13 then keys rows by `(alias, model, profile, effort_sent)`. This leaves out the two fields the dependency says are required. It also adds `alias`, which is not part of that identity rule. The architecture's goal that \"a report compares only results that match\" is not met for configs that differ only in `tool_use` or `max_output_tokens`. Those configs would be merged into one row, or split inconsistently. D13 says rows are \"never silently merged\", but that clause only covers prompt identity. Recommendation: make D13's key match the dependency bullet, and state whether `alias` is a display label only.",
+   "location": "project-documents/user/slices/425-slice.grading-and-paired-report.md:58 vs :263 (D13)"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Failure modes for several new I/O paths are not enumerated",
+   "description": "D16 is a good table, but it leaves several paths without a stated hang, timeout or disconnect strategy. The failure-mode rule requires each to be explicit and observable.\n- **Reinstall hang.** D5 handles a reinstall that fails. It does not handle one that hangs (`uv sync --locked` with network access). No timeout or absence class is named. `grader_timeout` is defined only as \"a suite run hit `benchmark.suite_timeout_s`\".\n- **Git calls.** The `git apply`, `git show` and `git diff` calls via `ProcessRunner` have no timeout stated. `reference_unreadable` covers a failed `git show` or `git diff`, but not a hung one.\n- **Grade lock.** The behavior when the grade lock is already held is not stated. 424 says a second invocation refuses; this slice only says \"behaves as 424's benchmark lock does\".\n- **Review cost on failure.** No requirement says the cost of a failed review is observable. See the first finding.\n\nRecommendation: add the missing absences or timeouts to D16, and extend the technical-requirements test list to cover each.",
+   "location": "project-documents/user/slices/425-slice.grading-and-paired-report.md:193-197 (D5), :293-312 (D16)"
+  },
+  {
+   "i": 4,
+   "severity": "NOTE",
+   "title": "Rebuilding in a fresh sandbox departs from \"same sandbox\" in the architecture and slice plan",
+   "description": "The architecture principle and the slice plan entry both say the grader runs \"in the same sandbox\" after the producer finishes. D1 rebuilds from `start_sha` plus the stored diff, \"as 424 states\", and adds an `environment_changed` check. That is a defensible design. It adds a harness-drop mode for any lockfile resolution, `uv` or interpreter drift during a long benchmark. It also costs a reinstall for each subject. The architecture text should be updated to match. The drop count for `environment_changed` should be treated as a health signal on the first run.",
+   "location": "project-documents/user/slices/425-slice.grading-and-paired-report.md:161-162 (D1)"
+  },
+  {
+   "i": 5,
+   "severity": "NOTE",
+   "title": "A timeout on a replay when the reference passed is dropped for every config",
+   "description": "The architecture names \"the grader timed out\" as a harness cause, so D16 is consistent with it. In practice, if the reference passed within `suite_timeout_s` in the same environment and a replay's hidden or regression run hangs, the producer's code is the likely cause. Dropping the case from every config means a config that writes hanging code is never charged for it. This is worth tracking as a measured rate on the first run, and the architecture rule may need a refinement.",
+   "location": "project-documents/user/slices/425-slice.grading-and-paired-report.md:302 (D16)"
+  },
+  {
+   "i": 6,
+   "severity": "NOTE",
+   "title": "Some detail could be deferred if the slice runs long",
+   "description": "Most of the scope is assigned by the slice plan entry, so no cut is required. If effort runs over, two items go beyond what the plan states:\n- The 4-way suppression matrix in D6 (noqa and type-ignore, each counted for source and for test). The plan only asks that suppressions be counted.\n- The `PROJECTED_SAMPLE_COUNTS` projections at k = 1, 2, 3 and 5 in D15. The plan only asks that the measured sample count be recorded and shown.",
+   "location": "project-documents/user/slices/425-slice.grading-and-paired-report.md:199-203 (D6), :282-291 (D15)"
+  }
+ ]
+}

@@ -1,0 +1,47 @@
+{
+ "review": "r09",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "\"Project source\" includes test helpers, so they can wrongly pass the test-first check",
+   "description": "D11 defines project source as any file under the tree, outside `.venv`, that is not `test_*.py`, `*_test.py` or `conftest.py`. That makes helper modules such as `tests/helpers.py`, `tests/factories.py` and `tests/fixtures/*.py` count as project source, and the packages they live in count as project modules.\n\nTwo errors follow, and both point the wrong way for the architecture's fairness rule (\"an exception raised by project code (the crash the fix cures) qualifies\"):\n- An exception raised inside a test helper becomes `project_exception` (D11 step 4). 422 would accept that as a valid test-first failure.\n- An `AttributeError` on a test-helper module becomes `missing_symbol`.\n\nThere is also a gap in the other direction. A `ModuleNotFoundError` for a project submodule the fix added (`squadron.new_mod`) has no `__file__`, so step 2 cannot call it a project module. That case falls through to `other_exception`, which is the safe direction but makes the slice plan's \"import/missing-symbol\" category miss the most common case.\n\nDefine project source from what the project declares as its packages: the src-layout or `[tool.*]` package directories, or the top-level package names found at the start commit. Then exclude the test directories (pytest `testpaths`, or `tests/`) as a whole. Match `ModuleNotFoundError` on the top-level package name. Add a fixture test for an exception raised in a test helper.",
+   "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:220"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "A network failure during install is recorded as a permanent lock failure",
+   "description": "`EnvironmentFailureReason` has `no_lockfile`, `lockfile_unsupported`, `lock_stale_or_unresolvable`, `install_timeout` and `installer_missing`. Nothing covers a network drop, a DNS failure or a registry 5xx in the middle of a download. Under D5's wording (\"a package that no longer downloads \u2026 fail[s]\") those become `lock_stale_or_unresolvable`.\n\nPer the architecture, \"a lockfile that no longer resolves disqualifies the case\", and 422 records that reason as an exclusion. A brief outage during qualification would therefore drop cases for good under a wrong reason, and the yield report would count them as unresolvable. That breaks \"Absent is not zero\": a harness failure must not look like a property of the case. This is the install path's \"peer disconnects mid-send\" failure, and it has no handling.\n\nAdd a separate reason (for example `install_network_error`), set from uv's fetch and connection errors. Do not let it count as disqualifying. Add a test for it in the failure-path tests at line 316.",
+   "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:152"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Two suite-runner failure paths are unspecified",
+   "description": "D10 covers a timeout and a missing or unparseable JSONL file when pytest exits non-zero. Two cases are left open:\n1. **Truncated last line after a timeout.** When `ProcessRunner` kills the process group, the plugin may be halfway through a line. The design does not say whether that line is dropped or makes the whole file \"unparseable\". If the latter, a timeout raises `SuiteRunError` instead of returning `SuiteRun(timed_out=True)`, and that changes how the case counts.\n2. **Missing JSONL with exit 0.** This can happen if a project's conftest or a pytest-env setting drops the output-path variable. The design only handles a missing file when the exit is non-zero, so with `all_tests()` this comes back empty, which is the \"empty pass\" the same paragraph says must never happen.\n\nSpecify both: ignore an incomplete final line, and raise `SuiteRunError` for a missing JSONL file whatever the exit code. Add both to the failure-path tests at line 316.",
+   "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:209"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Cf registration is assigned to 426, but 424 runs P6 first",
+   "description": "The Excluded list (line 48) assigns \"cf registration of benchmark sandboxes (426)\". Line 291 says 421 provides \"`HistoryFreeSandbox` for the cf registration 426 adds\" and lists this under 424.\n\nThe slice plan's 424 success criteria require producer-only `P6` to run the `implement` step. In 177's design, that is the step that needs the sandbox registered as a cf project. 424 comes before 426 in the keystone order, so registration is needed by 424, possibly by 423's sandbox run, and not first by 426. As written, 424's designer would find no owner for it.\n\nChange the attribution to 424, or to whichever slice first runs a cf-dependent pipeline in a `BenchmarkSandbox`. Make line 291 say plainly what 424 receives.",
+   "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:291"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "The sandbox root puts the store two directories up from the producer",
+   "description": "D4 places benchmark trees at `~/.config/squadron/benchmark/<id>/`. From the producer's working directory, the metrology store is then `../../metrology/`. The store holds case records with `reference_sha`, hidden node ids and, later, other configs' replay records. `../../replays/` and any kept sibling sandboxes are just as close.\n\nThe architecture's leak principle says squadron's config is pointed away from the user's (\"no store, no memory\"). The slice redirects `HOME` but then physically nests the producer inside the user's real squadron config directory. The doc defers this to 424's scan (\"a known leak path\"). But a scan matching the store's absolute path will miss relative reads unless it normalizes paths, and the doc does not pass that requirement on to 424.\n\nThe reason given for this location is only that it keeps the replay and benchmark sweeps apart. A root outside `~/.config/squadron/` does that equally well. Move the root, or if it stays, name relative-path normalization in Special Considerations as an explicit requirement for 424.",
+   "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:146"
+  },
+  {
+   "i": 5,
+   "severity": "NOTE",
+   "title": "Case sets are keyed by name, not `ProjectId`",
+   "description": "The architecture says new record types are \"keyed on `ProjectId`\". D2 keys case sets by name so that 422 can pool cases across projects, which the architecture's yield discussion anticipates. Each case still carries its own `project_id`. The deviation is deliberate and has a reason, but D2 does not mark it as a departure the way D1 does for `reference_sha`. Adding one line would let 422 and 425 see it without comparing the two documents.",
+   "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:134"
+  }
+ ]
+}

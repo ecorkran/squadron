@@ -1,0 +1,40 @@
+{
+ "review": "r07",
+ "findings": [
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "The slice plan's \"CLI, slash command and MCP give identical results\" criterion is dropped",
+   "description": "The 420 slice plan entry for 423 lists \"CLI, slash command and MCP give identical results\" as a success criterion. The design excludes the MCP surface and narrows the criterion to the CLI and `/sq:run` (D9). The reason is sound: squadron has no MCP server for any pipeline. But the slice plan assigns this scope, and dropping it quietly is a CONCERN. Amend the plan entry to remove MCP, or record the deviation in the slice plan, so the parent and the design agree.",
+   "location": "project-documents/user/slices/423-slice.fix-pipeline.md:43"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "The dependency on 422 contradicts the slice plan",
+   "description": "The slice plan says 423 has \"Dependencies: none in this initiative\" and \"can be built earlier\". The design sets `dependencies: [422]` and needs 422 to deliver an issue-text renderer with an optional cutoff (D3, Prerequisites). That is a hidden requirement on another slice's design, and the cutoff is only optional if 422 makes it so. Two fixes would remove the conflict. 423 could own a small renderer for the no-cutoff production case. Or 422's slice doc could be confirmed to expose the optional cutoff. The design also says file mode needs nothing from 422, so steps 1\u20133 of the Development Approach can proceed independently.",
+   "location": "project-documents/user/slices/423-slice.fix-pipeline.md:6"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "The hand-off for refused runs is unspecified, and the report gate may charge configs for report compliance",
+   "description": "D4 refuses to commit when the self-reported gates include a non-zero exit code, or when `failed_before_change` is not true. The tree is left dirty and nothing is committed. The architecture says a replay \"stops at the committed tree\" and that \"committed nothing\" counts as a config-caused fail. So in a benchmark, a producer that edits the code correctly but reports a failing unrelated gate is scored as a fail. Its tree would have passed the hidden test. Pass rate would then partly measure report compliance. Provides to Other Slices says 424 and 425 receive \"the fix commit as the producer's tree\". It does not say what 424 receives when `failure_kind: fix_report` fires. Two things need stating. First, whether 424 may treat `fix_report` failures as config-caused fails with no grade. Or whether the dirty tree is handed to the grader. Second, that this coupling is intended, because the benchmark measures the pipeline as shipped.",
+   "location": "project-documents/user/slices/423-slice.fix-pipeline.md:155"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Failure modes of the new I/O paths are only partly enumerated",
+   "description": "The design covers the fetch timeout, a missing or unreadable issue file, an agent commit that moves HEAD, and cost-cap overrun. These are not stated:\n- `sq _commit --report-file` when the temp file is missing, empty or truncated because the session was interrupted before writing it.\n- A dispatch that hangs or hits its timeout. The design inherits the executor's behavior without saying so, and a failure here leaves the tree dirty.\n- A `sq _fix-prompt` or `sq _commit` call that fails after the session has already started the dispatch.\n\nFor each, say whether it fails with a named kind and a WARNING+ log, and whether a test asserts the signal. The test list covers only the report defects.",
+   "location": "project-documents/user/slices/423-slice.fix-pipeline.md:197"
+  },
+  {
+   "i": 5,
+   "severity": "NOTE",
+   "title": "Proportionality is acceptable but the prompt-only path is the heaviest part",
+   "description": "The design adds a step type, two actions, five modules, two hidden commands and a parity test. The effort estimate rises from 2/5 to 3/5, and the document says so. The slash-command parity comes from the slice plan, so I don't recommend cutting it. If effort becomes a problem, the report schema could shrink to the fields 424 and 425 consume: `summary`, `blocked` and a gate list. The `failing_tests` and `failed_before_change` checks are the only fields not needed by anything in the architecture.",
+   "location": "project-documents/user/slices/423-slice.fix-pipeline.md:344"
+  }
+ ]
+}

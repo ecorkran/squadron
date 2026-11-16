@@ -1,0 +1,297 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "PASS",
+      "title": "Success criteria trace to tasks",
+      "description": "Mapping: no build path reads or writes `adoption.state`, runs detection, or spawns `sq` \u2192 3.3, 5.1 (snapshot and `sq` marker). A Phase 0 brownfield build returns the concept prompt and writes nothing \u2192 5.1, 6.3. Byte identity \u2192 2.2, 3.7, 6.1 (the planned case is weak, see below). CLI/MCP parity \u2192 5.1. Guide warning \u2192 3.5, 3.6, 6.1. `services/` imports \u2192 3.3, 6.2. Export audit \u2192 6.2. Walkthrough steps 1\u20135 \u2192 6.3, 5.1, 2.2, 6.2. D1\u2013D6 each have a task. \"Runs detection\" has no direct test; it shows only through output, which is acceptable.",
+      "file_ref": null,
+      "category": "coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/268-tasks.pure-cf-build.md"
+    },
+    {
+      "severity": "PASS",
+      "title": "No scope creep; exclusions respected",
+      "description": "Nothing touches `adoptionNavigation.ts`, the `adoption.state` key description, the detection report, reference docs, the guide prompt, or `MIN_GUIDE_VERSION`. Every row of the Migration Plan and Tests lists is assigned to a task. There is no merge or push task. The mutation step in 5.1 is the only check beyond the design.",
+      "file_ref": null,
+      "category": "scope",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/268-tasks.pure-cf-build.md"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Already-planned golden never reaches the removed code",
+      "description": "Case 2 is a planned project at Phase 4 with the `design` instruction. The design says the resolver runs only in Phase 0 (`project-documents/user/slices/268-slice.pure-cf-build.md:32`). This golden therefore cannot catch a regression from removing the resolver. The criterion \"already-planned builds are byte-identical\" (slice line 190) is unproven for the phase where the removed code runs. The Phase 4 case still guards the render changes in 3.1\u20133.2. Add a planned project with the Phase 0 concept instruction as a third golden. D6 fixes the count at \"exactly two cases\" (slice line 140), so the design needs the same amendment.",
+      "file_ref": null,
+      "category": "coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/268-tasks.pure-cf-build.md:73"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "CLI side of the purity test does not run the CLI",
+      "description": "5.1 defines the CLI path as \"pipeline plus integrator, as build.ts does it\", so the test calls the pipeline directly. A write added to `cli/src/commands/build.ts` would pass. The parity check at line 182 compares MCP with a re-creation of the CLI. Walkthrough 6.3 runs the real binary but does not compare its output with MCP. Drive the CLI side through the existing build command tests (`cli/tests/commands/build.test.ts` or `build.integration.test.ts`), or put the parity check there. Also state which MCP output is compared. The guide warning is a separate second text item (slice line 192).",
+      "file_ref": null,
+      "category": "verification",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/268-tasks.pure-cf-build.md:179"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Mutation check injects the write into the test, not production code",
+      "description": "The success criterion says the test must fail \"when run against code that writes state.\" This step adds a `writeFileSync` of `.context-forge.toml` \"in the CLI path of the test.\" That shows the snapshot helper detects changes. It does not show that the purity test catches a state-writing build. Put the temporary write in production code (the pipeline or `ContextIntegrator` path), confirm the snapshot and `sq`-marker assertions fail, then revert.",
+      "file_ref": null,
+      "category": "verification",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/268-tasks.pure-cf-build.md:185"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Commit points are checkboxes, not markers",
+      "description": "The commit steps are checkbox items at lines 79, 99, 101, 134, 148, 155, 163, 169 and 186. Project markers are plain `**Commit**:` lines, and implementation commits only at markers. This file has none, so the rule falls back to one commit per top-level task. That would merge 4.1\u20134.4 into one commit and contradict the file's own cadence. Convert the commit steps to `**Commit**:` plain lines at the working points. Once 3.2 carries a marker, 3.2a (a commit-only task, effort 1) can fold into 3.2.",
+      "file_ref": null,
+      "category": "conventions",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/268-tasks.pure-cf-build.md:101"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Task 4.2 may fail its check while the probe still exists",
+      "description": "4.2 removes the `SquadronProbe` type from `adoption/contracts.ts`. Its check greps `packages/*/src` and `packages/*/tests` for that name. The probe module, `detection/squadronProbe.ts`, and its contract test are deleted only in 4.4. The source files were not in the review inputs, so this is an inference. If the probe implements or imports that type, 4.2's typecheck and grep fail, and the 4.2 commit is not a working point. Check the probe's imports first. If it uses the type, move 4.4 ahead of 4.2.",
+      "file_ref": null,
+      "category": "sequencing",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/268-tasks.pure-cf-build.md:154"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Section 3 note on expected typecheck failures is wrong for the CLI",
+      "description": "The note says only `mcp-server` typecheck fails between 3.4 and 3.6, and that `cli` passes once 3.5 is done. After 3.4 rebuilds core, `build.ts` still passes the second argument, which the one-argument signature rejects. So `cli` also fails until 3.5. Correct the note to say that `cli` and `mcp-server` both fail until their tasks are done.",
+      "file_ref": null,
+      "category": "sequencing",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/268-tasks.pure-cf-build.md:87"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Task 5.1 is the largest task",
+      "description": "It has seven sub-steps covering four proofs (purity, parity, explicit key, mutation), one test file, one commit, and effort 3. An optional split is 5.1 for the harness and the CLI/MCP purity runs, and 5.2 for the parity and explicit-key checks. The file is cohesive, so one task is acceptable.",
+      "file_ref": null,
+      "category": "granularity",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/268-tasks.pure-cf-build.md:175"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Golden capture passes a non-default option and does not pin `sq`",
+      "description": "Line 75 says to capture \"exactly as the current code does,\" then passes `{ adoptionStateWrites: 'read-only' }`, which is not the default. Decide whether the golden must match default behavior or whether the option is a guard against writes into the fixture. The golden test also does not pin `PATH`/`sq` the way 5.1 does. If the current Phase 0 path spawns `sq` even for greenfield, the golden could differ between machines. Confirm that before 2.2 runs. Check the `'read-only'` value against the `AdoptionStateWrites` type, not against this file.",
+      "file_ref": null,
+      "category": "verification",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/268-tasks.pure-cf-build.md:75"
+    },
+    {
+      "severity": "NOTE",
+      "title": "\"No format script\" is an unverified claim",
+      "description": "The success criterion (slice line 197) requires format to pass. Tasks 3.7 and 6.1 run build, typecheck, lint, and test, with no format step, and rely on lint as the formatter gate. I could not check `package.json`. If a format script exists, add it to 3.7 and 6.1.",
+      "file_ref": null,
+      "category": "verification",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/268-tasks.pure-cf-build.md:41"
+    },
+    {
+      "severity": "NOTE",
+      "title": "6.2 grep cannot print nothing as written",
+      "description": "`fileComprehension` matches `COMPREHENSION_PROFILE_VARIABLE = 'fileComprehension'` in `detection/comprehensionAnalysis.ts`, which the task keeps. The line says \"prints nothing\" and then describes that exception. Exclude that file from the grep so the check is mechanical.",
+      "file_ref": null,
+      "category": "clarity",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/268-tasks.pure-cf-build.md:198"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Purity test covers two `adoption.state` values, not \"whatever it holds\"",
+      "description": "The criterion (slice line 189) says \"whatever `adoption.state` holds.\" 5.1 runs with the key absent and with `in_progress`. D5 argues that `complete` adds nothing (slice line 127), which is reasonable. Cover the valid values in the same test, or narrow the criterion's wording in the design.",
+      "file_ref": null,
+      "category": "coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/268-tasks.pure-cf-build.md:179"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "pass",
+      "category": "coverage",
+      "raw_category": null,
+      "summary": "Success criteria trace to tasks",
+      "location": "project-documents/user/tasks/268-tasks.pure-cf-build.md",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "pass",
+      "category": "scope",
+      "raw_category": null,
+      "summary": "No scope creep; exclusions respected",
+      "location": "project-documents/user/tasks/268-tasks.pure-cf-build.md",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "coverage",
+      "raw_category": null,
+      "summary": "Already-planned golden never reaches the removed code",
+      "location": "project-documents/user/tasks/268-tasks.pure-cf-build.md:73",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "verification",
+      "raw_category": null,
+      "summary": "CLI side of the purity test does not run the CLI",
+      "location": "project-documents/user/tasks/268-tasks.pure-cf-build.md:179",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "verification",
+      "raw_category": null,
+      "summary": "Mutation check injects the write into the test, not production code",
+      "location": "project-documents/user/tasks/268-tasks.pure-cf-build.md:185",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "conventions",
+      "raw_category": null,
+      "summary": "Commit points are checkboxes, not markers",
+      "location": "project-documents/user/tasks/268-tasks.pure-cf-build.md:101",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "concern",
+      "category": "sequencing",
+      "raw_category": null,
+      "summary": "Task 4.2 may fail its check while the probe still exists",
+      "location": "project-documents/user/tasks/268-tasks.pure-cf-build.md:154",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "concern",
+      "category": "sequencing",
+      "raw_category": null,
+      "summary": "Section 3 note on expected typecheck failures is wrong for the CLI",
+      "location": "project-documents/user/tasks/268-tasks.pure-cf-build.md:87",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "note",
+      "category": "granularity",
+      "raw_category": null,
+      "summary": "Task 5.1 is the largest task",
+      "location": "project-documents/user/tasks/268-tasks.pure-cf-build.md:175",
+      "location_verified": true
+    },
+    {
+      "id": "F010",
+      "severity": "note",
+      "category": "verification",
+      "raw_category": null,
+      "summary": "Golden capture passes a non-default option and does not pin `sq`",
+      "location": "project-documents/user/tasks/268-tasks.pure-cf-build.md:75",
+      "location_verified": true
+    },
+    {
+      "id": "F011",
+      "severity": "note",
+      "category": "verification",
+      "raw_category": null,
+      "summary": "\"No format script\" is an unverified claim",
+      "location": "project-documents/user/tasks/268-tasks.pure-cf-build.md:41",
+      "location_verified": true
+    },
+    {
+      "id": "F012",
+      "severity": "note",
+      "category": "clarity",
+      "raw_category": null,
+      "summary": "6.2 grep cannot print nothing as written",
+      "location": "project-documents/user/tasks/268-tasks.pure-cf-build.md:198",
+      "location_verified": true
+    },
+    {
+      "id": "F013",
+      "severity": "note",
+      "category": "coverage",
+      "raw_category": null,
+      "summary": "Purity test covers two `adoption.state` values, not \"whatever it holds\"",
+      "location": "project-documents/user/tasks/268-tasks.pure-cf-build.md:179",
+      "location_verified": true
+    }
+  ],
+  "template_name": "tasks",
+  "input_files": {
+    "input": "project-documents/user/tasks/268-tasks.pure-cf-build.md",
+    "against": "project-documents/user/slices/268-slice.pure-cf-build.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/context-forge-268-tasks"
+  },
+  "timestamp": "2026-11-16T09:50:57.533450",
+  "model": "claude-haiku-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 4,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-haiku-5-5",
+  "answering_models": [
+    "claude-haiku-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 13,
+    "in_fences": 0,
+    "in_section": 13,
+    "surviving": 13
+  },
+  "effort": "xhigh",
+  "profile": "sdk",
+  "turns": 5,
+  "prompt_tokens": 209425,
+  "cached_tokens": 95227,
+  "cache_write_tokens": 114192,
+  "completion_tokens": 71299,
+  "reasoning_tokens": null,
+  "duration_seconds": 304.27377229207195,
+  "cost_usd": 0.21873007,
+  "cost_basis": "provider"
+}

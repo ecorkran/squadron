@@ -288,3 +288,26 @@ Notes:
 - sol found one flaw nobody else did (425's rules hash inside a one-per-benchmark identity).
 - **Selection bias:** sonnet was the original reviewer of the six 42x designs, and haiku of the 426 task file. Those documents were committed after their review findings were addressed, so the flaws left in them are ones the original reviewer did not get fixed. On the two cases neither model first reviewed (915 and 302, 3 flaws): haiku-xhigh 3, opus-high 2, sonnet-high 0, sol 0.
 - One run per model, 9 cases, six of them from one initiative. Precision is not graded.
+
+## 15. Design review, 3 runs, six Claude configs (2026-11-16)
+
+**Method:** the same 9 cases and 25 flaws as section 14, `sq review` with read tools, 6 configs × 3 runs = 162 reviews (run 1 of haiku-xhigh, opus-high and sonnet-high reused from section 14; the other 135 new). Scripts, outputs and logs: `20261115-design/` (`run.sh`, `jobs.txt`, `out/`). Grading: nine Sonnet agents, one per case, blind (model names stripped, order shuffled, seed 20261116); each matched findings against that case's VALID flaws. Blind inputs, per-case `hits.json`, `map.json` (review id to config) and `score.py`: `20261115-design/grade/`. Agent grades, not hand-checked.
+
+| Config | Flaws found per run (of 25) | Found in any of 3 runs | Cost/run | Median time |
+|---|---|---|---|---|
+| haiku-xhigh | 5.3 (6, 4, 6) | 11 | $0.34 sub | 314 s |
+| opus-high | 5.3 (6, 4, 6) | 9 | $0.96 sub | 108 s |
+| fable-medium (claude-fable-5-2) | 4.3 (5, 5, 3) | 7 | $2.10 sub | 104 s |
+| opus-medium | 4.0 (4, 3, 5) | 6 | $0.79 sub | 76 s |
+| sonnet-high | 2.7 (2, 3, 3) | 4 | $0.48 sub | 74 s |
+| sonnet-medium | 2.3 (2, 3, 2) | 3 | $0.39 sub | 50 s |
+
+Notes:
+- 16 of 25 flaws were found by at least one run; 9 by none, including both uncompletable tasks in 426-tasks (0 of 18 reviews).
+- Pairs, run 1 each / 3 runs each: haiku-xhigh + opus-high 8 / 14; haiku-xhigh + fable-medium 8 / 11; opus-high + fable-medium 9 / 10. All six configs: 11 / 16.
+- Flaws found by exactly one config: haiku-xhigh 4, opus-high 3, opus-medium 1. Fable found none alone.
+- Effort matters for opus (high 5.3 against medium 4.0 per run) and not for sonnet.
+- Two flaws were found by almost every review (425 F3 by 17 of 18, 426 F5 by 18 of 18). Without them the table would separate less.
+- Selection bias from section 14 still applies: sonnet-5-5 originally reviewed the six 42x designs, so it is measured on flaws it did not get fixed.
+- Slice designs and one task breakdown only. No architecture documents.
+- haiku-xhigh and opus-high differ within noise; both are clearly above sonnet.

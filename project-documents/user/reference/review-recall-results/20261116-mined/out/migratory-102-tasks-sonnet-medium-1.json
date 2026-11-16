@@ -1,0 +1,207 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "PASS",
+      "title": "Success criteria coverage and sequencing",
+      "description": "Every functional criterion maps to a task:\n- **Protocol conformance:** 3.1/3.2 and 4.1/4.2.\n- **Hand-constructed inputs:** the known cases in 3.2 and 4.2.\n- **No-neighbor, stationary and zero-leadership edge cases:** 3.2 and 4.2.\n- **`active_indices` isolation:** both test tasks.\n- **Self-exclusion:** 4.2.\n- **`tick()` directional bias:** 5.2.\n- **Backward-incompatible state and profile updates:** 1.2 and 2.2.\n- **Profile differentiation:** 5.3.\n\nDependencies run in order: state, then profile, then the simpler force, then the neighbor-based force, then integration. Each implementation task is followed directly by its tests. No task is scope creep.",
+      "file_ref": null,
+      "category": "coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:27-183"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Convergence assertion in 5.2 is too weak to prove the success criterion",
+      "description": "The criterion says the herd's mean heading \"converges toward the leaders' initial heading\". Task 5.2 only asserts that the mean heading has a positive x-component. With 45 random-velocity agents, a positive x-component can occur with no leadership effect at all, so the test can pass without the forces doing anything and can also be seed-sensitive. The control comparison that makes the result meaningful is only in 5.3, and 5.3 uses an \"or\" assertion (lower variance OR stronger eastward bias, lines 160-161). That \"or\" lets either metric pass trivially.\n\nFix: merge 5.2 and 5.3 into one test run against the flocking-only control. Assert one pre-chosen metric, for example that the herding mean eastward component exceeds the control's by a stated margin.",
+      "file_ref": null,
+      "category": "test-quality",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:147-154"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Redundant tasks: 5.1 overlaps 5.2, and Section 6 repeats earlier verifications",
+      "description": "- **5.1:** 5.2 already runs all five forces through `tick()`. 5.1 adds only a \"runs without error\" check, and its step \"confirm forces interact correctly\" (line 144) has no assertion.\n- **6.2:** it repeats the `isinstance` checks already in 3.1, 3.2, 4.1 and 4.2.\n- **6.1:** it repeats the full-suite runs at the end of 1.2 and 2.2.\n\nCut 5.1 (or fold it into the merged 5.2/5.3 test) and drop 6.2. Keep 6.1 as the final gate, merged into the last commit task.",
+      "file_ref": null,
+      "category": "proportionality",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:141-182"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Commit steps are checkbox tasks, and 6.3 may be a bookkeeping-only commit",
+      "description": "Project convention is plain `**Commit**:` marker lines, never checkboxes. Here every commit is a numbered, checked-off task (1.3, 2.3, 3.3, 4.3, 5.4, 6.3). Replace them with plain `**Commit**:` lines at the same working, tested points. 6.3 says \"git add any remaining changes\" with a `docs:` message. If everything is already committed, that commit would only check boxes or add notes, which the project forbids. Drop 6.3 and put the final commit marker after the last test task.",
+      "file_ref": null,
+      "category": "process",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:48-49,73-74,103-104,134-135,164-165,180-182"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Epsilon is specified twice as an inline example literal",
+      "description": "Tasks 3.1 and 4.1 each say \"epsilon (e.g. 1e-10)\". Project rules forbid scattered magic values and duplicated constants. A junior implementer will likely hard-code `1e-10` in both forces. Add a step in 3.1 to define one named module-level constant in `herding.py`, and have 4.1 reference it.",
+      "file_ref": null,
+      "category": "code-quality",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:86,117"
+    },
+    {
+      "severity": "NOTE",
+      "title": "\"Vectorized, no nested Python loops\" has no explicit task step",
+      "description": "The technical requirement says both forces are vectorized within each agent's neighborhood. Task 4.1 writes the weighted average as `sum(velocity[i] * leadership[i]) / sum(leadership)`, which a junior could implement as an inner Python loop. Add a step stating that the per-neighbor weighted average uses NumPy array operations (indexing plus a weighted sum) inside a single per-agent loop.",
+      "file_ref": null,
+      "category": "coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:113-120"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Profile lookup per agent is not described",
+      "description": "Tasks 3.1 and 4.1 use `profile.momentum_weight` and `profile.leadership_weight` but never say how to get an agent's profile from `state.profile_indices` and `profiles`. Point to the equivalent lookup in `src/migratory/engine/flocking.py` so the implementer follows the same pattern.",
+      "file_ref": null,
+      "category": "clarity",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:80-91,110-121"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Test count in MomentumForce tests is slightly generous",
+      "description": "The known case, the direction test and the magnitude-scaling test (lines 96-98) overlap heavily for a one-line formula. This is acceptable, but the direction and scaling tests could be a single parametrized test.",
+      "file_ref": null,
+      "category": "proportionality",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:96-98"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "pass",
+      "category": "coverage",
+      "raw_category": null,
+      "summary": "Success criteria coverage and sequencing",
+      "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:27-183",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "test-quality",
+      "raw_category": null,
+      "summary": "Convergence assertion in 5.2 is too weak to prove the success criterion",
+      "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:147-154",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "proportionality",
+      "raw_category": null,
+      "summary": "Redundant tasks: 5.1 overlaps 5.2, and Section 6 repeats earlier verifications",
+      "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:141-182",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "process",
+      "raw_category": null,
+      "summary": "Commit steps are checkbox tasks, and 6.3 may be a bookkeeping-only commit",
+      "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:48-49,73-74,103-104,134-135,164-165,180-182",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "code-quality",
+      "raw_category": null,
+      "summary": "Epsilon is specified twice as an inline example literal",
+      "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:86,117",
+      "location_verified": null
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "coverage",
+      "raw_category": null,
+      "summary": "\"Vectorized, no nested Python loops\" has no explicit task step",
+      "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:113-120",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "note",
+      "category": "clarity",
+      "raw_category": null,
+      "summary": "Profile lookup per agent is not described",
+      "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:80-91,110-121",
+      "location_verified": null
+    },
+    {
+      "id": "F008",
+      "severity": "note",
+      "category": "proportionality",
+      "raw_category": null,
+      "summary": "Test count in MomentumForce tests is slightly generous",
+      "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:96-98",
+      "location_verified": true
+    }
+  ],
+  "template_name": "tasks",
+  "input_files": {
+    "input": "project-documents/user/tasks/102-tasks.herding-and-leadership.md",
+    "against": "project-documents/user/slices/102-slice.herding-and-leadership.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/migratory-102-tasks"
+  },
+  "timestamp": "2026-11-16T09:29:06.641945",
+  "model": "claude-sonnet-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 2,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-sonnet-5-5",
+  "answering_models": [
+    "claude-sonnet-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 8,
+    "in_fences": 0,
+    "in_section": 8,
+    "surviving": 8
+  },
+  "effort": "medium",
+  "profile": "sdk",
+  "turns": 3,
+  "prompt_tokens": 104465,
+  "cached_tokens": 11436,
+  "cache_write_tokens": 93025,
+  "completion_tokens": 4658,
+  "reasoning_tokens": null,
+  "duration_seconds": 41.66501758317463,
+  "cost_usd": 0.4203115,
+  "cost_basis": "provider"
+}

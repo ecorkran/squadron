@@ -1,0 +1,171 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Task 1 fixture edits break existing tests, and the unindexed example never matches",
+      "description": "- **The unindexed example can't match.** Task 1 suggests `7. [~] Feature Epsilon without explicit index \u2014 cut for scope.` with no `**\u2026**` around the name. `PLAN_UNINDEXED_RE` (`packages/core/src/introspection/parsers/slicePlanParser.ts:9`) requires the bold name. The line would still be dropped after the regex change, so Task 5's unindexed assertion fails. The slice design's criterion uses `N. [~] **Name** \u2014 rationale`.\n- **A bolded unindexed line still breaks things.** It would get fallback index 1 and sort first. That breaks the `entries[0]` (index 101) and `entries[2]` (index 103) assertions at `packages/core/tests/introspection/slicePlanParser.test.ts:12-30`. It also breaks the \"every entry `indexSource: explicit`\" test at `slicePlanParser.test.ts:126-129`.\n- **Other tests that use this fixture break too.** `packages/core/tests/introspection/ArtifactIntrospector.test.ts:52` asserts `totalSlices` is 5. Task 5 only updates the length and totals test in `slicePlanParser.test.ts`.\n- **Fix:** put both `[~]` forms in a new sibling fixture, which the slice design allows (\"or add a sibling fixture\"), and leave `sample-slice-plan.md` alone. The existing tests then prove the regression criterion unchanged. Task 5's edits to the existing totals test and its added \"byte-identical regression\" test can then be dropped.",
+      "file_ref": null,
+      "category": "test-design",
+      "raw_category": null,
+      "location": "packages/core/tests/fixtures/introspection/sample-slice-plan.md"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Task 8 misses the second `Pick` and wrongly describes the caller",
+      "description": "`resolveEntryStatus` is only called from `resolveEntryStatusSafe`, not with a full `SlicePlanEntry`. `resolveEntryStatusSafe` also declares `entry: Pick<SlicePlanEntry, 'index' | 'isChecked'>` (line 736). If only line 694 is widened, the call at line 740 won't type-check. Task 8 should say to widen both `Pick`s, and drop the claim that \"its only caller passes a full SlicePlanEntry\".",
+      "file_ref": null,
+      "category": "task-accuracy",
+      "raw_category": null,
+      "location": "packages/core/src/introspection/WorkflowNavigator.ts:734-740"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Task 9's reason for changing the initializer is wrong, and the `degraded` path is not covered",
+      "description": "- **The stated reason is wrong.** Task 9 says the initializer at line 91 is the value used if `detectDocuments` throws. It isn't: the `catch` at line 126 sets `derivedStatus = 'degraded'`, so whatever line 91 holds is overwritten. The edit is harmless but would mislead whoever implements it.\n- **The real gap is not mentioned.** Lines 122-123 return `'degraded'` before `deriveEntryStatus` runs. A `[~]` entry with an unreadable task file or bad frontmatter therefore shows `degraded`, not `deprecated`. Decision 4 says a plan-line `[~]` is definitionally true regardless of what the task file or frontmatter says, so arguably it should win here too.\n- **Fix:** replace the line-91 step with a decision on whether plan-line deprecated takes priority over `degraded` in `slice.ts` and in `resolveEntryStatusSafe`. If it does, add one test for it.",
+      "file_ref": null,
+      "category": "task-accuracy",
+      "raw_category": null,
+      "location": "packages/cli/src/commands/slice.ts:91-127"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`arch-status-vs-plans` has no test",
+      "description": "The criterion names both `plan-status-vs-entries` and `arch-status-vs-plans`. Task 12 only tests the first. Both read the same `completedSlices` value from the parser, so the risk is low. One more case, or an explicit note in Task 12 that this is covered transitively, would close the trace.",
+      "file_ref": null,
+      "category": "coverage",
+      "raw_category": null,
+      "location": "packages/core/src/introspection/ConsistencyChecker.ts"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Task 11's \"stop and report to the Project Manager\" step",
+      "description": "Project rules ignore steps that wait on the PM unless a named rule requires them. Saying \"don't guess at a fix\" fits the debugging rule, which is to get evidence first. The step could simply say to diagnose with the test output instead of stopping.",
+      "file_ref": null,
+      "category": "process",
+      "raw_category": null,
+      "location": "unverified"
+    },
+    {
+      "severity": "PASS",
+      "title": "Coverage and order",
+      "description": "Each success criterion maps to tasks:\n- parsing both forms: Tasks 2, 3 and 5\n- `completedSlices` arithmetic: Tasks 4 and 5\n- `cf list slices` display and next marker: Tasks 9 and 10\n- `cf next` skips the entry: Tasks 8 and 11\n- ConsistencyChecker: Task 12\n- regex regression: Task 5\n\nNo task falls outside the slice's scope. Test tasks come right after what they test. The `**Commit**:` points after Tasks 5, 7, 10, 11 and 12 each sit at a tested state. There's no NFR, so no load test is needed.",
+      "file_ref": null,
+      "category": "traceability",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/918-tasks.sliceplanparser-deprecated-entry-handling.md"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "test-design",
+      "raw_category": null,
+      "summary": "Task 1 fixture edits break existing tests, and the unindexed example never matches",
+      "location": "packages/core/tests/fixtures/introspection/sample-slice-plan.md",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "task-accuracy",
+      "raw_category": null,
+      "summary": "Task 8 misses the second `Pick` and wrongly describes the caller",
+      "location": "packages/core/src/introspection/WorkflowNavigator.ts:734-740",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "task-accuracy",
+      "raw_category": null,
+      "summary": "Task 9's reason for changing the initializer is wrong, and the `degraded` path is not covered",
+      "location": "packages/cli/src/commands/slice.ts:91-127",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "note",
+      "category": "coverage",
+      "raw_category": null,
+      "summary": "`arch-status-vs-plans` has no test",
+      "location": "packages/core/src/introspection/ConsistencyChecker.ts",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "process",
+      "raw_category": null,
+      "summary": "Task 11's \"stop and report to the Project Manager\" step",
+      "location": "unverified",
+      "location_verified": null
+    },
+    {
+      "id": "F006",
+      "severity": "pass",
+      "category": "traceability",
+      "raw_category": null,
+      "summary": "Coverage and order",
+      "location": "project-documents/user/tasks/918-tasks.sliceplanparser-deprecated-entry-handling.md",
+      "location_verified": null
+    }
+  ],
+  "template_name": "tasks",
+  "input_files": {
+    "input": "project-documents/user/tasks/918-tasks.sliceplanparser-deprecated-entry-handling.md",
+    "against": "project-documents/user/slices/918-slice.sliceplanparser-deprecated-entry-handling.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/context-forge-918-tasks"
+  },
+  "timestamp": "2026-11-16T09:22:31.882696",
+  "model": "claude-opus-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 11,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-opus-5-5",
+  "answering_models": [
+    "claude-opus-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 6,
+    "in_fences": 0,
+    "in_section": 6,
+    "surviving": 6
+  },
+  "effort": "medium",
+  "profile": "sdk",
+  "turns": 12,
+  "prompt_tokens": 632826,
+  "cached_tokens": 528177,
+  "cache_write_tokens": 104631,
+  "completion_tokens": 5989,
+  "reasoning_tokens": null,
+  "duration_seconds": 67.24885520804673,
+  "cost_usd": 1.0631453,
+  "cost_basis": "provider"
+}

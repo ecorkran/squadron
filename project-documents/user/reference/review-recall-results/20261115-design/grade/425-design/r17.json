@@ -1,0 +1,54 @@
+{
+ "review": "r17",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "D9 overrides the architecture's run-level cap and the architecture is not amended",
+   "description": "Design Goal 5 and the Cost section of 420 say one run-level cap \"covers grading and judging as well as the replays\". The architecture also requires one stated dollar bound before any dispatch. D9 splits grading into its own command with its own cap, bound and lock, and says \"This departs from the architecture.\" Separating the lock scopes is defensible. But the slice only notes that \"the architecture's cost section should say so\". No task or integration point amends 420, or 424's \"425 extends the bound\" sentence. Until 420 is amended, the two documents contradict each other. No single figure bounds a benchmark's total spend, which is now \"run cap + each grade invocation's cap\".\n\nD9 also admits that \"no per-review cap exists\" and that the per-review figure is an estimate (the largest observed cost, or a user-supplied `--review-cost` on the first run). The printed bound is therefore not the guaranteed upper bound the architecture asks for. The slice should state that explicitly in the bound output.\n\nFix: add an explicit step to amend 420's Cost section and Design Goal 5, and 424's sentence, as part of this slice's deliverables. Label the printed bound \"estimated bound, not enforced per review\".",
+   "location": "project-documents/user/slices/425-slice.grading-and-paired-report.md#D9 \u2014 Caps, bound and resume for grading"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "A review failure drops the case from the objective comparison",
+   "description": "The architecture says LLM signals are \"reported beside [objective grades] with their own noise floors, never folded into them\". D7, D8 and D16 make `review_failed` a harness absence. For a replay, a review timeout or an `UNKNOWN` verdict records a harness absence on the grade. D13's case-inclusion rule then drops the whole case from every config, including the hidden-test and regression comparison. For a reference, any failed floor run gives the reference `review_failed`, which drops the case from every config. The walkthrough report example shows this: \"1 dropped (harness: review_failed)\".\n\nA transient API error in the opinion signal therefore deletes an objective, deterministic result. That couples the objective grade to the availability of the reviewer. It also shrinks n for the headline paired comparison.\n\nFix: record the review outcome independently of the test result. A failed review should leave the review columns and floor \"not measured\" for that subject. It should not drop the case from the objective grade. Keep the case drop only for the objective-grade harness absences.",
+   "location": "project-documents/user/slices/425-slice.grading-and-paired-report.md#D7, D8, D16"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "A failed reinstall is always charged to the config, including harness faults",
+   "description": "D5 classifies every failed `uv sync --locked` as `producer_env_unresolvable`, a config absence that counts as a fail. A sync can also fail for harness reasons: index or network outage, a uv version change, or a timeout. The architecture says an environment that \"did not resolve\" is a harness absence that drops the case, so no config is charged for it. The slice has no distinction between \"the producer's lock is inconsistent\" and \"the install could not run\". It also names no timeout for the reinstall. The suite, review and snapshot paths each have a timeout, but this I/O path does not, so a hang here is unhandled.\n\nFix: classify by cause. Use `--locked` exit status or stderr for lock/pyproject mismatch (config), and map network, timeout and tool errors to `environment_failed` (harness). Add a reinstall timeout and the matching D16 row with its test double.",
+   "location": "project-documents/user/slices/425-slice.grading-and-paired-report.md#D5, D16"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Report row identity is inconsistent between Dependencies and D13",
+   "description": "The Dependencies section says rows group by 420's D6 identity: model, profile, effort sent, `tool_use`, `max_output_tokens`. D13 keys rows by `(alias, model, profile, effort_sent)`, which leaves out `tool_use` and `max_output_tokens`. Two configs that differ only in those would silently merge into one row. That violates the \"results stay comparable\" goal. D13 also uses the alias, a user-editable label, as part of the structural key, which the project rules say not to do.\n\nFix: make D13 use one identity definition, imported from 420 D6 or 424's `ProducerConfigRef` identity. Show the alias only as a display label.",
+   "location": "project-documents/user/slices/425-slice.grading-and-paired-report.md:58 and #D13"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "The design is heavier than the slice needs; several pieces can be cut or deferred",
+   "description": "The slice spans 16 decisions, about 10 new modules, 3 record types, a generalized sidecar store and edits to 320, 400, 422 and 424 code. It is rated 4/5, so some trimming is warranted. Candidates:\n- **`SampleSizeEstimate` as a persisted record (D15).** D15 calls it \"a pure function of the grades, so it is recomputed, not appended\". Computing it on demand in `report` and `yield` removes a record type, its store methods (`write_estimate`, `latest_estimate`) and a staleness hazard. It also removes a write step from the grade run's tail.\n- **The `nodes` sidecar kind (D8, D11).** A replay sandbox already starts at `start_sha`, so start node ids can be collected there directly. Keeping this baseline in a reference record adds a coupling and a third sidecar kind.\n- **`PACKAGING_TOOL_TABLES` (D4).** It lists 8 backends for a project that uses uv, hatch and setuptools. Start with the backends the project actually uses and extend when a case needs another.\n- **Report extras in D13.** The \"older grader identity\" line, the \"replays scanned under older `LEAK_RULES_VERSION`\" line and the prompt-identity split warning restate 424 or version-hygiene handling the slice plan does not assign here. Defer them.\n- **`--json` output.** The slice plan does not assign it. Defer it unless a consumer in 426 or 427 needs it.\n\nThe core grader, the paired bootstrap, the floor, the cap and the walkthrough are all assigned by the slice plan and should stay.",
+   "location": "project-documents/user/slices/425-slice.grading-and-paired-report.md#Technical Scope"
+  },
+  {
+   "i": 5,
+   "severity": "NOTE",
+   "title": "Grading in a fresh sandbox departs from the architecture's \"same sandbox\"",
+   "description": "420 and the slice plan say the grade \"runs after the producer finishes, in the same sandbox\". D1 rebuilds the tree from `start_sha` plus the stored diff and never keeps the replay sandbox alive, citing 424. The reasoning is sound: it gives a reproducible grade and allows regrading under a new reviewer. The D1 digest check also confirms the environment matches. The wording in 420 and the plan should be reconciled when D9's amendment is made.",
+   "location": "project-documents/user/slices/425-slice.grading-and-paired-report.md#D1"
+  },
+  {
+   "i": 6,
+   "severity": "NOTE",
+   "title": "Hidden-test clash handling differs in mechanism from the plan",
+   "description": "The plan and architecture say the hidden test is \"renamed\" on a clash. D3 injects the reference's file as a sibling module so both tests run, and it records clashes without renaming. The intent is met: nothing is overwritten and the clash is recorded. The reference grade also catches injection problems (`reference_failed_grade`). The Mitigation section is honest about the residual risk. No change needed beyond updating the plan's wording.",
+   "location": "project-documents/user/slices/425-slice.grading-and-paired-report.md#D3"
+  }
+ ]
+}

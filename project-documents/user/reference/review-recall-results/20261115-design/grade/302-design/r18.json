@@ -1,0 +1,47 @@
+{
+ "review": "r18",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Structured-output constraint for the score is dropped without acknowledgement",
+   "description": "The slice plan entry for 302 assigns this scope: \"Each template uses a structured-output constraint for the score field\", with the success criterion \"The score-with-rationale shape is enforced by the template's structured output.\" The architecture makes the same commitment (Technical Considerations, score reliability, item b). Slice 300 explicitly deferred it here: \"the richer structured-output shape\u2026 is 302's to add\u2026 302 will extend the extraction and add its own parser test for that variant.\"\n\nThe design does the opposite. It relies on a prose `## Rationale` block that is \"prose scaffolding for the model, not a new parser target\", a lenient `score:` line, and \"no parser change needed\". Nothing enforces that a rationale accompanies the score, so a response with a bare `score: 90` passes enforcement.\n\nThe lighter approach may be the right call, but the design must either implement the constraint or record the deviation as a decision and have the slice plan criterion amended. As written, a slice-plan success criterion cannot be met.",
+   "location": "project-documents/user/slices/302-slice.design-phase-judge-templates.md:152-183"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "CLI path is claimed to produce a derived verdict, but enforcement lives only in the pipeline action",
+   "description": "Success criterion 3, the Value section (\"or the `sq review` CLI\"), the Data Flow header (\"Pipeline step or CLI \u2192 ReviewAction._review()\") and Verification step 3 all assert that a CLI run yields a threshold-derived verdict with `provenance == \"judge\"`.\n\nSlice 301 placed `enforce_judge` and threshold resolution in the pipeline review action only. I checked the current engine: the `sq review` command calls the review engine directly and does not go through that action. A CLI judge run would therefore persist `verdict: UNKNOWN` (no `## Summary` is emitted) with no provenance.\n\nThat leaves three options, and the design must pick one:\n- **Add CLI wiring:** make it an explicit code change in this slice, which contradicts \"the one required code change\" at line 54.\n- **Scope the CLI out:** limit SC3 and the walkthrough to the pipeline path.\n- **Escalate to 301:** treat it as a gap in the enforcement layer.\n\nThe note at lines 376-379 defers the \"CLI invocation shape\" to implementation, which hides this. The auto-input-resolution claim for `sq review slice 154` (line 56) should be checked the same way.",
+   "location": "project-documents/user/slices/302-slice.design-phase-judge-templates.md:277-282"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Failure-mode table omits over-cap and unreadable ground truth, and over-cap can pass silently",
+   "description": "The architecture enumerates five judge failure modes that must map to non-passing, logged outcomes. Two are missing from the table: \"injected ground truth exceeding the cap\" and \"missing/unreadable ground-truth file\" (path resolves in `SliceInfo` but the file is absent or unreadable).\n\nThese are the first templates to inject real ground truth (slice design plus a full architecture document), so this is where the modes become live. The existing injection behaviour truncates or skips oversized content with a warning and still runs the review. A judge would then score against partial ground truth and could return `PASS`, which contradicts the \"No silent pass: every row above\u2026\" claim at lines 402-408 and the slice plan's 301 mapping (\"ground truth over the injection cap \u2192 UNKNOWN\").\n\nThe design should add both rows with a handling strategy (for example, fail to `UNKNOWN` for judge templates), or state explicitly that this is a 301 gap being raised rather than absorbed. The design also never says how ground truth is supplied (native read versus injection), though the slice plan entry calls it out.",
+   "location": "project-documents/user/slices/302-slice.design-phase-judge-templates.md:394-408"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Tests for 301's behaviour and restated material can be cut",
+   "description": "For a 2/5 \"templates are data\" slice, some content re-covers slice 301:\n- **Rogue-verdict test:** \"a rogue verdict is discarded\" is already 301's Functional Requirement 7 and has a test there. It is not new to this slice; cut it.\n- **Failure-table rows marked \"Not new\":** rows 1, 2 and 5 restate 301 and 300 handling. Replace them with a one-line reference and keep only the rows this slice actually introduces, plus the two missing ones above.\n- **\"Provides the score-with-rationale pattern for future judges\":** lines 254-257 are speculative; cut or reduce to a sentence.",
+   "location": "project-documents/user/slices/302-slice.design-phase-judge-templates.md:300-305"
+  },
+  {
+   "i": 4,
+   "severity": "NOTE",
+   "title": "Threshold rationale leans on \"weak ground truth\" for a judge the architecture treats as a priority gate",
+   "description": "Template-level defaults with step override, differentiated and conservative, match the architecture. The specific values (78/55, 82/60) are uncalibrated, which the architecture accepts until initiative 320.\n\nOne small inconsistency: `judge.tasks-vs-slice` sets `concerns_floor: 55` and `pass_floor: 78`, both above 301's defaults (75/50). The text frames it as the more trusted judge, but 301 said strong ground truth could justify lower floors. A sentence on why both sit above the defaults would help.",
+   "location": "project-documents/user/slices/302-slice.design-phase-judge-templates.md:218-234"
+  },
+  {
+   "i": 5,
+   "severity": "NOTE",
+   "title": "Verification step 2 asserts a tasks path transformation the design does not describe",
+   "description": "The walkthrough passes `task_files: [\"302-tasks\u2026md\"]` and expects `project-documents/user/tasks/302-tasks\u2026md`. This depends on `_tasks_input` behaviour that the design does not state, including whether the file must exist on disk (the 302 task file does not yet). Confirm it before treating the snippet as runnable.",
+   "location": "project-documents/user/slices/302-slice.design-phase-judge-templates.md:354-357"
+  }
+ ]
+}

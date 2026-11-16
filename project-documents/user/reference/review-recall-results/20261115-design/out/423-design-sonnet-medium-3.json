@@ -1,0 +1,189 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "PASS",
+      "title": "Sandbox and replay integration matches the architecture",
+      "description": "The architecture says the fix pipeline must run in a sandbox with frozen issue text and without GitHub access (420-arch, \"The fix pipeline in a sandbox\"). D2 and D5 provide exactly that, through `issue-file`, `commit-to: current` and `--io-dir`. D7 keeps the pipeline free of Context Forge calls in that mode. The architecture requires a fix pipeline of its own, because `implement` needs a design and task file. The design provides one, and it is a single `fix` step that 424 can run without forking anything. Producer-only mode and replay are left to 424, as the architecture and slice plan assign.",
+      "file_ref": null,
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/423-slice.fix-pipeline.md#Technical Decisions"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The slice plan's \"CLI, slash command and MCP give identical results\" criterion is dropped",
+      "description": "The 420 slice plan entry for 423 lists \"CLI, slash command and MCP give identical results\" as a success criterion. The design excludes the MCP surface and narrows the criterion to the CLI and `/sq:run` (D9). The reason is sound: squadron has no MCP server for any pipeline. But the slice plan assigns this scope, and dropping it quietly is a CONCERN. Amend the plan entry to remove MCP, or record the deviation in the slice plan, so the parent and the design agree.",
+      "file_ref": null,
+      "category": "scope",
+      "raw_category": null,
+      "location": "project-documents/user/slices/423-slice.fix-pipeline.md:43"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The dependency on 422 contradicts the slice plan",
+      "description": "The slice plan says 423 has \"Dependencies: none in this initiative\" and \"can be built earlier\". The design sets `dependencies: [422]` and needs 422 to deliver an issue-text renderer with an optional cutoff (D3, Prerequisites). That is a hidden requirement on another slice's design, and the cutoff is only optional if 422 makes it so. Two fixes would remove the conflict. 423 could own a small renderer for the no-cutoff production case. Or 422's slice doc could be confirmed to expose the optional cutoff. The design also says file mode needs nothing from 422, so steps 1\u20133 of the Development Approach can proceed independently.",
+      "file_ref": null,
+      "category": "dependencies",
+      "raw_category": null,
+      "location": "project-documents/user/slices/423-slice.fix-pipeline.md:6"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The hand-off for refused runs is unspecified, and the report gate may charge configs for report compliance",
+      "description": "D4 refuses to commit when the self-reported gates include a non-zero exit code, or when `failed_before_change` is not true. The tree is left dirty and nothing is committed. The architecture says a replay \"stops at the committed tree\" and that \"committed nothing\" counts as a config-caused fail. So in a benchmark, a producer that edits the code correctly but reports a failing unrelated gate is scored as a fail. Its tree would have passed the hidden test. Pass rate would then partly measure report compliance. Provides to Other Slices says 424 and 425 receive \"the fix commit as the producer's tree\". It does not say what 424 receives when `failure_kind: fix_report` fires. Two things need stating. First, whether 424 may treat `fix_report` failures as config-caused fails with no grade. Or whether the dirty tree is handed to the grader. Second, that this coupling is intended, because the benchmark measures the pipeline as shipped.",
+      "file_ref": null,
+      "category": "integration-points",
+      "raw_category": null,
+      "location": "project-documents/user/slices/423-slice.fix-pipeline.md:155"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Failure modes of the new I/O paths are only partly enumerated",
+      "description": "The design covers the fetch timeout, a missing or unreadable issue file, an agent commit that moves HEAD, and cost-cap overrun. These are not stated:\n- `sq _commit --report-file` when the temp file is missing, empty or truncated because the session was interrupted before writing it.\n- A dispatch that hangs or hits its timeout. The design inherits the executor's behavior without saying so, and a failure here leaves the tree dirty.\n- A `sq _fix-prompt` or `sq _commit` call that fails after the session has already started the dispatch.\n\nFor each, say whether it fails with a named kind and a WARNING+ log, and whether a test asserts the signal. The test list covers only the report defects.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/423-slice.fix-pipeline.md:197"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Proportionality is acceptable but the prompt-only path is the heaviest part",
+      "description": "The design adds a step type, two actions, five modules, two hidden commands and a parity test. The effort estimate rises from 2/5 to 3/5, and the document says so. The slash-command parity comes from the slice plan, so I don't recommend cutting it. If effort becomes a problem, the report schema could shrink to the fields 424 and 425 consume: `summary`, `blocked` and a gate list. The `failing_tests` and `failed_before_change` checks are the only fields not needed by anything in the architecture.",
+      "file_ref": null,
+      "category": "proportionality",
+      "raw_category": null,
+      "location": "project-documents/user/slices/423-slice.fix-pipeline.md:344"
+    },
+    {
+      "severity": "PASS",
+      "title": "Cost-cap NFR is restated and tested",
+      "description": "The architecture requires the benchmark's replays to run under `pipeline.max_cost_usd`. The design restates the cap (`--max-cost`, `pipeline.max_cost_usd`, `failure_kind: cost_cap`). It adds a verification step (`--max-cost 0.01`) and leaves the cap mechanism unchanged.",
+      "file_ref": null,
+      "category": "nfr",
+      "raw_category": null,
+      "location": "project-documents/user/slices/423-slice.fix-pipeline.md:252"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "pass",
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "summary": "Sandbox and replay integration matches the architecture",
+      "location": "project-documents/user/slices/423-slice.fix-pipeline.md#Technical Decisions",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "scope",
+      "raw_category": null,
+      "summary": "The slice plan's \"CLI, slash command and MCP give identical results\" criterion is dropped",
+      "location": "project-documents/user/slices/423-slice.fix-pipeline.md:43",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "dependencies",
+      "raw_category": null,
+      "summary": "The dependency on 422 contradicts the slice plan",
+      "location": "project-documents/user/slices/423-slice.fix-pipeline.md:6",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "integration-points",
+      "raw_category": null,
+      "summary": "The hand-off for refused runs is unspecified, and the report gate may charge configs for report compliance",
+      "location": "project-documents/user/slices/423-slice.fix-pipeline.md:155",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "Failure modes of the new I/O paths are only partly enumerated",
+      "location": "project-documents/user/slices/423-slice.fix-pipeline.md:197",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "proportionality",
+      "raw_category": null,
+      "summary": "Proportionality is acceptable but the prompt-only path is the heaviest part",
+      "location": "project-documents/user/slices/423-slice.fix-pipeline.md:344",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "pass",
+      "category": "nfr",
+      "raw_category": null,
+      "summary": "Cost-cap NFR is restated and tested",
+      "location": "project-documents/user/slices/423-slice.fix-pipeline.md:252",
+      "location_verified": true
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/423-slice.fix-pipeline.md",
+    "against": "project-documents/user/architecture/420-arch.model-benchmark.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261115-design/wt/423-design"
+  },
+  "timestamp": "2026-11-16T07:25:34.063847",
+  "model": "claude-sonnet-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 4,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-sonnet-5-5",
+  "answering_models": [
+    "claude-sonnet-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 7,
+    "in_fences": 0,
+    "in_section": 7,
+    "surviving": 7
+  },
+  "effort": "medium",
+  "profile": "sdk",
+  "turns": 5,
+  "prompt_tokens": 339731,
+  "cached_tokens": 337463,
+  "cache_write_tokens": 2260,
+  "completion_tokens": 4174,
+  "reasoning_tokens": null,
+  "duration_seconds": 37.86067320895381,
+  "cost_usd": 0.0853129,
+  "cost_basis": "provider"
+}

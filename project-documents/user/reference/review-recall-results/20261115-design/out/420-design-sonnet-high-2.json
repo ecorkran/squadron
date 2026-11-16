@@ -1,0 +1,189 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "PASS",
+      "title": "Effort-as-sent is covered across paths, including failure paths",
+      "description": "The 17-row inventory and decisions D1\u2013D5 cover the plan's four success criteria: an inventory, a send test per path, a capability-gate test that records \"not sent\", and identity carrying effort sent. The design reuses 175's `UsageCapture` and 931's `Effort` without changing them. The dependency direction is sound: `replay` and `stats` read from `pipeline/usage_capture`, not the reverse. D2 records the session's effort on compaction and never substitutes the alias value, which matches the architecture's \"recorded as not sent, not as the alias's value\". D5 stamps the action result on success and failure paths. That closes the failed-before-telemetry gap, which is the failure mode this slice adds.",
+      "file_ref": null,
+      "category": "architectural-alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/420-slice.effort-audit-across-dispatch-paths.md#Component Structure"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Config identity departs from the architecture and is defined twice",
+      "description": "The architecture defines a config as \"(alias, model, profile, effort sent)\" under \"Results stay comparable over time\". D6 drops the alias and adds `tool_use` and `max_output_tokens`. It says this \"supersedes\" the architecture and does not amend it. 424 and 425 are written against the architecture text, so they will read the old identity.\n\nThere are also two identity definitions after this slice:\n- The stats `ProducerKey` stays `(model, profile, effort, reviewer)`.\n- The replay `config_identity` is `(model, profile, effort_sent, tool_use, max_output_tokens)`.\n\nD6's argument is that `tool_use` and `max_output_tokens` change what is sent. By that argument the stats key merges rows it should not. The design also states \"this slice ships no shared identity type\". That leaves 421\u2013427 to re-derive the rule independently, which breaks DRY and the architecture's comparability goal.\n\nFix by doing both of these:\n- Amend the architecture's identity sentence, or add a pointer from it to D6.\n- Say explicitly whether `ProducerKey` also gains `tool_use` and `max_output_tokens`. If it does not, state why the two keys may differ.",
+      "file_ref": null,
+      "category": "architectural-boundaries",
+      "raw_category": null,
+      "location": "project-documents/user/slices/420-slice.effort-audit-across-dispatch-paths.md:142-147, 160-163"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`action_effort_sent` collapses \"unknown\" into \"not sent\"",
+      "description": "State Management distinguishes three cases: `null` (not sent), a level, and an absent key (predates the slice, or failed before resolution). D5's reader returns `None` when the key is absent and `usage` is `None`. That puts these runs in the \"backend default\" row, which is the stand-in defect D5 exists to remove:\n- a pre-slice failed run;\n- a post-slice run that failed before model resolution.\n\nThe architecture says \"Absent is not zero\". D5 argues that pre-resolution failures are counted by failure class. It does not say that `sq stats producers` and replay actually exclude them from effort rows. Replay has `NO_RUN_STATE`, but `sq stats producers` is not shown to have a comparable filter.\n\nFix by making the reader return a distinct \"unknown\" result for an absent key. Alternatively, state the exclusion rule for each consumer and add a test that a pre-resolution failure does not appear in the null-effort row.",
+      "file_ref": null,
+      "category": "data-integrity",
+      "raw_category": null,
+      "location": "project-documents/user/slices/420-slice.effort-audit-across-dispatch-paths.md:109, 137-138"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Provides section claims more than the inventory delivers",
+      "description": "\"Provides\" promises that every alias-resolving dispatch path, \"including the grading review and the judge, sends and records effort\". The inventory says three paths do not record:\n- Path 7, the findings-addressed judge, writes no record and is excluded.\n- Paths 10 and 11 are harness-run and write no record.\n\nDownstream slices (424, 425, 427) will read this contract. Narrow the sentence to name the paths that send and record, and the paths that send but write no record. The architecture's \"every run records the effort actually sent\" also needs a stated exception for these paths.",
+      "file_ref": null,
+      "category": "integration-points",
+      "raw_category": null,
+      "location": "project-documents/user/slices/420-slice.effort-audit-across-dispatch-paths.md:163 (see rows 7, 10, 11 at lines 68, 71-72 and Excluded at line 39)"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Design is heavier than a 2/5 \"small\" slice needs",
+      "description": "The plan calls this slice small, Low risk, and 2/5. The design touches about 15 modules across `pipeline`, `replay`, `stats`, `metrology` and `cli`. It adds a new metadata key and a two-function API, new optional fields on two record types, and a report regrouping. Items that can be cut or deferred without leaving a plan criterion unmet:\n- **Enumeration test (D7):** the plan asks for an inventory and a test per path, not a source-parsing guard. Its classification table duplicates the inventory table in this document, so there are two sources of truth to keep in sync. Defer it, or drop the table here and point to the test.\n- **Inventory rows 13\u201317:** these are paths with no alias and nothing to change. A short exclusion sentence covers them.\n- **`tool_use` and `max_output_tokens` on `ProducerConfigRef`:** the plan's identity is effort-based. These fields are justified only if replay identity stays alias-free. Defer them to 424, where implementation-replay identity matters, unless the alias-free grouping ships here.\n- **\"One test per sending path (1\u201312)\":** path 12 is a reader of paths 1\u20136. Test it once as a reader, not as a sending path.",
+      "file_ref": null,
+      "category": "proportionality",
+      "raw_category": null,
+      "location": "project-documents/user/slices/420-slice.effort-audit-across-dispatch-paths.md:60-78, 91, 142-152"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Reader raises on unrecognized persisted values without naming the run",
+      "description": "Raising on an unparsable stored `effort_sent` is correct under the project's no-silent-fallback rule. It is the one new read-path failure mode in the design. As written, one bad record can abort an entire `sq replay report` or `sq stats producers` run. The raised error should name the run or record id so the failure is observable and fixable. A test should assert that.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/420-slice.effort-audit-across-dispatch-paths.md:139"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Findings-addressed judge effort change raises spend that is not counted",
+      "description": "D3 makes the findings-addressed judge run at the alias's effort, which can raise its cost. The design also records that this path writes no `UsageRecord`, so its spend never counts against `pipeline.max_cost_usd` (947). The slice scopes the usage gap out, and the CHANGELOG bullet warns users about the cost change. Still, the deferred issue should be filed alongside this slice so the uncapped spend does not stay hidden after the effort change ships.",
+      "file_ref": null,
+      "category": "nfr-interaction",
+      "raw_category": null,
+      "location": "project-documents/user/slices/420-slice.effort-audit-across-dispatch-paths.md:232"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "pass",
+      "category": "architectural-alignment",
+      "raw_category": null,
+      "summary": "Effort-as-sent is covered across paths, including failure paths",
+      "location": "project-documents/user/slices/420-slice.effort-audit-across-dispatch-paths.md#Component Structure",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "architectural-boundaries",
+      "raw_category": null,
+      "summary": "Config identity departs from the architecture and is defined twice",
+      "location": "project-documents/user/slices/420-slice.effort-audit-across-dispatch-paths.md:142-147, 160-163",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "data-integrity",
+      "raw_category": null,
+      "summary": "`action_effort_sent` collapses \"unknown\" into \"not sent\"",
+      "location": "project-documents/user/slices/420-slice.effort-audit-across-dispatch-paths.md:109, 137-138",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "integration-points",
+      "raw_category": null,
+      "summary": "Provides section claims more than the inventory delivers",
+      "location": "project-documents/user/slices/420-slice.effort-audit-across-dispatch-paths.md:163 (see rows 7, 10, 11 at lines 68, 71-72 and Excluded at line 39)",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "proportionality",
+      "raw_category": null,
+      "summary": "Design is heavier than a 2/5 \"small\" slice needs",
+      "location": "project-documents/user/slices/420-slice.effort-audit-across-dispatch-paths.md:60-78, 91, 142-152",
+      "location_verified": null
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "Reader raises on unrecognized persisted values without naming the run",
+      "location": "project-documents/user/slices/420-slice.effort-audit-across-dispatch-paths.md:139",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "note",
+      "category": "nfr-interaction",
+      "raw_category": null,
+      "summary": "Findings-addressed judge effort change raises spend that is not counted",
+      "location": "project-documents/user/slices/420-slice.effort-audit-across-dispatch-paths.md:232",
+      "location_verified": true
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/420-slice.effort-audit-across-dispatch-paths.md",
+    "against": "project-documents/user/architecture/420-arch.model-benchmark.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261115-design/wt/420-design"
+  },
+  "timestamp": "2026-11-16T07:18:20.543092",
+  "model": "claude-sonnet-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 4,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-sonnet-5-5",
+  "answering_models": [
+    "claude-sonnet-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 7,
+    "in_fences": 0,
+    "in_section": 7,
+    "surviving": 7
+  },
+  "effort": "high",
+  "profile": "sdk",
+  "turns": 5,
+  "prompt_tokens": 339256,
+  "cached_tokens": 236226,
+  "cache_write_tokens": 103022,
+  "completion_tokens": 7202,
+  "reasoning_tokens": null,
+  "duration_seconds": 62.055185250006616,
+  "cost_usd": 0.5085145,
+  "cost_basis": "provider"
+}

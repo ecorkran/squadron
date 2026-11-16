@@ -1,0 +1,189 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "`cf config unset --project` deletes the wrong file in the collision recovery path",
+      "description": "Line 89 says delete \"mirrors write \u2014 deletes from whichever project file the key's scope maps to.\" Line 30 says callers keep passing `scope: 'project'` and cannot pick between the shared and personal files. So for the personal key `git.integration_branch`, `cf config unset git.integration_branch --project` deletes from `.context-forge.local.toml`.\n\nThe collision rule at line 146 and walkthrough step 9 at line 259 tell the user to run that same command \"to clear the stale shared-file copy.\" Following the design as written, that command:\n- deletes the personal value (`legacy/value`), which is the value the collision logic was written to protect;\n- leaves the stale shared copy, which then becomes the value that reads resolve to (via the fallback at line 79);\n- leaves the `cf check` warning in place, so step 9's \"confirm `cf check` is clean again\" cannot pass.\n\nThere is no CLI path at all to remove a personal key from the shared file except `migrate-personal`, and on a conflict it deliberately skips the key.\n\nThe simplest fix also removes a branch: when the personal file already has a value, `migrate-personal` should delete the shared copy whether or not the values match. Line 146 already says the shared copy is \"stale and harmless\" and never wins at read time, and the old value stays in git history. Then remove the \"skipped (personal value already set)\" outcome and the `unset` instruction, and rewrite step 9.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:89"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "No `ConfigManager` operation defined for reading or deleting keys in the shared file",
+      "description": "Line 181 says `ConfigManager` gets \"no signature changes,\" but two new consumers need things the current API cannot do.\n- **The `ConsistencyChecker` rule (line 142)** must scan the shared file for personal-scope keys. `ConsistencyChecker` receives an optional, injected `ConfigManager`, whose `get()` returns only the merged value. A personal key with values in both files reports `source: 'project-personal'`, so the stale shared copy can't be seen through `get()`. The design doesn't say whether the checker gets a new `ConfigManager` method or reads the TOML directly. Reading it directly would be a hidden dependency on file paths and would duplicate `readToml`. The design also doesn't say what the rule does when no `ConfigManager` is injected.\n- **`migrate-personal` (line 144)** must \"delete each from the shared file.\" Under the routing at line 89, `delete()` can't target the shared file for a personal key. Line 89 calls `migrate-personal` \"the one exception\" but names no mechanism for it.\n\nAdd the needed method or methods to API Contracts. One option is a single `ConfigManager.findPersonalKeysInSharedFile()` plus a `migratePersonalKeys()` that the CLI command and the checker both call. Keeping the file access inside `ConfigManager` matches the \"routing lives inside `ConfigManager`\" decision at lines 128\u2013132.",
+      "file_ref": null,
+      "category": "interfaces",
+      "raw_category": null,
+      "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md#api-contracts"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Frontmatter dependency differs from the slice plan entry",
+      "description": "The frontmatter declares `dependencies: [914]`, but the slice plan entry says \"Dependencies: none.\" Since 914 is complete and line 45 explains why it's needed, this has no practical effect. Consider updating the plan entry so the two match.",
+      "file_ref": null,
+      "category": "integration",
+      "raw_category": null,
+      "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:6"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`.gitignore` scope text contradicts itself",
+      "description": "Line 32 says the gitignore addition is \"reusing the pattern already used for personal ignores.\" Line 159 says no gitignore-writing logic exists anywhere today, and the slice plan's Future Work entry agrees. Remove the \"reusing the pattern\" clause so implementers don't go looking for code that doesn't exist.",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:32"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`migrate-personal` option shape differs from sibling subcommands",
+      "description": "The design shows `[-p, --project <id>]`, which requires a value. The existing `get`, `set` and `unset` subcommands use `-p, --project [id]`, where the value is optional and a bare flag resolves the project from the current directory. They share `resolveConfigProjectPath`. Use the same optional-value form and the same resolver so `migrate-personal` resolves projects the same way as the other three.",
+      "file_ref": null,
+      "category": "interfaces",
+      "raw_category": null,
+      "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:193"
+    },
+    {
+      "severity": "PASS",
+      "title": "Routing is placed in `ConfigManager`, and dependency direction is preserved",
+      "description": "Making the classification a property of the key, with a required field and no default, matches the plan's instruction to reuse the existing two-file precedence pattern. Callers (`branchGuard`, `WorkflowNavigator`, `ConsistencyChecker`, the CLI and MCP) keep depending on `ConfigManager` in core, so no layer boundary is crossed. Extending the `ConfigResult.source` union was checked against its two display-only consumers.",
+      "file_ref": null,
+      "category": "architecture",
+      "raw_category": null,
+      "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md#routing-lives-inside-configmanager-not-at-call-sites"
+    },
+    {
+      "severity": "PASS",
+      "title": "Scope matches the plan, and failure modes are covered",
+      "description": "Everything the plan assigns is covered: classification, routing, the one-line gitignore addition, the migration story, and the MCP touchpoint. Nothing assigned is deferred. The broader gitignore template stays in Future Work. The new I/O paths (writing the personal file, appending to `.gitignore`, the `migrate-personal` partial-failure order) each have an explicit handling strategy. The slice plan states no NFRs for this path.",
+      "file_ref": null,
+      "category": "proportionality",
+      "raw_category": null,
+      "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md#technical-scope"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "`cf config unset --project` deletes the wrong file in the collision recovery path",
+      "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:89",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "interfaces",
+      "raw_category": null,
+      "summary": "No `ConfigManager` operation defined for reading or deleting keys in the shared file",
+      "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md#api-contracts",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "note",
+      "category": "integration",
+      "raw_category": null,
+      "summary": "Frontmatter dependency differs from the slice plan entry",
+      "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:6",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "note",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "`.gitignore` scope text contradicts itself",
+      "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:32",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "interfaces",
+      "raw_category": null,
+      "summary": "`migrate-personal` option shape differs from sibling subcommands",
+      "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:193",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "pass",
+      "category": "architecture",
+      "raw_category": null,
+      "summary": "Routing is placed in `ConfigManager`, and dependency direction is preserved",
+      "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md#routing-lives-inside-configmanager-not-at-call-sites",
+      "location_verified": null
+    },
+    {
+      "id": "F007",
+      "severity": "pass",
+      "category": "proportionality",
+      "raw_category": null,
+      "summary": "Scope matches the plan, and failure modes are covered",
+      "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md#technical-scope",
+      "location_verified": null
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md",
+    "against": "project-documents/user/architecture/900-slices.maintenance-and-refactoring.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/context-forge-915-slice"
+  },
+  "timestamp": "2026-11-16T10:09:44.368874",
+  "model": "claude-opus-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 6,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-opus-5-5",
+  "answering_models": [
+    "claude-opus-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 7,
+    "in_fences": 0,
+    "in_section": 7,
+    "surviving": 7
+  },
+  "effort": "high",
+  "profile": "sdk",
+  "turns": 7,
+  "prompt_tokens": 416378,
+  "cached_tokens": 330758,
+  "cache_write_tokens": 85608,
+  "completion_tokens": 5624,
+  "reasoning_tokens": null,
+  "duration_seconds": 64.85273583396338,
+  "cost_usd": 0.8641534,
+  "cost_basis": "provider"
+}

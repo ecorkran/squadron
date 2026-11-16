@@ -1,0 +1,207 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Padded representation scales O(n \u00d7 max_neighbors) against a tens-of-thousands-of-agents goal, and the NFR is not restated",
+      "description": "- The architecture's \"Efficient large-scale evaluation\" goal is tens of thousands of agents on one CPU, with the hot loop vectorized. It also says the tick should avoid per-tick allocation (`100-arch.behavior-engine.md`, Technical Considerations, \"Array layout\").\n- `max_neighbors` is set by the single most-crowded agent. Once flocking converges it tends toward n.\n- At n=10K the `indices` array alone is about 800MB, and the gathered `(n_active, max_neighbors, 2)` float64 arrays are about 1.6GB each. Cohesion, alignment, leadership and separation each build one every tick.\n- The slice sizes the cost only at n=100 (~80KB). It dismisses the larger case with \"at n <= 10K\" and \"100K+ may need CSR\", without computing the n=10K figure.\n- The slice does not restate the arch target (tens of thousands) as a requirement for this slice. It also gives no per-tick allocation or memory ceiling.\n- Fix: either state the supported n and a memory/latency bound and show the padded design meets it, or chunk the force evaluation over agent blocks so peak memory is bounded. Block chunking is lighter than moving to CSR. Also decide whether the gathered buffers are reused across forces within a tick.",
+      "file_ref": null,
+      "category": "nfr-scaling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:140-148"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Profile-weight \"list comprehension\" contradicts the slice's own defining constraint and verification grep",
+      "description": "- Success Criteria say \"No Python-level per-agent loops in any `BulkForce.__call__`\" (line 198). The architecture's GPU note says \"no Python-level per-agent branching\".\n- The weight-building snippet is `np.array([profiles[pi].cohesion_weight for pi in state.profile_indices[eval_indices]])`. That is a per-agent Python loop inside every force call, repeated for each weight field.\n- The walkthrough grep (`for.*in.*eval_indices`) would match this exact line. The slice would fail its own check.\n- The deferral \"precompute if needed at higher n\" is the wrong way round. The lighter option is also the compliant one: build a `(n_profiles,)` array per weight field once per tick, or cache it with the profile set, and index it with `weights_table[state.profile_indices[eval_indices]]`.\n- The loop then runs over profiles (a handful), not agents. This also fits the \"profile as data\" principle.",
+      "file_ref": null,
+      "category": "internal-consistency",
+      "raw_category": null,
+      "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:127-136"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`-1` padding is described as \"never dereferenced\", but the gather dereferences it",
+      "description": "- The doc says padded entries are \"never dereferenced thanks to `mask`\". The Cohesion example does `state.positions[neighbor_data.indices]` over the full padded array, so every `-1` is dereferenced.\n- NumPy wraps `-1` to the last agent, so the gather returns a plausible but wrong value rather than failing. Correctness then depends on each of the five forces remembering to apply the mask before reducing. A force that forgets produces silently wrong output, which conflicts with the project's no-silent-fallback rule.\n- Separation also needs the mask applied before the inverse-square division, or padded rows feed bad values into it. This is not stated.\n- Fix:\n  - Describe the mechanism accurately.\n  - Use a sentinel that is safe to gather and cannot alias a real neighbor, or have one shared masked-gather helper own the mask logic so the invariant lives in one place.\n  - List `max_neighbors == 0` (every agent isolated, shape `(n, 0)`) and empty `active_indices` among the builder edge cases. The current list omits both.",
+      "file_ref": null,
+      "category": "correctness-hazard",
+      "raw_category": null,
+      "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:74-81"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Tick-budget fix rests on an unprofiled hypothesis and leaves two per-agent Python loops in the tick",
+      "description": "- The Value claim is that Python force loops cause the 10-15ms overrun. No profile is cited. The slice leaves the per-agent `query_radius` loop in `tick.py`. It also adds `build_neighbor_data`, which is itself a per-agent Python pass for self-exclusion, padding and copying (described as \"a single pass\").\n- The brute-force query cost does not depend on clustering. It is the new builder cost, plus the force loops, that grows with neighbor count. So the slice may move cost rather than remove it.\n- The only acceptance check is a manual 5-minute live run at n=100. There is no baseline measurement and no per-stage timing (query, build, forces, integrate), so the slice cannot show which stage dominates or whether it hit the target.\n- Fix: add a small benchmark task that times the stages before and after at n=100 and at a larger n, and use it as the acceptance check. Describe the builder's per-agent loop honestly, or vectorize the self-exclusion, e.g. `np.concatenate` plus a `repeat`-based scatter.",
+      "file_ref": null,
+      "category": "verification",
+      "raw_category": null,
+      "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:23, 96-101, 211-215"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Equivalence tolerance and interaction with slice 105's \"identical output\" requirement",
+      "description": "- Per-force equivalence uses `atol=1e-12`, which is reasonable. The integration check (\"positions/velocities after N ticks match\") gives no tolerance or N.\n- Flocking dynamics can amplify 1e-12 summation-order differences over many ticks, so this test could be flaky or meaningless.\n- Padded masked sums also make output depend on neighbor order. Slice 105 (spatial hash) must show \"identical behavioral output\" and may return neighbors in a different order, so it could trip over this.\n- Suggested: have `build_neighbor_data` sort each row, or state the tolerance and N explicitly for the integration test.",
+      "file_ref": null,
+      "category": "determinism",
+      "raw_category": null,
+      "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:190, 258-260"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Minor proportionality and consistency trims",
+      "description": "- `mask` is fully derivable from `counts`, so the `NeighborData` dataclass could carry `indices` and `counts` and compute the mask as a property. That removes one redundant field and an invariant to keep in sync.\n- The CSR/COO comparison and the Value section restate material from the architecture and could be trimmed.\n- Scope is slightly inconsistent. \"Included\" calls `MomentumForce` one of five \"neighbor-dependent forces\", but the design says it uses no neighbors. Success Criteria say it \"currently loops\" and also say to \"verify it uses array operations only\". Pick one description.",
+      "file_ref": null,
+      "category": "proportionality",
+      "raw_category": null,
+      "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:35, 68-77, 140-148, 201"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Plan records no ordering dependency for the interfaces this slice claims to provide",
+      "description": "- The frontmatter lists 103 and 105 as consumers of `NeighborData`. The slice plan lists 103 as depending only on 101 and 105 only on 100, so nothing in the plan orders them after 109.\n- If 103 lands first it would code against `list[NDArray]` and need rework. Either add 109 to those entries' dependencies or note the ordering.\n- `NeighborData` carries no distances, while the architecture's minimal query contract returns indices and squared distances. That is acceptable now because Separation recomputes them. It is worth keeping in mind for the batch-query hook in 105 and the aggregate neighbors in 108.",
+      "file_ref": null,
+      "category": "integration",
+      "raw_category": null,
+      "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:5-7, 176-184"
+    },
+    {
+      "severity": "PASS",
+      "title": "Layering, dependency direction and plan-scope coverage",
+      "description": "- All scope assigned by the plan entry is present. That covers the `NeighborData` representation, the `BulkForce` signature change with all implementations and callers updated together, and the rewrite of the five named forces.\n- `NeighborData` stays in the engine, spatial queries are unchanged, and slice 105's batch-query scope is explicitly excluded. This is consistent with the architecture's \"Pluggable spatial queries\" and \"Clean boundaries\" principles.\n- The GPU-compat rationale matches the architecture's \"GPU compute path for force accumulation\" note.\n- There is no new I/O or message path, so the failure-mode enumeration requirement does not apply beyond the builder edge cases noted above.",
+      "file_ref": null,
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md#architecture"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "nfr-scaling",
+      "raw_category": null,
+      "summary": "Padded representation scales O(n \u00d7 max_neighbors) against a tens-of-thousands-of-agents goal, and the NFR is not restated",
+      "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:140-148",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "internal-consistency",
+      "raw_category": null,
+      "summary": "Profile-weight \"list comprehension\" contradicts the slice's own defining constraint and verification grep",
+      "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:127-136",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "correctness-hazard",
+      "raw_category": null,
+      "summary": "`-1` padding is described as \"never dereferenced\", but the gather dereferences it",
+      "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:74-81",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "verification",
+      "raw_category": null,
+      "summary": "Tick-budget fix rests on an unprofiled hypothesis and leaves two per-agent Python loops in the tick",
+      "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:23, 96-101, 211-215",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "determinism",
+      "raw_category": null,
+      "summary": "Equivalence tolerance and interaction with slice 105's \"identical output\" requirement",
+      "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:190, 258-260",
+      "location_verified": null
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "proportionality",
+      "raw_category": null,
+      "summary": "Minor proportionality and consistency trims",
+      "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:35, 68-77, 140-148, 201",
+      "location_verified": null
+    },
+    {
+      "id": "F007",
+      "severity": "note",
+      "category": "integration",
+      "raw_category": null,
+      "summary": "Plan records no ordering dependency for the interfaces this slice claims to provide",
+      "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md:5-7, 176-184",
+      "location_verified": null
+    },
+    {
+      "id": "F008",
+      "severity": "pass",
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "summary": "Layering, dependency direction and plan-scope coverage",
+      "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md#architecture",
+      "location_verified": null
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/109-slice.force-computation-vectorization.md",
+    "against": "project-documents/user/architecture/100-slices.behavior-engine.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/migratory-109-slice"
+  },
+  "timestamp": "2026-11-16T10:21:02.426202",
+  "model": "claude-sonnet-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 4,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-sonnet-5-5",
+  "answering_models": [
+    "claude-sonnet-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 8,
+    "in_fences": 0,
+    "in_section": 8,
+    "surviving": 8
+  },
+  "effort": "high",
+  "profile": "sdk",
+  "turns": 5,
+  "prompt_tokens": 273833,
+  "cached_tokens": 190076,
+  "cache_write_tokens": 83749,
+  "completion_tokens": 7640,
+  "reasoning_tokens": null,
+  "duration_seconds": 63.82369712484069,
+  "cost_usd": 0.4307641,
+  "cost_basis": "provider"
+}

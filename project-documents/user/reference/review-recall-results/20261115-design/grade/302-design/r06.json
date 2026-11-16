@@ -1,0 +1,47 @@
+{
+ "review": "r06",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Slice-plan criterion \"enforced by structured output\" is silently downgraded to prose scaffolding",
+   "description": "The slice plan entry for 302 lists the success criterion \"The score-with-rationale shape is enforced by the template's structured output.\" The architecture says the same: \"the judge template uses a structured-output constraint for the score field and a score-with-rationale prompt shape.\"\n\nThe design makes the `## Rationale` section \"prose scaffolding for the model, not a new parser target.\" Nothing in it is enforced. It names no structured-output constraint on the score field. Success Criterion 2 only requires that the prompt \"instructs\" the model to emit the fields.\n\nThis drops or defers scope the slice plan assigns to 302, and the design doesn't say it is doing so. Either of two fixes works:\n- Specify what enforces the shape. This could be the template's existing output contract, or a provider structured-output option if the review engine has one. If the engine has none, say so.\n- Explicitly rescope the criterion, and record that the shape relies on prompt compliance plus 301's absent-score \u2192 `UNKNOWN` handling.\n\nThe design's own example puts the rationale in a separate `## Rationale` block. The prose says each justification sits \"immediately before its numeric value\" in the `criteria:` block. Those two descriptions disagree.",
+   "location": "project-documents/user/slices/302-slice.design-phase-judge-templates.md#score-with-rationale-prompt-shape"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Failure-mode table omits the ground-truth and parse failures the architecture enumerates for judges",
+   "description": "The architecture lists these judge failure modes: unparseable response; score absent or out of range; missing or unreadable ground-truth file; provider unavailable; injected ground truth exceeding the cap.\n\nThe slice table covers timeout/provider, absent or out-of-range score, a rogue verdict, `TEMPLATE_INPUTS` resolution, and a malformed criteria block. It leaves out three cases:\n- A ground-truth file that resolves to a path but is missing or unreadable. This differs from `SliceInfo` lacking the field.\n- Injected `input` plus `against` exceeding the cap on non-file-reading providers.\n- A wholly unparseable response.\n\nThese two templates are the first real consumers of the two-document `input`/`against` pair. They are where the cap and unreadable-file cases first matter. The doc should map each case to a verdict and a WARNING+ log, or point to the inherited behavior explicitly.\n\nThe section also says the slice \"introduces two new I/O paths (the score-with-rationale prompt shape)\". A prompt shape is not an I/O path, and the slice adds no new I/O. The wording should be corrected.\n\nThe \"**No silent pass**\" claim rests on 301's handling. It needs to cover these omitted cases before it can be asserted for the slice.",
+   "location": "project-documents/user/slices/302-slice.design-phase-judge-templates.md#failure-modes-on-the-judge-template-path"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "\"Reuse criteria, avoid drift\" claim contradicts the copy-based mechanism",
+   "description": "In the existing `slice.yaml`, the evaluation criteria are embedded in `system_prompt` text. The design says the judge templates reuse \"the same list\" to \"avoid drift between what a human-reviewed `slice` template checks and what its judge counterpart checks.\" The mechanism it describes is copying that text into two new YAML files, as the \"recipe\" in Provides to Other Slices confirms. A copy creates the drift risk it claims to avoid. Any later edit to `slice.yaml` or `tasks.yaml` criteria will not reach the judge variants.\n\nEither state this as an accepted duplication (a known drift risk, with a test or a documented sync point), or design a shared source for the criteria. The existing template loader may not support one, so a shared source could cost more than it saves, which is a reason to accept and document the duplication.",
+   "location": "project-documents/user/slices/302-slice.design-phase-judge-templates.md#reuse-existing-evaluation-criteria-dont-re-derive-them"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Default-threshold example contradicts the stated threshold table",
+   "description": "The data-flow walkthrough for `judge.slice-vs-arch` shows `score=82 \u2265 pass_floor(78)`. The Technical Decisions table and the verification script both give `judge.slice-vs-arch` a `pass_floor` of 82. 78 is the `judge.tasks-vs-slice` floor. The example happens to land on the boundary (82 \u2265 82), so it passes either way, but it misstates the floor the slice is deliberately differentiating. Fix the number.\n\nThe design also gives no basis for choosing 78/55 and 82/60. Under the architecture's \"default conservative, advisory until 320 calibrates\" commitment, a short statement that these are uncalibrated starting values would help. This part is only a NOTE.",
+   "location": "project-documents/user/slices/302-slice.design-phase-judge-templates.md:146"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Design restates other slices and documents more than this slice needs",
+   "description": "The slice is two YAML files plus two registry entries, rated Low risk and 2/5 effort. Several parts restate other documents or cover cases the slice does not have:\n- Three of the five failure-mode rows are labeled \"Not new\" (timeout, absent score, malformed criteria). They restate 300 and 301 behavior. Keep only the rows this slice introduces, plus the omitted cases from the earlier finding.\n- The \"Template naming \u2026 not a dispatch signal\" decision restates the slice 301 and project rule.\n- The \"Provides to Other Slices\" recipe for future judges (`judge.code`, `judge.arch`) describes templates nothing in this slice uses.\n- Success Criterion 1 and the technical requirements repeat each other.\n\nNone of these block the work, but cutting them would shorten the document and remove places where it could drift from 301.",
+   "location": "project-documents/user/slices/302-slice.design-phase-judge-templates.md#failure-modes-on-the-judge-template-path"
+  },
+  {
+   "i": 5,
+   "severity": "NOTE",
+   "title": "Verification walkthrough CLI invocation is internally inconsistent",
+   "description": "Success Criterion 3 and walkthrough step 3 mix a positional `slice-vs-arch` argument with `--template judge.slice-vs-arch`. The doc admits the invocation shape is unconfirmed. This can wait until implementation, but Criterion 3 should say which form is authoritative.",
+   "location": "project-documents/user/slices/302-slice.design-phase-judge-templates.md:362-365"
+  }
+ ]
+}

@@ -1,0 +1,33 @@
+{
+ "review": "r03",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Cleanup on a failed `BenchmarkSandbox.__enter__` is unspecified",
+   "description": "Environment resolution (step 4 of the `__enter__` flow) is the step most likely to fail. D5 and the Risk section both expect historical locks to stop resolving. By that point `HistoryFreeSandbox` has already created the lock and tree, and `ScrubbedEnvironment` has created `<id>.home/`. Python does not call `__exit__` when `__enter__` raises. The State Management section says the four directories are removed on exit, and the orphan sweep only handles dead owners.\n\nThe slice does not say that a failure inside `__enter__` unwinds what steps 1 to 3 created. 422 will probably qualify many candidates in one process. If a failure leaves its tree, `.venv` and lock behind, they pile up until that process ends. Walkthrough step 5 also expects \"no `.venv` created\" after a failure. A partial install can violate that, because `--locked` rejects a stale lock before installing but not a download that fails midway.\n\nFix: state that `__enter__` removes everything it created before it re-raises `SandboxError` or `EnvironmentResolutionError`. Add a test that asserts nothing is left under `~/.config/squadron/benchmark/` after an install failure and after an install timeout.",
+   "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:101-107"
+  },
+  {
+   "i": 1,
+   "severity": "NOTE",
+   "title": "`reference_sha` and `project_id` are added to case identity, which the architecture does not list",
+   "description": "The architecture says a case is identified by \"start commit, task text, hidden and superseded test sets, grader commands\". D1 adds `project_id`, `kind`, `reference_sha`, `hidden_fixtures` and `excluded_tests`. The `excluded_tests` field is consistent with the keystone slice's exclusion list. `reference_sha` is a sound addition, because hidden test source is read from the reference at grading time. The slice states the deviation, but 420-arch's immutability principle still reads as the narrower list. Update the architecture sentence so later slices (425 and 426) do not work from the older definition.",
+   "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md#D1 \u2014 Case content identity and id"
+  },
+  {
+   "i": 2,
+   "severity": "NOTE",
+   "title": "Mock-patch classification is checked only on Python 3.13",
+   "description": "The reporter plugin runs under the start commit's own interpreter, which can be older than 3.13. It also reads `unittest.mock._patch` internals. D11 says the behavior was \"Checked on Python 3.13\" and says nothing about other versions. If the introspection fails on another version, the failure falls through to `other_exception`. That is the safe direction, because 422 excludes it as undecidable, and it matches the architecture's rule that a check which cannot decide must exclude the case. The cost is lower fix-case yield from false exclusions. Record this direction explicitly. Also run the mock-target fixture test on more than one interpreter version, or state which versions are supported.",
+   "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md#D10 \u2014 Suite runner: an injected pytest reporter plugin"
+  },
+  {
+   "i": 7,
+   "severity": "NOTE",
+   "title": "Frontmatter omits 400",
+   "description": "The slice consumes `SourceLanguage` from 400's `metrology/snapshot_models.py`. It also mirrors 400's registry keying and in-tree `.venv` layout, and aligns its `lockfile_sha256` name with 400's. The body lists this under Interfaces Required, but `dependencies: [420, 177, 320]` leaves out 400. Add it so the dependency graph matches the body.",
+   "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:6"
+  }
+ ]
+}

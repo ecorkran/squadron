@@ -1,0 +1,189 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "The D6 identity rule is private, but 421\u2013427 are expected to group by it with no extra work",
+      "description": "- D6 puts the identity rule in \"a private `config_identity` in `replay/report.py`\" (line 146). The key is `(model, profile, effort_sent, tool_use, max_output_tokens)`.\n- Line 162 says \"this slice ships no shared identity type\", so later slices \"apply the rule to their own record types\".\n- The Integration Requirement (line 186) promises that \"421\u2013427 can read a config's effort from `action_effort_sent` and group by the D6 rule, with no further effort work.\"\n\nThese cannot both hold. Every consuming slice would have to rebuild the five-field key, including the non-obvious `tool_use` and `max_output_tokens`, and copy those two fields onto its own config record. The slice plan entry says this slice \"Provides effort-sent ... in config identity. All later slices read it\", which means a reusable contract. The project's DRY rule says the same.\n\nThe lightest fix is to make the key a small public function over a `ProducerConfigRef`-shaped input, for example in `metrology/replay_models.py`, and have `replay/report.py` call it. If shared code is not wanted, the slice should drop the \"no further effort work\" claim. It should then say plainly that 424 and 425 must carry `tool_use` and `max_output_tokens` and rebuild the key themselves.",
+      "file_ref": null,
+      "category": "integration",
+      "raw_category": null,
+      "location": "project-documents/user/slices/420-slice.effort-audit-across-dispatch-paths.md:160-162"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Narrowing the architecture's identity rule is justified, but the architecture document still says the old thing",
+      "description": "- The narrowing itself is sound. The architecture's goal at `420-arch.model-benchmark.md:40` says \"config (alias, model, profile, effort sent)\". D6 removes the alias from that key.\n- The architecture supports this elsewhere. Line 99 says two rows only \"when the effort really differed on the wire\", and the slice plan's success criterion requires merging same-effort aliases.\n- Adding `tool_use` and `max_output_tokens` is a necessary consequence, not scope creep. Without them, removing the alias would merge configs that send different requests.\n\nWhat is missing: the slice says it \"supersedes\" the architecture (line 162) but never says to update the architecture document. Designers of 424 and 425 will read the old rule there. This needs a one-line edit to the architecture's Design Goals, not a design change.",
+      "file_ref": null,
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/420-slice.effort-audit-across-dispatch-paths.md:142-147"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The \"Components changed\" list leaves out the `sq review resolve` entry point",
+      "description": "D3 (line 127) says `review/resolution.py` (`sq review resolve`) \"resolves the same way\". It also says `judge_residue_core` gains an `effort` parameter. A functional requirement (line 174) covers both entry points. But the Components changed list names only `pipeline/actions/findings_addressed/judge.py`. The task breakdown is usually built from that list, so `review/resolution.py` should be added to it.",
+      "file_ref": null,
+      "category": "under-specification",
+      "raw_category": null,
+      "location": "project-documents/user/slices/420-slice.effort-audit-across-dispatch-paths.md:82-91"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The findings-addressed judge's effort goes up while its spend is still not recorded",
+      "description": "D3 makes path 7 send the alias's effort. That can raise the judge's cost, and its spend is still missing from `pipeline.max_cost_usd` (947). The design states this, mentions it in the CHANGELOG (line 183), and files the missing usage record as a 175 issue. That is a proportionate choice. The architecture's producer-only replay strips the embedded review, so this path should not run inside benchmark runs, and the benchmark's spend-cap goal is not affected. The issue should still be filed while this slice is being built, not left for later.",
+      "file_ref": null,
+      "category": "cost",
+      "raw_category": null,
+      "location": "project-documents/user/slices/420-slice.effort-audit-across-dispatch-paths.md:231-232"
+    },
+    {
+      "severity": "PASS",
+      "title": "The dispatch-path inventory and enumeration test meet the slice plan's inventory criterion",
+      "description": "- The 17-row table classifies every path, and the paths outside scope each have a concrete reason: no alias, or not squadron's dispatch.\n- D7's AST guard, which follows the existing SC1a pattern, keeps the table accurate as the code changes. It is a light mechanism.\n- The excluded paths are consistent with the architecture's \"effort that was not sent is recorded as not sent\".",
+      "file_ref": null,
+      "category": "scope",
+      "raw_category": null,
+      "location": "project-documents/user/slices/420-slice.effort-audit-across-dispatch-paths.md#component-structure"
+    },
+    {
+      "severity": "PASS",
+      "title": "Effort-sent recording on failure paths follows \"Absent is not zero\" without changing 175's records",
+      "description": "- The failure cases are spelled out. Telemetry-less failures carry a stamp. Runs that died, were cancelled, or failed to resolve their model carry no stamp and are counted by replay's existing failure classes.\n- The reader refuses to guess: an unrecognized stored value raises an error instead of being read as `None`. This follows the no-silent-fallback rule.\n- Building an empty `UsageRecord` was rejected so that 175's priced and unpriced tallies are not disturbed. Old records stay readable through the `usage.effort` fallback, with no migration.\n- The slice adds no new network or message I/O, so no hang, timeout or disconnect handling is needed. The architecture states no latency or throughput NFR for these paths.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/420-slice.effort-audit-across-dispatch-paths.md#d5--effort-sent-is-stamped-on-the-action-not-only-on-the-usage-record"
+    },
+    {
+      "severity": "PASS",
+      "title": "Dependencies point the right way and decisions stay within the slice's boundary",
+      "description": "- The slice uses 931, 175 and #216 without changing them, and adds only optional fields with `None` defaults to the metrology records.\n- No pipeline reads the results to choose a model, which keeps the architecture's \"Measure, never gate\" principle.\n- The \"not sent\" gate stays for future providers even though all current providers apply effort. That is cheap, and it meets the slice plan's \"records 'not sent'\" criterion.",
+      "file_ref": null,
+      "category": "dependencies",
+      "raw_category": null,
+      "location": "project-documents/user/slices/420-slice.effort-audit-across-dispatch-paths.md#integration-points"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "integration",
+      "raw_category": null,
+      "summary": "The D6 identity rule is private, but 421\u2013427 are expected to group by it with no extra work",
+      "location": "project-documents/user/slices/420-slice.effort-audit-across-dispatch-paths.md:160-162",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "note",
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "summary": "Narrowing the architecture's identity rule is justified, but the architecture document still says the old thing",
+      "location": "project-documents/user/slices/420-slice.effort-audit-across-dispatch-paths.md:142-147",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "note",
+      "category": "under-specification",
+      "raw_category": null,
+      "summary": "The \"Components changed\" list leaves out the `sq review resolve` entry point",
+      "location": "project-documents/user/slices/420-slice.effort-audit-across-dispatch-paths.md:82-91",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "note",
+      "category": "cost",
+      "raw_category": null,
+      "summary": "The findings-addressed judge's effort goes up while its spend is still not recorded",
+      "location": "project-documents/user/slices/420-slice.effort-audit-across-dispatch-paths.md:231-232",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "pass",
+      "category": "scope",
+      "raw_category": null,
+      "summary": "The dispatch-path inventory and enumeration test meet the slice plan's inventory criterion",
+      "location": "project-documents/user/slices/420-slice.effort-audit-across-dispatch-paths.md#component-structure",
+      "location_verified": null
+    },
+    {
+      "id": "F006",
+      "severity": "pass",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "Effort-sent recording on failure paths follows \"Absent is not zero\" without changing 175's records",
+      "location": "project-documents/user/slices/420-slice.effort-audit-across-dispatch-paths.md#d5--effort-sent-is-stamped-on-the-action-not-only-on-the-usage-record",
+      "location_verified": null
+    },
+    {
+      "id": "F007",
+      "severity": "pass",
+      "category": "dependencies",
+      "raw_category": null,
+      "summary": "Dependencies point the right way and decisions stay within the slice's boundary",
+      "location": "project-documents/user/slices/420-slice.effort-audit-across-dispatch-paths.md#integration-points",
+      "location_verified": null
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/420-slice.effort-audit-across-dispatch-paths.md",
+    "against": "project-documents/user/architecture/420-arch.model-benchmark.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261115-design/wt/420-design"
+  },
+  "timestamp": "2026-11-16T07:23:22.536512",
+  "model": "claude-opus-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 4,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-opus-5-5",
+  "answering_models": [
+    "claude-opus-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 7,
+    "in_fences": 0,
+    "in_section": 7,
+    "surviving": 7
+  },
+  "effort": "medium",
+  "profile": "sdk",
+  "turns": 5,
+  "prompt_tokens": 336231,
+  "cached_tokens": 260713,
+  "cache_write_tokens": 75510,
+  "completion_tokens": 5287,
+  "reasoning_tokens": null,
+  "duration_seconds": 60.05689729214646,
+  "cost_usd": 0.7627625,
+  "cost_basis": "provider"
+}

@@ -1,0 +1,47 @@
+{
+ "review": "r15",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Hidden-test injection is assigned to 425, but 422's test-first check needs it first",
+   "description": "The design puts hidden-test injection in 425 in three places: \"Hidden-test injection (425)\" in the excluded list (line 48), \"425 adds hidden-test injection\" in D9 (line 192), and the integration requirement \"422 can build a sandbox at any commit \u2026 run a chosen node id at the parent, and read its `FailureKind` with no further harness work\" (line 322).\n\nThe architecture's test-first rule (420-arch, Architectural Principles, fairness rule item 1) and 422's slice-plan entry require running the fix's *new* test at the parent. That test does not exist in the parent tree. It has to be added at test level, without removing anything else in the file, which is exactly what the architecture describes as injection. A fix usually adds one function to an existing file, so copying in the reference's file would also replace that file's other tests. The build order is 421 \u2192 422 \u2192 423 \u2192 424 \u2192 425, so 422 cannot wait for 425.\n\nTo fix: give injection to 422 (or to 421's adapter seam) in D9 and the excluded list, and correct the line 322 claim. 425 then reuses it and only adds what the grader needs, such as clash renaming.",
+   "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:48"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "`EnvironmentIdentity` sits in `benchmark/`, but metrology records will need to carry it",
+   "description": "`EnvironmentIdentity` is defined in `benchmark/adapter.py` (lines 82\u201383). D3 says benchmark record types, including qualifications and replays, live in `metrology/benchmark_models.py` (line 138). State Management (line 119) says \"422's qualification records and 424's replay records carry it.\"\n\nOnce those records add an `EnvironmentIdentity` field, `metrology/` has to import from `benchmark/`. That breaks the rule stated at line 97: \"Neither of those depends on `benchmark/`.\" The same will happen to `FailureKind`/`NodeOutcome` if 422 persists per-node qualification results.\n\nTo fix: define the persisted value types (`EnvironmentIdentity`, and probably `FailureKind` and `NodeOutcome`) in `metrology/benchmark_models.py` now, next to `CaseKind` and `GraderCommand`. `benchmark/` then imports them.",
+   "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:82-83"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "The scrubbed `PATH` may hide the agent runtime, and the auth check would report that as an auth failure",
+   "description": "D7's `PATH` contains only the adapter's entries, `<id>.home/bin` (symlinks to `git` and `uv` via `HARNESS_TOOL_ALLOWLIST`) and the system directories. Homebrew, `~/.local/bin` and npm-global locations are left out. Squadron does not set the SDK's CLI path; `providers/sdk/` contains no `cli_path` setting, so the SDK finds its runtime the default way. If that lookup goes through `PATH`, or the runtime needs `node` from a user install, the `sdk` probe fails before any auth happens.\n\nD8 treats any non-zero result as \"no\" and describes the remedy as an auth decision (line 186). So a missing executable would send the PM after an auth problem that doesn't exist. The slice-plan requirement is \"a definite yes or no for each agent provider\" on *auth*, and this gap leaves it unmet.\n\nTo fix: say how each profile's runtime executable is resolved inside the scrub. It could come from the SDK's bundled CLI, or be added to `HARNESS_TOOL_ALLOWLIST`. Separately, have the probe report \"runtime not found\" with its own reason, not as an auth \"no\".",
+   "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:168"
+  },
+  {
+   "i": 3,
+   "severity": "NOTE",
+   "title": "Case sets keyed by name depart from the architecture's \"keyed on `ProjectId`\"",
+   "description": "The architecture principle \"Extend 320's store\" and the slice-plan 421 entry both say new record types are keyed on `ProjectId`. D2 keys `CaseSet` by name so that cases can be pooled across projects, which the architecture allows as a fallback for low yield. The envelope (`MetrologyRecord`) has no project field, so this works in practice. The reasoning is sound, but the architecture's wording should be updated so later slices don't treat it as a violation.",
+   "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:134"
+  },
+  {
+   "i": 4,
+   "severity": "NOTE",
+   "title": "Inline `task_text` and store read cost",
+   "description": "The architecture keeps records coarse \"because the store reads every file on every query.\" D3 keeps slice-case task text of tens of KB inline and calls that acceptable without an estimate. The number of cases is bounded, unlike the number of runs, so this is probably fine. Even so, one line estimating total bytes at the expected number of cases would back up the decision.",
+   "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:140"
+  },
+  {
+   "i": 5,
+   "severity": "NOTE",
+   "title": "Smaller gaps in the failure handling and the identity fields",
+   "description": "- D10 says what happens with a missing or unparseable JSONL file and a **non-zero** pytest exit. It does not say what happens with a zero exit, or with a final JSONL line cut off when a timeout kills pytest. Both should be named so the \"never an empty pass\" guarantee covers every case.\n- D6 puts `scrub_spec_version` in the identity because a change to the scrub changes test results. The install command line (`--all-extras --dev`) can change results the same way, but it is not in the identity. Fold the install command into the identity digest, or into a spec version.",
+   "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:209"
+  }
+ ]
+}

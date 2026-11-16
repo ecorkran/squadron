@@ -1,0 +1,225 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Judge cost bound uses a flat per-call figure although prompt sizes are known and vary by up to 20\u00d7",
+      "description": "The architecture requires a dollar bound stated before any dispatch, with overshoot limited to what one dispatch can add. D16 builds the bound as `calls \u00d7 max observed per-call cost` (or a flat `--judge-cost`), then adds \"one call of overshoot $0.04\". Every pair prompt has already been built by the time the bound prints, because the over-size check needs them. Prompts run from a few KB to 400 000 chars, and the design itself says the task text alone can reach tens of KB and is repeated in every prompt. A flat figure taken from small-prompt calls, or typed by the user for the first run, can understate the bound by a large factor. A single call near the limit can also exceed the stated overshoot. Derive the estimate from the known prompt length, using cost per input char from observed judgments (or a user-supplied per-char figure) plus a bounded output allowance. The overshoot term then becomes the largest single pair's estimate rather than the average.",
+      "file_ref": null,
+      "category": "nfr-cost",
+      "raw_category": null,
+      "location": "project-documents/user/slices/426-slice.slice-cases.md:287-296"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "A deterministic over-context failure is handled as a transient failed call, so it retries on every rerun",
+      "description": "D14's over-size limit is a character count with a 400 000 default (about 100k tokens at 4 chars per token). Code diffs usually tokenize worse than 4 chars per token, and the judge alias may have a smaller context window than the limit assumes. A prompt that passes the char check but overflows the judge's context fails on every attempt. D15 leaves failed calls unrecorded, logged at ERROR, and retried on rerun. That pair is retried and re-billed on each `judge` run and shows as \"pending\" indefinitely. It is never counted as over-size, so the report cannot tell a case that cannot be judged from one that has not been judged yet. State how a context-overflow or other non-retryable judge error is classified (for example, recorded as `OverSizeCase` with the provider's reason). Also state how many consecutive failures of the same pair stop retries. The success criteria should include a test that asserts the signal for this path.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/426-slice.slice-cases.md:272-285"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Scope statements about edits to 421, 424, 425 and 177 contradict each other",
+      "description": "- Line 42 says \"No edits to 424 or 425\". Line 321 widens 424's `CaseDrop.reason`, which edits 424's model.\n- D17 and the Provides section require `bench_report` to gain per-kind grouping and the pairwise section, which edits 425's module.\n- Line 451 says `tests/benchmark/` passes unchanged \"except where D8 routes re-qualification and D17 extracts the interval\". D17 says 425's `bootstrap_mean_interval` is called with \"no change to 425\", and 425 D14 already defines it publicly in `paired_stats.py`. The \"extracts\" wording is stale or implies an extraction that is not in the plan.\n- D8 and the Scope bullet both claim 424 already provides `requalify`. 424's design confirms this, so the routing needs no `bench_runner.py` edit.\n\nWithout a single accurate list, the implementer cannot tell which of 424's and 425's existing tests are expected to change. List the exact edits to each prerequisite slice (`CaseDrop.reason`, `bench_report` grouping, `ScrubbedEnvironment.with_tools`, yield rows, 177's `judging.py` and `sandbox.py`). Remove the \"extracts the interval\" clause. Note that 425's design names `review_flag` in `bench_report.py` as the place 427 will change, so the per-kind grouping edit should avoid reshaping it.",
+      "file_ref": null,
+      "category": "integration",
+      "raw_category": null,
+      "location": "project-documents/user/slices/426-slice.slice-cases.md:42"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Design is heavier than the slice requires; named items can be cut",
+      "description": "The design has 17 decisions, about 10 new modules and 3 new record types. It also edits shared code in 177, 421, 422, 424 and 425. The following can be cut or deferred:\n- **\"Consumes from Other Slices\" (lines 421-428)** largely restates \"Prerequisites\" and \"Interfaces Required\". Keep one list.\n- **Speculative \"Provides\" items (lines 416-419).** The claim that 427 may draw planted defects from slice diffs and that `normalize` is for \"any consumer\" has no consuming slice. Keep `CfRegistration` and `judge_pair`, which this slice actually extracts.\n- **`--keep` (line 336)** appears in the CLI contract and is defined nowhere. Define it or drop it.\n- **`slice_task.py`** is one function (design plus task text at the fork). Fold it into `slice_discovery.py` or `slice_qualify.py` unless line counts require otherwise.\n- **Walkthrough step 8** repeats a unit test. The 8-step walkthrough could stop at step 7.\n- **`uv.lock` normalization** goes beyond the slice plan's list. The design flags it as an addition, and it is cheap and justified, so this is a NOTE rather than a required cut.",
+      "file_ref": null,
+      "category": "proportionality",
+      "raw_category": null,
+      "location": "project-documents/user/slices/426-slice.slice-cases.md:414-428"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Failure-signal tests are listed only for some of the new I/O paths",
+      "description": "The success criteria require signal tests for a failing cf step, a failing `git` call in qualification, and a missing `tip_sha`. Other new paths are specified as logged or counted but have no required test:\n- a judge call that times out or fails, which D15 says is ERROR-logged and counted in the summary;\n- a `git diff` timeout when reading the reference diff at judge time, which the CLI contract mentions only as \"harness stop\";\n- a failed sidecar write for a normalized diff, which is not specified at all.\n\nThe architecture and project rules require an observable signal, with at least one test asserting it, for each identified failure mode. Add these three paths to the criteria. State what a sidecar write failure does (harness stop, no judgment recorded).",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/426-slice.slice-cases.md:443"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Reference is `tip_sha`, not the landing commit the architecture names",
+      "description": "The architecture describes the reference as \"the landing commit\". D2 uses `tip_sha` and explains why: `fork..after` on a merge landing would include unrelated work that reached the target. This is a reasoned refinement within the architecture's intent, and the slice's `source_ref` still records `landing_after_sha`. Record the deviation in the architecture's next revision so the two documents do not diverge.",
+      "file_ref": null,
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/426-slice.slice-cases.md:176-181"
+    },
+    {
+      "severity": "PASS",
+      "title": "Layering and dependency direction",
+      "description": "Slice qualification and building reach the language only through 422's adapter registry (D7). The judge core is pure apart from injected collaborators. Cases sit in 421's records, and the new records are optional sibling payloads on `MetrologyRecord` with no migration. Diffs live in content-addressed sidecars. All of this matches the architecture's \"extend 320's store, don't fork it\" principle. Dependencies run 426 \u2192 421/422/424/425/177/403, with no reverse reference.",
+      "file_ref": null,
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/426-slice.slice-cases.md#Architecture"
+    },
+    {
+      "severity": "PASS",
+      "title": "Architectural principles preserved in grading and reporting",
+      "description": "- Slice cases have no hidden set (D5).\n- Producer-only `P6` is invoked through the 424 seam, with no copied step (D8).\n- cf registration lives inside the scrubbed home and never touches the user's registry (D9).\n- Fix and slice cases are reported in separate tables, and the reference is a reference line that is never ranked (D17).\n- The pairwise section does not alter the objective grade, and no composite is computed.\n- Harness absences drop the case and config absences forfeit (D15), which applies \"absent is not zero\".\n- The over-size rule excludes the whole case and counts it, with no truncation (D14), as the architecture's \"stated rule\" requires.",
+      "file_ref": null,
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/426-slice.slice-cases.md:237-253, 304-313"
+    },
+    {
+      "severity": "PASS",
+      "title": "Cost NFR restated with caps, bound and resume",
+      "description": "The run cap is required, the bound prints before the first call, the cap is checked before each call, and the exit code on a cap hit is specified. Resume works by id lookup. This satisfies the architecture's \"spend is visible before it happens\" goal. The finding above concerns only how accurately the per-call estimate is derived.",
+      "file_ref": null,
+      "category": "nfr-cost",
+      "raw_category": null,
+      "location": "project-documents/user/slices/426-slice.slice-cases.md:287-302"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "nfr-cost",
+      "raw_category": null,
+      "summary": "Judge cost bound uses a flat per-call figure although prompt sizes are known and vary by up to 20\u00d7",
+      "location": "project-documents/user/slices/426-slice.slice-cases.md:287-296",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "A deterministic over-context failure is handled as a transient failed call, so it retries on every rerun",
+      "location": "project-documents/user/slices/426-slice.slice-cases.md:272-285",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "integration",
+      "raw_category": null,
+      "summary": "Scope statements about edits to 421, 424, 425 and 177 contradict each other",
+      "location": "project-documents/user/slices/426-slice.slice-cases.md:42",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "proportionality",
+      "raw_category": null,
+      "summary": "Design is heavier than the slice requires; named items can be cut",
+      "location": "project-documents/user/slices/426-slice.slice-cases.md:414-428",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "Failure-signal tests are listed only for some of the new I/O paths",
+      "location": "project-documents/user/slices/426-slice.slice-cases.md:443",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "summary": "Reference is `tip_sha`, not the landing commit the architecture names",
+      "location": "project-documents/user/slices/426-slice.slice-cases.md:176-181",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "pass",
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "summary": "Layering and dependency direction",
+      "location": "project-documents/user/slices/426-slice.slice-cases.md#Architecture",
+      "location_verified": null
+    },
+    {
+      "id": "F008",
+      "severity": "pass",
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "summary": "Architectural principles preserved in grading and reporting",
+      "location": "project-documents/user/slices/426-slice.slice-cases.md:237-253, 304-313",
+      "location_verified": null
+    },
+    {
+      "id": "F009",
+      "severity": "pass",
+      "category": "nfr-cost",
+      "raw_category": null,
+      "summary": "Cost NFR restated with caps, bound and resume",
+      "location": "project-documents/user/slices/426-slice.slice-cases.md:287-302",
+      "location_verified": true
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/426-slice.slice-cases.md",
+    "against": "project-documents/user/architecture/420-arch.model-benchmark.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261115-design/wt/426-design"
+  },
+  "timestamp": "2026-11-16T07:38:44.497522",
+  "model": "claude-sonnet-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 5,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-sonnet-5-5",
+  "answering_models": [
+    "claude-sonnet-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 9,
+    "in_fences": 0,
+    "in_section": 9,
+    "surviving": 9
+  },
+  "effort": "high",
+  "profile": "sdk",
+  "turns": 6,
+  "prompt_tokens": 476921,
+  "cached_tokens": 344049,
+  "cache_write_tokens": 132862,
+  "completion_tokens": 8877,
+  "reasoning_tokens": null,
+  "duration_seconds": 76.1587059169542,
+  "cost_usd": 0.6554098,
+  "cost_basis": "provider"
+}

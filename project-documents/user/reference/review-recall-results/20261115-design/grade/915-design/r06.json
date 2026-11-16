@@ -1,0 +1,47 @@
+{
+ "review": "r06",
+ "findings": [
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Re-entry semantics are ambiguous: the paused round is re-run, which can re-pause or discard the human's answer",
+   "description": "- D1 rationale 2 says `Continue` at an in-loop checkpoint means \"the next round, not the next step.\"\n- D3 and the success criteria resume **at the recorded paused round**, using `range(start_iteration, max+1)` with the paused iteration. That re-executes round N's whole body: dispatch, review, then the checkpoint again.\n- Whether that is what the design intends is never stated. Two problems follow:\n  - The review can return CONCERNS again and re-pause, so the loop never advances. The round also counts against `max:`, so a resumed `Continue` still spends a round.\n  - The checkpoint sits at the end of the body, so the paused round's own work was already done. The doc does not say whether resume skips the completed inner steps and starts after the checkpoint, or re-runs the round.\n- The design should state which behavior it intends and make D1 point 2, D3 and the success criteria consistent with it. The Verification Walkthrough step 3 should assert that behavior.",
+   "location": "project-documents/user/slices/915-slice.loop-checkpoint-pause-resume-correctness.md#D1 and #D3"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "\"Non-loop paused step behaves exactly as today\" contradicts Part A",
+   "description": "Today a paused non-loop step is recorded as complete and skipped on resume. That is the same bug. After Part A, `first_unfinished_step` returns the paused step itself, so resume re-executes it.\n- The criterion \"Resuming a paused non-loop step behaves exactly as today\" is therefore false.\n- The doc does not say what re-executing a paused top-level checkpoint step does, for example whether it re-prompts. That is a user-visible behavior change for every pipeline with a top-level checkpoint.\n- The Risk Assessment mentions only FAILED steps and loops. The criterion should be corrected, and the top-level checkpoint resume behavior specified and tested.",
+   "location": "project-documents/user/slices/915-slice.loop-checkpoint-pause-resume-correctness.md#Success Criteria"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Failure modes for the new resume coordinate are not enumerated",
+   "description": "`start_from_iteration` is a new input path read from persisted state. The doc covers two edge cases: clamping to `>= 1`, and a DEBUG log when the target is not a loop. Several cases are unspecified:\n- A recorded iteration greater than `max` (for example after the pipeline YAML was edited between pause and resume). `range(start, max+1)` would be empty, so the loop runs zero rounds with no signal. It is unclear whether `on_exhaust:` fires.\n- A paused step with no recorded iteration (0) that is a loop. Clamping to 1 silently restarts the loop.\n- A missing step name in `resume_iteration_for`.\n\nPer the project's fail-fast and no-silent-fallback rules, each case needs an explicit error or WARNING and a test. The ignore-with-DEBUG path for non-loop targets is below the WARNING threshold the project requires for observable failure modes.",
+   "location": "project-documents/user/slices/915-slice.loop-checkpoint-pause-resume-correctness.md#D3"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Part A also changes FAILED-step resume, and the doc does not say whether that is intended",
+   "description": "Treating `FAILED` as resumable goes beyond issue #48. The rationale is sound: it is the same mechanism.\n- The doc does not check how implicit paused-run detection (`find_matching_run` with `status=\"paused\"`) treats a run that ended `FAILED`. A failed run may never reach the resume path, so the change may not do what is claimed.\n- If a failed step is now re-run on `--resume`, that should appear in the CHANGELOG-visible behavior and in the Verification Walkthrough. The walkthrough currently verifies only the paused case.",
+   "location": "project-documents/user/slices/915-slice.loop-checkpoint-pause-resume-correctness.md#D2"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Design is heavier than the slice needs in places",
+   "description": "- D1 runs four numbered rationale points plus a rejected-configurability option for a one-line range change.\n- D2 and D3 carry several \"Rejected:\" paragraphs.\n- The resume-time INFO log in D4 duplicates what the new `start_iteration` already makes visible. It can be dropped or folded into the existing step-start logging.\n- The Verification Walkthrough restates the success criteria almost point for point.\n\nCondensing these would cut length without losing a requirement. Part C's pause-time WARNING is justified and should stay.",
+   "location": "project-documents/user/slices/915-slice.loop-checkpoint-pause-resume-correctness.md#D1, #D4"
+  },
+  {
+   "i": 6,
+   "severity": "NOTE",
+   "title": "Empty `prior_iteration_step_outputs` on resume is a documented limitation",
+   "description": "The doc says a resumed round gets an empty prior-outputs dict and defers rehydration to 911/305. That is honest, but it matters for 911's `revision_number:` and any 305 gate that reads prior-round output. The implementation should include a test that those consumers behave sensibly, or fail loudly, on a resumed round.",
+   "location": "project-documents/user/slices/915-slice.loop-checkpoint-pause-resume-correctness.md#D3"
+  }
+ ]
+}

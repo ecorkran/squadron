@@ -1,0 +1,243 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Task 15 and Task 17 disagree on how the auto-init timeout is applied",
+      "description": "Task 15 first says `init()` runs with `{ timeoutMs: GUIDE_INIT_TIMEOUT_MS }`. It then says to \"pass the timeout as an `init()` option\" so that `sync()` keeps no time limit. That makes the timeout opt-in, which contradicts the signature it gives (`init(operationPath)`). Task 17 then calls `SubmoduleStrategy.init(operationPath)` with no option. If someone reads Task 15 as \"opt-in\", `ensureCheckout()` would run the fetch with no time limit. That silently breaks D10 (the auto-init fetch must be bounded), and no test would catch it: Task 16 and Task 18 never check that the timeout is passed. Fix: give Task 15 one exact signature, for example `init(path, opts?: { timeoutMs?: number })`. Have Task 17 pass `GUIDE_INIT_TIMEOUT_MS` explicitly, and add a Task 18 case that checks the timeout is forwarded.",
+      "file_ref": null,
+      "category": "sequencing",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/925-tasks.guide-install-robustness.md:227-262"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Task 4 commits while the MCP package may not typecheck",
+      "description": "Tasks 1 and 3 narrow `GuideMethod` to `'submodule' | 'clone' | 'tarball'`. But `guideTools.ts` still declares the zod enum `'manual'` and passes it into `manager.install()` until Task 7. Task 4's commit only checks `pnpm --filter @context-forge/core test`. So the first commit, and the one after Task 6, can leave `@context-forge/mcp-server` failing typecheck. The slice's Implementation Notes ask for \"the full suite after step 1\". Fix: either change the Task 4 commit check to `pnpm -r typecheck && pnpm -r test`, or move the minimal CLI/MCP type fixes into Task 3 and keep Task 7 for alias behaviour only.",
+      "file_ref": null,
+      "category": "sequencing",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/925-tasks.guide-install-robustness.md:96-100"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The `'error'` checkout branch is never tested",
+      "description": "The slice's Data Flow lists `'error' \u2192 throw` as a branch, and the Technical criteria ask for tests of \"`ensureCheckout()` for each branch of the state machine\". Task 11 moves that throw into `detect()`. That is a reasonable choice because `GuideInfo.checkout` has no `'error'` value, but it means every caller of `detect()` now inherits the throw, including `cf guides info`, `guide_status` and `install`. Neither Task 12 nor Task 18 tests the `'error'` path, and no task checks what the wider throw does to the read-only status commands. Fix: add one case, such as a gitlink path that is not a repo or git missing, where `detect()`/`ensureCheckout()` rejects with a clear message. Also state in Task 11 that `cf guides info` showing an error in this case is intended.",
+      "file_ref": null,
+      "category": "testing",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/925-tasks.guide-install-robustness.md:188-205"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The CLI warning for `manual` in shared config is never checked",
+      "description": "The slice requires: \"A project whose shared config has `guide.git_strategy: manual` installs as tarball with the same warning.\" Task 6 only checks that core *reports* the alias. Task 7 adds the stderr print in `guidesInstallAction()`, but Task 8 only tests the `--strategy manual` flag. Nothing checks that the warning actually appears on stderr when the value comes from config. Fix: add one case to Task 8, with `guide.git_strategy: manual` in config, that checks for a tarball install and the deprecation line on stderr.",
+      "file_ref": null,
+      "category": "testing",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/925-tasks.guide-install-robustness.md:146-154"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "MCP call sites are listed by line number instead of found with the grep D3 requires",
+      "description": "D3 says to grep for `createContextPipeline`, `resolvePromptFilePath` and `GUIDE_RELATIVE_PATH` in **both** `packages/cli/src` and `packages/mcp-server/src`, and cover every hit. Task 20 does this for the CLI. Task 22 instead names two lines (~57 and ~98) and does not say whether both `prompt_list` and `prompt_get` go through ~98. Task 23 only tests `context_build`. Fix: add the same grep step to Task 22, list the covered MCP tools in the commit body, and add one `prompt_get` or `prompt_list` case to Task 23.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/925-tasks.guide-install-robustness.md:315-334"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Commit markers are inside checkbox items instead of on plain `**Commit**:` lines",
+      "description": "The commit points are written inside checkbox success-criteria items (\"Commit: `refactor(core): \u2026`\"), here and at lines 127, 153, 204, 224, 246, 276, 312, 333, 342, 373, 389 and 412. They are in sensible places: after a tested pair, about once per feature. But markers must be plain `**Commit**:` lines, never checkboxes, so task-checker and the commit cadence can find them. Fix: move each one to its own plain `**Commit**:` line after the task.",
+      "file_ref": null,
+      "category": "format",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/925-tasks.guide-install-robustness.md:99-100"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Several tiny tasks could be merged",
+      "description": "Task 10's success criterion (\"typecheck passes once Task 11 populates the field\") means it cannot be finished on its own, so merge it into Task 11. Pairs with effort 1+1, Tasks 13/14 and 28/29, could each become one task that includes its test, the way Task 24 already does. That would cut the file from 32 to about 29 tasks without losing coverage.",
+      "file_ref": null,
+      "category": "proportionality",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/925-tasks.guide-install-robustness.md:176-186"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The `manual` grep in Task 7 is loose and adds an exception the slice doesn't list",
+      "description": "`grep -rn \"manual\"` also matches words like \"manually\" in comments. Its expected result also allows the MCP zod enum entry and the deprecation text, which the slice's Technical criterion (\"no `'manual'` literal outside the alias table and enum\") does not list. The slice's own Component Structure requires the MCP enum to accept `manual`, so this gap is in the design. Narrow the grep to `\"'manual'\"` and say that the MCP enum and the warning text are accepted exceptions.",
+      "file_ref": null,
+      "category": "technical-accuracy",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/925-tasks.guide-install-robustness.md:143-144"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Task 17 doesn't give a signature for `ensureCheckout()`",
+      "description": "Task 17 says `operationPath` resolution \"matches `getGuideContext()` in `guides.ts`\". That is CLI code, which core cannot import. Say whether `ensureCheckout()` takes `operationPath` as an argument or reads it from how `GuideManager` was built. Task 22 (MCP) also needs that answer.",
+      "file_ref": null,
+      "category": "clarity",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/925-tasks.guide-install-robustness.md:264-265"
+    },
+    {
+      "severity": "PASS",
+      "title": "Every functional criterion is covered and nothing is out of scope",
+      "description": "Fresh-clone build and `--json` (Tasks 19\u201321), read-only `guides info` (Task 24), the out-of-sync warning (Tasks 17/18/21), the alias via flag (Tasks 7/8), `cf init --strategy` (Tasks 26/27), shared help (Tasks 25/27), the managed notice and README (Tasks 28\u201330), failing on a malformed config (Tasks 5/6), and CHANGELOG/DEVLOG (Task 31) are all covered. Task 32 runs the verification walkthrough. Every task traces back to a design decision or a success criterion. No NFR is restated, so no load-test or CI-wiring task is needed.",
+      "file_ref": null,
+      "category": "coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/925-tasks.guide-install-robustness.md"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "sequencing",
+      "raw_category": null,
+      "summary": "Task 15 and Task 17 disagree on how the auto-init timeout is applied",
+      "location": "project-documents/user/tasks/925-tasks.guide-install-robustness.md:227-262",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "sequencing",
+      "raw_category": null,
+      "summary": "Task 4 commits while the MCP package may not typecheck",
+      "location": "project-documents/user/tasks/925-tasks.guide-install-robustness.md:96-100",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "testing",
+      "raw_category": null,
+      "summary": "The `'error'` checkout branch is never tested",
+      "location": "project-documents/user/tasks/925-tasks.guide-install-robustness.md:188-205",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "testing",
+      "raw_category": null,
+      "summary": "The CLI warning for `manual` in shared config is never checked",
+      "location": "project-documents/user/tasks/925-tasks.guide-install-robustness.md:146-154",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "MCP call sites are listed by line number instead of found with the grep D3 requires",
+      "location": "project-documents/user/tasks/925-tasks.guide-install-robustness.md:315-334",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "format",
+      "raw_category": null,
+      "summary": "Commit markers are inside checkbox items instead of on plain `**Commit**:` lines",
+      "location": "project-documents/user/tasks/925-tasks.guide-install-robustness.md:99-100",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "note",
+      "category": "proportionality",
+      "raw_category": null,
+      "summary": "Several tiny tasks could be merged",
+      "location": "project-documents/user/tasks/925-tasks.guide-install-robustness.md:176-186",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "note",
+      "category": "technical-accuracy",
+      "raw_category": null,
+      "summary": "The `manual` grep in Task 7 is loose and adds an exception the slice doesn't list",
+      "location": "project-documents/user/tasks/925-tasks.guide-install-robustness.md:143-144",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "note",
+      "category": "clarity",
+      "raw_category": null,
+      "summary": "Task 17 doesn't give a signature for `ensureCheckout()`",
+      "location": "project-documents/user/tasks/925-tasks.guide-install-robustness.md:264-265",
+      "location_verified": true
+    },
+    {
+      "id": "F010",
+      "severity": "pass",
+      "category": "coverage",
+      "raw_category": null,
+      "summary": "Every functional criterion is covered and nothing is out of scope",
+      "location": "project-documents/user/tasks/925-tasks.guide-install-robustness.md",
+      "location_verified": null
+    }
+  ],
+  "template_name": "tasks",
+  "input_files": {
+    "input": "project-documents/user/tasks/925-tasks.guide-install-robustness.md",
+    "against": "project-documents/user/slices/925-slice.guide-install-robustness.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/context-forge-925-tasks"
+  },
+  "timestamp": "2026-11-16T09:23:18.865698",
+  "model": "claude-opus-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 2,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-opus-5-5",
+  "answering_models": [
+    "claude-opus-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 10,
+    "in_fences": 0,
+    "in_section": 10,
+    "surviving": 10
+  },
+  "effort": "medium",
+  "profile": "sdk",
+  "turns": 3,
+  "prompt_tokens": 117920,
+  "cached_tokens": 26974,
+  "cache_write_tokens": 90942,
+  "completion_tokens": 6299,
+  "reasoning_tokens": null,
+  "duration_seconds": 64.70302674989216,
+  "cost_usd": 0.8596135,
+  "cost_basis": "provider"
+}

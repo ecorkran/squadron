@@ -1,0 +1,296 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Engine is called stateless, but its interface includes register/remove agents",
+      "description": "Line 70 says \"The engine is stateless between ticks \u2014 all state lives in the arrays passed to it.\" Line 81 lists the engine's interface as \"tick the simulation forward, query agent state, register/remove agents.\" A stateless function has no agents to register, remove or query. The world server doc (300-arch, Envisioned State and Entity lifecycle events) gives entity IDs, array allocation and `spawn()`/`remove()` to the server's `EntityManager`. The document has to choose:\n- **Pure function:** `tick(state, env, subset, dt) -> state`. The server owns the arrays and the lifecycle.\n- **Stateful object:** the engine owns the arrays. This contradicts 300-arch.\n\nRecommendation: the pure function. Remove \"register/remove agents\" and \"query agent state\" from line 81. Leaving both in invites someone to build a second, duplicate entity store in the engine.",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md#envisioned-state"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Tick output contract is unspecified: in-place or copy, and update order",
+      "description": "Step 5, \"Returns the updated state array,\" leaves out decisions that the determinism goal depends on:\n1. **Mutate or copy:** does the tick change the input arrays in place or return new ones? Tick-as-transaction in 300-arch needs the pre-tick state intact until commit, and the GPU section's \"no dynamic allocation\" suggests in-place. These conflict unless double buffering is specified.\n2. **Update order:** do all active agents read the pre-tick snapshot (Jacobi), or do later agents see earlier agents' updated positions (Gauss-Seidel)? With subsets this matters even more. Agents outside the subset must be read at their tick-start state, and the document doesn't say so.\n3. **Inactive agents:** they must come back unchanged. The document implies this but never states it as part of the contract.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md#envisioned-state"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Reduced-rate ticking doesn't work with a single fixed dt",
+      "description": "The \"Subset-evaluable tick\" principle promises support for agents \"evaluated... at 1/4 or 1/16 rate,\" and the doc presents the subset parameter as the only interface needed. But the tick integrates every active agent with one fixed timestep (Technical Considerations, \"Fixed-timestep integration is essential\"). An agent evaluated every 4th tick with that dt moves at a quarter of its true speed.\n\nFixing this needs one of:\n- a per-agent dt or elapsed-ticks array;\n- multiple tick calls, one per rate group;\n- extrapolation on the server between evaluations, which 300-arch hints at with \"interpolated positions.\" That is extrapolation in practice, and it means the arrays the engine reads hold positions it didn't produce.\n\nEach option changes the tick signature or the stability analysis. This is exactly the interface the document says must be right \"from the start,\" so the decision belongs here.",
+      "file_ref": null,
+      "category": "feasibility",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md#architectural-principles"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Neighbor query output format is the load-bearing decision, and it's missing",
+      "description": "The doc correctly says neighbor queries dominate cost. It also requires \"no Python-level per-agent branching\" (GPU section). But it never says what a neighbor query returns:\n- variable-length lists per agent;\n- flat CSR-style (offsets, indices) arrays;\n- a padded fixed-K matrix with a mask;\n- pair arrays (i, j, distance).\n\nOnly the array formats can be vectorized in NumPy. Variable-length lists force the per-agent Python loop the document forbids. The format also sets the memory ceiling: at the 300-arch figure of ~100 neighbors per agent, 500K agents is about 50M pairs per tick. \"Pluggable spatial queries \u2026 without changing the engine\" holds only if the output format is fixed first. Any later strategy (spatial hash, KD-tree via `scipy.spatial.cKDTree.query_ball_point`, which returns lists of lists) has to produce that format. Name the format and a max-neighbor or cap policy.",
+      "file_ref": null,
+      "category": "abstraction",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md#technical-considerations"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "State schema can't express herding, predator-prey or territorial behavior",
+      "description": "The state is defined as \"positions, velocities, profile indices,\" and the engine is stateless. The anticipated archetypes need per-agent state that persists across ticks and that a profile (shared per species) can't hold:\n- **Territorial:** a home-range center for each individual.\n- **Herding:** a leader flag or experience score for each individual.\n- **Pack hunting / predator-prey:** a current target. If target selection reruns statelessly every tick, predators switch to whichever prey is nearest each tick and jitter. Persisting a target index then breaks when the server compacts arrays on `remove()`.\n- **Flight response:** usually an arousal or flee timer.\n\n\"Forces, not decisions\" also conflicts with \"target selection logic,\" which is a discrete decision. The doc needs:\n- an extensible per-agent auxiliary-attribute mechanism (named SoA columns registered by profile features);\n- a rule for references between agents that survives index compaction (stable IDs plus an ID\u2192index map that the server owns).\n\nWithout these, slices 102\u2013104 each make up their own state and ownership rules.",
+      "file_ref": null,
+      "category": "extension-points",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md#envisioned-state"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Swarm archetype contradicts the read-only environment and the stateless engine",
+      "description": "\"Environment as input surface\" makes the environment read-only to the engine. \"The same force-accumulation loop handles all archetypes\" includes swarm agents that respond to \"environmental stigmergy (reinforced paths).\" Stigmergy means agents write to the environment: they deposit or reinforce trails. Swarm intelligence therefore needs either a write-back output from the tick (deposit fields returned alongside state) or a separate server-side step that turns agent positions into trail updates. Either way, it falls outside the stated principles. The slice plan defers swarm. The architecture should still say which path it takes, or explicitly drop the claim that swarm fits the shared loop.",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md#architectural-principles"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Environment query interface shape is unspecified and risks Python callbacks in the hot loop",
+      "description": "The engine \"queries environmental state (terrain elevation, resource locations, threat zones, seasonal parameters) through a read-only interface.\" If that is a per-position query (`env.elevation(x, y)`), it is exactly the \"callback into Python during the hot loop\" that the GPU section forbids, and it ruins NumPy vectorization. The contract must be bulk: sample fields at an (N, 2|3) position array and return arrays, or pass pre-rasterized field grids that the engine samples with index arithmetic. Resource and threat \"locations\" need their own nearest-point query, which is a second spatial index the doc never mentions.",
+      "file_ref": null,
+      "category": "technology",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md#architectural-principles"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Aggregates can't be returned through the agent neighbor query interface",
+      "description": "\"Multi-resolution simulation and aggregation\" says the world server would present aggregates \"through the same neighbor query interface.\" Neighbor queries return indices into the agent state arrays. Aggregates aren't in those arrays, and they have a different schema (center, heading, dispersion, count). The force from an aggregate (a distributed cloud weighted by count) also differs from the force from a single point agent.\n\nThere are two ways to make this work:\n- give aggregates slots in the agent arrays plus a kind flag and weight column, which affects array layout now;\n- add a second neighbor channel with its own force terms.\n\nBoth change interfaces the doc calls stable. Either reserve the mechanism now, or state that aggregation support will need an interface revision.",
+      "file_ref": null,
+      "category": "extension-points",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md#technical-considerations"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Determinism is undefined and conflicts with swappable spatial indexes and GPU offload",
+      "description": "\"Tick determinism\" is used to justify replay and cross-region agreement, which need bitwise equality. Floating-point summation of neighbor contributions depends on order. A brute-force query and a spatial hash return neighbors in different orders, so forces differ in the last bits and simulations drift apart chaotically over time. Slice 105's \"behavioral output is identical before and after the swap\" will fail unless neighbor order is normalized (sorted indices) or the result is compared within a tolerance. GPU atomics-based accumulation is non-deterministic by default. Define the guarantee: either bitwise on the same platform and strategy, or within a tolerance. Also state the neighbor-ordering rule the query interface must follow.",
+      "file_ref": null,
+      "category": "feasibility",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md#design-goals"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "No failure-mode strategy for the numerical core",
+      "description": "The whole document is silent on error handling. The project's rules require explicit failures rather than silent fallbacks. Specific failure modes in this design that it doesn't cover:\n- **NaN/inf:** zero-length vector normalization in alignment and cohesion (coincident agents, zero velocity), and division by neighbor count when there are no neighbors. One NaN spreads through neighbors' forces within a few ticks.\n- **Unbounded speed:** Euler instability at high force magnitudes (which the doc itself names) with no speed or force clamp specified.\n- **Invalid input:** profile indices out of range, or malformed profiles. \"Profiles can be... swapped at runtime\" with no validation point named.\n- **Out-of-bounds positions:** agents leaving world bounds, which a spatial hash sized to world bounds must handle. 300-arch assigns removal at the boundary to the server, but the engine still produces the positions.\n\nState whether the tick validates its inputs, how NaNs are detected and reported (fail the tick or quarantine the agent), and which component clamps.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "unverified"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "GPU constraints don't fit a NumPy implementation and belong out of this document",
+      "description": "The \"GPU compute path\" section requires \"no dynamic allocation\" in the force loop. Every NumPy expression such as `a - b` or `np.linalg.norm` allocates temporaries, so the planned CPU implementation can't meet this without `out=` arguments everywhere or a switch to Numba. GPU work belongs to the 1M+ tier. The current initiative targets 10K\u201350K. The useful constraint is already stated elsewhere: bulk array-in/array-out with no per-agent Python branching. Cut this section down to that sentence. Also drop \"Aggregation interface support\" from Anticipated Slices. The slice plan already moved it to Future Work (108), and it depends on world server work that doesn't exist yet.",
+      "file_ref": null,
+      "category": "antipattern",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md#technical-considerations"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Wrong document references",
+      "description": "Related Work links `200-arch.world-server-foundation.md`, which doesn't exist. The actual file is `300-arch.worldserver-foundation.md`, and the Scope section correctly calls it \"300-arch.\" The slice plan repeats the broken 200 link. The concept link resolves, but 300-arch refers to the concept as `001-concept.migratory`, which is the initiative plan's index. These should be fixed so cross-document navigation works.",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md#related-work"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Open questions the slice plan already resolved",
+      "description": "Technical Considerations still lists these as open:\n- SoA vs AoS (\"needs validation\");\n- Euler vs Verlet vs semi-implicit Euler;\n- a separate \"Spatial query abstraction\" slice that comes after flocking.\n\nSlice 100 (complete) chose NumPy SoA, semi-implicit Euler, and a spatial query interface with a brute-force implementation. The precision question (float64 internally vs Float32 on the wire) is also still open. The doc's own wording, \"zero-copy serialization path,\" is impossible if internal precision is float64, because converting is a copy. The architecture should record the decisions that were made, so later slices don't reopen them.",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md#technical-considerations"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "Engine is called stateless, but its interface includes register/remove agents",
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md#envisioned-state",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "Tick output contract is unspecified: in-place or copy, and update order",
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md#envisioned-state",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "feasibility",
+      "raw_category": null,
+      "summary": "Reduced-rate ticking doesn't work with a single fixed dt",
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md#architectural-principles",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "abstraction",
+      "raw_category": null,
+      "summary": "Neighbor query output format is the load-bearing decision, and it's missing",
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md#technical-considerations",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "extension-points",
+      "raw_category": null,
+      "summary": "State schema can't express herding, predator-prey or territorial behavior",
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md#envisioned-state",
+      "location_verified": null
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "Swarm archetype contradicts the read-only environment and the stateless engine",
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md#architectural-principles",
+      "location_verified": null
+    },
+    {
+      "id": "F007",
+      "severity": "concern",
+      "category": "technology",
+      "raw_category": null,
+      "summary": "Environment query interface shape is unspecified and risks Python callbacks in the hot loop",
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md#architectural-principles",
+      "location_verified": null
+    },
+    {
+      "id": "F008",
+      "severity": "concern",
+      "category": "extension-points",
+      "raw_category": null,
+      "summary": "Aggregates can't be returned through the agent neighbor query interface",
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md#technical-considerations",
+      "location_verified": null
+    },
+    {
+      "id": "F009",
+      "severity": "concern",
+      "category": "feasibility",
+      "raw_category": null,
+      "summary": "Determinism is undefined and conflicts with swappable spatial indexes and GPU offload",
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md#design-goals",
+      "location_verified": null
+    },
+    {
+      "id": "F010",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "No failure-mode strategy for the numerical core",
+      "location": "unverified",
+      "location_verified": null
+    },
+    {
+      "id": "F011",
+      "severity": "concern",
+      "category": "antipattern",
+      "raw_category": null,
+      "summary": "GPU constraints don't fit a NumPy implementation and belong out of this document",
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md#technical-considerations",
+      "location_verified": null
+    },
+    {
+      "id": "F012",
+      "severity": "note",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "Wrong document references",
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md#related-work",
+      "location_verified": null
+    },
+    {
+      "id": "F013",
+      "severity": "note",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "Open questions the slice plan already resolved",
+      "location": "project-documents/user/architecture/100-arch.behavior-engine.md#technical-considerations",
+      "location_verified": null
+    }
+  ],
+  "template_name": "arch",
+  "input_files": {
+    "input": "project-documents/user/architecture/100-arch.behavior-engine.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/migratory-100-arch"
+  },
+  "timestamp": "2026-11-16T09:23:38.996097",
+  "model": "claude-opus-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 5,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-opus-5-5",
+  "answering_models": [
+    "claude-opus-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 13,
+    "in_fences": 0,
+    "in_section": 13,
+    "surviving": 13
+  },
+  "effort": "medium",
+  "profile": "sdk",
+  "turns": 6,
+  "prompt_tokens": 273328,
+  "cached_tokens": 190702,
+  "cache_write_tokens": 82618,
+  "completion_tokens": 7652,
+  "reasoning_tokens": null,
+  "duration_seconds": 83.80492566595785,
+  "cost_usd": 0.8525717000000002,
+  "cost_basis": "provider"
+}

@@ -1,0 +1,68 @@
+{
+ "review": "r05",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Alias-free config identity conflicts with the architecture's Design Goal",
+   "description": "D6 removes the alias from the grouping key. Plan criterion 4 requires this: runs that differ only in the alias's effort label and sent the same effort must count as one config. The architecture's Effort capability (\"two rows only when the effort really differed on the wire\") supports that outcome. Its Design Goal \"Results stay comparable over time,\" however, still defines the config as \"(alias, model, profile, effort sent)\". D6 calls its change a narrowing (line 147) and says the architecture \"already implies it.\" It is a change of key, and the architecture's own text points two ways. Amend the Design Goal sentence to the D6 key, with the alias kept as provenance, and have D6 cite that amendment. Slices 424\u2013427 group on this key, so the amendment should land before 424.",
+   "location": "project-documents/user/slices/420-slice.effort-audit-across-dispatch-paths.md:142-147"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Identity fields and the AST test exceed the plan, and the effort estimate does not match the change",
+   "description": "- `tool_use` and `max_output_tokens` (lines 145\u2013146) appear in neither the plan entry (criterion 4 covers effort only) nor the architecture. They split rows that would otherwise merge, and they add two optional fields, a new label rule, and a change to Bradley-Terry grouping. Cut them unless the amended architecture identity names them.\n- The D7 AST scan (lines 149\u2013152) is a regression guard. Plan criterion 1 asks for an inventory, and the table at lines 58\u201378 provides one. Defer the scan to 423 or 424, where new dispatch sites are expected.\n- The Providers paragraph (line 80) restates 931's wire mappings. Reduce it to a reference.\n- The change touches about fifteen modules (lines 83\u201391 and 127) and adds a metadata key, a reader, a CLI option and an AST test. The 2/5 effort rating (line 229) should be re-rated or the scope cut.",
+   "location": "project-documents/user/slices/420-slice.effort-audit-across-dispatch-paths.md:145-152"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Paths that cannot send effort write no record, against plan criterion 3",
+   "description": "Rows 13\u201315 (metrology audit, PR composer, daemon agents) say \"Records: no.\" The Excluded list (lines 36\u201337) justifies leaving them out because they have no alias effort to send. That answers sending, not recording. Plan criterion 3 requires that \"a path that cannot send effort records 'not sent'.\" The architecture requires that every run \"records the effort actually sent, or records that none was sent.\" D1 (line 115) says null covers \"a path with no alias,\" which implies these paths write null, so D1 and the table contradict each other. Rows 10\u201311 have a similar gap: `_dispatch-run` is marked \"no record (harness-run),\" but it is a squadron command that makes the call, and the design does not say who writes its record. Either have these paths write a null effort record, or amend the architecture so the \"every run\" rule covers pipeline and replay runs only, and state that in the inventory.",
+   "location": "project-documents/user/slices/420-slice.effort-audit-across-dispatch-paths.md:74-76"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "SDK-session steps record a different effort with no \"could not\" record, and compaction hides the mismatch",
+   "description": "The plan entry says every path \"sends the alias's effort when the alias has one, or records that it could not.\" The architecture's first capability says the same. Rows 1\u20133 send the session's effort instead, which #216 makes unavoidable without reopening the session. The record holds the session's value, which is truthful, but nothing records that the step's alias effort was not sent. The only signal is the existing WARNING, and D1 rejects a reason field. Record the requested effort next to the sent effort, or state this as a known limitation in the plan and architecture.\n\nD2 then makes compaction the exception. Its mismatch is passed through \"with no warning\" (lines 121\u2013122), while Special Considerations says \"Session effort mismatch stays a warning\" for any step (line 233). A mismatch that is silent on one path is the silent stand-in the project forbids. Keep the warning for compaction.",
+   "location": "project-documents/user/slices/420-slice.effort-audit-across-dispatch-paths.md:62-64"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "An absent effort stamp is read as \"not sent,\" which the design does not justify",
+   "description": "The reader returns `None` when both the key and the usage record are absent (line 138). Three situations produce that: a run from before this slice, an action that failed before its model was resolved, and a run whose subprocess died with no run state or was cancelled. Only the second is known to have sent nothing. Line 137 nonetheless says \"Nothing was sent in those runs,\" which is an assumption. A crashed or cancelled producer may have sent effort, and the reader cannot distinguish it from the other two cases, so an unknown run lands in the \"not sent\" row. The design states that replay counts these runs by failure class. It does not say that `sq stats producers`, which keys on this value, does the same. The reader should return an explicit unknown, and the design should say how each reader counts it, per the architecture's \"Absent is not zero.\" The absent path also has no WARNING and no test, although the failure-mode rule requires an observable signal and a test for each failure mode.\n\nD3 has the same problem for judges. It reads the judge's effort back from usage metadata (line 126), which D5 says can be missing. The judge's effort is in hand at the call, so the judge should record the value passed in, as D5 does for actions.",
+   "location": "project-documents/user/slices/420-slice.effort-audit-across-dispatch-paths.md:137-139"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Findings-addressed judge: effort rises on a path whose spend is unrecorded and outside the pipeline cap",
+   "description": "Row 7 changes this judge from the backend default to the judge alias's effort (D3), and the CHANGELOG bullet says cost and latency \"can change\" (line 183). Special Considerations (line 232) says this path writes no UsageRecord, so its spend is missing from run totals and from `pipeline.max_cost_usd`. The call also records no effort, so a run cannot show which effort the judge used. The architecture says spend must be visible (line 42) and that `pipeline.max_cost_usd` bounds one run (line 83). This slice raises effort on the path without restating that bound, and it defers the spend gap to an issue. Either write a UsageRecord for path 7's successful calls, which carry spend (D5's objection at line 140 covers only calls with no spend), or keep the judge at the backend default until its spend is counted. In either case, restate the cap bound for this path in the slice.",
+   "location": "project-documents/user/slices/420-slice.effort-audit-across-dispatch-paths.md:68"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "The `sq review` CLI run has no effort stamp, so the reader that 421\u2013427 are told to use cannot find it",
+   "description": "Row 9 records effort only as the review file's frontmatter `effort`. The stamp list (line 88) covers the review action, not the CLI command. `action_effort_sent` reads action metadata and a usage record. Line 186 tells 421\u2013427 they can read effort from `action_effort_sent` with no further work, which does not hold for these runs. The design also does not say whether the frontmatter value is the effort sent or the alias's value, which is the distinction D5 exists to draw. If reviewer recall (427) runs through this command, its configs will have no identity. Stamp the CLI run too, or state that recall uses only the review action and that this command's runs sit outside identity.",
+   "location": "project-documents/user/slices/420-slice.effort-audit-across-dispatch-paths.md:70"
+  },
+  {
+   "i": 7,
+   "severity": "NOTE",
+   "title": "Architecture's dependency list omits 931 and 175",
+   "description": "The architecture lists `dependencies: [140, 300, 320, 400]`. This slice's prerequisites are 931 (aliases, `Effort`, `applies_effort`) and 175 (`UsageRecord.effort` as \"sent\"), and the architecture's Current State discusses effort from 931. The slice's `dependencies: []` matches the plan's \"none in this initiative.\" Add 931 and 175 to the architecture frontmatter in the same amendment as the identity change.",
+   "location": "project-documents/user/architecture/420-arch.model-benchmark.md:8"
+  },
+  {
+   "i": 8,
+   "severity": "NOTE",
+   "title": "423 is absent from interfaces; confirm it dispatches through inventoried paths",
+   "description": "The plan says 423 (`sq run fix`) has no effort dependency. That holds only if the fix pipeline reuses inventoried actions. A new `AgentConfig` site would fail the D7 guard when it lands, which is the intended behavior. The 423 design should name the action it uses, because 424 reads `action_effort_sent` from the producer.",
+   "location": "project-documents/user/slices/420-slice.effort-audit-across-dispatch-paths.md:7"
+  }
+ ]
+}

@@ -1,0 +1,225 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Benchmark steps can't separate the two interventions, so the baseline can't be reproduced",
+      "description": "Step 3 lists four bench runs labelled \"counter-gating\" or \"break enabled\". Runs 1 and 2 use the same command (`--subdivision-factor 1`), and so do runs 3 and 4 (`--subdivision-factor 3`). The design never adds a way to switch early exit on or off. Intervention 1 replaces counter-gating outright (line 25). Once it ships, the run labelled \"Baseline \u2026 should reproduce slice 145 ~38 TPS\" will actually run with early exit on. As a result:\n- A2 (\"\u22655\u00d7 vs slice 145 baseline\") has to be compared against the historical 38 TPS figure, not a fresh run.\n- The per-intervention attribution that line 58 says \"needs CUDA measurement\" can't be measured.\n\nPick one fix. Either add a bench-only switch (a kernel template constant, not a runtime branch), or drop the attribution runs. If you drop them, state that the baseline is the recorded slice 145 figure and keep only the S=1 and S=3 runs.",
+      "file_ref": null,
+      "category": "verification",
+      "raw_category": null,
+      "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:158-178"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`cell_size` and `S` are separate settings that can disagree",
+      "description": "The component diagram stores `cell_size` and `subdivision_factor S` as two separate `BenchConfig` fields. Both are passed to the kernel. Line 80 says the harness \"reads [cell_size] from config\", but `cell_size = query_radius / S` is only valid if `cell_size` is calculated from `S`. If they are set separately:\n- `cell_size < query_radius / S` makes the \u00b1S scan too small. Neighbors inside the radius are silently missed.\n- `cell_size > query_radius / S` scans more cells than needed.\n\nThe validation block (lines 69\u201376) checks only `S`. State that `cell_size` is calculated from `query_radius` and `S` and can't be set on its own. Otherwise, add a config-time check that `cell_size * S >= query_radius`, in line with the project's fail-explicitly rule.",
+      "file_ref": null,
+      "category": "interface-contract",
+      "raw_category": null,
+      "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:84-99"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "\"Correct neighborhood is preserved\" is false once the cap applies",
+      "description": "Subdivision keeps the same search area. But with `max_neighbors=32` and hundreds of candidates per cell, the cap picks neighbors by scan order. With S=1, the first 32 come from the (-1,-1) cell. With S=3, they come from the first sub-cells of the 7\u00d77 block, starting at the (\u22123,\u22123) corner. These are often the far-corner cells, only partly inside the radius. So subdivision changes which neighbors are chosen, and that choice is biased toward one direction.\n\nSlice 145 (lines 222\u2013227) accepted the gap between first-k-found and true k-nearest, measured at population level. This slice changes the gap without discussing it. The parity check also runs at `mid-flock N=5000` (Step 5), where the cap may rarely bind. Two changes would close this:\n- Correct the claim on line 56.\n- Run the A4 parity check at a density where the cap binds (the gate workload), or document why the scan-order bias is acceptable.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:56"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Relies on Quadrants supporting inner-loop `break`, with no check or fallback",
+      "description": "Slice 145 R1 (lines 363\u2013368) listed \"Quadrants may not support the conditional break in the inner loop\" as a risk. Counter-gating was the fallback, and the shipped kernel uses it. This slice says the inner `for kk` loop accepts `break`, but gives no evidence. If the compiler rejects it, or turns it into predication that saves nothing, Intervention 1 fails. Add a small kernel test as the first implementation step. Also name the fallback: for example, a `while kk < end and k_found < k_max` loop, or relying on subdivision alone.",
+      "file_ref": null,
+      "category": "risk",
+      "raw_category": null,
+      "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:29-46"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Not specified how the `S` setting reaches the production engine (slice 146)",
+      "description": "`S` is added only to the \"bench configuration\" (line 50). Production runs will default to S=1. The A3 gate exists to show headroom \"before slice 146 wires the GPU tick into the production engine\" (line 116). That headroom is measured with S=3, which production won't get unless slice 146 knows to pass `S` through. The interface note says only that the setup/tick API is unchanged. State where `S` and the derived `cell_size` live in production config, or record it as a requirement handed to slice 146.",
+      "file_ref": null,
+      "category": "integration",
+      "raw_category": null,
+      "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:108-112"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Early exit sits in the caller, so A7 is no longer a one-place swap",
+      "description": "Option A puts the `break` in the kernel loop, outside `get_neighbors_first_k`. Distance-ranked k-nearest (the future A7 swap) has to scan every candidate. So that swap will need to remove the caller-side break as well as replace the seam. That conflicts with slice 145's A7 goal that the swap needs no kernel-structure change. This is acceptable, but say it in the A7 note on line 112.",
+      "file_ref": null,
+      "category": "architecture",
+      "raw_category": null,
+      "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:31-36"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The upper bound on `S` is justified incorrectly",
+      "description": "At any `S`, a (2S+1)\u00b2 grid of `query_radius/S` cells covers the same area. S=8 is not \"larger than the physical neighborhood\". Grid memory grows by S\u00b2, which stays small at the stated world sizes. The real cost of a large `S` is the number of near-empty cells scanned per agent. The cap is fine, but rewrite the reason.",
+      "file_ref": null,
+      "category": "documentation",
+      "raw_category": null,
+      "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:78"
+    },
+    {
+      "severity": "PASS",
+      "title": "Tier 2 NFR restated with specific targets",
+      "description": "The slice restates 60 TPS at N=50k on CUDA. It sets A3 at \u2265100 TPS, and A2 and A4 match the plan's exit criteria (\u22655\u00d7 `force_total`, 20% statistical parity).",
+      "file_ref": null,
+      "category": "nfr",
+      "raw_category": null,
+      "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md#success-criteria"
+    },
+    {
+      "severity": "PASS",
+      "title": "Scope matches the plan entry, and module boundaries are respected",
+      "description": "Nothing changes in `TickResult`, the world server, or the numpy/numba backends. Both interventions stay inside the fused kernel and the bench config. Dependencies point only at slice 145. `S` is validated in Python at config time with an explicit error, not inside the kernel. The slice adds no new I/O or message paths, so it needs no failure-mode list.",
+      "file_ref": null,
+      "category": "scope",
+      "raw_category": null,
+      "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md#out-of-scope"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "verification",
+      "raw_category": null,
+      "summary": "Benchmark steps can't separate the two interventions, so the baseline can't be reproduced",
+      "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:158-178",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "interface-contract",
+      "raw_category": null,
+      "summary": "`cell_size` and `S` are separate settings that can disagree",
+      "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:84-99",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "\"Correct neighborhood is preserved\" is false once the cap applies",
+      "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:56",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "risk",
+      "raw_category": null,
+      "summary": "Relies on Quadrants supporting inner-loop `break`, with no check or fallback",
+      "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:29-46",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "integration",
+      "raw_category": null,
+      "summary": "Not specified how the `S` setting reaches the production engine (slice 146)",
+      "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:108-112",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "architecture",
+      "raw_category": null,
+      "summary": "Early exit sits in the caller, so A7 is no longer a one-place swap",
+      "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:31-36",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "note",
+      "category": "documentation",
+      "raw_category": null,
+      "summary": "The upper bound on `S` is justified incorrectly",
+      "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:78",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "pass",
+      "category": "nfr",
+      "raw_category": null,
+      "summary": "Tier 2 NFR restated with specific targets",
+      "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md#success-criteria",
+      "location_verified": null
+    },
+    {
+      "id": "F009",
+      "severity": "pass",
+      "category": "scope",
+      "raw_category": null,
+      "summary": "Scope matches the plan entry, and module boundaries are respected",
+      "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md#out-of-scope",
+      "location_verified": null
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md",
+    "against": "project-documents/user/architecture/140-slices.simulation-scaling.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/migratory-149-slice"
+  },
+  "timestamp": "2026-11-16T09:24:51.504910",
+  "model": "claude-opus-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 5,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-opus-5-5",
+  "answering_models": [
+    "claude-opus-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 9,
+    "in_fences": 0,
+    "in_section": 9,
+    "surviving": 9
+  },
+  "effort": "medium",
+  "profile": "sdk",
+  "turns": 6,
+  "prompt_tokens": 297953,
+  "cached_tokens": 208437,
+  "cache_write_tokens": 89508,
+  "completion_tokens": 5945,
+  "reasoning_tokens": null,
+  "duration_seconds": 65.01795425009914,
+  "cost_usd": 0.8772447,
+  "cost_basis": "provider"
+}

@@ -1,0 +1,261 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Case sets keyed by name instead of `ProjectId`",
+      "description": "The architecture (\"Extend 320's store\") and the plan entry for 421 both say the new records are \"keyed on `ProjectId`\". D2 keys a `CaseSet` by `name` alone, justified by pooling, which the architecture treats as a fallback decided only after 422's yield report.\n\nThe consequence is a collision. 422 must produce fix-case sets for squadron and at least one other project. If both use the same set name, `write_case_set` sees a differing list and writes the second project's cases as v2 of the first project's set. Nothing in the design prevents this or states a naming rule.\n\nEither key the set on `ProjectId` plus name and defer the pooled form until the yield report asks for it, or state the uniqueness rule and add a test for it.",
+      "file_ref": null,
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:132-134"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "No reason for install failures that are not the lockfile's fault",
+      "description": "`EnvironmentFailureReason` has five values and no general bucket. A non-zero `uv sync` exit that is not a timeout can only become `lock_stale_or_unresolvable`. That covers a network outage, an index 5xx, a failed sdist build and a full disk.\n\nThe architecture says a lockfile that no longer resolves disqualifies the case, and 422's yield report counts exclusions per reason. A transient failure would therefore disqualify a good case under a wrong reason.\n\nThe design also does not say how uv's exit and stderr map to a reason. Add an `install_failed` reason (not a disqualifier by itself) and state the rule that selects `lock_stale_or_unresolvable`.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:152"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "A truncated suite run without a timeout is not detected",
+      "description": "D10 handles a timeout and a missing or unparseable JSONL file. It does not handle a run that dies mid-suite and leaves a valid partial file: an interpreter crash, `os._exit` in a test, or a pytest internal error.\n\nFor `all_tests()` there is no requested list to compare against, so the missing nodes simply vanish from `SuiteRun`. 425's regression count would then read an incomplete suite as clean, which breaks \"absent is not zero\".\n\nHave the plugin write a session-finish line with the exit status and collected count, and treat its absence as a truncated run or `SuiteRunError`. Also state whether the start commit's own `addopts` (such as `-x` or xdist) are honored, since they cause the same truncation or interleaved writes.",
+      "file_ref": null,
+      "category": "failure-modes",
+      "raw_category": null,
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:209"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Seeded user config reaches the suite environment but not the identity",
+      "description": "Data-flow step 3 seeds the user's `config.toml`, `models.toml` and `providers.toml` into every scrubbed home, including suite runs under `CredentialGrant.none()`. `EnvironmentIdentity` (D6) covers `scrub_spec_version` but not seed content.\n\nThe architecture re-qualifies a case when its environment identity differs, and warns that tests reading the developer's environment are only caught if qualification runs in the same environment as replays. A project test that reads `~/.config/squadron` can change result when the user edits their config, with the identity digest unchanged.\n\nThe lighter fix is to seed only when a grant is present, since suite runs dispatch no model. Otherwise hash the seed content into the identity.",
+      "file_ref": null,
+      "category": "integration",
+      "raw_category": null,
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:171"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Replaced credential symlink is detected but the token is not recovered",
+      "description": "D8 reports `yes, but carryover replaced` when a runtime rewrites its auth file by rename. At that point the refreshed token exists only as a regular file in the throwaway scrubbed home, which is deleted on exit, so the first probe can invalidate the user's real login.\n\nThe design names the failure but handles it with a report only. On detection, copy the replaced file back to the real path, or keep the home and print its path. Also state the exit code for this result; the API contract defines only yes (0) and no (1).",
+      "file_ref": null,
+      "category": "failure-modes",
+      "raw_category": null,
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:185"
+    },
+    {
+      "severity": "NOTE",
+      "title": "How the agent runtime is found on the scrubbed `PATH` is not stated",
+      "description": "D7 says agent CLIs started by a scrubbed `sq run` inherit the scrub, while `HARNESS_TOOL_ALLOWLIST` admits only `git` and `uv` and leaves out the user's tool installs. If a provider's runtime binary lives in one of those installs, the probe returns a no that is about `PATH`, not auth.\n\nThe check would still surface it through stderr. A separate `runtime not found` result would keep the auth answer clean.",
+      "file_ref": null,
+      "category": "under-specification",
+      "raw_category": null,
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:168-174"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Identity additions and undeclared 400 dependency",
+      "description": "Adding `reference_sha`, `project_id`, `kind` and `hidden_fixtures` to the case identity goes beyond the architecture's list. It is declared and well reasoned, and it only makes the identity stricter. State that `start_sha` and `reference_sha` are full shas so an abbreviated sha cannot create a second case.\n\nThe design consumes `SourceLanguage` and the `.venv` layout from 400, but frontmatter `dependencies` lists only 420, 177 and 320.",
+      "file_ref": null,
+      "category": "documentation",
+      "raw_category": null,
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:125-126"
+    },
+    {
+      "severity": "PASS",
+      "title": "Scope matches the slice plan entry",
+      "description": "All four plan items and all five plan success criteria are covered. Discovery, the fairness rule, injection, the leak scan and grading are explicitly left to 422\u2013426. Both open questions are decided: the seam shape (D9) and projects without a lockfile (D5). The two CLI commands and the fifth `FailureKind` are small and serve verification and 422's \"exclude when undecidable\" rule.",
+      "file_ref": null,
+      "category": "scope",
+      "raw_category": null,
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md#technical-scope"
+    },
+    {
+      "severity": "PASS",
+      "title": "Boundaries and dependency directions",
+      "description": "`benchmark/` depends on `metrology/` and `replay/sandbox.py`, never the reverse. Concrete adapters are reached only through the registry. The store is extended with sibling payloads and no migration. `HistoryFreeSandbox` is extracted by composition with replay behavior unchanged. A separate `BenchmarkAdapter` protocol avoids stubbed methods on 400's adapters.",
+      "file_ref": null,
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md#component-structure"
+    },
+    {
+      "severity": "PASS",
+      "title": "Scrubbed environment follows the \"answer stays out of reach\" principle",
+      "description": "The allowlist construction, redirected `HOME`, absent GitHub credentials, sandbox-first `PATH` and absence of store or memory match the architecture. The limits (open network, directory not a jail) are stated and handed to 424's scan rather than hidden. No fallback to the unscrubbed environment exists.",
+      "file_ref": null,
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:163-174"
+    },
+    {
+      "severity": "PASS",
+      "title": "Timeouts and NFRs",
+      "description": "Install, suite and auth-probe calls are each bounded by a declared config key, with a named outcome on timeout and process-group kill. The architecture states no latency or throughput NFR on these paths. Its cost-bound requirement applies to benchmark runs in 424, not to this slice.",
+      "file_ref": null,
+      "category": "failure-modes",
+      "raw_category": null,
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:223-226"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "summary": "Case sets keyed by name instead of `ProjectId`",
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:132-134",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "No reason for install failures that are not the lockfile's fault",
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:152",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "failure-modes",
+      "raw_category": null,
+      "summary": "A truncated suite run without a timeout is not detected",
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:209",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "integration",
+      "raw_category": null,
+      "summary": "Seeded user config reaches the suite environment but not the identity",
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:171",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "failure-modes",
+      "raw_category": null,
+      "summary": "Replaced credential symlink is detected but the token is not recovered",
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:185",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "under-specification",
+      "raw_category": null,
+      "summary": "How the agent runtime is found on the scrubbed `PATH` is not stated",
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:168-174",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "note",
+      "category": "documentation",
+      "raw_category": null,
+      "summary": "Identity additions and undeclared 400 dependency",
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:125-126",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "pass",
+      "category": "scope",
+      "raw_category": null,
+      "summary": "Scope matches the slice plan entry",
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md#technical-scope",
+      "location_verified": null
+    },
+    {
+      "id": "F009",
+      "severity": "pass",
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "summary": "Boundaries and dependency directions",
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md#component-structure",
+      "location_verified": null
+    },
+    {
+      "id": "F010",
+      "severity": "pass",
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "summary": "Scrubbed environment follows the \"answer stays out of reach\" principle",
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:163-174",
+      "location_verified": true
+    },
+    {
+      "id": "F011",
+      "severity": "pass",
+      "category": "failure-modes",
+      "raw_category": null,
+      "summary": "Timeouts and NFRs",
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:223-226",
+      "location_verified": true
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md",
+    "against": "project-documents/user/architecture/420-arch.model-benchmark.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261115-design/wt/421-design"
+  },
+  "timestamp": "2026-11-16T07:22:00.138538",
+  "model": "claude-fable-5-2",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 4,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-fable-5-2",
+  "answering_models": [
+    "claude-fable-5-2"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 11,
+    "in_fences": 0,
+    "in_section": 11,
+    "surviving": 11
+  },
+  "effort": "medium",
+  "profile": "sdk",
+  "turns": 5,
+  "prompt_tokens": 253988,
+  "cached_tokens": 145436,
+  "cache_write_tokens": 108546,
+  "completion_tokens": 13004,
+  "reasoning_tokens": null,
+  "duration_seconds": 138.2824934590608,
+  "cost_usd": 2.2868021,
+  "cost_basis": "provider"
+}

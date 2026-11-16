@@ -1,0 +1,171 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "PASS",
+      "title": "Success criteria coverage and failure-mode tests",
+      "description": "- **Criterion 1:** Tasks 8\u201315, with Task 9 covering complexity.\n- **Criterion 2:** Task 9.\n- **Criterion 3:** Tasks 4 and 6.\n- **Criterion 4:** Tasks 11 and 15, including the cross-language case.\n- **Criterion 5:** Task 22.\n- **Criterion 6:** Tasks 20 and 24.\n- **Criterion 7:** Tasks 20 and 24.\n- **Criterion 8:** Tasks 20 and 24.\n- **Criterion 9:** Task 17.\n- **Criterion 10:** Task 11.\n- **Criterion 11:** Task 26, covering determinism and read-only.\n- **Criterion 12:** Tasks 7 and 8.\n\nEvery row of the slice's failure-mode table has a test asserting both the signal and the outcome:\n- tokenizer errors: Tasks 11, 13, 15\n- token ceiling and `MemoryError`: Task 11\n- `RecursionError`: Task 9\n- malformed or unreadable report: Task 20\n- stat `OSError`: Task 22\n- `git ls-files` failures: Task 22\n\nI found no scope creep. Even the lower-value assertions, such as `tool.name` equality in Task 9, trace to D1 or D2.",
+      "file_ref": null,
+      "category": "coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Commit markers are written as checkboxes, not `**Commit**:` lines",
+      "description": "Tasks 2, 4, 6, 7, 9, 11, 13, 15, 17, 18, 20, 22, 24, 26, 27, 28, 29 and 30 use `- [ ] Commit: ...`. The convention is a plain `**Commit**: ...` line, never a checkbox. As written, task-checker will check the commits off as work items, and the \"never a commit that only checks boxes\" cadence rule gets muddied. Convert each to a plain `**Commit**: \\`type: summary\\`` line.\n\nThe placement is otherwise good. Markers sit at tested, working points, and the implementation-only tasks (8, 10, 12, 14, 16, 19, 21, 23, 25) correctly roll into the commit of the test task after them.",
+      "file_ref": null,
+      "category": "task-format",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:46"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Task 2 names enum members in value case, but the existing members are uppercase",
+      "description": "Existing members are uppercase with lowercase values, for example `FILE_LENGTH = \"file_length\"` and `TOOL_FAILED = \"tool_failed\"`. Task 2 says to add members `cyclomatic_complexity`, `duplicated_lines`, `coverage_not_configured` and the rest, in lowercase. A junior could add lowercase member names. That would break the naming convention and the references in Tasks 23 and 27 (`SnapshotMetric.\u2026`). State the names as `CYCLOMATIC_COMPLEXITY = \"cyclomatic_complexity\"` and so on, or say \"follow the existing member/value convention\".",
+      "file_ref": null,
+      "category": "clarity",
+      "raw_category": null,
+      "location": "src/squadron/metrology/snapshot_models.py:26-55"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Task 8 doesn't say the Python adapter's call site changes",
+      "description": "Task 8 renames `measure_length_metrics` to `measure_parse_metrics` and gives it a second `ToolIdentity` parameter. For TypeScript it says that `measure_typescript_lengths` passes the identity through. For Python it only describes building the identity. It never says that `PythonAdapter.measure` passes the identity and includes the returned complexity measurement in its output. Task 8 also has no success check beyond \"400's length tests pass\". That check doesn't prove the complexity measurement reaches the Python snapshot until Task 9. Add a Python call-site bullet matching the TypeScript one.",
+      "file_ref": null,
+      "category": "sequencing",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:99-106"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Task 1 and Task 30 are thin",
+      "description": "Task 1 is a single `git checkout -b` and could be the first item of Task 2. Task 30 largely repeats the per-commit format, lint, typecheck and test gate. Its unique value is the line-count check, the `snapshot_models.py` enum-only diff check, the unchanged-file checks, and the criteria-to-test mapping. Keep those items and drop the repeated gate. Neither is worth blocking on.",
+      "file_ref": null,
+      "category": "granularity",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:38-40"
+    },
+    {
+      "severity": "NOTE",
+      "title": "No load test needed",
+      "description": "The slice states no NFR requiring a `tests/load/` test. The memory bound is enforced by `DUPLICATION_MAX_TOKENS`, and Task 11 tests it by lowering the constant. A load-test task or CI gate would therefore be scope creep. The task file is also proportionate: it is one file, and the 30 tasks follow the slice's module table.",
+      "file_ref": null,
+      "category": "proportionality",
+      "raw_category": null,
+      "location": "project-documents/user/slices/401-slice.complexity-duplication-and-coverage.md:163-167"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "pass",
+      "category": "coverage",
+      "raw_category": null,
+      "summary": "Success criteria coverage and failure-mode tests",
+      "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "task-format",
+      "raw_category": null,
+      "summary": "Commit markers are written as checkboxes, not `**Commit**:` lines",
+      "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:46",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "clarity",
+      "raw_category": null,
+      "summary": "Task 2 names enum members in value case, but the existing members are uppercase",
+      "location": "src/squadron/metrology/snapshot_models.py:26-55",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "sequencing",
+      "raw_category": null,
+      "summary": "Task 8 doesn't say the Python adapter's call site changes",
+      "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:99-106",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "granularity",
+      "raw_category": null,
+      "summary": "Task 1 and Task 30 are thin",
+      "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:38-40",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "proportionality",
+      "raw_category": null,
+      "summary": "No load test needed",
+      "location": "project-documents/user/slices/401-slice.complexity-duplication-and-coverage.md:163-167",
+      "location_verified": true
+    }
+  ],
+  "template_name": "tasks",
+  "input_files": {
+    "input": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md",
+    "against": "project-documents/user/slices/401-slice.complexity-duplication-and-coverage.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/squadron-401-tasks"
+  },
+  "timestamp": "2026-11-16T10:14:52.863600",
+  "model": "claude-sonnet-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 5,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-sonnet-5-5",
+  "answering_models": [
+    "claude-sonnet-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 6,
+    "in_fences": 0,
+    "in_section": 6,
+    "surviving": 6
+  },
+  "effort": "high",
+  "profile": "sdk",
+  "turns": 6,
+  "prompt_tokens": 358859,
+  "cached_tokens": 247129,
+  "cache_write_tokens": 111720,
+  "completion_tokens": 7860,
+  "reasoning_tokens": null,
+  "duration_seconds": 61.320503666996956,
+  "cost_usd": 0.5509468000000001,
+  "cost_basis": "provider"
+}

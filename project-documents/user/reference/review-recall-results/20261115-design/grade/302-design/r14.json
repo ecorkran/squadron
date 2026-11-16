@@ -1,0 +1,40 @@
+{
+ "review": "r14",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "FAIL",
+   "title": "The CLI judge path in Value, Success Criterion 3 and walkthrough step 3 cannot work without engine changes",
+   "description": "The Value section (lines 31-35), Functional Requirement 3 (lines 277-282) and walkthrough step 3 (lines 361-368) say `sq review` can run `judge.slice-vs-arch` and return a threshold-derived verdict with `provenance == \"judge\"`. The current CLI cannot do this:\n- There is no `slice-vs-arch` subcommand and no `--template` option. `review_slice` passes the hard-coded name `\"slice\"` to `_run_review_command`.\n- The CLI path calls `run_review_with_profile` directly, not `ReviewAction`. So `enforce_judge()` never runs and `provenance` is never set. A judge template run this way would always persist the parsed verdict, which is `UNKNOWN` because the prompt forbids a `## Summary` line, and the CLI would exit 0.\n\nThe note at lines 376-379 treats this as uncertainty about argument shape only. It is really a missing integration path. Meeting criterion 3 as written needs CLI changes: a template option or subcommands, plus enforcement on the CLI path. That contradicts the \"one required code change\" scope at lines 51-57 and the slice plan's \"no engine changes\" rule. The task breakdown would inherit a criterion it cannot pass.\n\n**Fix:** Drop the CLI claims and verify end to end through a pipeline `review` step (`sq run`), which does go through `ReviewAction` and enforcement. The slice plan's criterion (\"produces a score, derived verdict, and findings, persisted like any review output\") is met that way. Record CLI judge support as Future Work.",
+   "location": "project-documents/user/slices/302-slice.design-phase-judge-templates.md:277-282"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "The structured-output constraint assigned to this slice is dropped without saying so",
+   "description": "The architecture (Technical Considerations, item (b)) commits that \"the judge template uses a structured-output constraint for the score field.\" The slice plan entry for 302 repeats this. Its success criteria include \"The score-with-rationale shape is enforced by the template's structured output.\" The parser also defers to this slice: `_extract_criteria`'s docstring says \"The structured-output/JSON variant is slice 302.\"\n\nThe design instead uses prompt instructions plus the lenient markdown `score:` line, and never mentions structured output. Templates currently have no output-schema mechanism, so delivering this would probably need an engine change. That is a legitimate reason to defer, but the design has to say so. As written, it drops slice-plan scope with no record.\n\n**Fix:** Either specify the structured-output mechanism, or add a Technical Decision that defers it with that reason, and add it to the slice plan's Future Work. Then state which success criterion stands in for it here.",
+   "location": "project-documents/user/slices/302-slice.design-phase-judge-templates.md#score-with-rationale-prompt-shape"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Concrete example numbers in the prompt shape invite the anchoring this slice is meant to reduce",
+   "description": "The architecture asks for score-with-rationale specifically \"to reduce anchoring,\" and lists \"anchoring on the prompt\" as a known weakness. The output-shape example (lines 161-178, also 129-133) uses real values: `score: 82`, `alignment: 85`, `scope: 80`. If an implementer copies this example into the system prompt, the model gets an anchor near the pass floors. This is the same hallucination trap the project's CLAUDE.md warns about.\n\n**Fix:** Require the shape example in each template's system prompt to use placeholders that are clearly not values, such as `score: <integer 0-100>` and `<criterion>: <integer 0-100>`. Make this a checkable item under Special Considerations.",
+   "location": "project-documents/user/slices/302-slice.design-phase-judge-templates.md:161-178"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "The failure-mode table misses a stray `score:` line in the rationale",
+   "description": "The new prompt shape puts free-form `## Rationale` prose before the `score:` line. `_SCORE_RE` matches any line that starts with `score:`, and the first match wins. If the model writes a provisional \"Score: 90\" while reasoning and then a final `score: 72`, the parser takes 90. That can produce a wrong `PASS` with no warning logged. This path is new in this slice, because the rationale-first layout is this slice's addition, but the failure-mode table does not list it.\n\n**Fix:** Add a row for this case. Handle it in the prompt: allow exactly one `score:` line, and require rationale lines to use only the `- <criterion> (<n>):` form. Add a test that a stray earlier `score:` line is treated as a known limitation, or say what detects it.",
+   "location": "project-documents/user/slices/302-slice.design-phase-judge-templates.md:394-400"
+  },
+  {
+   "i": 4,
+   "severity": "NOTE",
+   "title": "The data-flow example uses the wrong pass floor",
+   "description": "The data-flow example applies `pass_floor(78)` to `judge.slice-vs-arch`. The threshold table (lines 223-226) and walkthrough step 1 give that template 82; 78 belongs to `judge.tasks-vs-slice`. Under the real floor, a score of 82 still passes, but only just, and anyone writing tests from the example could pick up the wrong value.",
+   "location": "project-documents/user/slices/302-slice.design-phase-judge-templates.md:144-146"
+  }
+ ]
+}

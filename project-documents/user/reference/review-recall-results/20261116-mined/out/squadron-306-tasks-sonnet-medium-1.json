@@ -1,0 +1,189 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Part 0 is overweight for a purely mechanical move",
+      "description": "Part 0 has eight tasks (T1\u2013T8) and four commits for moving code verbatim and updating import paths. T2, T4 and T6 are verification-only tasks, and each repeats a long NOTE saying \"this is the focused subset, not the full-suite gate.\" The slice only requires that 305's suite passes unchanged (SC12). T1+T2, T3+T4 and T5+T6 could each be one task. T7 could be folded into T1/T3. The repeated caveats could be a single sentence. As written, the file spends more steps on the move than the slice's risk justifies.",
+      "file_ref": null,
+      "category": "proportionality",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-1.md:78-198"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Intermediate commits sit at points verified only by a subset of tests",
+      "description": "T2, T4 and T6 each commit after running only a focused subset of tests (lines 99-104, 127-129, 161-165). The file says the full-suite check is deferred to T8, and T2 states \"Commit here regardless.\" Commit markers should sit at working, tested points. Commits at T2, T4 and T6 can leave an importer regression outside the subset in history until T8. Running `uv run pytest -q` once at each of those points, or committing once at T8, would fix this. The commits are also written as `- Commit:` list items, not plain `**Commit**:` lines.",
+      "file_ref": null,
+      "category": "commit-markers",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-1.md:105"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "T14 has no test for the CLI path that the scope decision added",
+      "description": "The T13 scope note (line 316) says the guard moved into a shared `archive_existing_review` helper. It is called from `save_review_file`, which returns `None` on failure. It is also called from `save_review_result`, which raises `OSError`. The CLI got a `_save_and_report` wrapper. SC7 and SC11 are about re-running `sq review code <N>`, and that goes through `save_review_result`. T14's tests cover only `save_review_file`. Nothing tests the `save_review_result` raise or the CLI error-reporting path, which is the one users hit. T14 needs a sub-item for those, or it needs to say that the helper's tests cover both callers.",
+      "file_ref": null,
+      "category": "test-coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-1.md:316-338"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "T11 may leave one of the two `reviewedSha` paths untested",
+      "description": "SC1 requires the stamp from both the CLI and the pipeline persistence paths. T10 specifies two separate resolutions, one per caller. T11 tests one path, \"whichever is more directly testable.\" T10 should extract one shared resolver, which the slice's SC1 note says was done as `resolve_reviewed_sha`. Alternatively, T11 should require a test through each caller. Otherwise parity between the two paths, which T10 calls a standing project rule, is untested.",
+      "file_ref": null,
+      "category": "test-coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-1.md:233-236"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Stale cross-reference in T14",
+      "description": "T14 says \"the second failure mode T12 enumerates,\" but T12 is the cf-scanning checkpoint. The two failure modes are enumerated in T13 (copy cannot be created, and verification fails). An implementer following the reference lands on the wrong task.",
+      "file_ref": null,
+      "category": "documentation",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-1.md:330"
+    },
+    {
+      "severity": "NOTE",
+      "title": "T3 contradicts the relocation the slice records as completed",
+      "description": "T3 says \"do not move `screens.py`\" and keeps `RoundDiff` as a cross-package import. The slice's SC12 note says `RoundDiff` and the two context-free screens did move to `review/addressed/screens.py`, because T21 needed to construct a `RoundDiff`. The task file was not updated to reflect this. The file is marked `status: complete`, so this affects only readers using it as a record. The context summary at lines 48-54 has the same drift, since it lists `screens.py` as staying in the pipeline package.",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-1.md:115-119"
+    },
+    {
+      "severity": "PASS",
+      "title": "Sequencing and the F005 gating are structural",
+      "description": "T12 comes before T13 and T14, and it records a source-verified finding (non-recursive scanning, so the archive keeps the original filename). The dependency is explicit in T13 (line 311-314). Part 0 precedes everything in file 2, and Part D is independent of Part B. No circular dependencies. The T11 findings round-trip test is justified by the real risk that changing `format_review_markdown` could alter how findings serialize. It is a proportionate guard on file 2's reader, not scope creep.",
+      "file_ref": null,
+      "category": "sequencing",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-1.md:263-289"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "proportionality",
+      "raw_category": null,
+      "summary": "Part 0 is overweight for a purely mechanical move",
+      "location": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-1.md:78-198",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "commit-markers",
+      "raw_category": null,
+      "summary": "Intermediate commits sit at points verified only by a subset of tests",
+      "location": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-1.md:105",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "test-coverage",
+      "raw_category": null,
+      "summary": "T14 has no test for the CLI path that the scope decision added",
+      "location": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-1.md:316-338",
+      "location_verified": false
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "test-coverage",
+      "raw_category": null,
+      "summary": "T11 may leave one of the two `reviewedSha` paths untested",
+      "location": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-1.md:233-236",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "documentation",
+      "raw_category": null,
+      "summary": "Stale cross-reference in T14",
+      "location": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-1.md:330",
+      "location_verified": false
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "T3 contradicts the relocation the slice records as completed",
+      "location": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-1.md:115-119",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "pass",
+      "category": "sequencing",
+      "raw_category": null,
+      "summary": "Sequencing and the F005 gating are structural",
+      "location": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-1.md:263-289",
+      "location_verified": true
+    }
+  ],
+  "template_name": "tasks",
+  "input_files": {
+    "input": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-1.md",
+    "against": "project-documents/user/slices/306-slice.review-resolution-recording-that-findings-were-addressed.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/squadron-306-tasks"
+  },
+  "timestamp": "2026-11-16T09:26:49.662619",
+  "model": "claude-sonnet-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 2,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-sonnet-5-5",
+  "answering_models": [
+    "claude-sonnet-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 7,
+    "in_fences": 0,
+    "in_section": 7,
+    "surviving": 7
+  },
+  "effort": "medium",
+  "profile": "sdk",
+  "turns": 3,
+  "prompt_tokens": 118467,
+  "cached_tokens": 11436,
+  "cache_write_tokens": 107027,
+  "completion_tokens": 3605,
+  "reasoning_tokens": null,
+  "duration_seconds": 32.09354724991135,
+  "cost_usd": 0.4659207,
+  "cost_basis": "provider"
+}

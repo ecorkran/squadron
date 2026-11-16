@@ -1,0 +1,225 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "PASS",
+      "title": "All success criteria trace to tasks",
+      "description": "All Functional, Technical and Integration criteria have a task:\n- **Owner, heartbeat, progress:** owner in the creating write, `heartbeat_at` and `active_step`/`active_item` map to Tasks 11\u201314.\n- **Liveness in list and wait:** orphaned, stale and unowned rows and exit 8 map to Tasks 9\u201310 and 19\u201322.\n- **Foreground stall:** Tasks 15\u201318.\n- **Prune:** selection, protection rules and deletion map to Tasks 32\u201339.\n- **Listings and renderer:** the summary line, `-v` and width fitting map to Tasks 23\u201328.\n- **`pipelines show`:** Tasks 29\u201331.\n- **Listing-time target:** Task 22a.\n\nNo scope creep: Tasks 40\u201341 trace to Development Approach step 8, and Tasks 1\u20133 are setup and the design's spike.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md:31-33"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Commit markers are written as checkboxes, not `**Commit**:` lines",
+      "description": "All 17 commit points use `- [ ] Commit: \\`\u2026\\`` (lines 112, 157, 187, 217, 264, 286, 306, 320, 344, 368, 386, 414, 456, 472, 493, 508, 527). The project rule keys on plain `**Commit**:` lines. A file without them reads as \"no markers\", which means a commit at the end of every top-level task; that would commit Tasks 5, 15 and 33 with tests broken or missing. Convert each to a plain `**Commit**: \\`\u2026\\`` line; the placement itself is good and should not change.",
+      "file_ref": null,
+      "category": "commit-markers",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md:112"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Task 13 wires owner and heartbeat into a function that does not call `init_run` or `execute_pipeline`",
+      "description": "Task 13 says that in `_run_pipeline_sdk` \"new runs build `RunOwner.current(...)` before `init_run(owner=...)` and enter `RunHeartbeat`\". In the code:\n- `init_run` (`run.py:227`), the `StateManager` (`:225`), `execute_pipeline` (`:241`) and the finalizing `BaseException` handler (`:256`) all live in `_run_pipeline`.\n- `_run_pipeline_sdk` only delegates to it (`run.py:373`) and has no `StateManager` or new-run `run_id`.\n- `_run_pipeline` is also called directly for prompt-only resumes (`run.py:1201`, `:1259`), with `execution_mode` defaulting to `SDK`.\n\nThe implementer cannot follow the task as written. A new run's `run_id` does not exist until inside `_run_pipeline`, so `RunHeartbeat(state_mgr, run_id, \u2026)` cannot wrap the call at `:373`. The task should say which restructuring is intended: pass an owner and heartbeat interval into `_run_pipeline`, or hoist `StateManager` and `init_run` into `_run_pipeline_sdk`. It should also say how the direct prompt-only callers stay ownerless, and how \"cancel heartbeat, then finalize\" ordering is kept. Task 14's success line (\"the executor call sits inside the context manager\") needs the same correction.",
+      "file_ref": null,
+      "category": "task-accuracy",
+      "raw_category": null,
+      "location": "src/squadron/cli/commands/run.py:225-255"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Task 22a adds a wall-clock assertion the design says does not exist, with little headroom",
+      "description": "The design calls the 1 s target advisory and states \"There is still no assertion on time in tests\"; wall-clock is measured by walkthrough step 8. Task 22a adds a hard `MAX_LISTING_S = 1.0` assertion that CI gates on. The load test itself is warranted because the slice restates the target, but two things need fixing:\n- **Design conflict:** add a sub-item to update the design's Special Considerations sentence, so the two documents agree.\n- **Flake risk:** the design's only measurement is 0.67 s for 188 runs. A 1.0 s bound over \"a few hundred\" files with real `os.kill` calls on a shared CI runner is not \"generous\". Fix the seeded count as a named constant, and set the bound with stated headroom over a measured local run.",
+      "file_ref": null,
+      "category": "design-consistency",
+      "raw_category": null,
+      "location": "project-documents/user/slices/174-slice.run-liveness-stall-bounds-pruning-and-readable-listings.md:648"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "No task makes the caller log the run-id for an unknown process check",
+      "description": "The design's error table requires a \"WARNING naming run and PID\" for a non-positive PID or unexpected `OSError`. Task 9 logs only the PID in `process_alive` and says \"the run-id is logged by the caller that has it\". No task assigns that to `assess_liveness`, listing, wait or prune, and Task 10 asserts only \"`None` plus WARNING\". Name the one place that logs the run-id (most simply `assess_liveness`, which holds the state) and add the assertion to Task 10.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md:140-142"
+    },
+    {
+      "severity": "PASS",
+      "title": "Load test exists and CI gating is explicit",
+      "description": "Task 22a adds `tests/load/test_run_listing_scale.py` and states why no wiring task is needed. This checks out: `pyproject.toml:82` sets `testpaths = [\"tests\"]`, CI runs `uv run pytest`, and no marker deselects `tests/load/`.",
+      "file_ref": null,
+      "category": "nfr-coverage",
+      "raw_category": null,
+      "location": ".github/workflows/ci.yml:38"
+    },
+    {
+      "severity": "PASS",
+      "title": "Sequencing, test-with pattern and proportionality",
+      "description": "- **Sequencing:** dependencies run forward only. `ActiveItem` is defined in Task 4 before the observer uses it, the config keys land in Task 8 before Tasks 13 and 15, and `cli/columns` comes before the views and the prune preview.\n- **Test-with:** every implementation task is followed by its test task or carries its tests inline.\n- **Proportionality:** 43 tasks in one file is heavy but fits a six-feature slice. Tasks defer to design sections instead of restating them, and no test task goes beyond the design's Technical Requirements.",
+      "file_ref": null,
+      "category": "sequencing",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`StateManager.claim` calling `assess_liveness` creates an import cycle the task does not mention",
+      "description": "`run_liveness.py` needs `RunState` and `RUNNING_STATUS` from `state.py`, and Task 11 has `state.py` call `assess_liveness`. One line saying how to break the cycle (for example a function-local import) would save the implementer a detour. Task 11 should also say how `claim` gets `now`, `hostname` and `process_alive` for the Task 12 \"LIVE raises\" test.",
+      "file_ref": null,
+      "category": "task-clarity",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md:164-166"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Small clarity gaps in Tasks 2, 3, 16, 27 and 42",
+      "description": "- **Task 42:** it runs walkthrough step 8 \"in a scratch HOME\", but the design defines step 8 as a read-only timing of the real runs directory. It also adds a seed helper under `tests/pipeline/` inside a `docs:` commit.\n- **Task 27:** it never names adding the `-v` option to `list` in `cli/commands/pipelines.py`; Task 25 does this explicitly for `runs.py`.\n- **Task 16:** its only success line (\"adjust to the Task 2 spike findings if they differ\") is not checkable. Use \"Task 17 tests pass\" or fold the note into the task body.\n- **Task 3:** it does not say where the baseline counts are recorded.\n- **Task 2:** its design edit has no commit point and will ride along in the Task 7 `refactor:` commit.",
+      "file_ref": null,
+      "category": "task-clarity",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md:517-527"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "pass",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "All success criteria trace to tasks",
+      "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md:31-33",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "commit-markers",
+      "raw_category": null,
+      "summary": "Commit markers are written as checkboxes, not `**Commit**:` lines",
+      "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md:112",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "task-accuracy",
+      "raw_category": null,
+      "summary": "Task 13 wires owner and heartbeat into a function that does not call `init_run` or `execute_pipeline`",
+      "location": "src/squadron/cli/commands/run.py:225-255",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "design-consistency",
+      "raw_category": null,
+      "summary": "Task 22a adds a wall-clock assertion the design says does not exist, with little headroom",
+      "location": "project-documents/user/slices/174-slice.run-liveness-stall-bounds-pruning-and-readable-listings.md:648",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "No task makes the caller log the run-id for an unknown process check",
+      "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md:140-142",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "pass",
+      "category": "nfr-coverage",
+      "raw_category": null,
+      "summary": "Load test exists and CI gating is explicit",
+      "location": ".github/workflows/ci.yml:38",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "pass",
+      "category": "sequencing",
+      "raw_category": null,
+      "summary": "Sequencing, test-with pattern and proportionality",
+      "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md",
+      "location_verified": null
+    },
+    {
+      "id": "F008",
+      "severity": "note",
+      "category": "task-clarity",
+      "raw_category": null,
+      "summary": "`StateManager.claim` calling `assess_liveness` creates an import cycle the task does not mention",
+      "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md:164-166",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "note",
+      "category": "task-clarity",
+      "raw_category": null,
+      "summary": "Small clarity gaps in Tasks 2, 3, 16, 27 and 42",
+      "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md:517-527",
+      "location_verified": true
+    }
+  ],
+  "template_name": "tasks",
+  "input_files": {
+    "input": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md",
+    "against": "project-documents/user/slices/174-slice.run-liveness-stall-bounds-pruning-and-readable-listings.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/squadron-174-tasks"
+  },
+  "timestamp": "2026-11-16T09:08:45.704820",
+  "model": "claude-fable-5-2",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 16,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-fable-5-2",
+  "answering_models": [
+    "claude-fable-5-2"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 9,
+    "in_fences": 0,
+    "in_section": 9,
+    "surviving": 9
+  },
+  "effort": "medium",
+  "profile": "sdk",
+  "turns": 17,
+  "prompt_tokens": 654307,
+  "cached_tokens": 503099,
+  "cache_write_tokens": 151194,
+  "completion_tokens": 10117,
+  "reasoning_tokens": null,
+  "duration_seconds": 102.09395754197612,
+  "cost_usd": 2.925185000000001,
+  "cost_basis": "provider"
+}

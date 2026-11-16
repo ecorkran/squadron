@@ -1,0 +1,206 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Document still describes the pre-amendment design in several load-bearing sections",
+      "description": "The amendment says \"the sections below are rewritten to match\". Several are not.\n\n- **Anticipated Slices:** The list still specifies \"persisted adoption state\", \"`cf build` selecting the `brownfield-adoption` profile\", \"reading the probe\", and \"adoption steps while in progress\". All four are removed by the amendment. A one-line banner says they shipped, but an implementer reading the list sees the opposite of the Envisioned State.\n- **Technical Considerations:** \"Squadron contract stability\" and \"Guide prompt contract\" carry the full original probe and Adoption Facts specs \"for history\". An architecture doc is not a changelog, and these paragraphs are the longest, most detailed contracts in the file.\n- **Guide release coupling:** It still says \"If cf selects the brownfield profile \u2026 `cf build` fails with a named error\". That contradicts \"`cf build` is pure\" and \"cf build does not run detection\".\n- **Dependencies:** cf is pinned to ai-project-guide \u2265 v0.22.2 because it \"fixed the squadron-path gate in the brownfield prompt\". It also credits v0.22.1 with \"the concept step from the probe's `surfaces.<s>.concept`\". Both depend on the probe branching that Technical Considerations says \"goes away\". Nothing says whether the shipped prompt was reworked, so the version pin may be wrong.\n- **Frontmatter:** `relatedSlices: []` although slices 260\u2013274 are named throughout.\n\nDelete the superseded text, keep history in git, and reconcile the Dependencies pin.",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md#anticipated-slices"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The primary entry point still has the Motivation's defect, and the \"already planned\" outcome can strand a half-adopted repo",
+      "description": "Two gaps in the amended flow.\n\n- **`/cf:onboard` on a brownfield repo:** The Overview says \"When onboarding finds an existing codebase, it branches\", but the amended Onboarding section gives `/cf:onboard`, the Codex variant and `agent_onboard` no brownfield path. They still run the \"describe what you want to build\" conversation, which is exactly the Motivation's complaint. The only mitigation is a one-line `cf init` message and a `cf next` line. Nothing stops the greenfield conversation from running on a ten-year-old repo, or says what a user without squadron sees.\n- **Partial adoption:** The \"Already planned\" outcome is triggered by an architecture doc alone, and the concept alone does not count. Adoption step 5 writes the concept first, then architecture, then the slice plan. If the agent is interrupted after the architecture is written, detection returns \"already planned\" and `sq onboard` step 2 says \"adoption doesn't apply\". There is no slice plan, and `cf next` has nothing to point at. The old \"re-run resumes from whatever artifacts exist\" behavior is gone along with the state machine. Either make \"planned\" require a slice plan, or define the resume path.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md#detection-a-read-only-report-amended-20261025"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The retroactive marker is weaker than claimed, and its format is unspecified",
+      "description": "The doc says \"the marker can't be used to bypass the gate\". The enforcement is only \"a retroactive entry with a slice design or task file is a checker error\".\n\n- **Bypass:** Mark a new entry retroactive and never create a design or task file. It counts as complete for every \"done\" check, and the review gate skips it. Nothing is flagged, so the bypass the doc rules out is available.\n- **\"Set only by the adoption flow\":** The flow is an agent writing markdown, so nothing enforces this. The check also doesn't cover new entries added later by `cf`/`sq` tooling.\n- **Format and location:** The doc never says where the marker lives (plan-line syntax or frontmatter). It also never says how squadron's gates, which \"read slice status\", see it. If squadron only sees status and not the marker, `sq review` may still try to review these entries. If it does see the marker, that is a cross-repo parsing contract. Per project parsing rules, it needs a real-format fixture and a lenient parser.\n- **Mitigation:** Constrain retroactive entries to indices below the adoption baseline, or record the baseline index in the architecture's provenance block.",
+      "file_ref": null,
+      "category": "feasibility",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md#baseline-artifacts"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The cf\u2194squadron contract is now unspecified, and the end-to-end path is untestable",
+      "description": "The old design had a locked, versioned probe contract with field-level tests. The replacement is \"the detection report (JSON)\" and \"prompt delivery (slice 271)\". There is no schema, no version field, no failure semantics, and no statement of how `fileComprehension` is filled in or what happens when it doesn't resolve.\n\n- **Consumer:** The only consumer, `sq onboard`, doesn't exist, and slice 273 (the real adoption run) is parked. cf therefore ships the primitives and the marker without any end-to-end validation, and the contract is only checked when squadron lands.\n- **Contract:** Define the detection report schema (with a `report_version`) and the prompt-delivery output now, with cf-side contract tests.\n- **Comprehension lookup:** cf finds the comprehension doc \"by filename and `docType`\". The filename is a user-visible label and squadron owns it, so it's fragile coupling. A `docType`-only lookup, or an explicit path argument passed by `sq onboard`, would be sturdier. Step 4 already has squadron fill the path, so cf may not need to discover it at all.",
+      "file_ref": null,
+      "category": "dependencies",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md#adoption-flow-under-sq-onboard-amended-20261025"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Detection thresholds and the scope of \"history\" are deferred, though detection is the one gating decision",
+      "description": "\"Signals and thresholds are set in slice design\", yet slice 271 is already designed and the doc says thresholds govern a lopsided-cost decision. The unanswered questions:\n\n- **Source volume:** What counts as source, and which paths are excluded (vendored code, lockfiles, generated output, `node_modules`)?\n- **Unit of measure:** Lines, files, or bytes?\n- **Monorepo subdirectory:** Detection is \"scoped to the project's own folder\", but git history is repo-wide. Does a subfolder with 50 files in a 10-year-old monorepo count its history per path or per repo?\n- **Opt-out storage:** \"The only stored value is the opt-out\", but where it lives, its format, and how `cf init`, `cf next` and `sq onboard` read it are not stated. This is the sole persisted state in an otherwise stateless design.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md#technical-considerations"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The responsibility table assigns agent work to cf and leaves the concept writer unenforced",
+      "description": "Rows (c), (d), (e) and (f) say \"CF\" owns writing the architecture, the existing-state plan, reconciliation and mapping. By the doc's own principles, cf provides read-only primitives and a prompt, and the agent writes the artifacts. Describing the prompt-driven agent as \"CF\" blurs where cf's testable logic stops (detection, marker, checker, `setup-ide`) and where unverifiable agent behavior starts.\n\nFor the concept, \"exactly one writer per run, and nothing overwrites an existing concept without the PM saying so\" is stated, but the mechanism isn't. Both squadron 363 and the guide prompt can write it, and no code enforces the rule.",
+      "file_ref": null,
+      "category": "abstraction",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md#responsibility-split-with-squadron-pm-approved-20261020-amended-20261025"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "\"Later\" scope introduces new persistent state and sizeable features with only sketches",
+      "description": "Conventions reconciliation adds persisted resolutions \"keyed by rule file identity\". That is new stored state, in conflict with the \"no adoption state, only an opt-out\" principle. It needs a storage location and a definition of identity (path, hash, or manifest ID), and it must coexist with the unlanded #123 split. Docs/ADR mapping adds artifacts that point outside `project-documents/`, which \"introspection has to tolerate\", with no description of how.\n\nNeither is needed for the core goal (\"`cf next` points at new work\"). Move both out of this architecture into their own documents, or mark them explicitly out of scope until the baseline is proven with `sq onboard`. The proportional cut is to keep detection, the marker, and the checker/gate changes here.",
+      "file_ref": null,
+      "category": "antipattern",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md#later-in-the-initiative"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Rules requiring observable failure signals are unaddressed for the primitives",
+      "description": "Only one failure mode is covered: a missing guide prompt is an error. Others have no behavior stated: git unavailable or a shallow clone while counting history, an unreadable or malformed planning artifact during the \"already planned\" check, and a comprehension doc that is present but stale or unparseable. The project's failure-mode rule wants each to be observable, not silently mapped to greenfield. A false greenfield is the case the doc says is cheaper, but a silent one is still a bug.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md#detection-a-read-only-report-amended-20261025"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "Document still describes the pre-amendment design in several load-bearing sections",
+      "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md#anticipated-slices",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "The primary entry point still has the Motivation's defect, and the \"already planned\" outcome can strand a half-adopted repo",
+      "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md#detection-a-read-only-report-amended-20261025",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "feasibility",
+      "raw_category": null,
+      "summary": "The retroactive marker is weaker than claimed, and its format is unspecified",
+      "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md#baseline-artifacts",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "dependencies",
+      "raw_category": null,
+      "summary": "The cf\u2194squadron contract is now unspecified, and the end-to-end path is untestable",
+      "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md#adoption-flow-under-sq-onboard-amended-20261025",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "Detection thresholds and the scope of \"history\" are deferred, though detection is the one gating decision",
+      "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md#technical-considerations",
+      "location_verified": null
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "abstraction",
+      "raw_category": null,
+      "summary": "The responsibility table assigns agent work to cf and leaves the concept writer unenforced",
+      "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md#responsibility-split-with-squadron-pm-approved-20261020-amended-20261025",
+      "location_verified": null
+    },
+    {
+      "id": "F007",
+      "severity": "concern",
+      "category": "antipattern",
+      "raw_category": null,
+      "summary": "\"Later\" scope introduces new persistent state and sizeable features with only sketches",
+      "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md#later-in-the-initiative",
+      "location_verified": null
+    },
+    {
+      "id": "F008",
+      "severity": "note",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "Rules requiring observable failure signals are unaddressed for the primitives",
+      "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md#detection-a-read-only-report-amended-20261025",
+      "location_verified": null
+    }
+  ],
+  "template_name": "arch",
+  "input_files": {
+    "input": "project-documents/user/architecture/260-arch.brownfield-adoption.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/context-forge-260-arch"
+  },
+  "timestamp": "2026-11-16T09:27:38.421828",
+  "model": "claude-sonnet-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 1,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-sonnet-5-5",
+  "answering_models": [
+    "claude-sonnet-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 8,
+    "in_fences": 0,
+    "in_section": 8,
+    "surviving": 8
+  },
+  "effort": "medium",
+  "profile": "sdk",
+  "turns": 2,
+  "prompt_tokens": 117557,
+  "cached_tokens": 12914,
+  "cache_write_tokens": 104639,
+  "completion_tokens": 5558,
+  "reasoning_tokens": null,
+  "duration_seconds": 47.46904024994001,
+  "cost_usd": 0.4761689,
+  "cost_basis": "provider"
+}

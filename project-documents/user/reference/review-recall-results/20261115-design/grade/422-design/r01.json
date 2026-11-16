@@ -1,0 +1,54 @@
+{
+ "review": "r01",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "New subprocess paths (collect, boundary resolver, trace) have no timeout bound and no rule for harness vs. case failure",
+   "description": "The slice adds three subprocess paths that do not go through 421's `run_suite`. They are `FixCaseAdapter.collect` (trace plugin collect mode), `boundary` (resolver script) and `trace` (data flow steps 5\u20136, lines 108\u2013109). The design does not answer the failure-mode questions for any of them:\n\n- **No timeout.** D5 (line 177) maps timeouts to `harness_error` only for `run_suite`. No config key bounds the collect run, the resolver or the trace run. 421 D12 says no timeout is written inline. The design neither reuses `benchmark.suite_timeout_s` nor declares a new key.\n- **Contradiction on resolver failure.** D6 (line 185) says \"A resolver import failure rejects it with `boundary_undecidable`\", which is a `CandidateRejection` that counts against the case. The Technical Requirements (line 389) say a \"resolver crash\" must produce `harness_error`. Nothing defines where an import failure ends and a crash begins.\n- **Collect has the same gap.** `collection_failed` (line 157) blames the case. A crash, timeout or missing JSONL in the trace plugin itself is a harness fault, and the design does not say how the two are told apart.\n\nThe architecture's \"Absent is not zero\" principle requires harness-caused failures to stay out of the per-reason counts, because those counts decide the initiative's order. To fix this, name the timeout key for each of the three paths. Then define the classification for each: the project's own import or collection failure \u2192 rejection; plugin or resolver crash, timeout, or missing output \u2192 `harness_error`. Make the Technical Requirements test list match.",
+   "location": "project-documents/user/slices/422-slice.fix-case-qualification-and-yield-report-keystone.md:185"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Yield counts can double-count commits that have more than one qualification record",
+   "description": "The record id includes the environment digest, or `\"pre\"` for rejections before the sandbox (line 240). \"The store holds the latest per environment\" (line 240). So one commit can end up with several records:\n\n- **Pre-sandbox outcome changes on rebuild.** Discovery and issue freeze run again on every rebuild (D9 order; the reuse check only happens at step 4). An issue edited since the first run now gets a `pre` record with `issue_edited_after_fix`. The earlier `qualified` record under the environment key stays.\n- **Environment changes.** A new `uv`, interpreter or `scrub_spec_version` writes a second environment-keyed record next to the first.\n- **424 re-qualification** writes records under its own environment digest (line 242).\n\nD12 (line 255) says the report \"reads `FixQualification` records for the given projects\" but never says which record wins when a commit has several. The Functional Requirement \"The number of records equals the number of closing commits\" (line 373) is also false once a second environment exists. To fix this, D12 should define one record per `(project_id, commit_sha)` for counting, for example the latest `created_at` (or the latest for the current environment). D10 should say whether a `pre` record is replaced when that commit later reaches the sandbox.",
+   "location": "project-documents/user/slices/422-slice.fix-case-qualification-and-yield-report-keystone.md:240-241"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Re-qualification contract for 424 is under-specified, including when it yields a different case id",
+   "description": "The architecture requires a run to re-qualify a case whose environment differs and to drop it if it no longer qualifies. D10 gives 424 `qualification_for(case, environment)` and `qualify_candidate`, and both are listed under \"Provides to Other Slices\" (line 358). Two gaps remain:\n\n1. **No signature for `qualify_candidate`.** The API Contracts section does not give it. 424 cannot tell what inputs it needs (candidate, sandbox or context, adapter, store) or whether it re-runs discovery and the issue fetch. Fetching would put a `gh` dependency inside the benchmark run, and the architecture keeps network access out of the replay path.\n2. **Re-qualification can produce a different case.** In a new environment, different tests may be flaky or fail at the reference. Because `excluded_tests` is part of the case id (D9, line 227), re-qualifying can produce a `qualified` record whose `case_id` is not in the case set 424 is running. D10 handles only \"no longer qualifies\". The Integration Requirement (line 394) promises \"a valid record or a reason to re-qualify\" but says nothing about a qualified result under a new case id.\n\nTo fix this, add `qualify_candidate` to the API Contracts. Also state the rule for a changed `case_id`: run the original case with the new exclusions, drop it with a named reason, or require a new case-set version.",
+   "location": "project-documents/user/slices/422-slice.fix-case-qualification-and-yield-report-keystone.md:242"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "The FixCaseAdapter interface split blocks the 426 reuse this slice promises",
+   "description": "The Patterns section makes `FixCaseAdapter` a separate protocol so that \"slice-case languages need no fairness methods\". But \"Provides to Other Slices\" (line 360) promises 426 `test_sets`, meaning superseded sets computed from closure digests. Those digests come only from `FixCaseAdapter.collect` (line 295), which sits next to `boundary` and `trace` on the same protocol. A future slice-case-only language would then have to implement the fairness methods, or stub them, to get superseded sets. That is the exact problem the split was meant to prevent.\n\nTo fix this, move `is_test_side`, `collect` and `overlay` onto a small protocol of their own, used by both fix and slice cases. Keep `boundary`, `trace` and `grader_commands` on `FixCaseAdapter`. Alternatively, narrow the line 360 promise to Python only.",
+   "location": "project-documents/user/slices/422-slice.fix-case-qualification-and-yield-report-keystone.md:284"
+  },
+  {
+   "i": 4,
+   "severity": "NOTE",
+   "title": "D5 mixes NodeOutcome and FailureKind, and leaves precedence open for setup-phase errors",
+   "description": "The mapping table mixes 421's `NodeOutcome` values (`passed`, `skipped`, `xfailed`, `not_run`, `error`) with `FailureKind` values. 421 sets `failure_kind` for `error` outcomes as well. Take a fixture setup that fails with `missing_symbol` because the fixture imports a symbol the fix added. Line 174 maps it to `uses_symbol_added_by_fix`, while line 175 maps any setup `error` to `undecidable_failure_at_parent`. Both are rejections, so whether a case qualifies does not change. Only the reason counted in the yield report differs. One sentence on precedence would resolve it.",
+   "location": "project-documents/user/slices/422-slice.fix-case-qualification-and-yield-report-keystone.md:171-176"
+  },
+  {
+   "i": 5,
+   "severity": "NOTE",
+   "title": "Separability bound is optimistic, and the design says so",
+   "description": "The bound uses Var(D) \u2264 0.5/k. It covers variance within a case only and ignores how much the true difference varies from case to case, so \"enough cases\" can be optimistic. The design states this beside the answer, and 425 replaces the bound with the measured paired bootstrap. That fits the architecture's statement that the sample count is not known until measured. The example's arithmetic is correct: n = \u23087.84 \u00b7 (0.5/3) / 0.04\u2309 = 33.",
+   "location": "project-documents/user/slices/422-slice.fix-case-qualification-and-yield-report-keystone.md:256-260"
+  },
+  {
+   "i": 6,
+   "severity": "NOTE",
+   "title": "Statement that 421 is \"used unchanged\" doesn't match the additions this slice makes",
+   "description": "This slice adds the `FixCaseAdapter` entry to 421's `registry.py`, `fix_qualification` to `MetrologyRecord`, and three methods to `BenchmarkRecordStore`. All of these are additive and follow the extension path 421 D3 and D9 anticipated. 421 D9 does say 422 \"adds fairness-rule methods\" to the adapter seam; the separate protocol here departs from that wording, but the reasoning is sound. To avoid confusion, reword the line as \"used without modification to existing behavior; additions follow 421 D3/D9\".",
+   "location": "project-documents/user/slices/422-slice.fix-case-qualification-and-yield-report-keystone.md:395"
+  }
+ ]
+}

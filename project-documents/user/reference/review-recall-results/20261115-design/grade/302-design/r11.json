@@ -1,0 +1,82 @@
+{
+ "review": "r11",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "FAIL",
+   "title": "Missing or unreadable ground-truth file has no mapped non-passing outcome",
+   "description": "The architecture lists a missing or unreadable ground-truth file as a failure mode that must yield UNKNOWN, and commits that no failure mode silently yields a pass (architecture line 89). The table's only input row (line 399) covers a `SliceInfo` field that is absent, which raises a `KeyError` at the required-input check. It does not cover a path that resolves to a missing or unreadable file.\n\nThe \"No silent pass\" paragraph (402-408) still says every row ends in UNKNOWN or a score-derived verdict. For this case the design does not establish which. A file-reading provider can fail the read and still emit an in-range `score:`, and enforcement (slice 301) accepts any in-range score as valid. I did not verify whether the review engine raises on a missing path.\n\nFix: specify an existence and readability check on the resolved inputs that yields UNKNOWN with a WARNING-or-higher log before the review runs. Alternatively, require the template to omit the score when either input cannot be read. Add a test that asserts UNKNOWN and the log line for a missing `against` file.",
+   "location": "project-documents/user/slices/302-slice.design-phase-judge-templates.md:394-408"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Injection-cap failure mode is not mapped",
+   "description": "Architecture line 89 enumerates \"injected ground truth exceeding the cap\". The plan entry for 301 (plan line 40) assigns it to UNKNOWN. Slice 301's failure table (lines 221-226) has no cap row, and its collapse paragraph (228-232) does not mention it.\n\nThis slice then says \"every case below routes through infrastructure slice 301 or slice 300\" (389-390). That is not true for the cap. Each judge injects two artifacts, so the cap is one of the architecture's enumerated modes that this slice's real inputs can trigger.\n\nEither state where the cap is checked and what outcome it produces, or record it as a gap to close in 301 and remove the \"every case routes\" claim.",
+   "location": "project-documents/user/slices/302-slice.design-phase-judge-templates.md:389-400"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "A hung judge call has no stated bound",
+   "description": "The row \"LLM call times out / provider unavailable\" routes to `execute()`'s exception handler in 301 and yields UNKNOWN. An exception handler runs only when an error is raised. A hung provider call raises nothing, and neither this doc nor slice 301 names a timeout or bound for the judge call.\n\nThe failure-mode rule asks explicitly what happens if the call hangs. This matters more for judges than for plain reviews. Slice 303 runs judges in unattended `each`/`loop` cycles that must be bounded (plan line 71), so a hang would stall the pipeline with no UNKNOWN.\n\nState the bound (its value and where it is set, or that the engine's existing bound applies and what that value is). State the observable signal a timeout produces, and add a test for the timeout path.",
+   "location": "project-documents/user/slices/302-slice.design-phase-judge-templates.md:396"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Structured-output score contract is dropped; slice 300 assigns it here",
+   "description": "The plan entry for 302 requires a structured-output constraint for the score field, and says the score-with-rationale shape is enforced by the template's structured output (plan lines 53, 59). Architecture line 87(b) commits to the same.\n\nSlice 300 pins only the minimal `score:` line. It defers the richer structured-output shape, a JSON object with a `score` key, to 302, which \"will extend the extraction and add its own parser test for that variant\" (300-slice line 143).\n\nThis doc says the prompt \"produces exactly that shape, no parser change needed\" (93-95) and never describes a structured output. As written, the variant 300 assigned to 302 is not assigned to any slice in this design, and the plan's success criterion is unmet.\n\nEither add the extraction extension and its parser test to this slice, or amend the plan and the 300 handoff to drop structured output and record in this doc that the score is prompt-constrained text.",
+   "location": "project-documents/user/slices/302-slice.design-phase-judge-templates.md:93-95"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Code change contradicts the architecture's \"connective work\" statement",
+   "description": "Architecture line 91 says the connective work for a judge is \"just authoring the judge templates and the threshold/escalation config, not extending the pipeline schema\". Line 65 says required inputs are template data, not hardcoded. Plan 302 requires judges to run \"with no engine changes\" (plan line 56).\n\nThis design adds Python entries to `TEMPLATE_INPUTS`, keyed by template name, and calls it \"the one required code change\" (53-54). The Overview says \"no engine change\" (line 21). The deviation may be right, but it is not recorded against the architecture.\n\nDecide and state one of two options:\n- (a) Move judge input sources into template data. That is a loader change and must be recorded as an engine change.\n- (b) Keep the registry and amend architecture line 91 to name it as connective work.\n\nTwo smaller points under the same decision. The template name lives in two places, the YAML `name:` and the registry key, with no test tying them together, so a rename fails only at run time. And an absent key is passed through to a downstream `KeyError` (399) rather than failing in the resolver, which conflicts with the project's fail-explicitly rule.",
+   "location": "project-documents/user/slices/302-slice.design-phase-judge-templates.md:51-57"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Default gating thresholds ship without the advisory-until-calibrated commitment",
+   "description": "Architecture line 87(a) commits scores to be \"treated as advisory until 320 calibrates a judge at an artifact level.\" Line 45 says tasks-vs-slice \"can be trusted to gate.\" The architecture is internally inconsistent here, and this design picks the gating reading without saying so.\n\nFloors of 78 (tasks-vs-slice) and 82 (slice-vs-arch) let both judges auto-PASS checkpoints on day one. The strong-versus-moderate ground-truth rationale is reasonable, but the numbers have no data behind them, and the doc itself says the first runs should tune them (421-424). Setting the floors above slice 301's defaults of 75 and 50 is the conservative direction, and the doc should say so.\n\nEither name the 87(a) exception, cite line 45 as its basis, and say why 78 and 82 were chosen. Or make the judges advisory by setting floors a calibrated score cannot clear, and state the escalation behaviour that slice 303 will use.",
+   "location": "project-documents/user/slices/302-slice.design-phase-judge-templates.md:218-234"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "Criteria map is made a required output of both judges",
+   "description": "Architecture line 59 says the criteria map is \"reserved as a cheap, optional, latent field, not committed as a final schema\", and that the output is \"scalar now\". Slice 300 keeps `criteria` optional (300-slice line 145).\n\nThis design requires `criteria:` lines and per-criterion justifications in every judge run, and rolls them into `score:`. Nothing consumes `criteria`: enforcement (301) reads `score` only. An unconsumed, unfinalized shape becomes a live prompt contract for both templates. Any later change to the breakdown means rewriting both prompts and their fixtures.\n\nThe architecture requires the model to justify the number (line 87(b)). A `## Rationale` block that justifies the headline score before the `score:` line meets that requirement without a criteria contract. Cut: make `criteria:` optional and drop per-criterion justification from the required output.",
+   "location": "project-documents/user/slices/302-slice.design-phase-judge-templates.md:152-183"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "Prompt-to-parser round trip has no automated test",
+   "description": "The unit test list covers template loading, registry resolution and two failure modes. None of them checks that the output the prompt asks for is parsed into `score`, `criteria` and findings. The only check of that round trip is walkthrough step 3, which needs a live provider and is manual.\n\nThe project's parser rule requires a test fixture in the production format. This slice is the first where that format is real. Add parser-level tests with a judge-shaped response, using the exact `## Rationale` + `score:` + findings layout the prompt specifies. Include one with a malformed score that must reach UNKNOWN through enforcement.\n\nPrompt quality stays live-only, as the Technical Risks section says (410-417). The format round trip does not need to be.",
+   "location": "project-documents/user/slices/302-slice.design-phase-judge-templates.md:290-305"
+  },
+  {
+   "i": 8,
+   "severity": "CONCERN",
+   "title": "Overweight: restated content and repeated test lists",
+   "description": "The doc runs to about 450 lines for two YAML files and a four-line Python change. Much of it restates other documents. Cuts:\n- (a) The Data Flow diagram (110-150) re-traces the enforcement path that slice 301 documents. Replace it with a pointer and one line for the new input-resolution step.\n- (b) The failure-table rows marked \"Not new\" (396, 397, 400) and the \"No silent pass\" paragraph (402-408) restate 300 and 301. Keep only the new rows, plus the cases in the findings above.\n- (c) \"What does NOT change\" (59-66) and \"Explicitly out of scope\" (69-76) repeat 301 and the plan.\n- (d) The template-naming decision (187-196) restates the architecture's example.\n- (e) Verification steps 1-2 repeat Functional Requirements 1 and 4 and the unit-test list (295-305). Keep one list.\n\nKeep the prompt-shape spec, the threshold table and the registry decision.",
+   "location": "project-documents/user/slices/302-slice.design-phase-judge-templates.md:110-150"
+  },
+  {
+   "i": 9,
+   "severity": "NOTE",
+   "title": "Frontmatter omits slice 300 as a direct dependency",
+   "description": "`dependencies: [301]` matches the plan entry. The doc also consumes slice 300's parser directly (93-95), and the structured-output finding above may make 300 a direct dependency. Align the frontmatter with the Interfaces Required section once that is decided.",
+   "location": "project-documents/user/slices/302-slice.design-phase-judge-templates.md:6"
+  },
+  {
+   "i": 10,
+   "severity": "NOTE",
+   "title": "A success criterion asserts a CLI form the doc says is unconfirmed",
+   "description": "Functional Requirement 3 states the invocation `sq review slice-vs-arch <artifact> <against>`. The walkthrough note (376-379) says the exact invocation shape is still to be confirmed. Confirm it against the current CLI, or refer to the walkthrough's command and drop the positional form from the requirement.",
+   "location": "project-documents/user/slices/302-slice.design-phase-judge-templates.md:277-282"
+  }
+ ]
+}

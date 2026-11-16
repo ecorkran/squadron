@@ -1,0 +1,40 @@
+{
+ "review": "r15",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Slices rejected at discovery never get a `SliceQualification` record",
+   "description": "Task 13's `discover` returns `multiple_landings` and `branch_contains_merges` rejections, and `harness_error` entries, as an in-memory `DiscoveryResult`. Task 20 (line 196) only calls `qualify_slice_candidate` \"for each candidate\". Discovery rejections are not candidates, so no task writes a record for them. Task 15 writes records only for the task-text and no-code rejections.\n\nThis leaves several requirements unmet:\n- **First functional criterion:** \"writes a `SliceQualification` for every slice index in it \u2026 None is silently dropped.\"\n- **Yield rows:** Task 22 (line 207) counts from stored `SliceQualification`s, so `multiple_landings` and `branch_contains_merges` would always show zero. The design's mitigation strategy depends on exactly those two counts (\"the candidates to relax if they dominate\").\n- **Discovery `harness_error`:** D6 requires a failed `git` call in discovery to be recorded as `harness_error`. Task 20 records `harness_error` only for a failing candidate inside qualification.\n\nFix:\n- Have Task 20 write a `rejected` or `harness_error` `SliceQualification` (with `start_environment=None` and key `pre`) for every discovery entry.\n- Say which landing's `after_sha` keys a `multiple_landings` record. The record id needs one, and there are several.\n- Add a test asserting one stored record per discovery rejection.\n\nRelated: Task 20's \"not attempted \u2026 no record\" rule for indexes after a build stop also contradicts that same criterion. Task 1 (line 63) corrects the API Contracts but not the Success Criteria line. Add the Success Criteria to Task 1's list of edits.",
+   "location": "project-documents/user/tasks/426-tasks.slice-cases.md:153-157"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Load tests with no NFR behind them",
+   "description": "The slice design states no performance or concurrency NFR, yet line 53 adds two \"load tests\":\n- **Task 24 (line 223):** eight concurrent `invoke` calls under separate scrubbed homes.\n- **Task 33 (line 276):** a 200-pair plan with slow and hung dispatcher doubles.\n\nNeither traces to a success criterion. Judging is sequential by design (\"runs the calls one at a time\"), and the hung-dispatcher case is already tested in Task 3 (line 83) and Task 30 (line 259). Because they are called load tests but live in `tests/benchmark/` with no CI gating task, they also blur the load-test convention. Cut both, along with the \"Load tests\" bullet at line 53. Task 24's runner tests already show that each registration uses its own home and branch.",
+   "location": "project-documents/user/tasks/426-tasks.slice-cases.md:53"
+  },
+  {
+   "i": 2,
+   "severity": "NOTE",
+   "title": "Tasks 2\u20137 run before the precondition gate",
+   "description": "Task 8 stops with `BLOCKED:` if anything from 421\u2013425 is missing, but Tasks 2\u20137 are committed on the slice branch before it. If 426 starts before its dependencies (which the frontmatter lists), the slice branch stays open across units. Tasks 5, 6 and 7 also write into `config/keys.py`, `tests/benchmark/` and a new `src/squadron/benchmark/` package that 421, 422 and 425 also create or extend, which risks merge conflicts. If 426 starts after 421\u2013425 as its dependencies say, the gate costs nothing. Consider moving Task 8 to the front so the ordering is simpler.",
+   "location": "project-documents/user/tasks/426-tasks.slice-cases.md:121-124"
+  },
+  {
+   "i": 3,
+   "severity": "NOTE",
+   "title": "Task 6 builder list is unclear",
+   "description": "\"a slice whose every test changed and one whose regression selection would be empty (the test files are all rewritten)\" reads as two builders for the same shape. No test in Tasks 13\u201319 names an \"every test changed\" repo apart from the `no_regression_signal` case. Merge them into one builder, or say what the second one is for.",
+   "location": "project-documents/user/tasks/426-tasks.slice-cases.md:105"
+  },
+  {
+   "i": 4,
+   "severity": "NOTE",
+   "title": "Qualification is split finely",
+   "description": "Tasks 15\u201319 each add one stage to `qualify_slice_candidate`, with one commit at the end. Task 17 (repeats) and Task 19 (harness-error wrapping) are small enough to fold into Tasks 16 and 18. This is acceptable as written; with 42 tasks overall, merging would make the file lighter.",
+   "location": "project-documents/user/tasks/426-tasks.slice-cases.md:167-193"
+  }
+ ]
+}

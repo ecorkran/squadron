@@ -1,0 +1,225 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "PASS",
+      "title": "Every functional success criterion has a task",
+      "description": "- **Build writes a record for every index, nothing dropped silently:** Tasks 13, 20 and 23.\n- **Qualified case fields:** Task 18.\n- **The five fixture rejections:** Tasks 6, 13, 14, 15 and 18.\n- **P6 replay in a scrubbed home, cf list unchanged:** Tasks 24 and 26.\n- **Grade and separate report tables:** Tasks 36, 39 and 41.\n- **Normalization, including rename, binary file and `uv.lock`:** Task 7.\n- **Reference line with no rank:** Tasks 37 and 38.\n- **Over-size rule:** Tasks 29, 34 and 38.\n- **Forfeits and harness-absent cases:** Task 27.\n- **The three named failure signals:** Tasks 4 and 24 (cf), 13 and 19 (git), 31 (missing `tip_sha`).\n- **Judge refusals, bound, cap and resume:** Tasks 31 and 33\u201335.",
+      "file_ref": null,
+      "category": "coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/426-tasks.slice-cases.md"
+    },
+    {
+      "severity": "PASS",
+      "title": "Technical and integration requirements are covered",
+      "description": "- **Real-slice normalize fixture:** Task 7.\n- **Real merge and fast-forward landings:** Task 6, used in Task 13.\n- **`tests/replay/` unchanged after the extractions:** Tasks 2\u20134.\n- **Hand-computed pairwise tests:** Task 37.\n- **Mixed fix and slice set:** Task 39.\n- **Yield rows:** Task 22.\n- **ruff and pyright gates:** Task 42.",
+      "file_ref": null,
+      "category": "coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/426-tasks.slice-cases.md"
+    },
+    {
+      "severity": "PASS",
+      "title": "Design-gap corrections are recorded before implementation",
+      "description": "The gaps the tasks found are real:\n- `judge_pair` has no call counter.\n- `plan_file_for` needs a working tree at the fork.\n- Task files sorted by name put `-10` before `-2`.\n- `CfRegistration` has no cleanup state.\n- The registration branch is never defined.\n- `--keep` has no behavior.\n- A stale `OverSizeCase` would still be counted.\n- D8 contradicts the \"no edits to 424\" Scope line.\n\nTask 1 writes each correction into the design and commits it on the target before the slice branch is created, which matches the planning-commit rule.",
+      "file_ref": null,
+      "category": "sequencing",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/426-tasks.slice-cases.md:40-50"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Too many tasks and test files for a 3/5 slice",
+      "description": "There are 42 tasks, which is heavy for a slice the design rates 3/5.\n\n- **Qualification (Tasks 15\u201319):** one function, `qualify_slice_candidate`, is split into five tasks, each with its own test file (`test_slice_qualify_checks`, `_sets`, `_repeats`, `_case`, `_errors`). Merge them into two tasks: pre-sandbox checks with reuse, then sandbox, test sets, repeats, case and harness errors. Use one or two test files.\n- **Judge runner (Tasks 31\u201335):** five tasks for one module plus its command. Tasks 31 and 32 (plan inputs and plan pairs) and Tasks 33 and 34 (bound/cap and lock/resume) can each be merged.\n- **Over-specified steps:** a few steps fix details the slice does not need:\n  - Task 21 tells the test to check `option.hidden` rather than the help text.\n  - Task 7 asks for CRLF and quoted-path cases. These are reasonable under the lenient-parsing rule, but they are not success criteria.\n\n  Trim steps like these to the behavior the design requires.",
+      "file_ref": null,
+      "category": "proportionality",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/426-tasks.slice-cases.md:167-193"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Two \"load tests\" are added with no NFR behind them",
+      "description": "The slice design states no non-functional requirement: no concurrency, throughput or latency targets. Even so, the task file adds two tests it calls load tests:\n- Task 24: eight concurrent `invoke` calls.\n- Task 33: a 200-pair plan with a slow dispatcher.\n\nNeither one traces to a success criterion. They live in `tests/benchmark/`, not `tests/load/`, and nothing wires them into CI. The parts that do matter are already tested elsewhere:\n- Separate scrubbed homes are covered by Task 24's argv/env test.\n- The hung-dispatcher timeout is covered by Task 3's `judge_pair` tests and Task 30's failed-pair test.\n\nRemove the concurrency and 200-pair cases and the \"Load tests\" bullet in the Context Summary. Keep one hung-dispatcher case in Task 33 only if Task 30 does not already cover it.",
+      "file_ref": null,
+      "category": "scope-creep",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/426-tasks.slice-cases.md:53"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Task 6 uses slice 403 before the gate checks that it exists",
+      "description": "Tasks 2\u20137 are meant to need nothing from the precondition gate (Task 8), and they are committed before it. But Task 6's second bullet runs `sq metrology slice-ranges`, reads the result with `get_slice_ranges`, and validates the saved JSON as `SliceRanges`. Task 7's real-slice fixture is then picked from those landings.\n\nTask 8 lists 403's `get_slice_ranges`, `SliceLanding` and `sq metrology slice-ranges` as things to confirm. Task 6 simply asserts \"403 is implemented\". If that assertion is wrong, Tasks 6\u20137 fail before the gate that would have caught it. Do one of these:\n- Move a 403 check (and the matching 177 check) to the start of Task 6.\n- Move the real-landing and real-diff bullets to after Task 8.",
+      "file_ref": null,
+      "category": "sequencing",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/426-tasks.slice-cases.md:107"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Record validators go beyond the design schema",
+      "description": "Task 11 says to add the records \"exactly as the design's Database Schema gives them\". Its tests then require rules the schema does not define:\n- `qualified` requires a `case_id`.\n- `rejected` requires a `rejection`.\n- A forfeit `DiffJudgment` has no calls.\n\nThese rules are sensible, but a junior implementer will see a conflict between \"exactly as the schema\" and the tests. Either add the rules to Task 1's design corrections, or drop them from the tests.",
+      "file_ref": null,
+      "category": "proportionality",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/426-tasks.slice-cases.md:141-143"
+    },
+    {
+      "severity": "NOTE",
+      "title": "\"Grade grades slice cases\" relies on a double-based test and the live walkthrough",
+      "description": "D10 says the hidden set is empty and that `reference_failed_grade` applies to slice cases. The only checks for this are Task 39's mixed test, which uses doubles, and Task 41's live step 4. The design says 425 runs unchanged, so this is adequate. One assertion in Task 39 would make it explicit: a slice subject with no failing regression node passes even though no hidden node was selected.",
+      "file_ref": null,
+      "category": "coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/426-tasks.slice-cases.md:306-308"
+    },
+    {
+      "severity": "PASS",
+      "title": "Commit markers sit at tested points",
+      "description": "Each marker follows a group that has been implemented and tested. Tasks 11\u201312, 13\u201314, 15\u201319, 20\u201322, 24\u201325, 27\u201330, 31\u201335 and 36\u201339 are each committed as a unit. The markers after the live runs (Tasks 23, 26 and 41) say to skip the commit when no file changed, so the file never makes a commit that only checks boxes.",
+      "file_ref": null,
+      "category": "commits",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/426-tasks.slice-cases.md"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "pass",
+      "category": "coverage",
+      "raw_category": null,
+      "summary": "Every functional success criterion has a task",
+      "location": "project-documents/user/tasks/426-tasks.slice-cases.md",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "pass",
+      "category": "coverage",
+      "raw_category": null,
+      "summary": "Technical and integration requirements are covered",
+      "location": "project-documents/user/tasks/426-tasks.slice-cases.md",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "pass",
+      "category": "sequencing",
+      "raw_category": null,
+      "summary": "Design-gap corrections are recorded before implementation",
+      "location": "project-documents/user/tasks/426-tasks.slice-cases.md:40-50",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "proportionality",
+      "raw_category": null,
+      "summary": "Too many tasks and test files for a 3/5 slice",
+      "location": "project-documents/user/tasks/426-tasks.slice-cases.md:167-193",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "scope-creep",
+      "raw_category": null,
+      "summary": "Two \"load tests\" are added with no NFR behind them",
+      "location": "project-documents/user/tasks/426-tasks.slice-cases.md:53",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "sequencing",
+      "raw_category": null,
+      "summary": "Task 6 uses slice 403 before the gate checks that it exists",
+      "location": "project-documents/user/tasks/426-tasks.slice-cases.md:107",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "note",
+      "category": "proportionality",
+      "raw_category": null,
+      "summary": "Record validators go beyond the design schema",
+      "location": "project-documents/user/tasks/426-tasks.slice-cases.md:141-143",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "note",
+      "category": "coverage",
+      "raw_category": null,
+      "summary": "\"Grade grades slice cases\" relies on a double-based test and the live walkthrough",
+      "location": "project-documents/user/tasks/426-tasks.slice-cases.md:306-308",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "pass",
+      "category": "commits",
+      "raw_category": null,
+      "summary": "Commit markers sit at tested points",
+      "location": "project-documents/user/tasks/426-tasks.slice-cases.md",
+      "location_verified": null
+    }
+  ],
+  "template_name": "tasks",
+  "input_files": {
+    "input": "project-documents/user/tasks/426-tasks.slice-cases.md",
+    "against": "project-documents/user/slices/426-slice.slice-cases.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261115-design/wt/426-tasks"
+  },
+  "timestamp": "2026-11-16T06:59:25.769206",
+  "model": "claude-opus-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 2,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-opus-5-5",
+  "answering_models": [
+    "claude-opus-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 9,
+    "in_fences": 0,
+    "in_section": 9,
+    "surviving": 9
+  },
+  "effort": "medium",
+  "profile": "sdk",
+  "turns": 3,
+  "prompt_tokens": 152299,
+  "cached_tokens": 31472,
+  "cache_write_tokens": 120823,
+  "completion_tokens": 5779,
+  "reasoning_tokens": null,
+  "duration_seconds": 59.82390645798296,
+  "cost_usd": 1.0892436,
+  "cost_basis": "provider"
+}

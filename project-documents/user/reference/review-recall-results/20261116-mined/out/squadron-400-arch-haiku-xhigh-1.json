@@ -1,0 +1,350 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "Measuring a commit other than HEAD has no mechanism, and the stated invariant rules out the obvious ones",
+      "description": "Envisioned State requires that \"a project can be measured at any commit\" and that taking a snapshot \"doesn't modify the measured repository\" (line 71). The per-slice before/after is \"the snapshot at its fork point against the snapshot at its merge\" (line 75). Neither commit is HEAD in general, so the adapter must materialize an old tree, and each common way of doing that breaks a stated rule:\n\n- `git worktree add` writes metadata into the repository's `.git/worktrees`.\n- `git checkout` moves HEAD and rewrites the working tree.\n- `git archive` produces no `.git`. `derive_project_id` reads the remote from the tree it is given (`identity.py:67-98`), so the archive either falls through to a recorded id or fails.\n\nThe environment problem is not cosmetic. pyright resolves imports against whatever interpreter it finds, and pytest needs the project's dependencies, so a snapshot of an extracted tree may measure different code than the commit. The dirty-tree rule (line 49) covers only the working tree. The doc needs to decide the materialization mechanism, which environment the tools run in, and that identity comes from the source repository rather than the measured tree. Until then, the per-slice before/after is not buildable as written.",
+      "file_ref": null,
+      "category": "feasibility",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#envisioned-state"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Capture timing is deferred, yet per-slice before/after depends on it",
+      "description": "\"When snapshots are taken\" (line 95) is left open: on demand, or automatic at fork and merge. Envisioned State (line 75) assumes the automatic case. If capture is on demand, the fork-point snapshot must be taken retroactively, which depends on the unresolved mechanism above, and the before/after exists only when someone remembered to run it. If capture is automatic, every pipeline run gains a measurement step. The doc names the cost but not the default.\n\nThe failure contract is also incomplete. \"Logged and recorded as absent\" (line 95) is not a record shape. Nothing in `MetrologyRecord` (`models.py:261-279`) represents \"attempted, failed, reason X\" as distinct from \"not attempted,\" and the store's read path silently skips unreadable files (`store.py:183-189`). The absent-with-reason payload needs a specified shape, and the capture default needs a decision.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#technical-considerations"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The brownfield one-command baseline contradicts the identity rule it depends on",
+      "description": "Design Goals (line 41) promise that an existing project gets a baseline \"without editing the project's config files or code.\" `derive_project_id` (`identity.py:131-155`) takes the git remote first and a recorded `metrology.project_id` in `.squadron.toml` second, and raises `MetrologyIdentityError` otherwise. The error text tells the user to run `sq config set metrology.project_id ... --project`, which is a config edit.\n\nA brownfield repo with no remote, such as a local-only or mirrored repo, cannot be baselined without editing config, and the doc does not acknowledge this. The options are to relax the goal or to define a non-config identity. A non-config fallback needs care, because `identity.py` was written specifically to refuse a filesystem-path fallback. Decide this before the baseline slice.",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#design-goals"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The review vocabulary change conflicts with the existing review prompt and with the meaning of `other`",
+      "description": "Line 73 says review templates emit the closed vocabulary with `other` as \"the honest fallback.\" Three things in the code are not reconciled:\n\n- The current review prompt (`src/squadron/review/review_client.py:77-85`) uses `category: error-handling` as its format example. That value is not in `AuditCategory`, where the equivalent is `error-handling-observability` (`src/squadron/metrology/models.py:142`). The prompt's own example is out of vocabulary. Once the closed vocabulary is in the prompt, that example becomes the nearest-plausible-token trap CLAUDE.md warns about, and it has to be replaced.\n- `src/squadron/review/models.py:401` already maps a missing category to the string `\"uncategorized\"`, and `models.py:84` types the field `str | None`. Line 65 says the category is `None` on many findings. The doc does not say whether `None`, `\"uncategorized\"`, or `other` is the fallback.\n- The `AuditCategory` docstring (`models.py:122-128`) defines a rising `other` share as evidence that the vocabulary does not fit the codebase. If unlabelled review findings fall into `other`, that signal reports on reviewer omissions rather than on vocabulary fit. Missing and invented categories need separate values.",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#technical-considerations"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "\"Without a translation step\" is false for historical reviews, and review-sourced counts have no noise floor",
+      "description": "Line 35 promises that a report can show \"error-handling findings: 4 from review, 2 from audit\" without a translation step. Line 91 then concedes that historical reviews need read-side mapping, and the doc never defines the mapper beyond \"a lookup table that will miss or an LLM call that adds noise.\"\n\nLine 33 says LLM-derived signals carry their own noise floor, and line 75 says LLM-sourced numbers are shown against it. Review category counts are LLM-derived, since the reviewing model picks the category, but the doc defines no floor for them. The existing floor, `AuditNoiseFloor` (`models.py:241-257`), is keyed on `AuditRun` and the audit prompt hash and does not cover review. So the report cannot satisfy line 75 for review rows. Either define a review floor (repeated review of one commit, n runs) or state that review rows are unfloored and carry no interpretation, as 323 does with `within_floor = None` (`audit_models.py:190-203`).",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#design-goals"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Placing the vocabulary where it lives today creates an import cycle through review",
+      "description": "`src/squadron/metrology/models.py:24` already imports `squadron.review.models.Verdict`, so metrology depends on review. Review-side categorization and ingest need the closed vocabulary on the review side. If they import `AuditCategory` from `metrology.models`, the path `review.models \u2192 metrology.models \u2192 review.models` becomes a cycle. The codebase already works around the same pressure: `identity.py:302-304` imports `get_template` lazily, with a comment explaining why.\n\nThe doc does not say where the vocabulary lives. It should move to a neutral module, with metrology re-exporting it. The name matters too: review findings would carry a type called `AuditCategory`, which leaks an audit concept into the review subsystem. Decide the home before the normalization slice.",
+      "file_ref": null,
+      "category": "dependencies",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#technical-considerations"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The adapter contract and the snapshot payload are unspecified, and the record shape will be persisted",
+      "description": "The central extension point is not defined. Line 39 says each language is \"a pluggable adapter,\" and line 83 says the contract \"has to define each metric.\" The doc gives no method set, return type, metric identifiers, or registration mechanism (entry points, an explicit registry, or dispatch on language). An if/elif dispatch in the snapshot command is the growing conditional the project's OCP rule names.\n\nThe snapshot payload has no schema either. The doc does not say how per-language metrics, per-tool identity, exclusions, and absent-with-reason are represented, or whether a multi-language commit is one record or one per language. This shape is persisted under `schema_version: 1` (`store.py:47-48`). The plan puts the non-Python proof in slice 2 (line 104). If that proof changes the metric identity shape, existing records either need migration or break. Specify the adapter Protocol and the payload before slice 1, and decide whether metric identifiers are a closed enum (as `AuditCategory` is) or open keys with a declared version.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#anticipated-slices"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Determinism is asserted rather than validated, and the comparability key omits analyzer parameters",
+      "description": "Line 33 promises the same value for the same commit and tool versions. Several inputs break that without any change to the commit. pyright's import resolution and type-error counts depend on the interpreter and installed packages. Coverage depends on test ordering and any flaky test. Duplication depends on minimum-size thresholds that the doc never names.\n\nThe comparability key (lines 59, 85, 89) lists tool version, rule set and exclusions, but not analyzer parameters or an environment fingerprint. Two snapshots taken with different duplication thresholds would compare as equal. Include analyzer configuration and an environment fingerprint in the identity. Add a determinism check, measuring one commit twice and recording whether the results match. That is the snapshot analogue of 323's noise floor and costs one extra run.",
+      "file_ref": null,
+      "category": "feasibility",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#design-goals"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The project's own size rules have no defined metric, and the Python tooling the doc implies has gaps",
+      "description": "- **Function length.** CLAUDE.md sets \"~50 lines (excluding whitespace).\" The doc does not say whether docstrings, comments, decorators, or signatures count. Ruff's function-size rule (`PLR0915`) counts statements, not lines, so there is no existing Python linter equivalent of the project's limit. The adapter must walk the AST, and the doc should say so.\n- **Cyclomatic complexity.** Line 83 says tools disagree on this metric. For Python, the stack already includes ruff, which ships the mccabe rule (`C901`). The doc names no tool for any metric, which is acceptable for a slice decision, but the adapter contract cannot be specified without at least the definition.\n- **Limits.** Line 53 says limits come from the project's own config, but no key is named. Squadron's own limits are prose (line 67), so the keystone slice cannot prove limit checks on squadron (line 103) without a config key the doc does not define.\n- **Reference rule set.** The \"fixed reference rule set\" (line 85) is never located or versioned. A project without ruff or pyright config is not addressed. Silently applying tool defaults would be the silent fallback CLAUDE.md prohibits. The snapshot should record \"no project config, tool defaults\" as a named rule set.",
+      "file_ref": null,
+      "category": "technology",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#overview"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Subprocess measurement inside a pipeline step has no timeout, no async boundary, and no hang handling",
+      "description": "Line 95 covers a failed snapshot but not a hung one. Coverage runs, pyright on a large repo, and duplication scans can each take minutes. The codebase already bounds its git-remote subprocess (`identity.py:56-60`, `_GIT_REMOTE_TIMEOUT_S = 5.0`). The snapshot path needs the same bound for each tool, with the value in config rather than inline.\n\nIf the attachment runs from an `async def` orchestration step, a synchronous `subprocess.run` blocks the event loop for its whole duration. The Python rules require either a sub-millisecond synchronous call or `run_in_executor`/a subprocess in async code. The doc needs to name the execution model.\n\nReview-code.md's failure-mode rule asks, for each I/O path, what happens if it hangs, times out, or the peer disconnects. The doc answers only the non-hang failure case, and ingest, which reads review files, has no failure enumeration at all. If capture is attached to pipeline steps, the python.md load-test requirement for concurrency paths also applies, and no load test appears in the slice list.",
+      "file_ref": null,
+      "category": "technology",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#technical-considerations"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Snapshots share the store's full-scan read path, and the 320 budget check runs on it",
+      "description": "Line 47 reuses the store with \"no new store, no schema migration\" and does not analyze read cost. `_iter_records` (`store.py:183-189`) globs and fully validates every `*.json` on each query. `list_samples` (`store.py:424-450`) and `count_samples` (`store.py:452-454`) sit on it, and `count_samples` is documented as a \"budget check\" (line 453). Once per-commit snapshots are written into the same directory, every budget check also parses every snapshot.\n\nThe doc should bound snapshot size (summary metrics inline, detail elsewhere or omitted), state the expected record count per project at the chosen capture rate, and say whether a subdirectory or index is needed. Without that, the \"no new store\" decision moves cost onto the 320 paths.",
+      "file_ref": null,
+      "category": "feasibility",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#architectural-principles"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "\"Reused as they are\" conflicts with the changes the doc requires, and both target files are already past size guidance",
+      "description": "Scope (line 27) says the store and record envelope \"are reused as they are.\" Line 47 adds payloads to `MetrologyRecord`, and each new record type needs `write_*` and `list_*` methods on `MetrologyStore`, so both change. `store.py` is about 455 lines and `models.py` about 280, against the ~300-line guidance in CLAUDE.md. The doc's placement rule puts every payload in `models.py` (the 322/323 precedent, `models.py:6-10`), which pushes it further past the limit.\n\nThe envelope also has two sources of truth for its discriminator. `record_type` is a free string, and eight optional payload fields sit beside it (`models.py:261-279`). Nothing rejects `record_type=\"audit_finding\"` with `audit_run=None`, or the reverse. Each `write_*` method repeats the same construct-and-atomic-write block (`store.py:195-339`), and the doc adds two more copies. Add a validator that enforces exactly one payload matching `record_type`, and a single parameterized write/list pair, before adding two record types.",
+      "file_ref": null,
+      "category": "abstraction",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#overview"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Frontmatter dependencies omit 323, which the design builds on directly",
+      "description": "The frontmatter lists `dependencies: [100, 320]`. But the design uses 323's closed `AuditCategory`, the disjoint-severity rule, the noise-floor method, and the sync test (Current State, line 64; Design Goal, line 35; Related Work, line 119). The adoption baseline is 323's audit baseline (line 107). Frontmatter dependencies drive planning order, so as written the review normalization slice could be scheduled before the vocabulary sync test (line 91) it extends. Add 323.",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md:8"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Whether snapshots execute a brownfield project's code is named but not decided, and the default path would",
+      "description": "Line 87 calls this \"a slice decision with real security and environment cost.\" It is an architecture decision, because it sets the default for pipeline-triggered capture (line 95) and for the one-command baseline (line 41). Installing a brownfield project's dependencies and running its test suite executes code from that repository. A pipeline attachment would do so automatically at every fork and merge.\n\nThe doc should state the default: static tools only, with no code execution, for pipeline-triggered snapshots, and coverage only on explicit CLI request, in an isolated environment. Leaving it open means the first slice written decides the default.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#technical-considerations"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Reports, historical mapping, and the keystone are the heaviest parts and the least consumed",
+      "description": "The downstream consumers the doc names, 420 and 440, read snapshots, normalized findings, and the baseline record (lines 79, 122-123). Neither reads reports. The rollup and trend reports (slice 4, line 106) have no named consumer. The motivation is a person's ability to check \"the code got better\" (line 29). Things that can be cut or deferred without losing a consumer:\n\n- Defer the rollup and trend reports until at least one project has snapshots and normalized findings across several commits. A `--json` dump of the records covers 420 and 440.\n- Drop the read-side mapper for historical reviews (line 91) and report those findings as uncategorized and unpooled. The doc itself says neither mapper option is good, so this removes the piece with no good answer.\n- Narrow the keystone (line 103), which bundles record type, adapter contract, tool and rule-set identity, absent-with-reason, exclusions, and limits. Limits and the length metric can move to slice 2 if the keystone's persisted contract does not depend on them.",
+      "file_ref": null,
+      "category": "antipattern",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#anticipated-slices"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Static metrics sit on a separate axis from the ten categories",
+      "description": "The \"one category vocabulary\" goal (line 35) applies to audit and review findings. Static metrics (complexity, duplication, length, lint and type counts) have no category mapping. The \"breakdown across all three sources\" in lines 24 and 75 is therefore two axes side by side: categories for the LLM sources and metrics for the snapshot. That is workable, but the Overview should say so, so that no later slice tries to join complexity to a category.",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#design-goals"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "feasibility",
+      "raw_category": null,
+      "summary": "Measuring a commit other than HEAD has no mechanism, and the stated invariant rules out the obvious ones",
+      "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#envisioned-state",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "Capture timing is deferred, yet per-slice before/after depends on it",
+      "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#technical-considerations",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "The brownfield one-command baseline contradicts the identity rule it depends on",
+      "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#design-goals",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "The review vocabulary change conflicts with the existing review prompt and with the meaning of `other`",
+      "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#technical-considerations",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "\"Without a translation step\" is false for historical reviews, and review-sourced counts have no noise floor",
+      "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#design-goals",
+      "location_verified": null
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "dependencies",
+      "raw_category": null,
+      "summary": "Placing the vocabulary where it lives today creates an import cycle through review",
+      "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#technical-considerations",
+      "location_verified": null
+    },
+    {
+      "id": "F007",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "The adapter contract and the snapshot payload are unspecified, and the record shape will be persisted",
+      "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#anticipated-slices",
+      "location_verified": null
+    },
+    {
+      "id": "F008",
+      "severity": "concern",
+      "category": "feasibility",
+      "raw_category": null,
+      "summary": "Determinism is asserted rather than validated, and the comparability key omits analyzer parameters",
+      "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#design-goals",
+      "location_verified": null
+    },
+    {
+      "id": "F009",
+      "severity": "concern",
+      "category": "technology",
+      "raw_category": null,
+      "summary": "The project's own size rules have no defined metric, and the Python tooling the doc implies has gaps",
+      "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#overview",
+      "location_verified": null
+    },
+    {
+      "id": "F010",
+      "severity": "concern",
+      "category": "technology",
+      "raw_category": null,
+      "summary": "Subprocess measurement inside a pipeline step has no timeout, no async boundary, and no hang handling",
+      "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#technical-considerations",
+      "location_verified": null
+    },
+    {
+      "id": "F011",
+      "severity": "concern",
+      "category": "feasibility",
+      "raw_category": null,
+      "summary": "Snapshots share the store's full-scan read path, and the 320 budget check runs on it",
+      "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#architectural-principles",
+      "location_verified": null
+    },
+    {
+      "id": "F012",
+      "severity": "concern",
+      "category": "abstraction",
+      "raw_category": null,
+      "summary": "\"Reused as they are\" conflicts with the changes the doc requires, and both target files are already past size guidance",
+      "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#overview",
+      "location_verified": null
+    },
+    {
+      "id": "F013",
+      "severity": "concern",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "Frontmatter dependencies omit 323, which the design builds on directly",
+      "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md:8",
+      "location_verified": true
+    },
+    {
+      "id": "F014",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "Whether snapshots execute a brownfield project's code is named but not decided, and the default path would",
+      "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#technical-considerations",
+      "location_verified": null
+    },
+    {
+      "id": "F015",
+      "severity": "concern",
+      "category": "antipattern",
+      "raw_category": null,
+      "summary": "Reports, historical mapping, and the keystone are the heaviest parts and the least consumed",
+      "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#anticipated-slices",
+      "location_verified": null
+    },
+    {
+      "id": "F016",
+      "severity": "note",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "Static metrics sit on a separate axis from the ten categories",
+      "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#design-goals",
+      "location_verified": null
+    }
+  ],
+  "template_name": "arch",
+  "input_files": {
+    "input": "project-documents/user/architecture/400-arch.code-quality-measurement.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/squadron-400-arch"
+  },
+  "timestamp": "2026-11-16T09:39:21.774332",
+  "model": "claude-haiku-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 11,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-haiku-5-5",
+  "answering_models": [
+    "claude-haiku-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 16,
+    "in_fences": 0,
+    "in_section": 16,
+    "surviving": 16
+  },
+  "effort": "xhigh",
+  "profile": "sdk",
+  "turns": 12,
+  "prompt_tokens": 595564,
+  "cached_tokens": 444245,
+  "cache_write_tokens": 151307,
+  "completion_tokens": 47442,
+  "reasoning_tokens": null,
+  "duration_seconds": 221.17474804189987,
+  "cost_usd": 0.20004511,
+  "cost_basis": "provider"
+}

@@ -1,0 +1,189 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "PASS",
+      "title": "Alignment with architecture and slice plan entry",
+      "description": "- The five plan success criteria are covered: records and ids (D1\u2013D3), historical install with an identity and no fallback (D5\u2013D6), the scrubbed environment with `sq` unreachable (D7), a definite auth yes or no (D8), and per-node suite results with classification (D10\u2013D11).\n- `benchmark/` depends on `metrology/` and `replay/sandbox.py`, and neither depends back. The D4 extraction keeps `ReplaySandbox`'s public surface.\n- Store additions follow the architecture's \"optional sibling payloads, no migration\" rule.\n- The seam is a separate protocol from 400's `LanguageAdapter` (D9), which answers a plan open question. So do the no-lockfile policy (D5) and the check order (auth first).\n- The exclusions (422, 424, 425, 426) match the plan's split.",
+      "file_ref": null,
+      "category": "alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md#Technical-Scope"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Classification treats test-support code as project source, which can admit unfair cases",
+      "description": "- D11 defines project source as a file under the tree, not under `.venv`, and not `test_*.py`, `*_test.py` or `conftest.py`.\n- Helper modules in a test directory, such as `tests/helpers.py`, `tests/fixtures/*.py` or `tests/utils/`, therefore count as project source.\n- An exception raised there classifies as `project_exception`, and an `ImportError` naming such a module classifies as `missing_symbol`.\n- The first is read as a project crash that a fix cures, which qualifies a hidden test. The second sends a test through the wrong branch of the test-first check.\n- The architecture says that where a check cannot decide, the case is \"excluded, never admitted\". This definition fails open for any project with test helpers.\n- Fix: exclude files under the project's test directories (or any path component named `tests`/`test`) from project source. Alternatively, send exceptions from non-source support code to `other_exception`. Add a fixture for the helper-module case.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md#D11"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Cleanup after a partial `BenchmarkSandbox.__enter__` failure is unspecified",
+      "description": "- `__enter__` creates the lock, the tree, the scrubbed home with carryover symlinks and the output directory, then installs. Step 4 (install) and step 3 (home seeding) can fail.\n- Python does not call `__exit__` when `__enter__` raises. The design says all four paths are removed on exit unless `keep()` was called, and names the orphan sweep only for dead owners.\n- A failed install in the same live process (a likely case for stale locks, which the architecture says will lower yield) would leave `<id>.home` with symlinks to the user's real auth file and a partial `.venv` until the next sweep. It would also leave a lock.\n- Verification step 5 only asserts \"no `.venv` created\".\n- State that `__enter__` cleans up on any failure and re-raises, and add a test for it.\n- Also specify what happens when a granted profile's carryover file does not exist, for example `openai-oauth` with no `.codex/auth.json`. Fail at grant time with a named error rather than leaving a dangling symlink for the probe to trip on.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md#Data-Flow"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Design is heavier than the slice must deliver",
+      "description": "Cuts and deferrals, none of which is plan-assigned scope:\n- **`registry.py` with `adapter_for`.** It has one entry and a \"no detection step\" (D9). Have the CLI and callers construct `PythonBenchmarkAdapter` directly. Add the registry with the second adapter (Future Work 1).\n- **\"Carryover replaced\" symlink verification** (D8, last bullet). It is a second probe-time mechanism for a hypothetical rename-write. Fold it into the PM-facing DEVLOG answer: after one probe, run `ls -l`. Add automated detection only if a provider turns out to rotate tokens.\n- **`SCRUB_SPEC_VERSION` and `scrub_spec_version` in the identity digest** (D6). No consumer exists until 422/424. Declare it where qualification records need it, or keep it but drop the \"incremented whenever rules change\" process until then.\n- **`pytest_reporter/` mock `_patch` introspection** (D10). It exists for one `FailureKind` edge, is tied to Python 3.13 internals, and reaches for the `self` frame of mock. Consider classifying a patch-target AttributeError raised inside `unittest/mock.py` as `missing_symbol` from the exception message and frame module instead. D11 already puts anything unmatched into the exclude-by-default bucket.\n- **`sq benchmark sandbox --node` and `--suite` plus `--keep` path printing.** These are verification tools, but a single command with a pytest selection would meet the walkthrough. Fold the unused surface into the 422 consumer.\n- **Seeding the home with three config files plus a fixed git identity** is required. The `HARNESS_TOOL_ALLOWLIST` indirection with symlinks is justified only for `git` and `uv`, so keep it small.\n\nEvery one of these is defensible alone, but together they make a 12-decision slice rated 3/5. The auth spike (step 1) is the only part the plan marks as risk-first.",
+      "file_ref": null,
+      "category": "proportionality",
+      "raw_category": null,
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md#Technical-Decisions"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`reference_sha` and `other_exception` extend the architecture",
+      "description": "- Both extensions are reasoned and acceptable. The architecture's identity list omits `reference_sha`, and the plan lists three failure kinds where D11 has five.\n- 422 and the architecture should adopt both so the fairness rule's wording matches. In particular, `other_exception` reduces yield by excluding call-site `TypeError`s that the architecture's wording would arguably admit as \"exception raised by project code\".",
+      "file_ref": null,
+      "category": "alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md#D1"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Carried auth files are symlinks to the user's real tokens",
+      "description": "- Symlinking means model-written code in a producer run can read, overwrite or delete the user's real `~/.codex/auth.json` or `.claude/.credentials.json`.\n- The Risk section covers token rotation but not producer-caused corruption.\n- This sits at the same trust level as P6 today and under #213's remit, so it is not a blocker. It is worth one line in \"Limits of the scrub\" so 424 can decide whether to copy instead.",
+      "file_ref": null,
+      "category": "security",
+      "raw_category": null,
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md#D8"
+    },
+    {
+      "severity": "PASS",
+      "title": "Failure modes for new I/O paths",
+      "description": "- Install timeout, uv missing, stale or unsupported lock, suite timeout (partial results, `not_run`), missing or unparseable JSONL with non-zero exit, probe hang (a `timed out` no) and tampered case records each have an explicit strategy, a logged ERROR and a test.\n- Timeouts are config keys (D12) and run through `ProcessRunner`, which kills the process group.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md#D5"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "pass",
+      "category": "alignment",
+      "raw_category": null,
+      "summary": "Alignment with architecture and slice plan entry",
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md#Technical-Scope",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Classification treats test-support code as project source, which can admit unfair cases",
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md#D11",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "Cleanup after a partial `BenchmarkSandbox.__enter__` failure is unspecified",
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md#Data-Flow",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "proportionality",
+      "raw_category": null,
+      "summary": "Design is heavier than the slice must deliver",
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md#Technical-Decisions",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "alignment",
+      "raw_category": null,
+      "summary": "`reference_sha` and `other_exception` extend the architecture",
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md#D1",
+      "location_verified": null
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "security",
+      "raw_category": null,
+      "summary": "Carried auth files are symlinks to the user's real tokens",
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md#D8",
+      "location_verified": null
+    },
+    {
+      "id": "F007",
+      "severity": "pass",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "Failure modes for new I/O paths",
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md#D5",
+      "location_verified": null
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md",
+    "against": "project-documents/user/architecture/420-arch.model-benchmark.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261115-design/wt/421-design"
+  },
+  "timestamp": "2026-11-16T07:06:17.233767",
+  "model": "claude-sonnet-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 3,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-sonnet-5-5",
+  "answering_models": [
+    "claude-sonnet-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 7,
+    "in_fences": 0,
+    "in_section": 7,
+    "surviving": 7
+  },
+  "effort": "medium",
+  "profile": "sdk",
+  "turns": 4,
+  "prompt_tokens": 253289,
+  "cached_tokens": 140946,
+  "cache_write_tokens": 112337,
+  "completion_tokens": 7998,
+  "reasoning_tokens": null,
+  "duration_seconds": 68.76469870912842,
+  "cost_usd": 0.544203,
+  "cost_basis": "provider"
+}

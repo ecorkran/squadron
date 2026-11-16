@@ -1,0 +1,243 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "Production `BehavioralProfile` call site in the server package is not covered by any task",
+      "description": "Task 2.1 makes `leadership_weight` and `momentum_weight` required, but Task 2.2 only updates call sites under `tests/`. `build_profiles()` constructs `BehavioralProfile` with six fields, so it will raise `TypeError` once 2.1 lands. `ProfileConfig` (`src/migratory_server/config.py:51-60`) and its parser (`config.py:244-295`) have no herding fields to pass through.\n\n- **Unmet requirement:** the slice's \"all affected tests are updated within this slice\" and walkthrough step 1 (full suite green). Task 2.2's verify step cannot pass while `build_profiles()` is broken, assuming the server tests exercise it.\n- **Undecided design choice:** the implementer must either extend `ProfileConfig` and the config parser (as slice 101 did for the flocking fields) or hardcode `0.0` in `build_profiles()`. The second is a magic default the project rules forbid.\n- **Stale context:** the task file's Context Summary and `projectState` do not mention `migratory_server` at all.\n- **Fix:** add a task after 2.1 that extends `ProfileConfig` and the parser with the two fields, passes them through in `build_profiles()`, and updates the config and simulation tests. Place it before the Section 2 commit.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "src/migratory_server/simulation.py:18-25"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Task 2.2 file list misses test files that construct `BehavioralProfile`",
+      "description": "`tests/test_simulation.py:65` and `tests/test_entities.py:27` both build profiles through a `defaults` helper and will break after 2.1. Neither is named in 2.2; they are caught only by the catch-all \"search for `BehavioralProfile(`\" item. Name them explicitly, or replace the per-file list with the single search step.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "tests/test_simulation.py:65"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Convergence test assertion does not prove the success criterion",
+      "description": "Task 5.2 asserts only that the final mean heading has a positive x-component. The setup seeds 5 of 50 agents at `[4.0, 0.0]`, so the population mean is already biased east at tick 0. The assertion can pass with `LeadershipForce` doing nothing, so it does not show that \"the herd's mean heading converges toward the leaders' initial heading\".\n\n- Measure the non-leader agents only, or assert that eastward alignment increased from the initial state.\n- Specify the magnitude range for the \"random velocities\"; it is currently left open.",
+      "file_ref": null,
+      "category": "test-quality",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:147-154"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Profile differentiation assertion is a disjunction with no threshold",
+      "description": "Task 5.3 allows \"heading variance lower OR eastward component greater\" and calls the result \"statistically measurable\" without a margin. An implementer can pick whichever inequality happens to pass, and a difference at floating-point noise level satisfies it. Fix one metric and a minimum margin. The slice allows either metric, but the task should choose.",
+      "file_ref": null,
+      "category": "test-quality",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:156-162"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "No task step enforces the \"no nested Python loops\" technical requirement",
+      "description": "The slice requires both forces to be vectorized within each agent's neighborhood. Task 4.1 gives the formula as `sum(velocity[i] * leadership[i]) / sum(leadership)`, which reads as a per-neighbor Python loop. Nothing in 4.1 or Section 6 states or checks the constraint. Add one line to 4.1 saying the neighborhood computation must be a NumPy expression, for example `(vel[nbrs] * lead[nbrs, None]).sum(axis=0) / lead[nbrs].sum()`.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:110-122"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Commit steps are checkbox tasks, and the final commit is contentless",
+      "description": "Commits appear as checkbox tasks (1.3, 2.3, 3.3, 4.3, 5.4, 6.3) rather than plain `**Commit**:` lines. Their placement is good: each sits after an implementation and test pair, matching slice Development Approach step 7.\n\n- Convert the five placement commits to plain marker lines.\n- Drop Task 6.3 (`docs: complete slice 102`). All work is already committed at 5.4, so it would be a commit that only checks boxes.",
+      "file_ref": null,
+      "category": "commit-markers",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:48-49"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Section 6 and Task 5.1 are redundant",
+      "description": "- **Task 6.2** repeats the `isinstance(..., BulkForce)` checks already done in 3.1, 4.1 and tested in 3.2, 4.2. Cut it.\n- **Task 6.1** repeats the full-suite run. Fold it into the verify step of Section 5.\n- **Task 5.1** is a ten-step smoke run with no assertion beyond \"runs without error\", and its \"confirm forces interact correctly\" step has no defined check. Task 5.2 already runs all five forces through `tick()`. Merge 5.1 into 5.2.",
+      "file_ref": null,
+      "category": "proportionality",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:169-182"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Some unit-test expectations are vaguer than the computable values",
+      "description": "Two Task 4.2 cases have exact expected values but are worded loosely.\n\n- **Known-geometry case:** the force on agent 2 is exactly `[0.9, 0.1]` (weight 1.0, zero own velocity). The task says only \"biases toward agent 1's heading\".\n- **Uniform-leadership case:** the result equals `(mean neighbor velocity \u2212 own velocity) \u00d7 leadership_weight` exactly. The task says \"similar to plain velocity averaging\".\n\nExact assertions would better serve \"each force produces the correct output for hand-constructed inputs\". The current wording does match the slice walkthrough.",
+      "file_ref": null,
+      "category": "test-quality",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:126-127"
+    },
+    {
+      "severity": "PASS",
+      "title": "Functional success criteria trace to tasks",
+      "description": "Each functional criterion has an implementation task and a test task:\n\n| Criterion | Tasks |\n|---|---|\n| Protocol conformance | 3.1, 3.2, 4.1, 4.2 |\n| Zero force with no neighbors | 4.2 |\n| Zero force when stationary | 3.2 |\n| Zero force with zero-leadership neighbors | 4.1 epsilon guard, 4.2 |\n| `active_indices` isolation | 3.2, 4.2 |\n| Self-exclusion | 4.2 |\n| Hand-constructed inputs | 3.2, 4.2 |\n\nNo scope creep found. The slice restates no NFR, so no load test or CI gating task is required.",
+      "file_ref": null,
+      "category": "traceability",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:78-135"
+    },
+    {
+      "severity": "PASS",
+      "title": "Sequencing and test-with pattern",
+      "description": "The order (state, profile, `MomentumForce`, `LeadershipForce`, integration) matches the slice's Development Approach, and each implementation task is followed immediately by its test task. There are no circular dependencies.\n\nTask 1.1's `__init__` change is safe: `AgentState` is constructed only through `create()` (`src/migratory/engine/state.py:68`), and the `add_agent` default of 0.0 is specified by the slice.",
+      "file_ref": null,
+      "category": "sequencing",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:29-135"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "Production `BehavioralProfile` call site in the server package is not covered by any task",
+      "location": "src/migratory_server/simulation.py:18-25",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "Task 2.2 file list misses test files that construct `BehavioralProfile`",
+      "location": "tests/test_simulation.py:65",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "test-quality",
+      "raw_category": null,
+      "summary": "Convergence test assertion does not prove the success criterion",
+      "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:147-154",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "test-quality",
+      "raw_category": null,
+      "summary": "Profile differentiation assertion is a disjunction with no threshold",
+      "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:156-162",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "No task step enforces the \"no nested Python loops\" technical requirement",
+      "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:110-122",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "commit-markers",
+      "raw_category": null,
+      "summary": "Commit steps are checkbox tasks, and the final commit is contentless",
+      "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:48-49",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "concern",
+      "category": "proportionality",
+      "raw_category": null,
+      "summary": "Section 6 and Task 5.1 are redundant",
+      "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:169-182",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "note",
+      "category": "test-quality",
+      "raw_category": null,
+      "summary": "Some unit-test expectations are vaguer than the computable values",
+      "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:126-127",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "pass",
+      "category": "traceability",
+      "raw_category": null,
+      "summary": "Functional success criteria trace to tasks",
+      "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:78-135",
+      "location_verified": true
+    },
+    {
+      "id": "F010",
+      "severity": "pass",
+      "category": "sequencing",
+      "raw_category": null,
+      "summary": "Sequencing and test-with pattern",
+      "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:29-135",
+      "location_verified": true
+    }
+  ],
+  "template_name": "tasks",
+  "input_files": {
+    "input": "project-documents/user/tasks/102-tasks.herding-and-leadership.md",
+    "against": "project-documents/user/slices/102-slice.herding-and-leadership.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/migratory-102-tasks"
+  },
+  "timestamp": "2026-11-16T09:15:04.765305",
+  "model": "claude-fable-5-2",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 9,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-fable-5-2",
+  "answering_models": [
+    "claude-fable-5-2"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 10,
+    "in_fences": 0,
+    "in_section": 10,
+    "surviving": 10
+  },
+  "effort": "medium",
+  "profile": "sdk",
+  "turns": 10,
+  "prompt_tokens": 300324,
+  "cached_tokens": 194349,
+  "cache_write_tokens": 105965,
+  "completion_tokens": 6407,
+  "reasoning_tokens": null,
+  "duration_seconds": 62.71181462495588,
+  "cost_usd": 1.9911307,
+  "cost_basis": "provider"
+}

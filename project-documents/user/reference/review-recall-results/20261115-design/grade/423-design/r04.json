@@ -1,0 +1,40 @@
+{
+ "review": "r04",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Prompt identity will not record which version of the fix prompt was used",
+   "description": "The architecture requires results to name their prompt identity \"so a report compares only results that match\" (420-arch, Design Goals, line 40). D8 says \"the prompt's text is part of the dispatch's prompt identity, which `prompt_identity.py` already records.\" That is not how prompt identity works. Slice 177 defines it as a `PromptSource` plus `cf_version` and `guide_version`, read from the `build_context` outputs (177-slice:433). It does not hash the prompt text.\n\nD2 (line 139) makes `fix-context` output `operation: build_context` and `context` so that dispatch picks the prompt up. This causes two problems:\n- **Wrong source label.** The dispatch will record `source: build_context`, which says a cf build produced the prompt when none did.\n- **No version.** `cf_version` and `guide_version` will be null, at least under `commit-to: current`, which is the replay mode. Nothing records which version of `data/prompts/fix.md` was used.\n\n424 and 425 therefore cannot tell results from different fix-prompt revisions apart. That is the exact case D8 says is covered. Fix: have `fix-context` output a prompt identity field, either the sha256 of the `fix.md` template or squadron's version. Also either add a `PromptSource` value for the fix prompt or say explicitly why reusing `build_context` is correct. Then state which field 424 and 425 key on.",
+   "location": "project-documents/user/slices/423-slice.fix-pipeline.md:191"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "The slice plan's MCP parity criterion is dropped without amending the plan",
+   "description": "The slice plan entry for 423 lists \"CLI, slash command and MCP give identical results\" as a success criterion (420-slices:87). The design excludes MCP at line 43 and in D9 (line 198), reasoning that squadron has no MCP server for any pipeline. The reasoning holds, and building the first MCP `run` tool for this one pipeline would be scope creep. Still, this drops scope the plan assigned to the slice. Record the change in the slice plan by amending the 423 entry or adding a note, so 424/425 reviewers and the plan's success tracking don't expect MCP parity.",
+   "location": "project-documents/user/slices/423-slice.fix-pipeline.md:43"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Where 424 may put `--io-dir` conflicts with the clean-tree check and stage-everything",
+   "description": "D5 (line 165) refuses any non-ignored change in the working tree, and the commit stages every changed and untracked path. Line 234 has 424 run `-p issue-file=<io-dir file> --io-dir <dir>`, but the design never says where the io-dir may live. If 424 puts it inside the sandbox checkout, `fix-context` refuses the run because of the dirty tree. If the file arrives after the check, the frozen issue text is committed as part of the fix.\n\nThe same question applies to anything 421's environment resolution leaves untracked and not gitignored in the sandbox. Every replay would then fail at the precondition, and the architecture classes that as harness-caused.\n\nFix: state that the io-dir must be outside the working tree, or that `fix-context` refuses an `issue-file` that resolves inside it. State also what 421's sandbox has to guarantee: a clean tree after install. List both under Integration Requirements (line 270).",
+   "location": "project-documents/user/slices/423-slice.fix-pipeline.md:234"
+  },
+  {
+   "i": 3,
+   "severity": "NOTE",
+   "title": "The plan says 423 has no dependencies; the design adds one on 422",
+   "description": "The slice plan says 423 has \"none in this initiative\" and \"can be built earlier\" (420-slices:88, 166). The design depends on 422 for fetch mode, through `CodeHost.get_issue` and the renderer with an optional cutoff. 422 agrees with this and defines the optional cutoff for 423 at its line 139. Reusing the renderer is the right call because it avoids duplicating it, and the design keeps file mode independent by putting the fetched source last in its development order (line 340). Even so, the production `sq run fix <n>` path now waits on a High-risk, 4/5 slice. Update the plan's dependency line to match.",
+   "location": "project-documents/user/slices/423-slice.fix-pipeline.md:49"
+  },
+  {
+   "i": 4,
+   "severity": "NOTE",
+   "title": "In a replay, a rejected fix report counts as a config-caused fail",
+   "description": "A `fix_report` refusal or a `blocked` report commits nothing. Under the architecture's \"Absent is not zero\" principle (line 67), \"committed nothing\" is a fail for that config, even when the tree the agent left would pass 425's grade. This follows from \"replays run the production pipelines\" (line 61), so it is consistent. 424 should still record `failure_kind: fix_report` as a separate producer-absence kind, so reports can show how many fails came from the report contract rather than from the code.",
+   "location": "project-documents/user/slices/423-slice.fix-pipeline.md:155-156"
+  }
+ ]
+}

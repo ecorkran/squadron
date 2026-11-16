@@ -1,0 +1,47 @@
+{
+ "review": "r08",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Two architecture departures are recorded only in slice docs, and the architecture is not updated",
+   "description": "The architecture's design goal says a benchmark run \"stops at its own cap, which covers grading and judging as well as the replays\". Its Cost section says \"The run-level cap covers all of it\". D9 replaces that with a separate `grade` invocation that has its own cap. Line 236 says only that the architecture \"should say so\".\n\nD1 (line 161) also adopts 424's rebuild-from-diff approach. That departs from the architecture's \"in the same sandbox\" wording in the Envisioned State and the grader principle. 424 documents that departure, but only in its own Integration Points (424:400).\n\nBoth departures are reasonable, and the bound is still printed before any spend. But the parent architecture now contradicts two slice designs. 426 and 427 would build against wording that no longer holds.\n\nThere is also a leftover in 424: line 258 was corrected, but 424:398 still says \"`bench_plan` arithmetic, which 425 extends with grading terms\". 425 line 472 asks for that change.\n\nFix: update the Cost section and design goal in `420-arch.model-benchmark.md` to say \"run cap + each grade invocation's cap\", and replace \"same sandbox\" with \"rebuilt from start plus diff\". Correct 424:398 at the same time.",
+   "location": "project-documents/user/slices/425-slice.grading-and-paired-report.md:235-236"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "A failed reinstall is always charged to the config, even when the harness caused it",
+   "description": "D5 and D16 (line 298) classify every failed `uv sync --locked` after a dependency change as `producer_env_unresolvable`, which is a config absence. But the same command can fail for reasons the harness owns:\n- a network or index outage\n- uv cache corruption\n- an index that has since yanked a package\n\nThe architecture's \"Absent is not zero\" principle puts \"the environment did not resolve\" on the harness side. Under this design, a transient outage during grading counts as a fail against every config that touched dependencies. That biases the comparison against those configs. The design also gives no timeout for a reinstall that hangs. D16 has no row for it, and `grader_timeout` covers only suite runs.\n\nFix: blame the config only when the producer's lock fails to resolve for a reason that comes from the lock itself. One way is to retry once, or to check uv's error class: a resolution or lock mismatch versus a network or IO failure. Classify the rest as harness `environment_failed`. Also name the timeout that bounds the reinstall, such as 421's environment timeout, and its absence kind.",
+   "location": "project-documents/user/slices/425-slice.grading-and-paired-report.md:193-197"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "The report row key is stated two different ways",
+   "description": "Line 58 says report rows group by 420's D6 identity: model, profile, effort sent, `tool_use` and `max_output_tokens`. D13 (line 263) keys rows by `(alias, model, profile, effort_sent)`, which leaves out `tool_use` and `max_output_tokens`.\n\nThe architecture requires that \"a report compares only results that match, and flags the rest\". Under D13's key, two replays that differ in `max_output_tokens` or `tool_use` would be silently merged into one row. The same section says \"Rows are never silently merged\".\n\nFix: choose one key and state it once. It should include every field of 420's D6 identity, plus prompt identity as D13 already does. Add a test that two replays differing only in `tool_use` end up in separate rows.",
+   "location": "project-documents/user/slices/425-slice.grading-and-paired-report.md:263"
+  },
+  {
+   "i": 3,
+   "severity": "NOTE",
+   "title": "The environment digest is under-specified when a case's replays span environments",
+   "description": "The plan grades a reference under \"the environment digest on the case's replays\", and D8 says replays read their baseline from \"the reference grade\". A resumed or extended run can produce replays of one case under different digests: 424 re-qualifies on a digest change rather than refusing. When that happens, the design does not say which digest the reference is graded under or which reference grade each replay uses.\n\nA related risk is missing from the Risk Assessment. Any uv, interpreter or lock-resolution change between `run` and `grade` turns every replay into `environment_changed`. That drops every case, and the only recovery is to pay for the replays again. No review spend is wasted, because the digest check comes first. But the plan step could detect a mismatch across the whole benchmark and refuse up front, instead of writing one harness-absence record per replay.",
+   "location": "project-documents/user/slices/425-slice.grading-and-paired-report.md:108-110"
+  },
+  {
+   "i": 4,
+   "severity": "NOTE",
+   "title": "It is unclear whether replays scanned under older leak rules enter the comparison",
+   "description": "D13 section 6 counts replays scanned under an older `LEAK_RULES_VERSION`. 424 (line 490) offers that version so that 425 can exclude those replays. The design does not say whether they are included in the comparison, excluded, or excluded as harness drops. Counting them satisfies the architecture's \"flags the rest\". Stating whether they enter the comparison would make case inclusion fully determined.",
+   "location": "project-documents/user/slices/425-slice.grading-and-paired-report.md:271"
+  },
+  {
+   "i": 5,
+   "severity": "NOTE",
+   "title": "The measured line in the yield report goes beyond what the slice plan asks for",
+   "description": "The slice plan requires the sample-count measurement to be \"recorded and shown in the report\". Adding it to 422's `sq benchmark yield` costs a cross-slice rendering change, `latest_estimate(case_set)` and a success criterion (line 488). It is small and useful, but it can be deferred if effort runs tight, because `sq benchmark report` already shows the estimate.",
+   "location": "project-documents/user/slices/425-slice.grading-and-paired-report.md:290"
+  }
+ ]
+}

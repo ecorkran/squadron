@@ -1,0 +1,26 @@
+{
+ "review": "r10",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "D6 changes the architecture's config identity without updating the architecture",
+   "description": "The architecture defines a result's config as \"(alias, model, profile, effort sent)\" (`420-arch.model-benchmark.md:40`). D6 changes that in two ways:\n- It removes the alias from the identity.\n- It adds `tool_use` and `max_output_tokens`.\n\nThe section says this \"narrows\" the identity to what the slice plan requires. That is only half true. Dropping the alias narrows it. Adding the two alias fields widens it, and the slice plan does not ask for that. The widening is correct: without the alias, two aliases that differ only in `max_output_tokens` would merge into one row. But it is a new identity definition.\n\nLine 162 says the rule \"supersedes the architecture's\" for grouping, and line 186 tells slices 421\u2013427 to group by the D6 rule. Those slices will be designed against the architecture doc, which still says the opposite. That is a hidden dependency. The fix is to update the architecture's Design Goals line (and line 99) to the D6 tuple as part of this slice, and to state it as a widening as well as a narrowing.",
+   "location": "project-documents/user/slices/420-slice.effort-audit-across-dispatch-paths.md:142-147"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Old producer replays will split from new ones under the D6 identity",
+   "description": "The new `ProducerConfigRef.tool_use` and `max_output_tokens` fields default to `None` on old records (line 109). Both fields are part of the `config_identity` grouping key (line 146). So a replay recorded before this slice and one recorded after, from the same alias that sent the same model, profile and effort, become two report rows. The new row carries the alias's real values; the old row carries `None`.\n\nThis contradicts the slice's own success criterion: \"two replays \u2026 which sent the same model, profile and effort fall into one report row\" (line 177). It also runs against the architecture's goal that a report \"compares only results that match, and flags the rest\" (`420-arch.model-benchmark.md:40`). D3 deals with the same problem for `JudgeRef`. D6 does not.\n\nThe design should pick one behavior:\n- show pre-slice rows as a separate, flagged legacy identity; or\n- treat `None` in these fields as \"unknown\" and keep those rows out of comparisons with known values.\n\nIt should not leave them as quietly unequal keys.",
+   "location": "project-documents/user/slices/420-slice.effort-audit-across-dispatch-paths.md:109"
+  },
+  {
+   "i": 2,
+   "severity": "NOTE",
+   "title": "The findings-addressed judge sends effort but records it nowhere",
+   "description": "The slice plan requires that every path \"sends the alias's effort \u2026 or records that it could not.\" Path 7 meets the \"sends\" half once D3 lands. It writes no record of any kind, so the missing record is a 175 spend-coverage gap, not dropped effort scope. The design correctly excludes it and plans to file an issue (line 232). No consuming slice reads this judge's effort. The grader's review goes through paths 6 and 9, which do record it. No action needed beyond filing the issue.",
+   "location": "project-documents/user/slices/420-slice.effort-audit-across-dispatch-paths.md:68"
+  }
+ ]
+}

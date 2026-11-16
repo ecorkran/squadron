@@ -1,0 +1,54 @@
+{
+ "review": "r02",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Case sets keyed by name instead of `ProjectId`",
+   "description": "The architecture (\"Extend 320's store\") and the plan entry for 421 both say the new records are \"keyed on `ProjectId`\". D2 keys a `CaseSet` by `name` alone, justified by pooling, which the architecture treats as a fallback decided only after 422's yield report.\n\nThe consequence is a collision. 422 must produce fix-case sets for squadron and at least one other project. If both use the same set name, `write_case_set` sees a differing list and writes the second project's cases as v2 of the first project's set. Nothing in the design prevents this or states a naming rule.\n\nEither key the set on `ProjectId` plus name and defer the pooled form until the yield report asks for it, or state the uniqueness rule and add a test for it.",
+   "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:132-134"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "No reason for install failures that are not the lockfile's fault",
+   "description": "`EnvironmentFailureReason` has five values and no general bucket. A non-zero `uv sync` exit that is not a timeout can only become `lock_stale_or_unresolvable`. That covers a network outage, an index 5xx, a failed sdist build and a full disk.\n\nThe architecture says a lockfile that no longer resolves disqualifies the case, and 422's yield report counts exclusions per reason. A transient failure would therefore disqualify a good case under a wrong reason.\n\nThe design also does not say how uv's exit and stderr map to a reason. Add an `install_failed` reason (not a disqualifier by itself) and state the rule that selects `lock_stale_or_unresolvable`.",
+   "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:152"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "A truncated suite run without a timeout is not detected",
+   "description": "D10 handles a timeout and a missing or unparseable JSONL file. It does not handle a run that dies mid-suite and leaves a valid partial file: an interpreter crash, `os._exit` in a test, or a pytest internal error.\n\nFor `all_tests()` there is no requested list to compare against, so the missing nodes simply vanish from `SuiteRun`. 425's regression count would then read an incomplete suite as clean, which breaks \"absent is not zero\".\n\nHave the plugin write a session-finish line with the exit status and collected count, and treat its absence as a truncated run or `SuiteRunError`. Also state whether the start commit's own `addopts` (such as `-x` or xdist) are honored, since they cause the same truncation or interleaved writes.",
+   "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:209"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Seeded user config reaches the suite environment but not the identity",
+   "description": "Data-flow step 3 seeds the user's `config.toml`, `models.toml` and `providers.toml` into every scrubbed home, including suite runs under `CredentialGrant.none()`. `EnvironmentIdentity` (D6) covers `scrub_spec_version` but not seed content.\n\nThe architecture re-qualifies a case when its environment identity differs, and warns that tests reading the developer's environment are only caught if qualification runs in the same environment as replays. A project test that reads `~/.config/squadron` can change result when the user edits their config, with the identity digest unchanged.\n\nThe lighter fix is to seed only when a grant is present, since suite runs dispatch no model. Otherwise hash the seed content into the identity.",
+   "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:171"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Replaced credential symlink is detected but the token is not recovered",
+   "description": "D8 reports `yes, but carryover replaced` when a runtime rewrites its auth file by rename. At that point the refreshed token exists only as a regular file in the throwaway scrubbed home, which is deleted on exit, so the first probe can invalidate the user's real login.\n\nThe design names the failure but handles it with a report only. On detection, copy the replaced file back to the real path, or keep the home and print its path. Also state the exit code for this result; the API contract defines only yes (0) and no (1).",
+   "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:185"
+  },
+  {
+   "i": 5,
+   "severity": "NOTE",
+   "title": "How the agent runtime is found on the scrubbed `PATH` is not stated",
+   "description": "D7 says agent CLIs started by a scrubbed `sq run` inherit the scrub, while `HARNESS_TOOL_ALLOWLIST` admits only `git` and `uv` and leaves out the user's tool installs. If a provider's runtime binary lives in one of those installs, the probe returns a no that is about `PATH`, not auth.\n\nThe check would still surface it through stderr. A separate `runtime not found` result would keep the auth answer clean.",
+   "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:168-174"
+  },
+  {
+   "i": 6,
+   "severity": "NOTE",
+   "title": "Identity additions and undeclared 400 dependency",
+   "description": "Adding `reference_sha`, `project_id`, `kind` and `hidden_fixtures` to the case identity goes beyond the architecture's list. It is declared and well reasoned, and it only makes the identity stricter. State that `start_sha` and `reference_sha` are full shas so an abbreviated sha cannot create a second case.\n\nThe design consumes `SourceLanguage` and the `.venv` layout from 400, but frontmatter `dependencies` lists only 420, 177 and 320.",
+   "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:125-126"
+  }
+ ]
+}

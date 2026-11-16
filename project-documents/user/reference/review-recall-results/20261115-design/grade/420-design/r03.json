@@ -1,0 +1,47 @@
+{
+ "review": "r03",
+ "findings": [
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "The identity rule is implemented twice in this slice, already differently, and later slices must write it again",
+   "description": "D6 puts `config_identity` as a private function in `replay/report.py`, keyed on `(model, profile, effort_sent, tool_use, max_output_tokens)`. In the same slice, `sq stats producers` keeps `ProducerKey(model, profile, effort, reviewer)` (line 144), which has no `tool_use` or `max_output_tokens`. So the two readers this slice changes will group the same runs differently.\n\nLine 162 says \"this slice ships no shared identity type\" and that later slices \"apply the rule to their own record types\". But the plan's interface for 420 is \"Provides effort-sent \u2026 in config identity. All later slices read it\", and line 186 promises 421\u2013427 can \"group by the D6 rule, with no further effort work\". As designed, 424 and 425 would each re-implement the tuple, which breaks the project's DRY rule and invites the same drift that already exists between replay and stats.\n\n**Fix:** expose one public identity function, or a small value type, next to `action_effort_sent`, and use it from both replay and `stats/producer_units.py`. If stats is meant to group more coarsely, say so explicitly.",
+   "location": "project-documents/user/slices/420-slice.effort-audit-across-dispatch-paths.md:160-163"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Old records' `None` for `tool_use`/`max_output_tokens` reads the same as \"alias does not set it\"",
+   "description": "The new optional `ProducerConfigRef.tool_use` and `max_output_tokens` default to `None` \"so old records load unchanged\" (lines 109 and 145), and both fields are part of the grouping key. That causes two problems:\n- **Split rows:** a replay recorded before this slice and one recorded after it, for the same alias, land in different report rows because `None \u2260 <actual value>`.\n- **Ambiguity:** `None` means both \"unknown, record predates the slice\" and \"the alias leaves it unset\".\n\nThe architecture says results stay comparable over time and that a report \"flags the rest\". This design separates the old rows silently instead of flagging them, and the project bans silent placeholder values. D5 handles the same problem for `effort_sent` carefully (absent key versus `null`). D6 has no matching rule.\n\n**Fix:** state the rule for old records. For example, store \"unknown\" as an absent key or a distinct marker, and have the report show pre-slice rows as a labeled, separate group.",
+   "location": "project-documents/user/slices/420-slice.effort-audit-across-dispatch-paths.md:107-109"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "The enumeration test does not guard the failure that produced paths 7 and 8, so the \"cannot ship\" claim is too strong",
+   "description": "D7 classifies `AgentConfig(` construction sites and `open_pipeline_session` calls. Line 25 then claims \"A new dispatch path cannot ship without a decision about effort.\"\n\nThe two judge defects this audit found did not happen at a construction site. Both callers reached shared helpers that build the config correctly:\n- path 7 used `resolve` instead of `resolve_full`\n- path 8 called `one_shot_dispatch_with_telemetry` without passing effort\n\nA new caller of `run_review_with_profile` or `one_shot_dispatch_with_telemetry` that drops effort would pass D7 unchanged.\n\n**Fix:** either extend the classification table to call sites of the effort-taking helpers (`one_shot_dispatch_with_telemetry`, `capture_summary_via_profile_with_telemetry`, `run_review_with_profile`, `one_shot_dispatch`), which is cheap with the same AST pattern, or narrow the claim at line 25 to what the test actually guarantees.",
+   "location": "project-documents/user/slices/420-slice.effort-audit-across-dispatch-paths.md:149-152"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "The \"Provides\" guarantee contradicts path 7's inventory row",
+   "description": "Line 163 gives downstream slices \"the guarantee that every alias-resolving dispatch path, including the grading review and the judge, sends and records effort.\" Path 7 (the findings-addressed judge) resolves an alias, and the inventory says it writes no record (line 68). Lines 39 and 232 defer that gap.\n\nDeferring it is defensible: the benchmark's producer-only replay strips the review loop, so path 7 never runs in a benchmark. But the guarantee should not claim more than the slice delivers.\n\n**Fix:** qualify the guarantee. For example: \"\u2026sends effort; every path that writes a record records it (path 7 writes none \u2014 see Special Considerations).\"",
+   "location": "project-documents/user/slices/420-slice.effort-audit-across-dispatch-paths.md:163"
+  },
+  {
+   "i": 6,
+   "severity": "NOTE",
+   "title": "Path 7 will now run at the alias's effort while its spend is still uncounted",
+   "description": "D3 makes the findings-addressed judge send the alias's effort, which can raise its cost per call. Its spend still goes uncounted in run totals and is not checked against `pipeline.max_cost_usd`. This does not affect benchmark runs, because the review loop is stripped. In production `P6` runs, though, uncounted spend can grow after this slice. The CHANGELOG bullet (line 183) mentions the cost change. Filing the 175 issue should be a concrete task in the task breakdown so it is not lost.",
+   "location": "project-documents/user/slices/420-slice.effort-audit-across-dispatch-paths.md:231-232"
+  },
+  {
+   "i": 7,
+   "severity": "NOTE",
+   "title": "The slice deliberately changes the architecture's config-identity definition; update the architecture to match",
+   "description": "D6 and line 162 say this slice \"supersedes the architecture's '(alias, model, profile, effort sent)' for grouping\". The plan's success criterion justifies that change. But `420-arch.model-benchmark.md` line 40 still states the old tuple, and slices 424 and 425 will be designed against the architecture. Updating that line, keeping the alias as a stored provenance field and adding `tool_use` and `max_output_tokens`, would stop later designs from bringing the alias back into the grouping key.",
+   "location": "project-documents/user/slices/420-slice.effort-audit-across-dispatch-paths.md:147"
+  }
+ ]
+}

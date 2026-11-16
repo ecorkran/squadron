@@ -1,0 +1,369 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "Bounds sync-back drops velocity changes on the REFLECT path",
+      "description": "The bounds policy mutates velocities in place for REFLECT: it flips the outward component at the boundary. The sync-back in this design uploads positions only (`notify_positions_modified(positions)`, `upload_positions(positions)`). On the GPU path an agent keeps its outward velocity, hits the wall again next tick, and is re-clamped. The CPU path does not behave this way. A4 requires all four policies to work, but Test 7 covers only WRAP, so this would pass unnoticed. The SOFT description is also wrong: the bounds policy is a no-op for SOFT, because the repulsion lives in a force (see the force-set finding below). Fix: sync positions and velocities together, and add a REFLECT test that checks velocity after the bounce.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:207-213"
+    },
+    {
+      "severity": "FAIL",
+      "title": "No source of truth for agent state; spawn/despawn sync re-uploads stale host state",
+      "description": "The GPU step returns a `TickResult` built from exports. Nothing in the design writes those results back to `entity_manager.state`. The design reads that state only at setup (line 148) and in `sync_from_entity_manager` (line 269), and host-side EntityManager arrays are not touched by GPU ticks. So the first spawn or despawn after startup re-uploads pre-GPU state and resets every live agent to its starting position and velocity. The design must choose one of two models. Either the GPU is authoritative and sync downloads before remapping, or every tick writes back to host, which contradicts the no-per-tick-host-copy model in 145. The doc must state which, and it needs a test that spawns mid-run.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:256-284"
+    },
+    {
+      "severity": "FAIL",
+      "title": "Linux branch does not detect CUDA, so a no-GPU host crashes; A7 is unmet",
+      "description": "`_select_arch` returns the CUDA arch on Linux without checking for a device. The existing bench version does the same, so the change touches only the unsupported-platform branch. On a Linux host without an NVIDIA driver, `qd.init` raises. The Open Notes (line 382) say setup propagates that and the server exits. This is the common no-GPU case, and it contradicts A7 (line 336), the \"no crash\" claim at line 117, and plan line 44, which says to warn and fall back when neither Metal nor CUDA is detected. `qd.init` is process-global, so detection must happen before the one init. Either probe for a device without initializing, or attempt init once and fall back only on that specific error, logging a WARNING. Add a test for the no-GPU branch.\n\nThe fallback also needs a decision. When the default `quadrants` setting is not honored, the design logs and runs on CPU. Project rules forbid silent fallbacks and require explicit failure. The plan asks for warn-and-fallback, so this needs a PM decision, not a design fix.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:98-117"
+    },
+    {
+      "severity": "FAIL",
+      "title": "`GpuAgentState` in the library package takes server types, inverting the dependency the move was meant to fix",
+      "description": "The move to `migratory.gpu` is justified as removing a production\u2192bench import. But `setup_from_server` takes `EntityManager` and `WorldBoundsConfig`, which are defined in the server package. The library layer would then import the server package. That inverts the direction the architecture needs (the server consumes the substrate, not the reverse) and risks an import cycle. Fix: `setup_from_server` takes only the arrays and scalars it needs (positions, velocities, profile indices, leadership, capacity, world width and height, dt, subdivision factor). The server-side driver does the extraction from EntityManager.",
+      "file_ref": null,
+      "category": "architecture-boundary",
+      "raw_category": null,
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:129-140"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Count-based change detection misses equal-count swaps; fields are sized to current count",
+      "description": "`count_changed_since_last_tick` fires only when the count differs. A `remove_entity` followed by a `spawn_entity` between two ticks leaves the count unchanged, but the removal shifts every later index. The GPU keeps simulating the removed agent and never receives the new one. Separately, setup allocates N from `entity_manager.count` (line 143), so spawns beyond that have no slot, and 145 forbids resizing fields mid-run. EntityManager already has a capacity, but it is private and not exposed. Fix: allocate fields to capacity, and track a membership version that increments on any spawn or removal. Sync when the version changes. That also removes the count helper from EntityManager.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:178-201"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "GPU path silently drops the configured force set and the SOFT bounds repulsion",
+      "description": "The CPU branch of `step()` passes `self._forces`, which server startup builds from config (`_build_forces()`, line 231). The GPU branch calls the fused kernel, whose seven forces are hard-coded in 145. The design never says how configured forces map to the kernel. A config that disables or retunes a force is silently ignored on the GPU path. The same applies to SOFT: its edge repulsion comes from a force, which the GPU path never runs. Environment pre- and post-tick hooks also run against host state the GPU does not see. Fix: at setup, compare the configured forces with the kernel's supported set and fail explicitly on any mismatch. State what SOFT means on the GPU path. State how environment changes reach GPU state, or reject environments on this path.",
+      "file_ref": null,
+      "category": "under-specification",
+      "raw_category": null,
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:168-199"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Test plan leaves the `qd.init` isolation mechanism unspecified and misses several success criteria",
+      "description": "- The Open Notes (line 382) say a second `qd.init` in one process is undefined and that tests must use subprocess isolation or `finalize`. Tests 5\u20137 each call `setup()`, and the Testing section never names the mechanism.\n- A4 requires all four bounds policies. Only WRAP is tested.\n- A3 (the dtype and shape contract) has no assertion. Test 5 checks only count and finiteness.\n- A7 (no-GPU fallback) has no test.\n- Line 307 says \"All tests are CPU-only\", then describes GPU-required tests.\n- The load-tier TPS test is CUDA-only and skips on the macOS default path. Project rules require load tests on simulation paths to gate in CI. The design should name the runner that executes it.",
+      "file_ref": null,
+      "category": "test-coverage",
+      "raw_category": null,
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:305-320"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The float64 contract at `TickResult` depends on an unverified library upcast",
+      "description": "The design keeps GPU fields in f32 and says `export_positions()` returns f64 because \"Quadrants upcasts on download.\" Nothing verifies that, and the A3 contract depends on it. Fix: cast explicitly to float64 at the `TickResult` boundary, and assert dtype in a test. The upload direction should cast explicitly to f32 for the same reason.",
+      "file_ref": null,
+      "category": "integration",
+      "raw_category": null,
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:150"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Failure modes are not enumerated for the new GPU I/O paths",
+      "description": "The design covers only `qd.init` failure and says a mid-session GPU failure is fatal. It does not cover the other paths:\n- Sync-back and spawn/despawn uploads: partial failure, and whether the dirty flag clears before or after the upload.\n- Per-tick export: non-finite positions. Test 5 checks finiteness offline only, and no runtime signal is specified.\n- Kernel launch and `qd.sync`: a hang. The design does not say whether it can block the event loop.\n\nEach path needs a handling strategy and an observable signal (a WARNING-or-higher log and a test that checks it). The Python rules also require any synchronous call inside an `async def` to run in under 1 ms or in an executor. A 16 ms GPU tick at 60 TPS does not meet that, and the design does not say which thread `step()` runs on.",
+      "file_ref": null,
+      "category": "failure-modes",
+      "raw_category": null,
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:213-225"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Overweight: several mechanisms can be cut or simplified",
+      "description": "- The deferred sync-back (`notify_positions_modified`, `_positions_dirty`, a pending array, and an upload at the start of the next step) is the heaviest option. An immediate upload after the bounds policy, in the same step, gives the same GPU state with no extra public method and no pending buffer. The pending buffer also creates an ordering hazard with resyncs.\n- The count helper on EntityManager can be replaced by driver-owned membership tracking (see the detection finding).\n- The `arch` property exists only for logging. Log it in setup instead.\n- The Data Flow section (lines 256\u2013284) restates the step and sync sections.\n\nCutting these leaves the GPU boundary at setup, step, sync, and finalize, which is what the plan describes.",
+      "file_ref": null,
+      "category": "scope",
+      "raw_category": null,
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:207-225"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The design says the server call site is unchanged and then changes it; it says the bench harness is untouched and then edits it",
+      "description": "- Line 29 says `server.py` is unchanged. The Files Changed table (line 293) changes it to construct the driver, pass it in, and call `finalize`.\n- Line 40 puts \"any changes to the bench harness\" out of scope. Line 296 changes the bench backend's import, line 383 says the bench backend updates its import, and line 301 says the bench backends are \"not changed.\"\n\nPick the accurate statement and make the scope list match the table. The plan's intent is that `step()` callers are unchanged, so say that explicitly.",
+      "file_ref": null,
+      "category": "internal-consistency",
+      "raw_category": null,
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:29"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The walkthrough's CPU-default case contradicts the design's own default",
+      "description": "The walkthrough says to remove the `compute` block and expect no GPU initialization. But the default is `quadrants` (A1, line 324; line 33). Removing the block starts the GPU path and logs `GPU compute backend: quadrants`. The expected result is wrong. Either the step should say \"set `backend: cpu`\", or the expected result should be GPU initialization.",
+      "file_ref": null,
+      "category": "internal-consistency",
+      "raw_category": null,
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:358-362"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Dependencies omit the slices the Tier 2 gate and `subdivision_factor` depend on",
+      "description": "The frontmatter lists only 145. But:\n- A6 requires \u226560 TPS at N=50k. Slice 145 measured 37.9 TPS at 50k and says closure is slice 148 (its lines 441 and 445\u2013447).\n- `subdivision_factor` (lines 27 and 62) is the cell-subdivision mechanism from slice 149. The design passes it to setup but never says what consumes it, such as cell size in the spatial build or a kernel parameter.\n- The plan says 147 gates 145 and 146 (plan line 46). The design does not reference 147's decision.\n\nAdd 147, 148, and 149 to the frontmatter, and state where `subdivision_factor` is consumed.",
+      "file_ref": null,
+      "category": "integration",
+      "raw_category": null,
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:11-13"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Scattered comparison values and string-typed choices",
+      "description": "The backend is a `str` with a comment listing its values. It is then compared as a literal in the validation set, in the server startup branch (line 235), and in the tests. The `[1, 8]` range appears three times (lines 62, 65, and Test 4). The platform strings \"Darwin\" and \"Linux\" are also literals. Project rules require a `StrEnum` for choices and one definition for each comparison value. Fix: `ComputeBackend(StrEnum)` with `QUADRANTS` and `CPU`, plus one definition of the subdivision bounds, referenced everywhere.",
+      "file_ref": null,
+      "category": "conventions",
+      "raw_category": null,
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:58-66"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The plan's substrate notes conflict with the architecture and with 145; this design follows the correct source",
+      "description": "Plan line 36 says 145 uses f64 on CUDA, and line 40 says `_ti_f32` kernels are deprecated. Plan line 88 says the substrate decision is deferred, and line 100 says it is settled on CUDA. The architecture (line 72: f32 on GPU; line 28: Metal default on macOS) and slice 145 (f32 throughout) agree with each other. This design follows them, so 146 needs no precision change. The plan's notes should be corrected so the question is not reopened.",
+      "file_ref": null,
+      "category": "internal-consistency",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/140-slices.simulation-scaling.md:36"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The transfer-size figure in the Open Notes is about 2\u00d7 low",
+      "description": "At N=50k, 2D positions in f32 are 400 KB, or 800 KB in f64. The doc says about 200 KB. The conclusion, that the transfer is negligible next to the kernel, probably still holds, but the figure should be corrected or measured.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:384"
+    },
+    {
+      "severity": "PASS",
+      "title": "Config surface and the Tier 2 gate match the plan and the architecture",
+      "description": "The `compute` block (backend and `subdivision_factor`) matches the plan entry. The CUDA-only gate at N=50k with \u226560 TPS restates the architecture's Tier 2 NFR. The Metal default is sanctioned by the architecture. The CPU tick path is left unchanged. The bounds split (host-side in `SimulationManager`) matches the plan and the architecture.",
+      "file_ref": null,
+      "category": "scope",
+      "raw_category": null,
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:334"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Bounds sync-back drops velocity changes on the REFLECT path",
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:207-213",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "No source of truth for agent state; spawn/despawn sync re-uploads stale host state",
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:256-284",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Linux branch does not detect CUDA, so a no-GPU host crashes; A7 is unmet",
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:98-117",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "fail",
+      "category": "architecture-boundary",
+      "raw_category": null,
+      "summary": "`GpuAgentState` in the library package takes server types, inverting the dependency the move was meant to fix",
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:129-140",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Count-based change detection misses equal-count swaps; fields are sized to current count",
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:178-201",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "under-specification",
+      "raw_category": null,
+      "summary": "GPU path silently drops the configured force set and the SOFT bounds repulsion",
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:168-199",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "concern",
+      "category": "test-coverage",
+      "raw_category": null,
+      "summary": "Test plan leaves the `qd.init` isolation mechanism unspecified and misses several success criteria",
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:305-320",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "concern",
+      "category": "integration",
+      "raw_category": null,
+      "summary": "The float64 contract at `TickResult` depends on an unverified library upcast",
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:150",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "concern",
+      "category": "failure-modes",
+      "raw_category": null,
+      "summary": "Failure modes are not enumerated for the new GPU I/O paths",
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:213-225",
+      "location_verified": true
+    },
+    {
+      "id": "F010",
+      "severity": "concern",
+      "category": "scope",
+      "raw_category": null,
+      "summary": "Overweight: several mechanisms can be cut or simplified",
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:207-225",
+      "location_verified": true
+    },
+    {
+      "id": "F011",
+      "severity": "concern",
+      "category": "internal-consistency",
+      "raw_category": null,
+      "summary": "The design says the server call site is unchanged and then changes it; it says the bench harness is untouched and then edits it",
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:29",
+      "location_verified": true
+    },
+    {
+      "id": "F012",
+      "severity": "concern",
+      "category": "internal-consistency",
+      "raw_category": null,
+      "summary": "The walkthrough's CPU-default case contradicts the design's own default",
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:358-362",
+      "location_verified": true
+    },
+    {
+      "id": "F013",
+      "severity": "concern",
+      "category": "integration",
+      "raw_category": null,
+      "summary": "Dependencies omit the slices the Tier 2 gate and `subdivision_factor` depend on",
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:11-13",
+      "location_verified": true
+    },
+    {
+      "id": "F014",
+      "severity": "concern",
+      "category": "conventions",
+      "raw_category": null,
+      "summary": "Scattered comparison values and string-typed choices",
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:58-66",
+      "location_verified": true
+    },
+    {
+      "id": "F015",
+      "severity": "note",
+      "category": "internal-consistency",
+      "raw_category": null,
+      "summary": "The plan's substrate notes conflict with the architecture and with 145; this design follows the correct source",
+      "location": "project-documents/user/architecture/140-slices.simulation-scaling.md:36",
+      "location_verified": true
+    },
+    {
+      "id": "F016",
+      "severity": "note",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "The transfer-size figure in the Open Notes is about 2\u00d7 low",
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:384",
+      "location_verified": true
+    },
+    {
+      "id": "F017",
+      "severity": "pass",
+      "category": "scope",
+      "raw_category": null,
+      "summary": "Config surface and the Tier 2 gate match the plan and the architecture",
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:334",
+      "location_verified": true
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md",
+    "against": "project-documents/user/architecture/140-slices.simulation-scaling.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/migratory-146-slice"
+  },
+  "timestamp": "2026-11-16T10:00:29.169573",
+  "model": "claude-haiku-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 10,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-haiku-5-5",
+  "answering_models": [
+    "claude-haiku-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 17,
+    "in_fences": 0,
+    "in_section": 17,
+    "surviving": 17
+  },
+  "effort": "xhigh",
+  "profile": "sdk",
+  "turns": 11,
+  "prompt_tokens": 545008,
+  "cached_tokens": 384803,
+  "cache_write_tokens": 160195,
+  "completion_tokens": 63905,
+  "reasoning_tokens": null,
+  "duration_seconds": 289.8468034157995,
+  "cost_usd": 0.20939971000000002,
+  "cost_basis": "provider"
+}

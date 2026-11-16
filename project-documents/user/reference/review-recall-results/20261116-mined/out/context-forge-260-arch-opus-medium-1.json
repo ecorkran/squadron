@@ -1,0 +1,260 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "Interrupted adoption gets stuck as \"already planned\" and cannot resume",
+      "description": "Detection checks its outcomes in a fixed order. Outcome 2, \"Already planned\", fires as soon as *any* initiative plan, architecture doc or slice plan exists. Step 5 of the adoption flow writes artifacts one after another: concept, then derived architecture, then existing-state slice plan.\n\nSuppose a run stops after the architecture is written but before the slice plan. Causes could be a context limit, the PM leaving, or an agent error. The next detection run reports \"already planned\". `sq onboard` step 2 then says \"adoption doesn't apply\". `cf next` treats the repo as a normal planned project with no slice plan, so it routes to slice planning. That path does not know about retroactive entries at all.\n\nThe original contract said \"a re-run resumes from whatever artifacts exist\". The amendment removed the state machine that made that possible and put nothing in its place. Since \"derived from the files every time\" is now the only source of truth, the document has to say one of these:\n- a derived architecture with no slice plan counts as brownfield-in-progress, using the architecture's \"derived\" marker as the signal, or\n- the architecture alone does not count as \"planned\".\n\nOtherwise the \"no state\" decision causes exactly the \"false brownfield / wrong artifacts\" cost the Technical Considerations section warns about, only in the other direction.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md:73-92"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Superseded design text still makes up much of the document and contradicts the amendment",
+      "description": "The amendment says \"the sections below are rewritten to match\", but several were not rewritten:\n- **Anticipated Slices (147\u2013153)** still describes \"the persisted adoption state, and `cf build` selecting the `brownfield-adoption` profile\", \"reading the probe\", and \"adoption steps while in progress\". All three are things the amendment removes.\n- **Guide release coupling (137)** still says \"If cf selects the brownfield profile \u2026 `cf build` fails with a named error\". The parenthetical says this moved to the prompt primitive, but the rule itself was never rewritten for that primitive.\n- **Dependencies (159)** says \"cf releases that select the brownfield profile require at least v0.22.2\". No cf release selects that profile any more. The guide version that the 271/272 primitive actually needs is not stated.\n- **Technical Considerations (135\u2013136)** keeps the full probe contract and the original Adoption Facts contract \"for history\". That is two long paragraphs a slice designer will read as current constraints.\n\nAn architecture doc is the input to slice design. Superseded contracts written in the present tense are a hallucination trap for agents that read it. Move the history to the review or the slice plan's \"Reversed\" note, and rewrite Anticipated Slices and Dependencies to describe the current design only.",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md#anticipated-slices"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Responsibility table still assumes two adoption paths",
+      "description": "The table has not caught up with \"Squadron is the only adoption path\":\n- Row (c) says \"CF writes the architecture doc on both paths. With squadron present, squadron 362's comprehension analysis is an input.\"\n- The Concept row says \"squadron 363, **or** the guide's adoption prompt\".\n\n\"Exactly one writer per run\" is stated, but nothing says which writer `sq onboard` uses, or how the prompt knows a 363 concept has already been written.\n\nRow (c) also says \"CF writes\", but under the amendment no cf code writes the architecture. The agent writes it, driven by a guide prompt that cf only delivers. The ownership column should name who actually produces each artifact: the guide prompt, squadron, or cf code.",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md#responsibility-split-with-squadron-pm-approved-20261020-amended-20261025"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Prompt primitive treats the comprehension doc as optional, which is a CF-only fallback by another name",
+      "description": "Step 3 says squadron always writes the comprehension doc on brownfield, and step 4 fills its path in. The slice plan's 271 success criterion says the prompt \"says plainly when it doesn't\" exist. The original contract, still in the text at line 136, says \"the prompt works from the repo alone\".\n\nIf squadron is the only path, a missing comprehension doc means squadron failed or was skipped. The primitive should then fail with a named error, consistent with \"A missing guide prompt is an error, never a reason to fall back\". As written, the delivery path quietly allows the CF-only adoption the amendment says was dropped.\n\nThe lookup is also underspecified. It finds `{n}-analysis.codebase-comprehension.md` \"by filename and `docType`\", but does not say:\n- which directory it searches,\n- what happens with several `{n}` files from re-runs,\n- whether a stale doc from an earlier graph is acceptable.",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md:83-94"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The squadron-facing contract has no defined shape and no versioning",
+      "description": "The amendment calls the 271 detection report and prompt delivery \"the contract between cf and squadron\". The document defines neither one:\n- no JSON field set,\n- no outcome enum values,\n- no version field,\n- no rule for which changes are breaking,\n- no exit-code meaning.\n\nCommand names are deferred to slice design. When cf was the consumer, the document demanded `probe_version`, null-means-unknown semantics, and cross-repo field-name tests. Now cf is the producer and asks for none of that.\n\n`sq onboard` will branch on the outcome string. Renaming or adding an outcome, such as a fix for the stuck-adoption gap above, would silently break squadron. At minimum the arch should fix:\n- the outcome vocabulary,\n- a `report_version`,\n- the requirement for a cross-repo field-name test, mirroring the probe precedent.",
+      "file_ref": null,
+      "category": "extension-points",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md:131-135"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Nothing enforces \"set only by the adoption flow\", so the retroactive marker can bypass the review gate",
+      "description": "The marker is a property written into a markdown slice plan by an agent. cf no longer runs the adoption flow, and adoption state is gone, so cf cannot tell an adoption-written marker from any other.\n\nThe document's protection is \"a retroactive entry with a slice design or task file is a checker error; real new work always produces those files\". But Current State (line 60) says `missing-artifact` already tolerates plan entries without a design. So an agent can mark a design-less, unreviewed entry as retroactive. That entry then counts as complete for cf's and squadron's pipeline gates, and the review gate skips it.\n\nTwo invariants are stated in prose but not assigned to the checker:\n- \"Retroactive entries come before new work in index order\" has no checker rule. A retroactive entry indexed after a non-retroactive one should be an error, and that would close most of the bypass.\n- The derived-architecture marker has no stated format or consumer.",
+      "file_ref": null,
+      "category": "feasibility",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md:98-100"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The initiative's core goal depends on an external deliverable with no stated trigger",
+      "description": "The stated core goal is \"`cf next` pointing at new work after adoption\". After the amendment, every path to it runs through `sq onboard`, which \"squadron builds once the cf core is stable\". \"Stable\" is not defined, and the doc lists no squadron slice or date.\n\n273 (the only real adoption run) and 274 (described in the slice plan as \"the benefit that justifies adoption at all\") are parked. Meanwhile 266 (reconciliation) and 267 (docs map) have shipped, even though the doc itself says they \"aren't needed for the core goal\".\n\nThe result is that the initiative's remaining cf scope (268\u2013272) is mostly deletion plus two primitives. Nothing proves those primitives meet `sq onboard`'s needs. The CF-only path and comprehension carry-forward are dropped or deferred.\n\nPer proportionality, the document should do one of two things:\n- state an exit condition for the cf side (for example, \"the 271 contract is confirmed by the squadron session; the initiative closes; 273/274 move to squadron 440\"), or\n- name the squadron dependency concretely, with its slice index.\n\nLeaving it open keeps an initiative alive that cannot finish.",
+      "file_ref": null,
+      "category": "antipattern",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md:24-33"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Detection scope for git history in monorepo subdirectories is unspecified",
+      "description": "Detection is \"scoped to the project's own folder\", and CI is named as the only exception. History is one of the signals, but the document never says whether history means:\n- commits that touch the subfolder (`git log -- <path>`), or\n- the whole repository's history.\n\nIn a monorepo, the whole-repo reading makes a brand-new subproject look like a years-old brownfield system. That is the costly misfire, because a false brownfield writes wrong artifacts.\n\nThis interacts with the shallow-clone and squashed-history concerns at line 133. The architecture should settle what the history signal means, since it is a load-bearing input to the single core outcome function.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md:79"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Where the opt-out is stored, and how to undo it, is not stated",
+      "description": "\"The only stored value is the opt-out.\" The key and its location are left to slice 269. The project's config is stored per checkout directory (as with `git.integration_branch`), so if the opt-out lives there, two worktrees of the same repo can get different detection outcomes. The document should say whether the opt-out is project-level or per checkout.\n\nThere is also no way described to reverse an opt-out once `sq onboard` arrives. An opted-out repo is permanently greenfield until someone hand-edits the config.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md:75-79"
+    },
+    {
+      "severity": "NOTE",
+      "title": "\"Only an opt-out is stored\" conflicts with reconciliation's stored resolutions",
+      "description": "Conventions reconciliation persists resolutions \"keyed by rule file identity\". That is stored state inside this same initiative, even though the overview says only the opt-out is stored.\n\nThe document also does not define \"rule file identity\" for rules inside the composite CLAUDE.md, AGENTS.md and copilot-instructions files. Those composites are rebuilt by `setup-ide`, and #123 may restructure them.",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md:108"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The `cf next` line cannot distinguish \"squadron absent\" from \"squadron present\"",
+      "description": "Design Goals says \"A project without squadron is told that adoption needs it\". The principles, however, forbid cf from inspecting squadron's install paths or running its commands. So the one-line message in `cf next` must be the same whether or not squadron is installed. The goal's wording implies a check that the architecture forbids.",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md:41"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "Interrupted adoption gets stuck as \"already planned\" and cannot resume",
+      "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md:73-92",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "Superseded design text still makes up much of the document and contradicts the amendment",
+      "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md#anticipated-slices",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "Responsibility table still assumes two adoption paths",
+      "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md#responsibility-split-with-squadron-pm-approved-20261020-amended-20261025",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "Prompt primitive treats the comprehension doc as optional, which is a CF-only fallback by another name",
+      "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md:83-94",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "extension-points",
+      "raw_category": null,
+      "summary": "The squadron-facing contract has no defined shape and no versioning",
+      "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md:131-135",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "feasibility",
+      "raw_category": null,
+      "summary": "Nothing enforces \"set only by the adoption flow\", so the retroactive marker can bypass the review gate",
+      "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md:98-100",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "concern",
+      "category": "antipattern",
+      "raw_category": null,
+      "summary": "The initiative's core goal depends on an external deliverable with no stated trigger",
+      "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md:24-33",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "Detection scope for git history in monorepo subdirectories is unspecified",
+      "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md:79",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "note",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "Where the opt-out is stored, and how to undo it, is not stated",
+      "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md:75-79",
+      "location_verified": true
+    },
+    {
+      "id": "F010",
+      "severity": "note",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "\"Only an opt-out is stored\" conflicts with reconciliation's stored resolutions",
+      "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md:108",
+      "location_verified": true
+    },
+    {
+      "id": "F011",
+      "severity": "note",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "The `cf next` line cannot distinguish \"squadron absent\" from \"squadron present\"",
+      "location": "project-documents/user/architecture/260-arch.brownfield-adoption.md:41",
+      "location_verified": true
+    }
+  ],
+  "template_name": "arch",
+  "input_files": {
+    "input": "project-documents/user/architecture/260-arch.brownfield-adoption.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/context-forge-260-arch"
+  },
+  "timestamp": "2026-11-16T09:21:16.482597",
+  "model": "claude-opus-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 4,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-opus-5-5",
+  "answering_models": [
+    "claude-opus-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 11,
+    "in_fences": 0,
+    "in_section": 11,
+    "surviving": 11
+  },
+  "effort": "medium",
+  "profile": "sdk",
+  "turns": 5,
+  "prompt_tokens": 400349,
+  "cached_tokens": 309675,
+  "cache_write_tokens": 90664,
+  "completion_tokens": 6569,
+  "reasoning_tokens": null,
+  "duration_seconds": 76.88170716608874,
+  "cost_usd": 0.9194005000000001,
+  "cost_basis": "provider"
+}

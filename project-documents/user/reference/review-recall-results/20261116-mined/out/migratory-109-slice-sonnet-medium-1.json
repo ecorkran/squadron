@@ -1,0 +1,207 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Profile-weight lookup keeps a per-agent Python loop, contradicting the slice's defining constraint",
+      "description": "The \"Per-Agent Profile Weight Vectorization\" section builds weights with a list comprehension over `state.profile_indices[eval_indices]`. That is an O(n) Python loop inside every force call, and the section concedes it (\"negligible at n=100... can be precomputed if needed\"). This conflicts with three statements:\n- The Technical Requirements say \"No Python-level per-agent loops in any `BulkForce.__call__`.\"\n- The slice plan entry promises \"O(1) Python overhead regardless of agent count.\"\n- The Overview says Python overhead is constant.\n\nThe verification grep (`for.*agent_idx|for.*eval_indices|for.*list_idx`) would not catch the comprehension, so the criterion would pass while the constraint is violated.\n\nThe lighter option is to build a per-field weight table once per tick or at profile load, for example `weight_table = np.array([p.cohesion_weight for p in profiles])`. Forces then use `weight_table[state.profile_indices[active_indices]]`, which is a single fancy-index operation. This costs no more than the current design and removes the deferred \"if needed\" branch. The grep criterion should also cover comprehensions.",
+      "file_ref": null,
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md#Per-Agent Profile Weight Vectorization"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Padded-array memory cost is misjudged and has no bound or failure handling",
+      "description": "The padded array is sized by the single worst agent, `max_neighbors = max(counts)`. The gathers then allocate `(n_active, max_neighbors, 2)` float64 arrays. The section justifies rejecting CSR with \"no benefit at n <= 10K\", but at n = 10K with k \u2192 n (the clustering case this slice exists for), the `indices` array alone is about 800MB. The `mask` adds about 100MB. Each gather adds about 1.6GB, and Separation allocates several more for distances and masks. The slice plan notes cite entity scaling tiers starting at 10K, so this regime is within the architecture's stated range, not a distant one.\n\nThe document names no failure mode here, such as `MemoryError` or a latency cliff, and no observable signal for it. It should do three things:\n- State the n at which the padded design stops being viable. A defensible figure is far below 10K.\n- Add a check or WARNING when `n_active * max_neighbors` exceeds a configured threshold, with explicit failure behavior.\n- Correct the \"no benefit at n <= 10K\" claim.\n\nThe 80KB figure for n=100 is correct, but only that scale is analyzed.",
+      "file_ref": null,
+      "category": "scalability",
+      "raw_category": null,
+      "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md#Technical Decisions"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "No measurable performance target; the overrun fix is verified only by a manual 5-minute run",
+      "description": "The slice's value claim is \"tick stays within 50ms at 100 agents, `query_radius: 50.0`, clustered.\" The only check is a manual 5-minute live run compared against remembered pre-slice numbers (~58-60ms). There is no automated benchmark with a fixed clustered state and a target such as force-computation time or total tick time.\n\nThe slice also leaves the per-agent `query_radius` loop in `tick.py` (step 2) and the new `build_neighbor_data()` pass (step 3). Both are O(n) Python work. The document does not show what share of the 58-60ms is force computation versus these loops. If the neighbor query dominates, the slice could pass its functional criteria and still not remove the overruns. Two additions would close this:\n- A baseline profile split (query, build, forces, integrate).\n- A deterministic benchmark test at n=100 and a larger n, with a stated target for the post-slice tick and for force computation alone.",
+      "file_ref": null,
+      "category": "nfr",
+      "raw_category": null,
+      "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md#Verification Walkthrough"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`NeighborData` builder has no input validation or specified failure behavior",
+      "description": "`build_neighbor_data(raw_lists, eval_indices)` is the new boundary between the spatial layer and every force, and slice 105 will plug into it. The document specifies only the zero-neighbor case. It says nothing about these cases:\n- `len(raw_lists) != len(eval_indices)`\n- neighbor indices outside `[0, n_agents)`\n- an empty active set, which gives `max_neighbors = 0` and a zero-width array\n\nBecause padding uses `-1`, a stray index gathers silently. NumPy wraps `-1` to the last agent, so a bug yields wrong forces, not an error. This conflicts with the project's fail-fast principle. The builder should fail explicitly on mismatched lengths and out-of-range indices, and the edge-case test list should include the empty active set.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md#Handling Zero-Neighbor Agents"
+    },
+    {
+      "severity": "NOTE",
+      "title": "\"Never dereferenced\" is inaccurate for padded indices",
+      "description": "The document says padded `-1` entries are \"never dereferenced thanks to `mask`.\" The cohesion example gathers `state.positions[neighbor_data.indices]` over the full padded array, so `-1` is dereferenced and returns the last agent's data. The result is correct only because the mask zeroes those rows afterward. The text should say this, because later force authors may rely on the wrong statement.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md#Neighbor Data Representation"
+    },
+    {
+      "severity": "NOTE",
+      "title": "MomentumForce is categorized inconsistently",
+      "description": "`MomentumForce` is listed among \"five neighbor-dependent forces,\" but the Architecture section says it uses no neighbors. The Technical Requirements say it \"currently loops but does not use neighbors.\" It is in scope because of the per-agent loop, but it should be described as a non-neighbor force that still needs rewriting. This also clarifies which forces merely accept and ignore the new `NeighborData` parameter.",
+      "file_ref": null,
+      "category": "scope-clarity",
+      "raw_category": null,
+      "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md#Technical Scope"
+    },
+    {
+      "severity": "NOTE",
+      "title": "GPU-offload justification is speculative but harmless",
+      "description": "GPU compatibility appears under Value and again under \"Provides to Other Slices,\" but nothing in the slice implements or tests it. The design does not add mechanism for it, so it is not scope creep. It should not be used to justify the padded layout over CSR, given the memory concern above.",
+      "file_ref": null,
+      "category": "proportionality",
+      "raw_category": null,
+      "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md#Value"
+    },
+    {
+      "severity": "PASS",
+      "title": "Layer boundaries, dependency direction and integration points",
+      "description": "- `neighbors.py` sits in the engine layer and the spatial query layer stays unaware of padding.\n- The dependencies on 101 and 102 match the slice plan entry.\n- The `BulkForce` signature change and the updates to all implementations, callers and tests happen in one slice, as the plan requires.\n- The exclusions (slice 105's batch query, the already-vectorized forces, the single-agent `Force` protocol) are clean.\n- Keeping the loop-based reference implementation only in tests is proportionate.",
+      "file_ref": null,
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md#Integration Points"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "summary": "Profile-weight lookup keeps a per-agent Python loop, contradicting the slice's defining constraint",
+      "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md#Per-Agent Profile Weight Vectorization",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "scalability",
+      "raw_category": null,
+      "summary": "Padded-array memory cost is misjudged and has no bound or failure handling",
+      "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md#Technical Decisions",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "nfr",
+      "raw_category": null,
+      "summary": "No measurable performance target; the overrun fix is verified only by a manual 5-minute run",
+      "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md#Verification Walkthrough",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "`NeighborData` builder has no input validation or specified failure behavior",
+      "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md#Handling Zero-Neighbor Agents",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "\"Never dereferenced\" is inaccurate for padded indices",
+      "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md#Neighbor Data Representation",
+      "location_verified": null
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "scope-clarity",
+      "raw_category": null,
+      "summary": "MomentumForce is categorized inconsistently",
+      "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md#Technical Scope",
+      "location_verified": null
+    },
+    {
+      "id": "F007",
+      "severity": "note",
+      "category": "proportionality",
+      "raw_category": null,
+      "summary": "GPU-offload justification is speculative but harmless",
+      "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md#Value",
+      "location_verified": null
+    },
+    {
+      "id": "F008",
+      "severity": "pass",
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "summary": "Layer boundaries, dependency direction and integration points",
+      "location": "project-documents/user/slices/109-slice.force-computation-vectorization.md#Integration Points",
+      "location_verified": null
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/109-slice.force-computation-vectorization.md",
+    "against": "project-documents/user/architecture/100-slices.behavior-engine.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/migratory-109-slice"
+  },
+  "timestamp": "2026-11-16T09:29:46.175665",
+  "model": "claude-sonnet-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 2,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-sonnet-5-5",
+  "answering_models": [
+    "claude-sonnet-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 8,
+    "in_fences": 0,
+    "in_section": 8,
+    "surviving": 8
+  },
+  "effort": "medium",
+  "profile": "sdk",
+  "turns": 3,
+  "prompt_tokens": 101394,
+  "cached_tokens": 11400,
+  "cache_write_tokens": 89990,
+  "completion_tokens": 4578,
+  "reasoning_tokens": null,
+  "duration_seconds": 37.785605292068794,
+  "cost_usd": 0.4074135,
+  "cost_basis": "provider"
+}

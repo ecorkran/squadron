@@ -1,0 +1,189 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "PASS",
+      "title": "Success criteria are covered and traceable",
+      "description": "Each criterion maps to tasks:\n- **PASS and FAIL output, `missing:` lines:** Tasks 2, 3 and 4 implement them. Tasks 2T, 3T and 4T test them.\n- **`docType` failure:** Tasks 3 and 3T, then 4T.\n- **Multi-file ordering and continuing after a failure:** Tasks 3 and 3T, then 4T.\n- **Every exit-2 case with empty stdout, in human and `--json` modes:** Task 3 preflight and Task 4. Task 4T covers the \"valid file before a missing one\" case and the missing-template message naming `cf guides update`.\n- **`--json` contract:** Tasks 4 and 4T.\n- **Worktree-aware template:** Tasks 4 and 4T.\n- **Unit-test list:** Task 2T covers case, whitespace, comments, parentheticals, placeholder prefix, level mismatch, fenced blocks and CRLF.\n- **Real-template test:** Task 3T asserts a non-empty required list that includes `## Overview` and `### Verification Walkthrough`.\n- **Command test on real designs:** Task 4T.\n- **Build, lint, full suite and file size:** Task 6.\n- **Parity sweep and walkthrough:** Task 5.\n\nI found no scope creep. The guide-side repointing is correctly excluded as post-release work.",
+      "file_ref": null,
+      "category": "coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md:36-134"
+    },
+    {
+      "severity": "PASS",
+      "title": "Sequencing and test-with pattern are correct",
+      "description": "There are no circular dependencies. The order is constant, pure validator, file layer, CLI, then verification. Each test task directly follows its implementation task (2\u21922T, 3\u21923T, 4\u21924T). The commit markers 2C, 3C and 4C sit at working, tested points. Tasks 2 and 3 are sized for a junior.",
+      "file_ref": null,
+      "category": "sequencing",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md:46-117"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Tasks 5/5C and 6/6C are conditional, partly notes-only commits, and arguably one task",
+      "description": "- **Notes-only commit:** Task 5C commits `docs: record slice 214 parity sweep results` if Task 5 changed anything. The only expected change is a \"Parity differences\" note in the slice design. The project rule says \"Never make a commit that only checks boxes or only adds notes.\"\n- **Commit message mismatch:** If Task 5 finds a real bug, the commit would also contain a code fix and a test. The message `docs:` would then be wrong.\n- **Task 6 is unlikely to change anything:** The context summary already says the README needs no change. Task 6C will probably never fire.\n- **Suggested fix:** Merge Tasks 5 and 6 into one \"verify and finalize\" task. It would run the walkthrough and parity sweep, fix any real bug with a test, record any parity differences, run the root build, lint and test, and confirm file sizes. It would end in a single commit marker. If it produces only notes, they should ride along with the 4C commit. Alternatively, say a bug fix is committed as `fix:` and notes are never committed alone.",
+      "file_ref": null,
+      "category": "proportionality",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md:119-134"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Task 4T leaves test inputs ambiguous",
+      "description": "- **Real slice designs (line 108):** The task says \"several files in `project-documents/user/slices/` that pass the bash script today\". A junior would have to run the bash script to find them. The result also depends on whichever slice files exist in the repo at test time. Name the specific files, or state a deterministic rule such as a fixed list of 3\u20135 filenames plus the 214 design. The test must not invoke the bash script.\n- **Worktree test (line 114):** The task says \"with `--project` or a worktree checkout fixture\". Pick one, or require both. Say how the fixture's guide copy differs from the main one, for example a distinguishable template path under a temp checkout, so the `template` assertion proves which guide was read.",
+      "file_ref": null,
+      "category": "testability",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md:108"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Task 1 is very granular",
+      "description": "Task 1 is a one-line constant. Only Task 4 consumes it, so it sits unused through Tasks 2 and 3. Folding it into Task 4's first step would remove a task, with no loss of independence.",
+      "file_ref": null,
+      "category": "granularity",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md:41-44"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Test coverage overlaps between layers",
+      "description": "Tasks 3T and 4T both cover the broken copy, the missing `docType` and the failing-then-passing multi-file case. The layers differ, so this is defensible. The CLI tests need only assert output formatting and exit codes, so they could drop the repeated semantic variants. That keeps Task 4T from growing.",
+      "file_ref": null,
+      "category": "proportionality",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md:88-90, 109-111"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Task 0 hard-codes `main` and stops if an integration branch is set",
+      "description": "The git rules say to fork the slice branch from the configured target, whatever it is. The task instead hard-codes `main` and stops if `git.integration_branch` is non-empty. Rewrite it as: read the target with `cf config get git.integration_branch` (or `main` if empty), then create the slice branch from that target.",
+      "file_ref": null,
+      "category": "process",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md:37-38"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "pass",
+      "category": "coverage",
+      "raw_category": null,
+      "summary": "Success criteria are covered and traceable",
+      "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md:36-134",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "pass",
+      "category": "sequencing",
+      "raw_category": null,
+      "summary": "Sequencing and test-with pattern are correct",
+      "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md:46-117",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "proportionality",
+      "raw_category": null,
+      "summary": "Tasks 5/5C and 6/6C are conditional, partly notes-only commits, and arguably one task",
+      "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md:119-134",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "testability",
+      "raw_category": null,
+      "summary": "Task 4T leaves test inputs ambiguous",
+      "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md:108",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "granularity",
+      "raw_category": null,
+      "summary": "Task 1 is very granular",
+      "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md:41-44",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "proportionality",
+      "raw_category": null,
+      "summary": "Test coverage overlaps between layers",
+      "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md:88-90, 109-111",
+      "location_verified": null
+    },
+    {
+      "id": "F007",
+      "severity": "note",
+      "category": "process",
+      "raw_category": null,
+      "summary": "Task 0 hard-codes `main` and stops if an integration branch is set",
+      "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md:37-38",
+      "location_verified": true
+    }
+  ],
+  "template_name": "tasks",
+  "input_files": {
+    "input": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md",
+    "against": "project-documents/user/slices/214-slice.native-slice-design-validation.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/context-forge-214-tasks"
+  },
+  "timestamp": "2026-11-16T10:17:56.669837",
+  "model": "claude-sonnet-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 2,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-sonnet-5-5",
+  "answering_models": [
+    "claude-sonnet-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 7,
+    "in_fences": 0,
+    "in_section": 7,
+    "surviving": 7
+  },
+  "effort": "high",
+  "profile": "sdk",
+  "turns": 3,
+  "prompt_tokens": 114792,
+  "cached_tokens": 29496,
+  "cache_write_tokens": 85292,
+  "completion_tokens": 5619,
+  "reasoning_tokens": null,
+  "duration_seconds": 46.79991833283566,
+  "cost_usd": 0.4009799,
+  "cost_basis": "provider"
+}

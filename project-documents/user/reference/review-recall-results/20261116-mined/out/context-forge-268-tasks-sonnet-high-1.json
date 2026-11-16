@@ -1,0 +1,189 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "PASS",
+      "title": "Success criteria coverage",
+      "description": "Every criterion in the slice design maps to at least one task:\n- **No state read/write, detection or `sq` spawn:** tasks 3.3\u20133.6 remove the seam, 4.1\u20134.4 delete the code, and 5.1 proves it by behavior.\n- **Brownfield Phase 0 returns the concept prompt and writes nothing:** covered by the 5.1 snapshot and marker assertions.\n- **Greenfield, planned and later-phase output byte-identical:** covered by the 2.x golden capture, checked again in 3.7 and 6.1.\n- **CLI and MCP outputs match:** covered by the 5.1 parity check.\n- **`MIN_GUIDE_VERSION` warning preserved:** 3.5, 3.6 and 6.1 keep the warning assertions.\n- **`services/` imports nothing from `adoption/` or `detection/`:** grep checks in 3.3 and 6.2.\n- **No orphan exports:** the 6.2 export audit.\n- **Format, lint, typecheck and test pass:** 3.7 and 6.1.\n- **Verification Walkthrough steps 1\u20135:** covered by 6.3 and 6.2.\n\nNothing in the file lacks a source in the slice. Every Migration Plan row has a task, and `node.ts` and `adoption/index.ts` both use `export *`, so the comment-only change in 4.2 is correct. The slice states no NFR, so no load-test or CI-gating task is needed.",
+      "file_ref": null,
+      "category": "coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/268-tasks.pure-cf-build.md"
+    },
+    {
+      "severity": "PASS",
+      "title": "Sequencing and the golden-first ordering",
+      "description": "The golden capture (section 2) runs before any source edit, as D6 requires. In section 3, the render removal (3.1\u20133.2) compiles on its own. The signature change and its two callers (3.3\u20133.6) are grouped into one commit at 3.7, because they cannot compile apart. The file also notes that cli and mcp typecheck against core's `dist`, and puts the core build after 3.4. In section 4, the resolver, facts and completion modules are deleted (4.1) before `contracts.ts` is trimmed (4.2), the `adoption-completed` variant is removed (4.3) and the probe is deleted (4.4). That order means nothing is deleted while a live consumer still exists. There are no circular dependencies.",
+      "file_ref": null,
+      "category": "sequencing",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/268-tasks.pure-cf-build.md"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Commits are written as checkboxes, not `**Commit**:` markers",
+      "description": "Commits appear as checklist items: `- [ ] **2.3 Commit** \u2014 ...`, `- [ ] **3.2a Commit the render removal**`, `- [ ] Commit: ...` in 3.7, 4.1\u20134.4 and 5.1, and the last line of 6.3. The project convention is that `**Commit**:` markers are plain lines, never checkboxes. Implementation commits happen only at those markers, and the commit must follow the task-checker check-off so the check-offs land in the same commit. A commit that is itself a checkbox can't be checked off before it is made.\n- **Fix:** convert each to a plain `**Commit**: <message>` line.\n- **Fix:** drop 2.3 and 3.2a as tasks. Task 3.2a currently carries only a verification line and a commit.\n- **Fix:** fold the commit line into the end of 2.2, 3.2 and 3.7. The placements are right, only the format is wrong.",
+      "file_ref": null,
+      "category": "process-conventions",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/268-tasks.pure-cf-build.md:79"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Section 4 claims each task compiles but checks only against a stale core `dist`",
+      "description": "Section 4 says \"Each task leaves the workspace compiling.\" The checks don't prove it. 4.1 runs only core typecheck and tests. 4.2\u20134.4 run root `pnpm typecheck`, which is `pnpm -r typecheck` (`package.json:11`) and does not build. cli and mcp resolve core through `dist`, so they type-check against the build from 3.4 and cannot see exports removed in section 4. The risk is low, since 3.5 and 3.6 already removed their usages. Even so, the stated guarantee is not backed by the commands.\n- **Fix:** add `pnpm -r build` before the typecheck in 4.1\u20134.4, or state that cross-package compilation is verified only at 6.1.",
+      "file_ref": null,
+      "category": "verification",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/268-tasks.pure-cf-build.md:140"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Task 5.1 bundles a harness and six distinct checks into one task",
+      "description": "Effort is rated 3, and the task combines these pieces:\n- checkout fixture construction, adapted from a deleted test\n- fake `sq` with PATH management\n- snapshot helper\n- two CLI runs\n- two MCP runs\n- parity check\n- explicit-key check\n- a mutation check\n\nIt is a hard handoff for a junior AI to complete in one pass. Splitting it would give two tasks:\n- 5.1 builds the harness: fixture, fake `sq`, snapshot helper, and one passing CLI run.\n- 5.2 adds the cases: the `in_progress` state, MCP, parity, the explicit key, and the mutation check.\n\nThe slice's success criteria are unchanged either way. The split only makes the work a junior AI can complete reliably, and the commit can stay at the end of 5.2.",
+      "file_ref": null,
+      "category": "task-sizing",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/268-tasks.pure-cf-build.md:175"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Proportionality is acceptable",
+      "description": "There is one task file, which fits a slice of effort 2/5 with a broad, mechanical deletion surface. The tests added are only the golden test (D6) and the purity test (D5). Both trace to success criteria, and the design review already weighed test cost. Task 1.1 (branch setup) is a standalone task with one verification line. It could be merged into the head of section 2, but it does no harm.",
+      "file_ref": null,
+      "category": "proportionality",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/268-tasks.pure-cf-build.md"
+    },
+    {
+      "severity": "NOTE",
+      "title": "6.1 and 3.7 overlap by design",
+      "description": "6.1 repeats the full build, typecheck, lint and test run from 3.7. Sections 4 and 5 sit between them and touch many files, so a final end-to-end pass is justified. The golden-diff check against `{target}` in 6.1 also confirms the golden files never changed over the whole slice. 6.3 correctly says there is nothing to commit when no changes were needed.",
+      "file_ref": null,
+      "category": "granularity",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/268-tasks.pure-cf-build.md:192"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "pass",
+      "category": "coverage",
+      "raw_category": null,
+      "summary": "Success criteria coverage",
+      "location": "project-documents/user/tasks/268-tasks.pure-cf-build.md",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "pass",
+      "category": "sequencing",
+      "raw_category": null,
+      "summary": "Sequencing and the golden-first ordering",
+      "location": "project-documents/user/tasks/268-tasks.pure-cf-build.md",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "process-conventions",
+      "raw_category": null,
+      "summary": "Commits are written as checkboxes, not `**Commit**:` markers",
+      "location": "project-documents/user/tasks/268-tasks.pure-cf-build.md:79",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "verification",
+      "raw_category": null,
+      "summary": "Section 4 claims each task compiles but checks only against a stale core `dist`",
+      "location": "project-documents/user/tasks/268-tasks.pure-cf-build.md:140",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "task-sizing",
+      "raw_category": null,
+      "summary": "Task 5.1 bundles a harness and six distinct checks into one task",
+      "location": "project-documents/user/tasks/268-tasks.pure-cf-build.md:175",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "proportionality",
+      "raw_category": null,
+      "summary": "Proportionality is acceptable",
+      "location": "project-documents/user/tasks/268-tasks.pure-cf-build.md",
+      "location_verified": null
+    },
+    {
+      "id": "F007",
+      "severity": "note",
+      "category": "granularity",
+      "raw_category": null,
+      "summary": "6.1 and 3.7 overlap by design",
+      "location": "project-documents/user/tasks/268-tasks.pure-cf-build.md:192",
+      "location_verified": true
+    }
+  ],
+  "template_name": "tasks",
+  "input_files": {
+    "input": "project-documents/user/tasks/268-tasks.pure-cf-build.md",
+    "against": "project-documents/user/slices/268-slice.pure-cf-build.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/context-forge-268-tasks"
+  },
+  "timestamp": "2026-11-16T10:19:02.988516",
+  "model": "claude-sonnet-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 8,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-sonnet-5-5",
+  "answering_models": [
+    "claude-sonnet-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 7,
+    "in_fences": 0,
+    "in_section": 7,
+    "surviving": 7
+  },
+  "effort": "high",
+  "profile": "sdk",
+  "turns": 9,
+  "prompt_tokens": 447723,
+  "cached_tokens": 343505,
+  "cache_write_tokens": 104206,
+  "completion_tokens": 8694,
+  "reasoning_tokens": null,
+  "duration_seconds": 70.34423441719264,
+  "cost_usd": 0.5388702,
+  "cost_basis": "provider"
+}

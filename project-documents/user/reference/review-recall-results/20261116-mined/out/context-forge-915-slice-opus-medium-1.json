@@ -1,0 +1,189 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "The `unset` remediation contradicts the delete rule and removes the developer's value",
+      "description": "The design says delete \"mirrors write \u2014 deletes from whichever project file the key's scope maps to\" (line 89). For `git.integration_branch` that file is `.context-forge.local.toml`. Two later parts of the doc rely on the opposite behaviour:\n- The collision rule (line 146) tells the user that clearing the stale shared copy \"is a separate, explicit `cf config unset <key> --project`\".\n- Walkthrough step 9 (line 259) runs `cf config unset git.integration_branch --project` \"to clear the stale shared-file copy explicitly, then confirm `cf check` is clean\".\n\nUnder the routing as written, that command deletes the personal value (`legacy/value`) and leaves the stale shared value in place. The read fallback (lines 79, 140) then resolves the stale `another-legacy-value`. So the developer's preference is lost and the old value comes back without any warning, which is the harm the collision rule exists to prevent. The `cf check` warning also stays. The same gap affects any project that has not migrated yet: a personal key that lives only in the shared file cannot be unset at all.\n\nTo fix this, choose one rule and state it:\n- (a) Delete of a personal key also removes it from the shared file, so delete clears every project-level copy. This matches what a user means by \"unset\" and keeps the walkthrough as it is.\n- (b) Have `migrate-personal` itself delete the stale shared copy in the collision case, since the personal value already wins at read time, and remove the `unset` advice.\n\nOption (b) is lighter and also removes the separate \"skipped\" reporting path. After choosing, update line 146 and walkthrough step 9 to match.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:89"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Projects that already exist never get the gitignore line, so the personal file can still be committed",
+      "description": "The slice says it will \"keep personal settings out of git\" (line 19). The only thing that adds the ignore line is `cf init` (lines 32, 157\u2013159). The projects this slice is for are already initialized and have the key committed. When one of their developers runs `cf config set git.integration_branch \u2026 --project` or `cf config migrate-personal`, a new `.context-forge.local.toml` is created that nothing ignores, and the next `git add -A` commits it.\n\nThe cheapest fix inside the current scope is to reuse the one-line gitignore helper. Either call it from `migrate-personal` and from the first write to the personal file in `ConfigManager.set`, or extend the new `ConsistencyChecker` rule to warn when `.context-forge.local.toml` exists but is not ignored. That still adds only the one line, so it does not overlap the broader gitignore item listed under Future Work.",
+      "file_ref": null,
+      "category": "integration",
+      "raw_category": null,
+      "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md#gitignore-handling-in-cf-init"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Data Flow read step 2 is written as a condition that is always true",
+      "description": "Step 2 checks the shared file \"only if the key's own scope is `shared`, OR it's a personal key falling through from step 1 with no value yet found there.\" Taken together with step 1, that covers every key. In practice the rule is simply: personal file (personal keys only), then shared file, then user, then default. The \"only if \u2026 OR \u2026\" wording suggests a filter that is not there, and an implementer may add a check that skips the shared file for personal keys. That would break the pre-migration fallback that Migration Plan item (a) depends on. Restate the step as the plain sequence.",
+      "file_ref": null,
+      "category": "under-specification",
+      "raw_category": null,
+      "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:79"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The `scope` field name is also used for a different concept",
+      "description": "`ConfigKeyDefinition.scope: 'shared' | 'personal'` sits next to the existing `ConfigManager.set/delete(key, value, scope: 'user' | 'project')` parameter (`ConfigManager.ts:165`, `:187`). Inside `ConfigManager` the routing code will compare both in the same function. A distinct name such as `visibility` or `sharing` would avoid the clash and follows the project's semantic-naming rule. This does not block anything.",
+      "file_ref": null,
+      "category": "naming",
+      "raw_category": null,
+      "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:165-172"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The dependency differs from the slice plan entry",
+      "description": "The frontmatter declares `dependencies: [914]`, but the 915 entry in the slice plan says \"Dependencies: none\". 914 is complete and the slice's reason for depending on it is sound (line 45). Consider updating the plan entry so the two documents agree.",
+      "file_ref": null,
+      "category": "dependencies",
+      "raw_category": null,
+      "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:6"
+    },
+    {
+      "severity": "PASS",
+      "title": "Routing goes through the registry and existing call sites are unchanged",
+      "description": "The plan asks to classify keys in `CONFIG_KEYS` and route through `ConfigManager`/`configPaths.ts`, reusing the two-file precedence pattern. The design does exactly that, and keeping the public signatures unchanged means no caller can pass the wrong file. Making `scope` a required field puts the decision for every new key in front of reviewers. One more point checked: the worktree overlay (`packages/core/src/utils/worktree-overlay.ts:9`) swaps `projectPath` to the worktree path, so `.context-forge.local.toml` is automatically kept separate for each worktree, which is the behaviour `git.integration_branch` needs.",
+      "file_ref": null,
+      "category": "architecture",
+      "raw_category": null,
+      "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md#routing-lives-inside-configmanager-not-at-call-sites"
+    },
+    {
+      "severity": "PASS",
+      "title": "Scope and size match the plan entry",
+      "description": "Every item in the plan entry is covered: classification, file routing, the `cf init` gitignore line, a migration story, and the MCP config tools. The broader gitignore template is deferred to Future Work as the plan asks. Choosing a dedicated migration command over extending the closed `fixAction` union is justified, and the doc explicitly keeps the command minimal. The failure modes for the write path (personal file written before the shared copy is deleted, re-runnable, failures reported per key) are listed with how each is handled.",
+      "file_ref": null,
+      "category": "proportionality",
+      "raw_category": null,
+      "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md#technical-scope"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "The `unset` remediation contradicts the delete rule and removes the developer's value",
+      "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:89",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "integration",
+      "raw_category": null,
+      "summary": "Projects that already exist never get the gitignore line, so the personal file can still be committed",
+      "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md#gitignore-handling-in-cf-init",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "under-specification",
+      "raw_category": null,
+      "summary": "Data Flow read step 2 is written as a condition that is always true",
+      "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:79",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "note",
+      "category": "naming",
+      "raw_category": null,
+      "summary": "The `scope` field name is also used for a different concept",
+      "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:165-172",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "dependencies",
+      "raw_category": null,
+      "summary": "The dependency differs from the slice plan entry",
+      "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:6",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "pass",
+      "category": "architecture",
+      "raw_category": null,
+      "summary": "Routing goes through the registry and existing call sites are unchanged",
+      "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md#routing-lives-inside-configmanager-not-at-call-sites",
+      "location_verified": null
+    },
+    {
+      "id": "F007",
+      "severity": "pass",
+      "category": "proportionality",
+      "raw_category": null,
+      "summary": "Scope and size match the plan entry",
+      "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md#technical-scope",
+      "location_verified": null
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md",
+    "against": "project-documents/user/architecture/900-slices.maintenance-and-refactoring.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/context-forge-915-slice"
+  },
+  "timestamp": "2026-11-16T09:22:31.162117",
+  "model": "claude-opus-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 6,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-opus-5-5",
+  "answering_models": [
+    "claude-opus-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 7,
+    "in_fences": 0,
+    "in_section": 7,
+    "surviving": 7
+  },
+  "effort": "medium",
+  "profile": "sdk",
+  "turns": 7,
+  "prompt_tokens": 311500,
+  "cached_tokens": 216050,
+  "cache_write_tokens": 95440,
+  "completion_tokens": 5665,
+  "reasoning_tokens": null,
+  "duration_seconds": 67.13162375008687,
+  "cost_usd": 0.9205262999999999,
+  "cost_basis": "provider"
+}

@@ -1,0 +1,33 @@
+{
+ "review": "r17",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "A not-collected node id likely aborts the whole pytest run, which contradicts D10/D11",
+   "description": "D11 makes a requested node id that was never collected a `collection_error`, and the success criteria include a fixture test for it. D10 passes the node ids to pytest on the command line and says a missing or unparseable JSONL with a non-zero exit raises `SuiteRunError`.\n\nAs I understand pytest, a nonexistent `file::name` node id is a usage error (exit 4, \"not found\"). pytest then runs nothing, so the plugin's collection and test hooks may never write a line. The result is that:\n- A request containing one absent id fails every node in that request.\n- Under D10 as written that surfaces as `SuiteRunError`, not as a per-node `collection_error`.\n- 422's test-first check at the parent is the main caller. It will hit this often, because a fix's new test usually does not exist at the parent.\n\nThe document also says nothing about a non-timeout abnormal exit (interpreter crash, OOM kill) that leaves a partial JSONL. Only timeouts map the remaining nodes to `not_run`.\n\nFix: specify how absent ids are resolved. Options are a `--collect-only` pre-pass, filtering in `pytest_collection_modifyitems` by node id, or running each id separately. Also state the partial-JSONL rule for abnormal exits. Add a fixture test that mixes present and absent ids in one request and asserts per-node results.",
+   "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md#D10 \u2014 Suite runner: an injected pytest reporter plugin"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "\"422 can run a chosen node id at the parent with no further harness work\" overclaims, because hidden-test injection is deferred to 425",
+   "description": "The slice plan has 422's qualification run the parent's test-first check. For a fix case the hidden test and any added `conftest.py` fixtures do not exist in the parent tree, because the fix added them. The slice excludes \"hidden-test injection (425)\" and says 425 adds it to the adapter seam. 422 comes before 425, so one of two things must happen:\n- 422 builds its own injection, which 425 later duplicates or replaces, or\n- the integration requirement is false as written.\n\nThe Technical Scope and Provides sections do not say who owns the minimal \"place these test files and fixtures into a tree\" capability. It is simpler than 425's version, since the producer tree is empty and nothing can clash.\n\nFix: either put a minimal `inject_files` primitive on `BenchmarkAdapter` in 421 and have 425 extend it, or reword the 421\u2192422 interface to say 422 owns the minimal injection and 425 reuses it. Name the owner explicitly.",
+   "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md#Integration Requirements"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Symlinked real credentials need a cleanup and write-through contract",
+   "description": "The architecture's principle is that the producer's config directories are \"pointed away from the user's\". D8 symlinks the user's real `~/.codex/auth.json` (and `.claude/.credentials.json`) into the scrubbed home. That is a deliberate choice, and the doc handles the replaced-symlink case. Two consequences are not addressed:\n\n1. **Cleanup and sweep.** `<id>.home/` is removed on exit and by the orphan sweep, which D4 says now also removes `.home` and `.out` siblings. The design never requires that removal unlinks symlinks rather than following them. A cleanup that followed them would delete the user's real auth file. The success criteria have no test for this.\n2. **Write-through.** Model-written code running in the sandbox can write or truncate the user's real token file through the link. The Risk section covers refresh-token rotation but not corruption.\n\nFix: add a cleanup contract (links are unlinked, targets are never touched) with a test that the real file survives both normal exit and the sweep. State the write-through exposure in Risks, and say whether read-only carryover is possible for providers that do not refresh in place.",
+   "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md#D8 \u2014 Auth carryover and the auth check"
+  },
+  {
+   "i": 3,
+   "severity": "NOTE",
+   "title": "`uv` on the producer's PATH weakens the \"installed later `sq` is unreachable\" principle",
+   "description": "The architecture wants a squadron case unable to run the later, installed `sq`. D7 keeps `sq` out of reach, but it symlinks `uv` onto `PATH`, so `uvx squadron` can fetch the published version. The doc acknowledges this in Special Considerations and hands it to 424's leak scan, which matches the architecture's \"recorded as no leak detected\" posture. No change is needed, but 424's design must pick this up.",
+   "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md#D7 \u2014 Scrubbed producer environment: allowlist, redirected HOME"
+  }
+ ]
+}

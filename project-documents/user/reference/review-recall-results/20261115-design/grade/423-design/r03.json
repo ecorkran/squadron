@@ -1,0 +1,47 @@
+{
+ "review": "r03",
+ "findings": [
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Self-attested report fields gate the commit, so a harness-caused failure can be charged to the config",
+   "description": "D4 fails the step with `failure_kind: fix_report` when `failed_before_change` is not true, `gates` is empty, or any gate `exit_code` is non-zero. A refused fix leaves the tree uncommitted. Two parts of the architecture conflict with this:\n- **\"Absent is not zero\".** A producer that \"committed nothing\" counts as a config-caused fail, while a harness-caused failure must drop the case from every config. A non-zero gate can be harness-caused. The sandbox may lack the project's dev tools, or the start commit may already fail its own lint. The slice cannot tell the two apart, so a correct fix in a broken environment becomes a config fail with no commit for the grader to grade.\n- **\"The grade comes from a separate step\".** The producer's claim that tests pass \"is never evidence\". The slice agrees: Risk Assessment says the pipeline cannot verify honesty, and 425 re-grades. A shape check on fields the pipeline cannot verify is still weight, and the weight is a new parser, a new failure kind, and a replay outcome that depends on report formatting.\n\nCut: fail the step only on a missing or invalid `summary`, a `blocked` report, and no staged changes. Record `failing_tests`, `failed_before_change` and `gates` in the run state without gating on them. 424 and 425 can then read what the agent claimed, and a correctly fixed tree still reaches the grader. If the slice plan's \"passing gates\" criterion needs enforcement in production, say so explicitly. If not, drop it.",
+   "location": "project-documents/user/slices/423-slice.fix-pipeline.md:146-158"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Declares a dependency on 422 that the slice plan does not give, and pulls a benchmark-owned renderer into a production path",
+   "description": "The slice plan says 423 has \"Dependencies: none in this initiative\" and \"Consumes the existing executor and cost cap\". The slice frontmatter lists `dependencies: [422]`. The fetched mode depends on `CodeHost.get_issue` and `issue_freeze`, a renderer whose optional cutoff 422 is expected to provide. Two problems follow:\n- Production `sq run fix <n>` now depends on a utility owned by the benchmark's case-qualification slice, which points the dependency the wrong way. The plan also says 423 \"can be built earlier\".\n- 422's plan entry does not list an optional-cutoff renderer or `get_issue`, so this slice sets a requirement on 422 that 422 has not committed to.\n\nEither place the issue-text renderer where both slices consume it (the codehost layer) and amend the plan entries for 422 and 423 to say so, or have 423 own a small no-cutoff renderer. The second option is lighter, because D3 says production never uses a cutoff.",
+   "location": "project-documents/user/slices/423-slice.fix-pipeline.md:6, 49, 239"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Drops the MCP half of the slice plan's parity criterion without amending the plan",
+   "description": "The slice plan entry for 423 requires \"CLI, slash command and MCP give identical results\". The slice excludes MCP because squadron has no MCP server for pipelines, and it rewrites the criterion to cover the CLI and `/sq:run` only. The reasoning is documented in D9. But the plan is the source of truth for what the slice delivers, and it still states the original criterion. Update the 423 plan entry to match, so later reviews are not checking against an obsolete criterion.",
+   "location": "project-documents/user/slices/423-slice.fix-pipeline.md:43, 253"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "The `issue-file` and `--io-dir` contract with 424 does not guarantee a clean tree or an uncontaminated commit",
+   "description": "D2 resolves `issue-file` against `--io-dir`. D5 refuses a dirty tree and stages every untracked path. The 424 contract does not require `--io-dir` to be outside the sandbox work tree. If 424 puts the frozen file or run state inside the checkout, one of two things happens:\n- `fix-context` refuses a dirty tree, so every replay fails before dispatch as a harness-caused failure.\n- The file is committed, which puts the frozen issue text into the producer's diff that 425 grades and the 426 judge reads.\n\nThe slice's own walkthrough uses `/tmp`, which shows the expectation but does not state it. The slice also does not say whether 421's dependency install leaves the sandbox tree clean, for example through a rewritten lockfile. State in \"Provides to Other Slices\" that `--io-dir` must be outside the work tree and that the start tree must be clean. Add a precondition test for the in-tree case.\n\nThe slice also gives no failure kind for `fix-context` refusals (dirty tree, wrong branch, missing issue file) separate from `fix_report` and `cost_cap`. 424 must tell harness-caused refusals from producer-caused failures. Name the kind, or state that 424 attributes by the failing action. That fits under the same contract paragraph.",
+   "location": "project-documents/user/slices/423-slice.fix-pipeline.md:136, 165, 234, 349"
+  },
+  {
+   "i": 5,
+   "severity": "NOTE",
+   "title": "Two unlisted failure paths in prompt-only mode and the commit step",
+   "description": "`sq _commit --report-file PATH` does not say what happens when the file is missing, empty or unreadable. The `fix: \u2026` commit can also fail in a git hook, and the slice does not say how that is reported. Both probably fall under the existing \"exits 1 with the refusal\" and `ActionResult(success=False)` conventions. A one-line statement each, plus a test that the signal is a WARNING log, would meet the failure-mode enumeration rule.",
+   "location": "project-documents/user/slices/423-slice.fix-pipeline.md:197, 228"
+  },
+  {
+   "i": 6,
+   "severity": "NOTE",
+   "title": "Name collision: `IssueSource` is both a module class and a StrEnum",
+   "description": "Component Structure lists `IssueSource` as the issue-fetching class in `fix_issue.py`. Patterns and Conventions defines an `IssueSource` StrEnum (`file`, `github`). Rename one of them, for example the class to `IssueTextLoader`, before implementation.",
+   "location": "project-documents/user/slices/423-slice.fix-pipeline.md:73, 202"
+  }
+ ]
+}

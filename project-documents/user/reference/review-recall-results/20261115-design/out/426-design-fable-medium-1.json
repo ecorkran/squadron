@@ -1,0 +1,225 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Contradictory statements about edits to upstream slices",
+      "description": "The design does not say consistently which upstream modules this slice edits, so the task breakdown cannot be derived from it.\n- Line 42 says \"No edits to 424 or 425\", but lines 321 and 426 widen 424's `CaseDrop.reason`, and line 87 / D17 change 425's `bench_report.py`.\n- Line 451 allows `tests/benchmark/` to change \"where D8 routes re-qualification and D17 extracts the interval\". D8 says 424's `replay_one` already calls `runner.requalify`, and D17 says \"No change to 425\". Line 451 reads like text from an earlier revision.\n- Line 424 adds `ScrubbedEnvironment.with_tools` to 421, and `yield_report.py` (422) gains rows, while D7 says \"no 422 code changes\".\n\nFix: replace line 42 with one explicit list of upstream touches (421 `with_tools`, 422 yield rows, 424 `CaseDrop.reason`, 425 `bench_report`, 177 extractions) and correct line 451 to match.",
+      "file_ref": null,
+      "category": "hidden-dependencies",
+      "raw_category": null,
+      "location": "project-documents/user/slices/426-slice.slice-cases.md:42"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Over-size record lifecycle can leave a case both judged and counted as over size",
+      "description": "D14 says raising the limit and rerunning `judge` judges the case, and D15 says the `OverSizeCase` \"is replaced when the limit changes\". Its id (D16) excludes the limit, and nothing replaces it once the case is no longer over size.\n- **Limit raised:** the stale `OverSizeCase` stays beside the new `DiffJudgment`s.\n- **Limit lowered, or a resumed run adds a larger replay:** existing judgments stay beside a new `OverSizeCase`.\n\nThe report (D17) has no rule for which record wins, so the \"over size N\" count the slice plan requires can be wrong. Walkthrough step 7 avoids the problem by using a fresh benchmark id. Fix: state one rule, such as deleting the record when the case is judged, or having the report ignore an `OverSizeCase` whose `max_prompt_chars` differs from the current limit or whose case has judgments.",
+      "file_ref": null,
+      "category": "under-specification",
+      "raw_category": null,
+      "location": "project-documents/user/slices/426-slice.slice-cases.md:279-285"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Judging of incomplete cases is unspecified",
+      "description": "D13 and D15 cover committed replays, config absences (forfeit) and harness absences (drop). They do not cover a (case, config, sample) with no replay record yet, which is the normal state after a run stopped at its cap.\n\nThe architecture says a partial run \"reports only cases that completed under every config\", and \"absent is not zero\" means a pending replay must not count as a forfeit. As written, `judge` could spend calls on a case the report then excludes as `incomplete` (425 D13), or record a pending side as a forfeit that resume never re-judges. Fix: state that a case is judged only when every config has all k samples recorded, and count the rest as pending in the bound and summary.",
+      "file_ref": null,
+      "category": "under-specification",
+      "raw_category": null,
+      "location": "project-documents/user/slices/426-slice.slice-cases.md#d15--absences-in-judging"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Separate judge cap departs from the architecture without saying so",
+      "description": "The architecture's run-level cap \"covers grading and judging as well as the replays\". D16 gives `judge` its own `--max-cost`, following 425 D9. 425 records this as a departure and asks for the architecture's cost section to be updated; 426 should carry the same sentence for judging. The per-call figure is the largest observed cost, so \"at most $3.88\" is an estimate when prompts can reach 400k characters; 425 D9 says this about its own figure and D16 should too.",
+      "file_ref": null,
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/426-slice.slice-cases.md#d16--caps-bound-and-resume-for-judging"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Reference is the branch tip, not the landing commit",
+      "description": "The architecture and the slice plan both say \"the landing commit is the reference\". D2 uses `tip_sha` and gives the reason: on a merge landing, `fork..after` includes unrelated target work. This is a sound refinement, but the architecture wording should be updated to match.",
+      "file_ref": null,
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/426-slice.slice-cases.md#d2--landing-and-reference-selection"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`cf` on the scrubbed PATH: the spike should cover cf's runtime",
+      "description": "D9 links only the `cf` executable into `<id>.home/bin`. If cf starts through an interpreter resolved from `PATH`, that interpreter is not on the scrubbed `PATH` (421: adapter entries, `home/bin`, system dirs).\n- The spike should check this explicitly, since the fix would widen `PATH` further against the principle that it \"leaves out the user's tool installs\".\n- The design should say what happens when `cf` is missing from the harness `PATH`: refuse at planning, not a harness absence per replay.\n\nThe deviation from the principle is otherwise bounded: slice runner only, and not part of `EnvironmentIdentity`.",
+      "file_ref": null,
+      "category": "integration",
+      "raw_category": null,
+      "location": "project-documents/user/slices/426-slice.slice-cases.md:234-235"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Minor unspecified items",
+      "description": "- `--keep` on `slice-cases build` is in the signature but not described. It presumably keeps sandboxes as in 422.\n- In the report example, the `pairs` value `18+` is unexplained, and D17 does not say whether the per-config W/L/T columns include vs-reference pairs. The example's numbers imply cross-config pairs only.",
+      "file_ref": null,
+      "category": "under-specification",
+      "raw_category": null,
+      "location": "project-documents/user/slices/426-slice.slice-cases.md:336"
+    },
+    {
+      "severity": "PASS",
+      "title": "Alignment with architecture principles and slice-plan scope",
+      "description": "- **Production pipeline:** replays run producer-only `P6` with no copied step or prompt.\n- **Hidden and superseded sets:** the hidden set is empty, and a slice's own tests are ignored (the \"no slice tests as hidden tests\" non-goal). The superseded set comes from 422's closure digests.\n- **Qualification:** mechanical, keyed on environment, with every rejection recorded under an enum reason.\n- **Objective before opinion:** per-kind tables keep slice and fix cases apart, pairwise results sit beside the objective grade, and there is no composite.\n- **Reference:** it is a contestant in the fit but shown as an unranked reference line.\n- **Diff rules:** normalization matches the architecture's list (the `uv.lock` addition is flagged and justified), and the over-size rule is \"excluded and counted\", with no truncation.\n- **Absences:** config absences forfeit and harness absences drop the case, matching \"absent is not zero\".\n- **Store:** new records are optional sibling payloads with sidecar diffs.\n- **Dependencies:** directions are correct, and the seams it uses (`CaseKindRunner.requalify`, `bootstrap_mean_interval`, 425's empty-hidden-set grading) are what 424 and 425 say they provide to 426.",
+      "file_ref": null,
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/426-slice.slice-cases.md"
+    },
+    {
+      "severity": "PASS",
+      "title": "Failure modes and proportionality",
+      "description": "- **Failure modes:** each new I/O path has a stated, observable outcome. Git calls give `harness_error` with an ERROR log. cf steps that fail or time out give a harness absence with stderr. Judge calls are bounded by `metrology.judge_timeout_s`, and a failed pair is left unrecorded, logged and retried. A missing `tip_sha` is a named refusal. The success criteria require a test per signal.\n- **Proportionality:** the four layers map to the slice-plan entry. D13's pairing cuts judge calls by more than half against all-pairs, the bounded-view judge and landing splicing are deferred, and no new protocol or dependency is added. Nothing obvious to cut.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/426-slice.slice-cases.md#success-criteria"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "hidden-dependencies",
+      "raw_category": null,
+      "summary": "Contradictory statements about edits to upstream slices",
+      "location": "project-documents/user/slices/426-slice.slice-cases.md:42",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "under-specification",
+      "raw_category": null,
+      "summary": "Over-size record lifecycle can leave a case both judged and counted as over size",
+      "location": "project-documents/user/slices/426-slice.slice-cases.md:279-285",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "under-specification",
+      "raw_category": null,
+      "summary": "Judging of incomplete cases is unspecified",
+      "location": "project-documents/user/slices/426-slice.slice-cases.md#d15--absences-in-judging",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "note",
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "summary": "Separate judge cap departs from the architecture without saying so",
+      "location": "project-documents/user/slices/426-slice.slice-cases.md#d16--caps-bound-and-resume-for-judging",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "summary": "Reference is the branch tip, not the landing commit",
+      "location": "project-documents/user/slices/426-slice.slice-cases.md#d2--landing-and-reference-selection",
+      "location_verified": null
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "integration",
+      "raw_category": null,
+      "summary": "`cf` on the scrubbed PATH: the spike should cover cf's runtime",
+      "location": "project-documents/user/slices/426-slice.slice-cases.md:234-235",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "note",
+      "category": "under-specification",
+      "raw_category": null,
+      "summary": "Minor unspecified items",
+      "location": "project-documents/user/slices/426-slice.slice-cases.md:336",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "pass",
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "summary": "Alignment with architecture principles and slice-plan scope",
+      "location": "project-documents/user/slices/426-slice.slice-cases.md",
+      "location_verified": null
+    },
+    {
+      "id": "F009",
+      "severity": "pass",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "Failure modes and proportionality",
+      "location": "project-documents/user/slices/426-slice.slice-cases.md#success-criteria",
+      "location_verified": null
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/426-slice.slice-cases.md",
+    "against": "project-documents/user/architecture/420-arch.model-benchmark.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261115-design/wt/426-design"
+  },
+  "timestamp": "2026-11-16T06:56:59.791314",
+  "model": "claude-fable-5-2",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 7,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-fable-5-2",
+  "answering_models": [
+    "claude-fable-5-2"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 9,
+    "in_fences": 0,
+    "in_section": 9,
+    "surviving": 9
+  },
+  "effort": "medium",
+  "profile": "sdk",
+  "turns": 8,
+  "prompt_tokens": 398170,
+  "cached_tokens": 243504,
+  "cache_write_tokens": 154658,
+  "completion_tokens": 12010,
+  "reasoning_tokens": null,
+  "duration_seconds": 127.67108045797795,
+  "cost_usd": 3.0044597000000004,
+  "cost_basis": "provider"
+}

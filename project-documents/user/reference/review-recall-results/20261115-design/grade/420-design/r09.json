@@ -1,0 +1,54 @@
+{
+ "review": "r09",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Unstamped and legacy runs read as \"not sent\", and the stamp condition is stated two ways",
+   "description": "- **Reader erases a distinction the design draws.** State Management (line 109) separates `null` (not sent) from an absent key (run predates the slice, or failed before resolution). `action_effort_sent` then returns `None` for \"neither key nor usage record\", so \"unknown\" and \"backend default\" become the same value.\n- **Old failed runs keep the defect D5 fixes.** A pre-slice run that failed with no telemetry still lands in the \"not sent\" config row, which D5 itself calls a stand-in.\n- **New unstamped runs have no stated config.** D5 says runs with no stamp are \"counted by that class, not by effort\", but D6 makes `effort_sent` part of the grouping key and drops the alias. The design never says which config row such a run belongs to.\n- **This leaves an architecture requirement unmet.** \"Absent is not zero\" requires a producer crash to count as a fail for that config. A `sq run` subprocess that dies with no run state is exactly that case, and 424 inherits the rule.\n- **The stamp condition is inconsistent.** Technical Scope (line 32) and Data Flow (line 103) say \"whenever an action reaches a provider\". D5 (line 136) says \"on every action result built after the model is resolved\". A dispatch that fails on connect or auth is stamped under one reading and not the other.\n\nFix: pick one stamp condition. Have the reader return a distinct \"unknown\" result for absent-with-no-usage. State that an unstamped run is attributed to the requested config for failure counting and kept out of effort rows.",
+   "location": "project-documents/user/slices/420-slice.effort-audit-across-dispatch-paths.md:133-140"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Config identity is not provided as a shared contract and already diverges",
+   "description": "- **The slice plan assigns this as an interface.** Its entry says the slice \"Provides effort-sent on usage records and in config identity. All later slices read it.\"\n- **The design ships it as a private function.** `config_identity` is private to `replay/report.py`, and Integration Points (line 162) says \"this slice ships no shared identity type\" and that later slices \"apply the rule to their own record types\".\n- **Two definitions already disagree.** Replay groups on `(model, profile, effort_sent, tool_use, max_output_tokens)`. `sq stats producers` keeps `ProducerKey(model, profile, effort, reviewer)`. Two aliases that differ only in `tool_use` are two rows in a replay report and one row in stats.\n- **Later slices would add more copies.** 424 and 425 would each write their own, against the project's DRY and one-definition rules.\n\nFix: put the identity in one shared place (a function or small value type beside `action_effort_sent`) that replay, stats and 424/425 all use. Otherwise state why stats is exempt.",
+   "location": "project-documents/user/slices/420-slice.effort-audit-across-dispatch-paths.md:142-147"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "The enumeration guard would not catch the defect classes this audit found",
+   "description": "D7 classifies `AgentConfig(` constructions and `open_pipeline_session` calls. Value (line 25) claims \"A new dispatch path cannot ship without a decision about effort.\" Against the inventory's own four defects:\n\n| Path | Defect | Why the guard misses it |\n|---|---|---|\n| 3 | Record hard-codes `None` | A recording defect, not a construction site |\n| 7 | Caller uses `resolve` and drops effort | Caller of a shared helper, not a construction site |\n| 8 | Caller does not pass effort | Caller of a shared helper, not a construction site |\n| 11 | Renderer emits a command with no effort | Emits a command string, constructs nothing |\n\nThis assumes the shared helpers construct `AgentConfig`, as the inventory's entry points suggest. Paths 13\u201314, which pass a model to a CLI raw, are also invisible to the guard.\n\nFix, lighter and stronger: make `effort` a required keyword with no default on the shared helpers (`one_shot_dispatch_with_telemetry`, `run_review_with_profile`, `capture_summary_via_profile_with_telemetry`), so omission is a pyright error. Then narrow D7's claim to what it enforces, or have it enumerate helper call sites.",
+   "location": "project-documents/user/slices/420-slice.effort-audit-across-dispatch-paths.md:149-152"
+  },
+  {
+   "i": 3,
+   "severity": "NOTE",
+   "title": "`tool_use` and `max_output_tokens` in the identity are alias values, not wire values",
+   "description": "D6 is titled \"what went on the wire\", but `config_ref` copies these two fields from the alias. That is the stand-in pattern the slice removes for effort. Adding them is justified, because without them dropping the alias would merge configs that send different requests, and they are the only other alias fields that change the request. Say explicitly that these two are configured values, or record them as sent.",
+   "location": "project-documents/user/slices/420-slice.effort-audit-across-dispatch-paths.md:145"
+  },
+  {
+   "i": 4,
+   "severity": "NOTE",
+   "title": "Slice declares it supersedes the architecture's config tuple",
+   "description": "The architecture's goal is that a result \"names\" the config as \"(alias, model, profile, effort sent)\". The slice keeps the alias as stored provenance and display, so naming is preserved. The slice plan's fourth criterion requires alias-independent grouping, so the narrowing is correct. The architecture text should be updated to match, so that 421\u2013427 designs are not reviewed against the old tuple.",
+   "location": "project-documents/user/slices/420-slice.effort-audit-across-dispatch-paths.md:162"
+  },
+  {
+   "i": 5,
+   "severity": "NOTE",
+   "title": "\"Sends and records\" guarantee is wider than the inventory",
+   "description": "Integration Points promises that \"every alias-resolving dispatch path, including the grading review and the judge, sends and records effort.\" Path 7 (findings-addressed judge) and paths 10\u201311 (prompt-only) write no record. None of these is on a benchmark path, since replays strip the review loop, and deferring path 7's missing `UsageRecord` to an issue is proportionate. Reword the guarantee to \"sends; records wherever a record is written\".",
+   "location": "project-documents/user/slices/420-slice.effort-audit-across-dispatch-paths.md:163"
+  },
+  {
+   "i": 6,
+   "severity": "NOTE",
+   "title": "Relative effort looks understated",
+   "description": "The design changes about fifteen modules, adds two model fields and a new metadata key with a reader, and adds an AST guard, at a stated 2/5. Nothing here is cuttable against the slice plan entry. The estimate is closer to 3/5.",
+   "location": "project-documents/user/slices/420-slice.effort-audit-across-dispatch-paths.md:229"
+  }
+ ]
+}

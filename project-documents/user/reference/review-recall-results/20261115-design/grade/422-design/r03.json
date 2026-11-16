@@ -1,0 +1,54 @@
+{
+ "review": "r03",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Reference-fails-every-run exclusion lets a regressing reference qualify",
+   "description": "The architecture says a case enters the set \"only if the original work passes its own grade in the sandbox environment.\" D9 turns \"non-hidden node fails every reference run\" into an `excluded_tests` entry. It justifies this as \"tests that read the developer's environment.\" The design never runs the full suite at the parent, so it cannot tell two cases apart:\n- A test that fails at both parent and reference. That is environmental, and excluding it is correct.\n- A test that passes at the parent and fails at the reference. That is a regression the fix itself caused, and the architecture says the case should not qualify.\n\nAs written, the second kind is silently absorbed into the exclusion list. There is also no cap on how large that list can grow. Fix this one of two ways:\n- Exclude a node only when it also fails at the parent, and reject the candidate (new reason, e.g. `reference_regresses`) otherwise.\n- State the deviation explicitly, with a threshold or a count in the yield report.\n\nThe second option avoids a parent full-suite run.",
+   "location": "project-documents/user/slices/422-slice.fix-case-qualification-and-yield-report-keystone.md:225-227"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Qualification record key allows several records per commit, but the yield counts and success criteria assume one",
+   "description": "The record id embeds the environment digest, or `pre` for rejections before the sandbox. A commit can therefore hold several records at once: one per environment on different machines or interpreters, plus a `pre` record. D2's time-dependent rejections make this likely. Issue freeze (step 2) runs before the reuse check (step 4), so a rebuild after a later issue edit writes `issue_edited_after_fix` under `pre`. The earlier env-keyed `qualified` record stays in the store.\n\nThree things then break:\n- The success criterion at line 373 (\"number of records equals the number of closing commits\") fails.\n- The yield report (D12, line 255) has no stated rule for choosing one record per commit, so candidates and qualified counts can double-count.\n- Every rebuild calls `gh` for every candidate before reuse is checked. That contradicts the walkthrough's \"runs installs but no tests\" and makes rebuilds depend on the network.\n\nSpecify \"latest record per (project, commit)\" for the report and for `show`. Then state whether the reuse check happens before issue freeze.",
+   "location": "project-documents/user/slices/422-slice.fix-case-qualification-and-yield-report-keystone.md:240-241"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "\"Enough cases\" is an optimistic bound, but the report presents it as the answer that decides initiative order",
+   "description": "The architecture asks whether the qualified count can separate two configs \"under the paired statistic.\" That statistic is a paired bootstrap over cases, so it includes between-case variation in the true difference. D12 substitutes an analytic bound that assumes a constant per-case difference. Its MDD is therefore a lower bound on what is needed:\n- \"Not enough\" is reliable.\n- \"Enough\" is not. It can be wrong whenever per-case differences vary, and that is the case that matters.\n\nThe design admits this in a caveat line, but the output offers a binary `enough cases | not enough`. The slice's stated value (lines 28-29) is that this answer sets the order 423 \u2192 424 \u2192 425. Change the positive verdict to something like \"not ruled out (lower bound)\", so the decision rule reads correctly. Keep the caveat. This is a wording and rendering change, not a new mechanism.",
+   "location": "project-documents/user/slices/422-slice.fix-case-qualification-and-yield-report-keystone.md:253-265"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Harness-failure policy is split between \"record and continue\" and \"stop the build\" with no rule, and git failures are not enumerated",
+   "description": "Line 285 records harness failures as `harness_error` per candidate. Line 304 says some harness failures stop the build with exit 1 (example: `gh` missing). The design doesn't say which kind of failure stops the build and which doesn't. A systemic failure such as expired `gh` auth, a rate limit, or `uv` missing mid-run would produce N `harness_error` records and exit 0 (\"whatever the yield\"). The report would then look like a result.\n\nNew I/O paths with no listed handling:\n- `git log` and `git show` in the user's checkout. This covers a shallow clone with missing parent objects, `--repo` not being a git repository, and a zero-parent commit. `merge_commit` covers only more than one parent.\n- Timeouts of the collect run, the boundary resolver and the trace run. The text names timeouts only under D5 (test-first) and in the generic pattern line.\n\nAdd a rule, for example: stop after the same harness-failure class repeats K times consecutively or on a named set of fatal classes. Add the git cases to the enumerated failure paths, each with the observable signal the code-review rules require.",
+   "location": "project-documents/user/slices/422-slice.fix-case-qualification-and-yield-report-keystone.md:285,304"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "The no-cutoff issue renderer serves a slice that does not depend on this one",
+   "description": "D2 builds a no-cutoff rendering mode and a branch that skips the edited-after-fix check, \"for 423's live fix.\" The slice plan lists 423 with no dependency on 422. 422's frontmatter `interfaces` is `[424, 425, 426]`, and \"Provides to Other Slices\" never lists 423. Nothing in 422 exercises that mode. It is a speculative abstraction for a consumer that has not asked for it. Cut it. Take the cutoff as a required parameter, and let 423 add the live variant if it needs one.",
+   "location": "project-documents/user/slices/422-slice.fix-case-qualification-and-yield-report-keystone.md:139"
+  },
+  {
+   "i": 5,
+   "severity": "NOTE",
+   "title": "D5 mixes `NodeOutcome` and `FailureKind` in one mapping",
+   "description": "In 421, `FailureKind` is set only for `failed` and `error` results. `passed`, `skipped`, `xfailed`, `xpassed` and `not_run` are `NodeOutcome` values (421 D11). D5 lists them all as \"results map from 421's `FailureKind`.\" Key the table on `(outcome, failure_kind)` so the setup/teardown `error` row and the `failed` rows can't be read ambiguously.",
+   "location": "project-documents/user/slices/422-slice.fix-case-qualification-and-yield-report-keystone.md:171-176"
+  },
+  {
+   "i": 6,
+   "severity": "NOTE",
+   "title": "\"421 used unchanged\" understates additive edits to 421's files",
+   "description": "The slice adds a `FixCaseAdapter` lookup to 421's `registry.py`, adds a field to `MetrologyRecord` and adds methods to `BenchmarkRecordStore`. The record and store additions are anticipated by 421 D3. The registry addition is not described in 421 D9, which has a single `adapter_for`. The edits are small and compatible, but the claim should say \"extended additively, not modified.\"",
+   "location": "project-documents/user/slices/422-slice.fix-case-qualification-and-yield-report-keystone.md:395"
+  }
+ ]
+}

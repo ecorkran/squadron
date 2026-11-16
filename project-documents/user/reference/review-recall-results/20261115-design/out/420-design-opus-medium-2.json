@@ -1,0 +1,207 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "PASS",
+      "title": "Inventory and fixes cover the slice plan's criteria",
+      "description": "All four slice-plan success criteria are met:\n- **Inventory:** the 17-row table lists every path and whether it sends and records effort.\n- **Per-path tests:** one test for each of paths 1\u201312, at line 180.\n- **\"Not sent\" test:** a fake provider with `applies_effort=False` is tested in both shared helpers, at line 180.\n- **Merged rows:** runs that sent the same effort fall into one row (D6).\n\nD1 keeps the architecture's \"absent is not zero\" rule: \"not sent\" is stored as `null`, never as the alias's configured value. That also matches 175 D7, so no migration is needed. The excluded paths (13\u201317) resolve no alias, so they have no alias effort to send. Excluding them is consistent with \"sends the alias's effort when the alias carries it.\"",
+      "file_ref": null,
+      "category": "alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/420-slice.effort-audit-across-dispatch-paths.md:60-78"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The enumeration guard checks where `AgentConfig` is built, but the defects were in callers that left effort out",
+      "description": "D7 classifies each place that constructs `AgentConfig(` or calls `open_pipeline_session`. Three of the fixed defects were not at those places:\n- **Path 7:** `_resolve_model` calls `resolve` instead of `resolve_full`, so the effort never reaches `run_review_with_profile`.\n- **Path 8:** `judge_dispatch.py` does not pass `effort=` to `one_shot_dispatch_with_telemetry`.\n- **Path 11:** the renderer does not emit `--effort`.\n\nIn each case the `AgentConfig` construction sits inside a shared helper that accepts an `effort` parameter. The test would classify that helper as `SENDS_ALIAS_EFFORT` and pass, even with the bug still present. So the Value claim at line 25, that \"a new dispatch path cannot ship without a decision about effort,\" does not hold. A new caller of `one_shot_dispatch_with_telemetry`, `capture_summary_via_profile_with_telemetry` or `run_review_with_profile` that leaves out `effort` passes the guard.\n\n**Fix:** make `effort` a required keyword-only parameter with no default on those helpers, so pyright catches every caller that leaves it out. Alternatively, extend the enumeration to call sites of those helpers. Either way, state which one in D7.",
+      "file_ref": null,
+      "category": "testing",
+      "raw_category": null,
+      "location": "project-documents/user/slices/420-slice.effort-audit-across-dispatch-paths.md:149-152"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The identity rule has no single definition, and two readers already disagree",
+      "description": "D6 defines replay identity as `(model, profile, effort_sent, tool_use, max_output_tokens)` in a private `config_identity`. It leaves `sq stats producers` on `ProducerKey(model, profile, effort, reviewer)`, which has no `tool_use` or `max_output_tokens`.\n\nLine 162 says later slices \"apply the rule to their own record types\" and that this slice ships no shared identity type. Line 186 says 421\u2013427 can group by D6 \"with no further effort work.\" Those two statements conflict: each of six later slices must reimplement a rule that already exists in two different forms. The architecture's goal that results \"stay comparable over time\" depends on every reader grouping configs the same way.\n\nThere is also a hidden dependency. Once the alias is dropped from identity, any alias field that changes the request but is missing from the tuple silently merges distinct configs into one row. The design names only `tool_use` and `max_output_tokens`, and does not say these are all of the alias's request-affecting fields.\n\n**Fix:**\n- Put one public identity function next to `action_effort_sent`, or explain why stats intentionally differs.\n- State that the tuple covers every request-affecting alias field.\n- Add a check that fails when a new alias field is not classified as part of identity or display-only.",
+      "file_ref": null,
+      "category": "dry",
+      "raw_category": null,
+      "location": "project-documents/user/slices/420-slice.effort-audit-across-dispatch-paths.md:142-147"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Removing the alias from identity contradicts the architecture's design goal, and the architecture is not updated",
+      "description": "The architecture's design goal at line 40 defines a config as \"(alias, model, profile, effort sent)\". D6 and line 162 say this slice \"supersedes\" that definition. The slice plan's criterion does require merging runs whose alias labels differ, so the change is justified, and the architecture's line 99 supports it.\n\nThe problem is that the change is recorded only in a slice doc. Slices 421\u2013427 will read the architecture's definition. The slice should include a one-line correction to `420-arch.model-benchmark.md` line 40, so the parent document matches the rule later slices must follow.",
+      "file_ref": null,
+      "category": "alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/420-slice.effort-audit-across-dispatch-paths.md:147"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The findings-addressed judge's cost goes up while its spend stays unrecorded",
+      "description": "Excluding usage recording for path 7 is defensible: it is a gap in 175's coverage, not an effort gap.\n\nHowever, D3 makes this judge run at the alias's effort. Line 183 itself says that can raise cost and latency. That spend is invisible to `pipeline.max_cost_usd`, and the architecture's spend goal (line 42) says the caps cover grading and judging too. File the issue with this slice rather than after it, and link it from Special Considerations.",
+      "file_ref": null,
+      "category": "scope",
+      "raw_category": null,
+      "location": "project-documents/user/slices/420-slice.effort-audit-across-dispatch-paths.md:231-232"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Frontmatter interfaces leave out 423, but the integration requirement includes it",
+      "description": "`interfaces: [421, 422, 424, 425, 426, 427]` leaves out 423. Line 186 says \"421\u2013427 can read a config's effort.\" Make the two lists agree.",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/slices/420-slice.effort-audit-across-dispatch-paths.md:7"
+    },
+    {
+      "severity": "PASS",
+      "title": "Failure handling for the new metadata key is explicit",
+      "description": "D5 covers the failure cases explicitly:\n- **Failed actions:** the key is stamped on failure paths too, including the `except Exception` branch once the model is resolved.\n- **Unstamped runs:** runs with no stamp (dead subprocess, cancellation, resolution failure) are listed, and each is tied to an existing replay failure class.\n- **Old records:** the fallback reads `usage.effort`, which already meant \"sent\" under 175 D7, so it never substitutes the alias's value.\n- **Bad values:** an unrecognized stored value raises an error instead of being read as `None`.\n\nRejecting a zero-spend `UsageRecord` correctly protects 175's priced and unpriced tallies.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/420-slice.effort-audit-across-dispatch-paths.md:133-140"
+    },
+    {
+      "severity": "PASS",
+      "title": "Scope fits the 2/5 estimate",
+      "description": "Each mechanism maps to a slice-plan criterion or a defect the audit found. No new store record types are added, the new fields are optional with `None` defaults, and the work is six sequenced steps. There is nothing to cut. D6's two extra identity fields are needed to compensate for dropping the alias, so they are not scope creep.",
+      "file_ref": null,
+      "category": "proportionality",
+      "raw_category": null,
+      "location": "project-documents/user/slices/420-slice.effort-audit-across-dispatch-paths.md:219-229"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "pass",
+      "category": "alignment",
+      "raw_category": null,
+      "summary": "Inventory and fixes cover the slice plan's criteria",
+      "location": "project-documents/user/slices/420-slice.effort-audit-across-dispatch-paths.md:60-78",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "testing",
+      "raw_category": null,
+      "summary": "The enumeration guard checks where `AgentConfig` is built, but the defects were in callers that left effort out",
+      "location": "project-documents/user/slices/420-slice.effort-audit-across-dispatch-paths.md:149-152",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "dry",
+      "raw_category": null,
+      "summary": "The identity rule has no single definition, and two readers already disagree",
+      "location": "project-documents/user/slices/420-slice.effort-audit-across-dispatch-paths.md:142-147",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "alignment",
+      "raw_category": null,
+      "summary": "Removing the alias from identity contradicts the architecture's design goal, and the architecture is not updated",
+      "location": "project-documents/user/slices/420-slice.effort-audit-across-dispatch-paths.md:147",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "scope",
+      "raw_category": null,
+      "summary": "The findings-addressed judge's cost goes up while its spend stays unrecorded",
+      "location": "project-documents/user/slices/420-slice.effort-audit-across-dispatch-paths.md:231-232",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "Frontmatter interfaces leave out 423, but the integration requirement includes it",
+      "location": "project-documents/user/slices/420-slice.effort-audit-across-dispatch-paths.md:7",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "pass",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "Failure handling for the new metadata key is explicit",
+      "location": "project-documents/user/slices/420-slice.effort-audit-across-dispatch-paths.md:133-140",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "pass",
+      "category": "proportionality",
+      "raw_category": null,
+      "summary": "Scope fits the 2/5 estimate",
+      "location": "project-documents/user/slices/420-slice.effort-audit-across-dispatch-paths.md:219-229",
+      "location_verified": true
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/420-slice.effort-audit-across-dispatch-paths.md",
+    "against": "project-documents/user/architecture/420-arch.model-benchmark.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261115-design/wt/420-design"
+  },
+  "timestamp": "2026-11-16T07:04:23.404195",
+  "model": "claude-opus-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 4,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-opus-5-5",
+  "answering_models": [
+    "claude-opus-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 8,
+    "in_fences": 0,
+    "in_section": 8,
+    "surviving": 8
+  },
+  "effort": "medium",
+  "profile": "sdk",
+  "turns": 5,
+  "prompt_tokens": 334478,
+  "cached_tokens": 332284,
+  "cache_write_tokens": 2186,
+  "completion_tokens": 5900,
+  "reasoning_tokens": null,
+  "duration_seconds": 65.82440549996682,
+  "cost_usd": 0.2027447,
+  "cost_basis": "provider"
+}

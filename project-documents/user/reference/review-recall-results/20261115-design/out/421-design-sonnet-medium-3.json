@@ -1,0 +1,207 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Cleanup on a failed `BenchmarkSandbox.__enter__` is unspecified",
+      "description": "Environment resolution (step 4 of the `__enter__` flow) is the step most likely to fail. D5 and the Risk section both expect historical locks to stop resolving. By that point `HistoryFreeSandbox` has already created the lock and tree, and `ScrubbedEnvironment` has created `<id>.home/`. Python does not call `__exit__` when `__enter__` raises. The State Management section says the four directories are removed on exit, and the orphan sweep only handles dead owners.\n\nThe slice does not say that a failure inside `__enter__` unwinds what steps 1 to 3 created. 422 will probably qualify many candidates in one process. If a failure leaves its tree, `.venv` and lock behind, they pile up until that process ends. Walkthrough step 5 also expects \"no `.venv` created\" after a failure. A partial install can violate that, because `--locked` rejects a stale lock before installing but not a download that fails midway.\n\nFix: state that `__enter__` removes everything it created before it re-raises `SandboxError` or `EnvironmentResolutionError`. Add a test that asserts nothing is left under `~/.config/squadron/benchmark/` after an install failure and after an install timeout.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:101-107"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`reference_sha` and `project_id` are added to case identity, which the architecture does not list",
+      "description": "The architecture says a case is identified by \"start commit, task text, hidden and superseded test sets, grader commands\". D1 adds `project_id`, `kind`, `reference_sha`, `hidden_fixtures` and `excluded_tests`. The `excluded_tests` field is consistent with the keystone slice's exclusion list. `reference_sha` is a sound addition, because hidden test source is read from the reference at grading time. The slice states the deviation, but 420-arch's immutability principle still reads as the narrower list. Update the architecture sentence so later slices (425 and 426) do not work from the older definition.",
+      "file_ref": null,
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md#D1 \u2014 Case content identity and id"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Mock-patch classification is checked only on Python 3.13",
+      "description": "The reporter plugin runs under the start commit's own interpreter, which can be older than 3.13. It also reads `unittest.mock._patch` internals. D11 says the behavior was \"Checked on Python 3.13\" and says nothing about other versions. If the introspection fails on another version, the failure falls through to `other_exception`. That is the safe direction, because 422 excludes it as undecidable, and it matches the architecture's rule that a check which cannot decide must exclude the case. The cost is lower fix-case yield from false exclusions. Record this direction explicitly. Also run the mock-target fixture test on more than one interpreter version, or state which versions are supported.",
+      "file_ref": null,
+      "category": "risk",
+      "raw_category": null,
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md#D10 \u2014 Suite runner: an injected pytest reporter plugin"
+    },
+    {
+      "severity": "PASS",
+      "title": "Layering and dependency direction",
+      "description": "`benchmark/` depends on `metrology/` and `replay/sandbox.py`, and neither depends back. Concrete adapters are reached only through `registry.py`. `ReplaySandbox` composes the extracted `HistoryFreeSandbox` and keeps its public surface and tests unchanged. The store grows by optional sibling payloads with no migration, as the architecture's \"Extend 320's store\" principle requires. Benchmark record I/O goes in its own module because `store.py` is already large.",
+      "file_ref": null,
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md#Component Structure"
+    },
+    {
+      "severity": "PASS",
+      "title": "Scrubbed producer environment matches the architecture's containment principle",
+      "description": "The environment is built from an allowlist. `HOME` is redirected, there are no GitHub credentials, and `PATH` puts the sandbox's `.venv/bin` first and leaves out the user's tool installs. The installed, later `sq` is out of reach. Credentials enter only through `CredentialGrant`, which reads `api_key_env` from the profile definition. The slice records the network-reinstall gap as an input to 424's leak scan instead of hiding it.",
+      "file_ref": null,
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md#D7 \u2014 Scrubbed producer environment: allowlist, redirected HOME"
+    },
+    {
+      "severity": "PASS",
+      "title": "Failure modes for the new I/O paths are named, bounded and observable",
+      "description": "The install, suite run and auth probe each have a config-keyed timeout (D12) and run through `ProcessRunner`, which kills the whole process group on timeout. The slice names the failure outcomes:\n- **Install:** reasons from `EnvironmentFailureReason`.\n- **Suite run:** `timed_out`, with every requested node without a result marked `not_run`.\n- **Missing or unparseable JSONL:** `SuiteRunError`, never an empty pass.\n- **Auth probe:** a hang is a `timed out` \"no\", and a replaced carryover symlink is reported.\n\nTests are specified for each path. The architecture does not set a numeric NFR on these paths.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md#D8 \u2014 Auth carryover and the auth check"
+    },
+    {
+      "severity": "PASS",
+      "title": "Scope matches what the slice plan assigns, with clean hand-offs",
+      "description": "Case discovery, the fairness rule, hidden-test injection, the leak scan, the grader and non-Python adapters are excluded and assigned to later slices. The auth question the architecture assigns to this slice is answered first, so a \"no\" reaches the PM before replay is built. The protocol is kept narrow, and 422 and 425 add their own methods. Adding a fifth `FailureKind`, `other_exception`, is justified by the architecture's rule that undecidable cases are excluded.",
+      "file_ref": null,
+      "category": "scope",
+      "raw_category": null,
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md#Technical Scope"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Frontmatter omits 400",
+      "description": "The slice consumes `SourceLanguage` from 400's `metrology/snapshot_models.py`. It also mirrors 400's registry keying and in-tree `.venv` layout, and aligns its `lockfile_sha256` name with 400's. The body lists this under Interfaces Required, but `dependencies: [420, 177, 320]` leaves out 400. Add it so the dependency graph matches the body.",
+      "file_ref": null,
+      "category": "dependencies",
+      "raw_category": null,
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:6"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "Cleanup on a failed `BenchmarkSandbox.__enter__` is unspecified",
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:101-107",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "note",
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "summary": "`reference_sha` and `project_id` are added to case identity, which the architecture does not list",
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md#D1 \u2014 Case content identity and id",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "note",
+      "category": "risk",
+      "raw_category": null,
+      "summary": "Mock-patch classification is checked only on Python 3.13",
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md#D10 \u2014 Suite runner: an injected pytest reporter plugin",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "pass",
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "summary": "Layering and dependency direction",
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md#Component Structure",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "pass",
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "summary": "Scrubbed producer environment matches the architecture's containment principle",
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md#D7 \u2014 Scrubbed producer environment: allowlist, redirected HOME",
+      "location_verified": null
+    },
+    {
+      "id": "F006",
+      "severity": "pass",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "Failure modes for the new I/O paths are named, bounded and observable",
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md#D8 \u2014 Auth carryover and the auth check",
+      "location_verified": null
+    },
+    {
+      "id": "F007",
+      "severity": "pass",
+      "category": "scope",
+      "raw_category": null,
+      "summary": "Scope matches what the slice plan assigns, with clean hand-offs",
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md#Technical Scope",
+      "location_verified": null
+    },
+    {
+      "id": "F008",
+      "severity": "note",
+      "category": "dependencies",
+      "raw_category": null,
+      "summary": "Frontmatter omits 400",
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:6",
+      "location_verified": true
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md",
+    "against": "project-documents/user/architecture/420-arch.model-benchmark.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261115-design/wt/421-design"
+  },
+  "timestamp": "2026-11-16T07:25:56.755792",
+  "model": "claude-sonnet-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 2,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-sonnet-5-5",
+  "answering_models": [
+    "claude-sonnet-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 8,
+    "in_fences": 0,
+    "in_section": 8,
+    "surviving": 8
+  },
+  "effort": "medium",
+  "profile": "sdk",
+  "turns": 3,
+  "prompt_tokens": 135250,
+  "cached_tokens": 135246,
+  "cache_write_tokens": 0,
+  "completion_tokens": 8253,
+  "reasoning_tokens": null,
+  "duration_seconds": 72.99041758384556,
+  "cost_usd": 0.096831,
+  "cost_basis": "provider"
+}

@@ -1,0 +1,103 @@
+{
+ "review": "r14",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Suite runner failure modes are incomplete and not all observable",
+   "description": "D10 says a missing or unparseable JSONL \"never comes back as an empty pass,\" but the raise rule is scoped to a non-zero pytest exit. Two paths are unhandled: exit 0 with no JSONL, and a JSONL whose last line was cut off when the run was killed. Line 388 says a pytest without the required hooks \"fails with `SuiteRunError`,\" but the doc gives no mechanism for that. A run where the hooks are never called can exit 0 with no JSONL, which is the unhandled case above. The timeout path returns `SuiteRun(timed_out=True)` and names no log, but the review rules require each failure mode to be observable at WARNING or higher. Specify that exit 0 with missing or unparseable output raises `SuiteRunError`, that a truncated final line is discarded and counted, that a timeout logs at WARNING, and how hook incompatibility is detected explicitly (for example, a sentinel line the plugin writes at session start).",
+   "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:209"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "A harness crash leaves live children writing into directories the sweep deletes",
+   "description": "D12 says \"Nothing new is needed for orphans,\" because `ProcessRunner` kills the process group on timeout. That covers timeouts only. If the `sq` process is killed mid-install or mid-suite, `uv` and pytest keep running, and the next run's orphan sweep (line 118) can delete the tree under them. Verification step 7 (line 356) checks that the earlier directories are swept, not that their children are gone. Specify how the owner's process group is recorded (for example, in the `.lock` file) and how the sweep either kills that group or refuses to sweep while it is alive. Add a test that kills the harness mid-install and asserts no child survives.",
+   "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:226"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "The auth check reports harness faults as \"no\"",
+   "description": "The plan requires \"a definite yes or no ... A no is reported, not worked around\" (420-slices.model-benchmark.md:49). Line 184 makes every non-success a \"no.\" A missing or non-executable installed `sq`, an alias the seeded config cannot resolve, or a failed scrub build would all appear as \"no,\" with stderr. The remedy in line 186 is a PM decision about provider carryover, so a harness misconfiguration would send the PM to change auth for a provider that works. Split the result into `yes`, `no` (the probe ran and the provider refused or returned an empty response) and `error` (the probe could not run). `error` should exit non-zero and be reported separately. A timeout stays `no`, as specified.",
+   "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:183-184"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Case sets are keyed by name, contradicting the architecture and plan",
+   "description": "Architecture line 65 says new record types are \"keyed on `ProjectId`,\" and the plan's 421 entry says the same (420-slices.model-benchmark.md:40). D2 keys `CaseSet` by name so that 422 \"may pool cases from several projects.\" The plan leaves pooling to 422's yield report (420-slices.model-benchmark.md:66, 170), so this design commits to an outcome the plan says should be measured. Either keep `ProjectId` on the set and let 422 decide pooling, or amend the architecture and plan to record that case sets are cross-project. Also, the record id `caseset-<sha256(name)[:12]>-v<version>` makes the name a global key, so two projects that pick the same set name collide.",
+   "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:134"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "PATH brings user tool installs back in through symlinks",
+   "description": "Architecture line 46 says the producer's PATH \"leaves out the user's tool installs.\" The plan's 421 entry says \"no user tool installs\" (420-slices.model-benchmark.md:42, 48). D7 symlinks `git` and `uv` from the harness PATH into `<id>.home/bin`, so those installs are reachable from the producer's PATH. The success criterion at line 309 passes only because the entry sits under the sandbox home. Keeping `uv` is defensible, since the project's instructions tell agents to `uv run` and removing it would change the producer's prompt behavior. But that makes this an architecture decision for the PM, and the architecture sentence needs amending. The doc is also silent on what happens when `git` or `uv` is missing from the harness PATH. An omitted tool must raise an explicit error, not be skipped.",
+   "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:168"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Test-first classification is narrower than the architecture's rule",
+   "description": "Architecture line 53 disqualifies a fix test at the parent if there is \"no `ImportError`\" at all. D11 classifies an ImportError as `missing_symbol` only when it names a project module. An ImportError that names a third-party module and is raised from project source falls through to `project_exception` (line 217), which qualifies. Example: the fix added a dependency to `pyproject.toml`, the parent lacks it, and a project module's import fails. That is an environment gap the fix introduced, not a crash the fix cured. Either classify every ImportError or ModuleNotFoundError as `missing_symbol`, as the architecture reads, or amend the architecture with the narrower rule and its reason.",
+   "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:215-217"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "`list_cases` silently drops tampered records",
+   "description": "D1 makes `get_case` raise on a tampered record but has `list_cases` skip it with the store's WARNING. The two read paths then disagree about whether a bad record exists. The yield report in 422 reads cases through `list_cases`, so a hand-edited case silently leaves the population, and a log line is the only trace. The plan says \"No candidate is silently dropped\" (420-slices.model-benchmark.md:73), and the project rule is to fail explicitly. Make `list_cases` raise as `get_case` does, or return the skipped ids with the cases so callers must report them.",
+   "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:127"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "`EnvironmentIdentity` collides with 400's model of the same name",
+   "description": "D6 says the new model \"is not 400's `EnvironmentIdentity`,\" and both keep `lockfile_sha256`. Line 292 says 425 receives \"`EnvironmentIdentity` as part of the grader identity,\" and 425 also consumes 400's snapshot. Two classes with one name will be imported side by side in the same code path. 400's task breakdown already defines `EnvironmentIdentity` (lockfile path, lockfile SHA-256, interpreter version). Rename the 421 model to say what it is, such as `BenchmarkEnvironmentIdentity`, before 422 and 424 use it.",
+   "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:161"
+  },
+  {
+   "i": 8,
+   "severity": "CONCERN",
+   "title": "The sandbox's public surface and the adapter's environment contract are undefined",
+   "description": "Architecture line 117 says that in a replay \"the target is the sandbox's own branch,\" so fix-pipeline commits land on a branch the replay reads. The Provides list hands `BenchmarkSandbox` to 422, 424 and 425 but never says what they read from it: tree path, branch, output directory, scrubbed home, environment, or `keep()`. D4 spells out `ReplaySandbox`'s surface (line 144), but `BenchmarkSandbox`'s is missing. Separately, `SandboxContext` carries the scrubbed `env` into `resolve_environment`, while D5 (line 155) runs install under the harness environment. The protocol (lines 194\u2013202) does not say the adapter must ignore `ctx.env` during install. Name the `BenchmarkSandbox` attributes, and state which environment each adapter method uses.",
+   "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:288-293"
+  },
+  {
+   "i": 9,
+   "severity": "CONCERN",
+   "title": "The architecture's record-size constraint is not restated with a target",
+   "description": "Architecture line 65 says records stay coarse \"because the store reads every file on every query,\" and line 129 says records \"stay small.\" This slice writes case records that carry slice-case task text, and D3 keeps that text inline, calling tens of KB \"acceptable\" with no bound. Restate the constraint with a target: a maximum record size, the measured size of the largest existing slice design plus task file, and what happens above the bound (refuse the write, or move the text to a sidecar). Without a number the decision cannot be checked.",
+   "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:140"
+  },
+  {
+   "i": 10,
+   "severity": "CONCERN",
+   "title": "Mock patch targets are detected through a private attribute of `unittest.mock`",
+   "description": "The plugin recovers the patch target from `self` in the innermost `unittest/mock.py` frame, which is a private `_patch` object. D11 says this was checked only on Python 3.13. The runner runs under the start commit's interpreter, so the same case can classify differently on another version. Qualification is keyed on interpreter version (D6), so a mismatch triggers re-qualification, but the classification is undefined on untested versions. Name the Python and pytest versions the classification supports, fail explicitly on any other version, and check at runtime that the private attribute exists. Alternatively, have 422 detect `mock.patch` targets statically from the test source, which needs no runtime introspection. The doc should choose one and say why.",
+   "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:207"
+  },
+  {
+   "i": 11,
+   "severity": "CONCERN",
+   "title": "Overweight: a second CLI surface and restated conventions",
+   "description": "The plan's 421 entry names no CLI, and its criteria are checked by tests. `sq benchmark sandbox REV [--suite] [--node] [--keep]` adds a user-facing command with its own output format. The doc already defers the `/sq:benchmark` slash command to 422 for the same reason (line 42). Keep `sq benchmark auth-check`, which the plan needs so the PM sees the answer, and move `sandbox` to 424, the first slice that runs sandboxes for a user. Walkthrough steps 2, 4, 5 and 7 can become integration tests. Also cut \"Patterns and Conventions\" (lines 234\u2013238), which restates the project's error and enum rules.",
+   "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:254-256"
+  },
+  {
+   "i": 12,
+   "severity": "NOTE",
+   "title": "The dependency on 420 is listed, but the body says 421 reads nothing from it",
+   "description": "The frontmatter (line 6) and the plan (420-slices.model-benchmark.md:51) both list 420. Line 57 says 420 \"must land first,\" then that 421 \"reads nothing from 420.\" The reason given, that later slices compare configs by effort sent, is an ordering constraint on 422 and later, not on 421. State it as ordering only and drop it from 421's dependencies, or name what 421 needs from 420.",
+   "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:57"
+  },
+  {
+   "i": 13,
+   "severity": "NOTE",
+   "title": "Identity fields go beyond the architecture's list; amend the architecture to match",
+   "description": "Architecture line 63 lists the identity as start commit, task text, hidden and superseded tests, and grader commands. D1 adds `project_id`, `kind`, `reference_sha`, `hidden_fixtures` and `excluded_tests`. D1 justifies `reference_sha` in the text, and `excluded_tests` follows the keystone's rule that the exclusion list is part of identity, so the additions are sound. Record them in the architecture and the plan (420-slices.model-benchmark.md:40) so later readers do not take the design as a departure.",
+   "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:125-126"
+  }
+ ]
+}

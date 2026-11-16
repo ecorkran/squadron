@@ -1,0 +1,54 @@
+{
+ "review": "r14",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Discovery-stage rejections never get a `SliceQualification` record, so yield rows can't count them",
+   "description": "The success criterion says the build \"writes a `SliceQualification` for every slice index in it\u2026 Every rejected slice has a `SliceCandidateRejection` or `harness_error` with detail.\"\n\n- Task 13 returns `multiple_landings`, `branch_contains_merges` and discovery `harness_error` only as entries in `DiscoveryResult`.\n- Task 15 writes records only for the pre-sandbox checks (task text and no-code).\n- Task 20 calls `qualify_slice_candidate` only for candidates. It never says the discovery rejections are written.\n- Task 22 counts yield rows from stored `SliceQualification`s. Two of the seven rejection values (`multiple_landings` and `branch_contains_merges`) can therefore never appear in yield. Yet the design's mitigation names exactly those two as the ones the PM will see counted.\n\nSeparately, a discovery `git` failure is not tied to Task 20's \"harness error stops the build\" rule.\n\n**Fix:** In Task 13 or Task 20, write a `rejected` or `harness_error` `SliceQualification` (with `start_environment=None`) for each discovery outcome. Say which landing supplies `landing_after_sha`, `fork_sha` and `tip_sha` for `multiple_landings`, since the record id needs a single landing. Add a test to Task 20 and Task 22 asserting that these records exist and are counted.",
+   "location": "project-documents/user/tasks/426-tasks.slice-cases.md:154-156"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "`judge` without `--max-cost` would exit 2, which means \"cap reached\"",
+   "description": "The command signature in Task 35 makes `--max-cost USD` required (no brackets). If it is declared as a required Typer option, Click rejects the missing option as a usage error with exit 2. That collides with the contract's \"2 run cap reached\".\n\nTask 35's tests expect \"exit 1 with the missing item named for each refusal of Task 31\", and Task 31's refusals include \"no run cap\". A junior implementer will hit either a failing test or an ambiguous exit code.\n\n**Fix:** Make `--max-cost` optional at the Typer level and refuse in `plan_judge` with exit 1. Add an explicit test that a missing `--max-cost` exits 1, not 2.",
+   "location": "project-documents/user/tasks/426-tasks.slice-cases.md:285-286"
+  },
+  {
+   "i": 2,
+   "severity": "NOTE",
+   "title": "The \"pending\" count in the report has no test",
+   "description": "Task 38 renders \"failed pairs pending\" in the count line. Failed pairs leave no record, so pending has to be derived from planned pairs minus recorded judgments, and nothing says how. Task 38's tests cover over-size, harness-absent and the limit, but not pending. Add the derivation and one test case.",
+   "location": "project-documents/user/tasks/426-tasks.slice-cases.md:302-303"
+  },
+  {
+   "i": 3,
+   "severity": "NOTE",
+   "title": "Two fixture builders aren't used by any test",
+   "description": "Task 6 builds \"a slice whose every test changed\" and \"one whose regression selection would be empty\". Task 18 tests `no_regression_signal` with doubles, so these repos are only exercised by the smoke test. Either drop the \"every test changed\" builder (it traces to no criterion), or say the double-based test is what satisfies the \"fixture slices produce each rejection\" criterion for that value.",
+   "location": "project-documents/user/tasks/426-tasks.slice-cases.md:105"
+  },
+  {
+   "i": 4,
+   "severity": "NOTE",
+   "title": "Frontmatter on the packaged judge prompt may end up in the prompt text and its hash",
+   "description": "Task 28 asks for frontmatter \"per `file-naming-conventions`\" on `pairwise-diff-judge.md`, and loads it the way `judge_prompt()` loads 177's prompt. If that loader sends the file as-is, the frontmatter goes to the judge and into `JudgeRef.prompt_hash`. Tell the implementer to copy the format of 177's `replay/pairwise-judge.md` instead of requiring frontmatter.",
+   "location": "project-documents/user/tasks/426-tasks.slice-cases.md:248"
+  },
+  {
+   "i": 5,
+   "severity": "NOTE",
+   "title": "The load tests aren't required by an NFR and need no CI wiring",
+   "description": "The slice design has no NFR, so no `tests/load/` task is required. The two \"load tests\" (8 concurrent `invoke` calls in Task 24, and a 200-pair plan with slow and hung dispatchers in Task 33) are ordinary pytest cases inside the unit test files. They run in the normal suite, so no separate CI gating task is needed. The hung-dispatcher case backs the failure-mode rule. The concurrent-invoke case is defensible only if 424 runs replays concurrently; drop it if it doesn't.",
+   "location": "project-documents/user/tasks/426-tasks.slice-cases.md:223"
+  },
+  {
+   "i": 6,
+   "severity": "NOTE",
+   "title": "The real-landing fixtures only reach discovery",
+   "description": "The technical requirement says \"Qualification fixtures come from squadron's real `slice_ranges` landings\". Task 6 saves them, but only Task 13 (discovery) loads them; Tasks 15\u201319 use doubles. With sandboxes and adapters involved, that is a reasonable reading, but Task 42's DEVLOG entry should say so explicitly.",
+   "location": "project-documents/user/tasks/426-tasks.slice-cases.md:107-108"
+  }
+ ]
+}

@@ -1,0 +1,40 @@
+{
+ "review": "r06",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "D6 overrides the architecture's config identity and widens scope beyond the effort audit",
+   "description": "- The architecture defines identity as \"config (alias, model, profile, effort sent)\" (Design Goals, \"Results stay comparable over time\"). D6 drops the alias from the grouping key. It adds `tool_use` and `max_output_tokens` to identity, so it changes `ProducerConfigRef` and adds a private `config_identity` in `replay/report.py`.\n- The anticipated-slice entry in the architecture is limited to: every path sends or records that it could not, and every usage record carries effort sent. Reworking replay report grouping and adding two non-effort identity fields goes past that. The slice describes itself as effort 2/5.\n- D6 also states the architecture's own rule (\"two rows only when the effort really differed on the wire\") \"already implies\" the change. That is a debatable reading, because the architecture lists the alias explicitly.\n- The slice rewrites an architecture-level identity rule locally and tells later slices to apply it. The architecture document is not updated.\n- Cut or defer one of these:\n  - Keep this slice to `effort_sent` correctness (D1\u2013D5, D7).\n  - Move the identity change to a slice that owns it, such as 424/425, where record types are defined. The architecture is amended there.\n  - If D6 stays, amend the architecture's identity wording in the same change.\n  - Drop `tool_use` and `max_output_tokens` unless a named requirement needs them. The slice plan criterion cited only needs rows to merge on sent effort.",
+   "location": "project-documents/user/slices/420-slice.effort-audit-across-dispatch-paths.md#D6 \u2014 Config identity is what went on the wire; the alias is display"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "\"Provides\" guarantee overstates what the inventory delivers",
+   "description": "- The slice promises \"every alias-resolving dispatch path, including the grading review and the judge, sends and records effort.\"\n- The inventory contradicts this:\n  - Path 7, the findings-addressed judge, has \"Records: no\". It is excluded as a 175 gap.\n  - Paths 10 and 11 have \"no record (harness-run)\".\n- Downstream slices (421\u2013427) read this as a recording guarantee. Reword it to \"sends effort on all alias-resolving paths, and records it on paths 1\u20136, 8, 9 and 12.\" Name path 7 as a known gap with the issue to be filed.\n- The Integration Requirement \"no further effort work\" has the same overreach.",
+   "location": "project-documents/user/slices/420-slice.effort-audit-across-dispatch-paths.md#Provides to Other Slices"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Reader raising on unrecognized stored value has no stated handling or observable signal",
+   "description": "- D5 says `action_effort_sent` \"raises on an unrecognized value rather than reading it as `None`.\" The callers are the replay outcome reader and `sq stats producers`, which scan many persisted run files.\n- The slice does not say whether one corrupt or future-format record aborts the whole report or only that record, or what is logged. The project's failure-mode enumeration rule requires the failure handling to be explicit and observable.\n- State the behavior at each of the two call sites. For example, fail that run's row with a WARNING that names the run id, or abort deliberately. Add one test that asserts the signal.",
+   "location": "project-documents/user/slices/420-slice.effort-audit-across-dispatch-paths.md#D5 \u2014 Effort sent is stamped on the action, not only on the usage record"
+  },
+  {
+   "i": 3,
+   "severity": "NOTE",
+   "title": "Enumeration test (D7) is reasonable but is the heaviest option for the guard",
+   "description": "- The AST scan with a classification table is justified by the architecture's \"precondition for effort rows meaning anything.\" It follows the existing SC1a pattern, so it does not need cutting.\n- It is the largest single piece of test machinery in a 2/5 slice. If scope needs trimming, the per-path assertions in the Technical Requirements give most of the protection. The guard mainly covers future paths.",
+   "location": "project-documents/user/slices/420-slice.effort-audit-across-dispatch-paths.md#D7 \u2014 The inventory is enforced by an enumeration test"
+  },
+  {
+   "i": 4,
+   "severity": "NOTE",
+   "title": "Cost and latency change for the findings-addressed gate is acknowledged",
+   "description": "- Sending the judge alias's effort changes the spend and latency of the pipeline gate and `sq review resolve`. The CHANGELOG bullet covers it.\n- Because path 7 writes no `UsageRecord`, that change is invisible in run totals and in `pipeline.max_cost_usd`. The issue the slice plans to file should be linked from the slice before implementation.",
+   "location": "project-documents/user/slices/420-slice.effort-audit-across-dispatch-paths.md#Success Criteria"
+  }
+ ]
+}

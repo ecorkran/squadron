@@ -1,0 +1,26 @@
+{
+ "review": "r04",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "A temporary network failure during install gets the same reason as a lock that no longer resolves",
+   "description": "D5 says three things fail with `lock_stale_or_unresolvable`: a stale lock, \"a package that no longer downloads\", and a Python version that cannot be obtained. A network outage, DNS failure or index error during `uv sync` looks exactly like \"a package that no longer downloads\", so it gets that reason too.\n\nThis matters because of what the architecture does with the reason. It says \"a lockfile that no longer resolves disqualifies the case\" (420-arch, Technical Considerations \u203a The environment). 422 records every exclusion with its reason and counts it in the yield report. It only re-qualifies a case when the environment identity changes, and a retry after an outage has the same identity. So a passing outage would permanently disqualify cases and lower the measured yield, which is the number that decides 422's ordering.\n\nThe architecture also counts \"the environment did not resolve\" as harness-caused, which drops the case for every config. The harness cannot attribute a failure correctly unless a transient failure is told apart from a permanent one.\n\n**Fix:** Add a reason to `EnvironmentFailureReason` such as `install_network_error` (or `install_failed_transient`), decided from uv's exit code and stderr. Do not retry silently. Say in D5 that 422 should not treat it as a permanent disqualification. Add a fixture test for it next to the existing failure-path tests (line 316).",
+   "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:152"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Timeout with a cut-off JSONL line hits two contradictory rules",
+   "description": "D10 gives two rules:\n- A timeout returns `SuiteRun(timed_out=True)` with whatever lines were written.\n- A missing or unparseable JSONL file with a non-zero pytest exit raises `SuiteRunError`.\n\nOn timeout, `ProcessRunner` kills the whole process group (D12, line 226). That can leave the last line half-written, and the exit is non-zero. Both rules then apply, and the doc doesn't say which wins. The success criteria include a timeout fixture (line 311), so the result has to be pinned down.\n\nA second gap: the doc doesn't say what happens when pytest exits 0 but the JSONL file is missing (for example, the plugin loaded but never wrote). \"Never an empty pass\" suggests an error, but it isn't stated for that exit code.\n\n**Fix:** State that on timeout a truncated final line is dropped and logged at WARNING, and the result is still `timed_out=True`. State that a missing file raises `SuiteRunError` whatever the exit code.",
+   "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:209"
+  },
+  {
+   "i": 2,
+   "severity": "NOTE",
+   "title": "Keying case sets by name instead of `ProjectId` departs from the architecture, with a reason given",
+   "description": "The architecture says new record types are \"keyed on `ProjectId`\" (Architectural Principles \u203a Extend 320's store). D2 keys `CaseSet` by name so that 422 can pool cases across projects, and each case keeps its own `project_id`. This works with the existing `MetrologyRecord` envelope, which has no required project field. The reason matches the architecture's own pooling option (Technical Considerations \u203a Fix-case yield). It is worth recording as a deliberate deviation so the architecture can be updated.",
+   "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:132-134"
+  }
+ ]
+}

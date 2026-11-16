@@ -1,0 +1,40 @@
+{
+ "review": "r12",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Scrubbed PATH does not say how the agent runtime's executables are reached",
+   "description": "- **Gap:** D7 limits `PATH` to the adapter entries, `<id>.home/bin` (only `git` and `uv`) and the system directories, and explicitly drops `~/.local/bin`, Homebrew, pipx and uv tool installs. Those are the usual homes of the agent CLIs, `node` and `cf`, and the design never says whether the dispatch path needs any of them on `PATH`.\n- **Consequence for the auth check:** D8's probe would report a missing binary as an auth `no`. The architecture's question (\"whether the agent's auth still works with its config directory redirected\") would then be answered wrongly.\n- **Consequence for 424:** the slice plan has 424 consume this environment unchanged for `sq run`, so it inherits the same gap.\n- **Fix:** list the runtime executables each profile needs. Either add them to `HARNESS_TOOL_ALLOWLIST` or state that the runtime resolves them without `PATH`. Give the probe a distinct result for \"runtime not found\" versus \"auth failed\".",
+   "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:168"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Install failure reasons have no case for network or build failure",
+   "description": "- **Gap:** the install step is a new network I/O path, but `EnvironmentFailureReason` has only `no_lockfile`, `lockfile_unsupported`, `lock_stale_or_unresolvable`, `install_timeout` and `installer_missing`. A dropped connection, an index outage or a failed sdist build has nowhere to go except `lock_stale_or_unresolvable`.\n- **Why it matters:** the architecture says \"a lockfile that no longer resolves disqualifies the case\", and 422's yield report counts exclusions per reason. A transient outage would be recorded as a permanent property of the case, which defeats \"Absent is not zero\".\n- **Fix:** add a reason for install failures that are not attributable to the lock (or an explicit `install_failed` catch-all), and state how uv's output maps to each reason.\n- **Related criterion:** line 308 and walkthrough step 5 require that a stale lock leaves no `.venv`. I believe `uv sync --locked` creates the environment before it validates the lock; if so, the criterion cannot pass as written. Either confirm uv's ordering or reword it to \"the sandbox is removed\".",
+   "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:152"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "`EnvironmentIdentity` placement conflicts with the stated dependency direction",
+   "description": "- **Conflict:** line 97 says `metrology/` does not depend on `benchmark/`. But `EnvironmentIdentity` is defined in `benchmark/adapter.py`, and line 119 says 422's qualification records and 424's replay records carry it. Those are store payloads under D3, in `metrology/benchmark_models.py`.\n- **Consequence:** 422 must either import `benchmark/` from `metrology/` or duplicate the model. The same applies to `FailureKind` if qualification records store it.\n- **Fix:** decide here, since this slice owns the seam. Either put the persisted value types in `metrology/benchmark_models.py`, or state that records carry only `identity_digest` and plain strings.",
+   "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:97"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Case sets are not keyed on `ProjectId`, and the replacement keying is under-specified",
+   "description": "- **Deviation:** the architecture (\"optional sibling payloads, no migration, keyed on `ProjectId`\") and the 421 plan entry both key new records on `ProjectId`. D2 keys `CaseSet` by a global name instead.\n- **What holds up:** the pooling rationale is sound, and the deviation is stated openly.\n- **What is missing:**\n  - What the `MetrologyRecord` envelope's project field holds for a `case_set` record.\n  - How existing per-project queries treat that record.\n  - What stops two projects that reuse a name from silently versioning each other's set, since `write_case_set` would write v2 of the other project's set.\n- **Fix:** specify the envelope value, and either scope the name (for example an optional project qualifier) or reject a write whose case ids share no project with the previous version.",
+   "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:134"
+  },
+  {
+   "i": 4,
+   "severity": "NOTE",
+   "title": "Sandbox tree sits two directories from the store that now holds the answers",
+   "description": "`~/.config/squadron/benchmark/<id>/` is a sibling of `metrology/`, which after this slice holds `reference_sha` and the hidden test ids for the case being replayed. Redirecting `HOME` does not hide a relative `../../metrology`. D4 acknowledges this and defers to 424's scan, which matches the architecture's \"directory, not a jail\" position and 177's precedent. 424 should treat the path as a required scan entry.",
+   "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:146"
+  }
+ ]
+}

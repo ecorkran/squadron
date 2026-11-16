@@ -1,0 +1,297 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "Missing, unreadable, or oversized ground truth can yield a scored PASS",
+      "description": "The architecture enumerates \"missing/unreadable ground-truth file\" and \"injected ground truth exceeding the cap\" as judge failure modes, and commits that an input failure yields UNKNOWN, logged at WARNING or above. The failure table (394\u2013400) omits both cases, and the \"No silent pass\" paragraph (402\u2013408) asserts the guarantee only for the rows it lists.\n\nThe judge inherits the review client's input injection, which does not fail on these cases:\n- A ground-truth path that is not a file on disk is skipped with no log. For non-file-reading providers, the judge then scores against a bare path string. The design does not say what happens for file-reading providers.\n- An unreadable file is logged at WARNING and skipped.\n- A file over the per-file cap is logged at WARNING and truncated, and the judge scores the truncated text.\n- Once the total cap is reached, the remaining ground-truth file is dropped with a WARNING, and the judge proceeds.\n\nIn every case the model still returns a valid score. Enforcement then derives a PASS, and the design's wording \"score-derived verdict\" accepts that outcome.\n\nRealistic exposure is low, because both artifacts are well under the per-file cap. The gap is in the contract. The fix needs a judge-specific pre-run check (each ground-truth input exists, is readable, and is under the cap, otherwise UNKNOWN before the provider call), which the design's \"no other module changes\" claim (107\u2013108) does not cover. Alternatively, the architecture must be amended to accept these outcomes. Either way, the design needs a row and a test per case; the test list (296\u2013305) has none.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/302-slice.design-phase-judge-templates.md:383-408"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Empty architecture path passes the missing-input check",
+      "description": "The design tests a SliceInfo \"missing a field\" and expects UNKNOWN through the required-input check. That holds for the design file, whose source treats an empty value as absent. It does not hold for the architecture file: its source returns the stored value unchanged, the type declares it a non-optional string, and the required-input check tests key presence only. An empty `arch_file` therefore reaches the judge as an empty `against`, and the judge scores without its ground truth with nothing logged. Treat an empty `arch_file` as absent in its source, and add the empty-string case alongside None in the tests.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/302-slice.design-phase-judge-templates.md:300-305"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Structured-output constraint is dropped, contrary to the plan and architecture",
+      "description": "The architecture's commitment (b) requires \"a structured-output constraint for the score field.\" The slice plan's 302 success criteria require that \"the score-with-rationale shape is enforced by the template's structured output.\" The 300 slice doc hands the structured (JSON-object) parser variant to 302. This design instead relies on prompt text alone and states \"no parser change needed\" (94\u201395, 263\u2013265). Nothing in the codebase provides a provider-level structured-output mechanism; the only structured instruction is a prompt-level findings format. The design must either add the machine-checkable score shape that 300 deferred to 302, or formally amend the plan and architecture to say the constraint is prompt-only.",
+      "file_ref": null,
+      "category": "architecture",
+      "raw_category": null,
+      "location": "project-documents/user/slices/302-slice.design-phase-judge-templates.md:152-183"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "A discarded model verdict is invisible",
+      "description": "The failure table lists \"model emits a verdict summary\" as a new failure mode, handled by silently ignoring the parsed verdict. The enforcement layer (301) ignores it with no log, and the test list (300\u2013305) asserts only the final verdict. The architecture requires each failure mode to be logged at WARNING or above. The design's own rationale (208\u2013216) also says a raw verdict beside the derived one could be mistaken for authoritative. Log at WARNING whenever the parsed verdict is non-UNKNOWN (template name, parsed verdict, derived verdict), and assert the log with `caplog`. Decide whether this belongs in 301's enforcement or in 302's tests.",
+      "file_ref": null,
+      "category": "observability",
+      "raw_category": null,
+      "location": "project-documents/user/slices/302-slice.design-phase-judge-templates.md:398"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Per-criterion sub-scores are made mandatory before the architecture allows them",
+      "description": "The architecture says \"scalar now,\" with the criteria breakdown \"anticipated, not finalized\" and its shape possibly needing weights or other metadata. The 300 slice reserved `criteria` with \"no schema committed.\" This design requires a numeric value per criterion in every judge output, which effectively commits that schema. Nothing in enforcement reads criteria, and the architecture's anti-anchoring requirement is met by a rationale before the score. Cut the per-criterion numbers from the judge prompt and keep a single rationale block before `score:`. If the breakdown is wanted now, record it as a decision.",
+      "file_ref": null,
+      "category": "scope",
+      "raw_category": null,
+      "location": "project-documents/user/slices/302-slice.design-phase-judge-templates.md:155-170"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "\"Avoids drift\" is not delivered by copying criteria",
+      "description": "The design copies each standard template's criteria into a new judge YAML and says this \"avoids drift.\" Two independent copies with no shared mechanism drift apart. The codebase has no template inheritance or include, and the design adds none. Either add a parity test that compares the criteria lists, or state that the duplication is accepted and drift is a known risk.",
+      "file_ref": null,
+      "category": "dry",
+      "raw_category": null,
+      "location": "project-documents/user/slices/302-slice.design-phase-judge-templates.md:198-206"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Overweight design for two YAML files and two registry entries",
+      "description": "The document runs about 450 lines for a data-only slice. Specific cuts:\n- Walkthrough steps 1\u20132 are inline Python that duplicates the unit tests already listed under Technical Requirements. Keep one line pointing to those tests, plus the live run (step 3) and the test and static-analysis commands (step 4).\n- The data-flow diagram (110\u2013150) re-narrates the 301 enforcement path. One sentence referencing 301 is enough.\n- Failure-table rows that restate 300/301 handling (395\u2013397, 400) can be cut to a reference, keeping the two new rows.\n- The rationale example (161\u2013178) repeats the prompt-shape requirement. Keep the requirement sentence only.",
+      "file_ref": null,
+      "category": "proportionality",
+      "raw_category": null,
+      "location": "project-documents/user/slices/302-slice.design-phase-judge-templates.md:317-374"
+    },
+    {
+      "severity": "NOTE",
+      "title": "\"No engine change\" is not accurate for input resolution",
+      "description": "The architecture and plan both say judges need only authored templates (\"connective work is authoring, not engine change\"). This design correctly flags one required code change to the input registry, but still cites the \"no engine change\" commitment. Record the amendment in the architecture or plan. Also note that the registry is keyed by template name, which the design's own rule forbids as a dispatch signal. It is acceptable as a lookup key, but the design should say so.",
+      "file_ref": null,
+      "category": "architecture",
+      "raw_category": null,
+      "location": "project-documents/user/slices/302-slice.design-phase-judge-templates.md:51-63"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Frontmatter dependencies and interfaces do not match the body",
+      "description": "`dependencies: [301]` omits slice 300, which the body says it consumes and which 300 says 302 extends. `interfaces: [303, 304]` lists 304, but the body never says what 304 needs; the plan says 304 depends on 302. The \"interfaces required\" section also cites the parser's private helpers, while the stable seam is the public parse entry point that calls them.",
+      "file_ref": null,
+      "category": "integration",
+      "raw_category": null,
+      "location": "project-documents/user/slices/302-slice.design-phase-judge-templates.md:5-7"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Success criterion 3 names a CLI form that does not exist",
+      "description": "The criterion uses `sq review slice-vs-arch <artifact> <against>`, and the name appears nowhere in the source. The walkthrough note concedes the invocation must be confirmed during implementation. Replace the criterion with the real invocation once it is confirmed.",
+      "file_ref": null,
+      "category": "scope",
+      "raw_category": null,
+      "location": "project-documents/user/slices/302-slice.design-phase-judge-templates.md:277-282"
+    },
+    {
+      "severity": "PASS",
+      "title": "Verdict-free judge output matches the architecture",
+      "description": "The judge prompt asks for score and findings and forbids a verdict summary. The verdict is derived from the score by enforcement, as the architecture's \"score is the source of truth\" principle requires.",
+      "file_ref": null,
+      "category": "architecture",
+      "raw_category": null,
+      "location": "project-documents/user/slices/302-slice.design-phase-judge-templates.md:208-216"
+    },
+    {
+      "severity": "PASS",
+      "title": "Thresholds are template config with step-level override",
+      "description": "Default floors live in the YAML `judge:` block, and nothing is hardcoded in Python. Step-level overrides merge per key, as the architecture and the magic-values rule require.",
+      "file_ref": null,
+      "category": "architecture",
+      "raw_category": null,
+      "location": "project-documents/user/slices/302-slice.design-phase-judge-templates.md:218-234"
+    },
+    {
+      "severity": "PASS",
+      "title": "Reuses the review action with no new action, step type, or selector",
+      "description": "Judge templates are discovered by glob with no registration code, and `is_judge` depends only on the presence of the `judge:` block. Both match \"reuse, don't rebuild.\"",
+      "file_ref": null,
+      "category": "integration",
+      "raw_category": null,
+      "location": "project-documents/user/slices/302-slice.design-phase-judge-templates.md:59-65"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "Missing, unreadable, or oversized ground truth can yield a scored PASS",
+      "location": "project-documents/user/slices/302-slice.design-phase-judge-templates.md:383-408",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "Empty architecture path passes the missing-input check",
+      "location": "project-documents/user/slices/302-slice.design-phase-judge-templates.md:300-305",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "architecture",
+      "raw_category": null,
+      "summary": "Structured-output constraint is dropped, contrary to the plan and architecture",
+      "location": "project-documents/user/slices/302-slice.design-phase-judge-templates.md:152-183",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "observability",
+      "raw_category": null,
+      "summary": "A discarded model verdict is invisible",
+      "location": "project-documents/user/slices/302-slice.design-phase-judge-templates.md:398",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "scope",
+      "raw_category": null,
+      "summary": "Per-criterion sub-scores are made mandatory before the architecture allows them",
+      "location": "project-documents/user/slices/302-slice.design-phase-judge-templates.md:155-170",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "dry",
+      "raw_category": null,
+      "summary": "\"Avoids drift\" is not delivered by copying criteria",
+      "location": "project-documents/user/slices/302-slice.design-phase-judge-templates.md:198-206",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "concern",
+      "category": "proportionality",
+      "raw_category": null,
+      "summary": "Overweight design for two YAML files and two registry entries",
+      "location": "project-documents/user/slices/302-slice.design-phase-judge-templates.md:317-374",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "note",
+      "category": "architecture",
+      "raw_category": null,
+      "summary": "\"No engine change\" is not accurate for input resolution",
+      "location": "project-documents/user/slices/302-slice.design-phase-judge-templates.md:51-63",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "note",
+      "category": "integration",
+      "raw_category": null,
+      "summary": "Frontmatter dependencies and interfaces do not match the body",
+      "location": "project-documents/user/slices/302-slice.design-phase-judge-templates.md:5-7",
+      "location_verified": true
+    },
+    {
+      "id": "F010",
+      "severity": "note",
+      "category": "scope",
+      "raw_category": null,
+      "summary": "Success criterion 3 names a CLI form that does not exist",
+      "location": "project-documents/user/slices/302-slice.design-phase-judge-templates.md:277-282",
+      "location_verified": true
+    },
+    {
+      "id": "F011",
+      "severity": "pass",
+      "category": "architecture",
+      "raw_category": null,
+      "summary": "Verdict-free judge output matches the architecture",
+      "location": "project-documents/user/slices/302-slice.design-phase-judge-templates.md:208-216",
+      "location_verified": true
+    },
+    {
+      "id": "F012",
+      "severity": "pass",
+      "category": "architecture",
+      "raw_category": null,
+      "summary": "Thresholds are template config with step-level override",
+      "location": "project-documents/user/slices/302-slice.design-phase-judge-templates.md:218-234",
+      "location_verified": true
+    },
+    {
+      "id": "F013",
+      "severity": "pass",
+      "category": "integration",
+      "raw_category": null,
+      "summary": "Reuses the review action with no new action, step type, or selector",
+      "location": "project-documents/user/slices/302-slice.design-phase-judge-templates.md:59-65",
+      "location_verified": true
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/302-slice.design-phase-judge-templates.md",
+    "against": "project-documents/user/architecture/300-arch.eval-actions-llm-as-judge-scoring.md",
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/3e1bc1cd-e8c0-4d04-8eb6-68e1bced119f/scratchpad/design-recall/wt/302-design"
+  },
+  "timestamp": "2026-11-15T16:14:25.696821",
+  "model": "claude-haiku-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 23,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 1,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-haiku-5-5",
+  "answering_models": [
+    "claude-haiku-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 13,
+    "in_fences": 0,
+    "in_section": 13,
+    "surviving": 13
+  },
+  "effort": "xhigh",
+  "profile": "sdk",
+  "turns": 24,
+  "prompt_tokens": 1430402,
+  "cached_tokens": 1256450,
+  "cache_write_tokens": 173930,
+  "completion_tokens": 55974,
+  "reasoning_tokens": null,
+  "duration_seconds": 272.5798616250977,
+  "cost_usd": 0.27685096,
+  "cost_basis": "provider"
+}

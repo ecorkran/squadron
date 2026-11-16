@@ -1,0 +1,54 @@
+{
+ "review": "r15",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Part A changes resume for every paused non-loop step, contradicting the slice's own success criterion",
+   "description": "D2 (lines 189-202) makes any step recorded as `PAUSED` unfinished, so `first_unfinished_step` returns the paused step itself. That predicate is not loop-specific. Today an ordinary phase or gate step that pauses at its checkpoint is resumed at the *next* step, which is the documented \"pause, human decides, continue\" flow.\n\nUnder Part A, that step is re-executed in full on resume (dispatch, review, checkpoint) and will normally pause again on the same verdict. The success criterion \"Resuming a paused non-loop step behaves exactly as today\" cannot hold alongside Scope Part A (lines 118-120) and the criterion at lines 303-304.\n\nThe Risk Assessment (lines 381-386) names only the `FAILED` case and misses this wider change. Verification step 5 covers only a clean run, so nothing bounds it.\n\nThe design needs to do one of two things:\n- **Scope the predicate to loops:** treat a paused step as unfinished only when it carries a re-entry coordinate (`iteration > 0`).\n- **Own the change:** state and justify the new resume semantics for all checkpoints, and say how a resolved checkpoint is prevented from re-firing.",
+   "location": "project-documents/user/slices/915-slice.loop-checkpoint-pause-resume-correctness.md:307-308"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Re-running the paused round means a persistently non-passing loop never advances",
+   "description": "D1 resumes \"at round 2\" and re-runs round 2 from the top. The checkpoint fired *after* that round's dispatch and review had already run. The consequences are:\n\n- **Round counter can stall:** with `checkpoint: on-concerns`, a re-run that again returns CONCERNS pauses again at the same round, and resume re-enters the same round. `max:` is never consumed and `on_exhaust:` is unreachable, which undercuts the claim that \"Resume does not grant extra rounds\".\n- **Feedback is lost:** D3 (lines 258-264) gives the re-run round an empty `prior_iteration_step_outputs`. The findings that triggered the pause, and any human direction, are not fed back, so round N runs as a blind first attempt. That weakens the 910 findings-feedback contract this slice says it protects (lines 44-47).\n- **911 interaction unaddressed:** a re-run round N stamps the same `revision_number:` twice and overwrites the reviewed artifact.\n\nThe design should decide between resuming at N+1 with round N treated as spent, or re-running N. Whichever it picks, it should state how the loop terminates under repeated pauses and what feedback the resumed round receives.",
+   "location": "project-documents/user/slices/915-slice.loop-checkpoint-pause-resume-correctness.md:180-182"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Exhaustion pauses and failures are swept into re-entry without being designed for",
+   "description": "Two existing loop outcomes record a non-complete status with `iteration = max`:\n- `on_exhaust: checkpoint` records `PAUSED`.\n- `on_exhaust: fail` records `FAILED`.\n\nUnder Parts A+B both become \"resume into the loop at round `max`\". Resume then re-runs the final round, which is an extra round beyond `max`. For `on_exhaust: checkpoint` the human escalation becomes a loop that re-pauses on every resume and can never proceed past the step.\n\nThe design treats inner-checkpoint pause as the only pause source and includes `FAILED` as \"the same bug\" without tracing these paths. It should distinguish mid-loop pause from exhaustion and specify resume behaviour for each. Including `FAILED` is also scope beyond issue #48 and the slice plan entry. Either justify it with these cases covered, or defer it.",
+   "location": "project-documents/user/slices/915-slice.loop-checkpoint-pause-resume-correctness.md:204-208"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "`resume_iteration_for` and the predicate are unspecified when a step has multiple records",
+   "description": "D2 keeps the unconditional append (lines 218-222), so every pause/resume cycle adds another `completed_steps` entry for the same step name. Examples are `paused(2)` then `paused(3)`, or `paused(2)` then `completed(3)`.\n\nThe design does not say which record `resume_iteration_for` reads. It also does not say that the D2 predicate must judge a step by its *latest* record. The sketch at lines 198-201 happens to work for paused-then-completed, but only by accident.\n\nThe design should state \"latest record wins\" for both functions and add the second-pause case to the Part A/B tests (lines 317-320).",
+   "location": "project-documents/user/slices/915-slice.loop-checkpoint-pause-resume-correctness.md:287"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Part C's WARNING covers only one of the two loop executors",
+   "description": "The component table threads `start_iteration` through both `_execute_loop_step` and `_execute_loop_body` (line 289). It places the pause WARNING only in `_execute_loop_body`.\n\nSingle-step-body loops also stop on an inner pause, and would keep abandoning rounds silently. That leaves the slice plan's \"at minimum\u2026 observable rather than silent\" requirement unmet for that shape. The WARNING should be added to both paths, or emitted from a shared point.",
+   "location": "project-documents/user/slices/915-slice.loop-checkpoint-pause-resume-correctness.md:290"
+  },
+  {
+   "i": 5,
+   "severity": "NOTE",
+   "title": "Clamp on `start_from_iteration` is a silent fallback",
+   "description": "The design clamps to `>= 1` and ignores the value at DEBUG for non-loop steps. It does not say what happens when the recorded iteration exceeds `max` (for example, `max:` lowered between pause and resume), where the range is empty and the loop falls straight to exhaustion. Project rules prefer an explicit error over silent correction, so one sentence on this case would do.",
+   "location": "project-documents/user/slices/915-slice.loop-checkpoint-pause-resume-correctness.md:247-250"
+  },
+  {
+   "i": 6,
+   "severity": "NOTE",
+   "title": "\"Verified Current Behavior\" could be trimmed",
+   "description": "Roughly 65 lines restate the issue and slice plan entry with line-level citations that the doc itself says have already drifted once. The four-step mechanism and \"Two facts\" (which lists three) could shrink to a short paragraph. The `CheckpointState` fact is not used by any decision. This matters because the architecture asks for a lighter-weight process for maintenance slices.",
+   "location": "project-documents/user/slices/915-slice.loop-checkpoint-pause-resume-correctness.md#verified-current-behavior"
+  }
+ ]
+}

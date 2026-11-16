@@ -1,0 +1,96 @@
+{
+ "review": "r13",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Superseded set and regression selection are blind to non-Python test changes",
+   "description": "D5 takes superseded tests from 422's closure digests. Those digests hash only Python source: the test function and the test-side definitions it reaches. Three effects follow, and D5 addresses none of them.\n\n1. A changed conftest fixture or helper changes the digest of every test that uses it. Those tests become superseded and leave the regression count, so regressions are hidden. 422 D3 rejects this for fix cases (`modifies_test_support`) for this reason. D5's \"no hidden tests\" rationale does not cover it.\n2. A changed non-Python test data file sits outside every digest. A test whose expectation the reference changed through data is not superseded, so a correct replay is charged for failing it. 422 D3 rejects this case (`test_data_changed`).\n3. Regression selection is all fork-collected nodes (line 201). A node the fork already fails and the reference fixes is charged to every replay that does not fix it.\n\nThe parent defines superseded as \"tests the reference changed or deleted\" and says correct replays must not be charged (420-arch, Principles). Reject these cases as 422 does, or state how each is treated and what it does to the count.",
+   "location": "project-documents/user/slices/426-slice.slice-cases.md:195-202"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "A case enters the set before its reference is graded, and the tip environment is unspecified",
+   "description": "The parent says a case \"enters the set only if the original work passes its own grade in the sandbox environment\" (420-arch, Principles), and that the reference is checked \"in the same environment the replays use\" (Technical Considerations). The build flow writes `BenchmarkCase` and `SliceQualification` without grading the reference. D10 (line 240) drops a failing reference later with `reference_failed_grade`, so a case can sit in the set and be dropped afterward.\n\nThe build also resolves a tip sandbox with its own environment (line 118), and the design never says which environment the tip suite repeats run in. If the slice changed `uv.lock`, the tip suite's `flaky` and `fails_at_reference` exclusions come from a different environment than the replays use. 422 D10 fixes this for fix cases (\"checked in the start environment\"). State the same rule here. Either grade the reference during build, or mark the case provisional until its grade passes.",
+   "location": "project-documents/user/slices/426-slice.slice-cases.md:109-125"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "The reference is the tip, not the landing commit the parent names, and two other departures are unrecorded",
+   "description": "The parent's Envisioned State (420-arch, line 87) and the slice plan entry for 426 both say the landing commit is the reference. D2 uses `tip_sha`. The reasoning holds: `fork..after` includes work that reached the target while the branch was open, and 403 D3 stores `tip_sha` for this use. But this changes the parent's definition, so it should be recorded as a change to the parent, not left as a local choice.\n\nTwo more departures are not acknowledged:\n- D11 (line 249) adds `uv.lock` to the judge's dropped paths. The parent's list does not include it.\n- D16 gives the judge its own `--max-cost`. The parent says the run-level cap \"covers grading and judging\" (420-arch, Breakdown). 425 D9 records that departure. 426 inherits it without saying so.",
+   "location": "project-documents/user/slices/426-slice.slice-cases.md:176-178"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Pairwise preference has no noise floor",
+   "description": "The parent says LLM signals, including \"pairwise preference\", are reported \"with their own noise floors\" (420-arch, Design Goals). 320 says the instrument's own run-to-run variance is measured before a comparison is credible (320-arch, Principles).\n\nD13 excludes pairs within one config because \"a config against itself carries no information about it.\" Those same-config pairs are the source of the floor. The spread of a config's own samples measures run-to-run noise in the verdict. The `inconsistent` count (position-swap disagreement) measures one kind of judge noise, but not the verdict's run-to-run variance. Add same-config sample pairs (three per config at k = 3) and derive the floor from them, or state that the pairwise section carries no significance until this is added.",
+   "location": "project-documents/user/slices/426-slice.slice-cases.md:263-270"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Bradley-Terry strengths are shown as a ranking without uncertainty",
+   "description": "D17 prints a Bradley-Terry strength per config with no interval. The walkthrough (lines 352\u2013356) shows an ordered table with strengths 1.42 and 0.70 from six cases. The parent says a pair whose interval spans zero \"is shown as not distinguishable, not ranked\" (420-arch, Envisioned State). 320-arch's \"honest statistics at small n\" forbids implying precision the data does not support. D17 says the verdict comes from the interval, but the ordered strengths still read as a ranking. Show strengths without order, with a bootstrap interval over cases from 425's function, or drop them from the table and keep the pairwise verdicts.",
+   "location": "project-documents/user/slices/426-slice.slice-cases.md:304-313"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Judgment identity does not capture normalization or the size limit",
+   "description": "Judgment ids hash the refs, the judge prompt hash and the alias, and a recorded pair is never judged again (line 302). The normalization rule (D11's dropped paths) and `judge_max_prompt_chars` appear in neither the id nor any version constant. Changing either leaves old judgments in the store, pooled with new ones, and nothing flags the mix. `DiffJudgment` records `max_prompt_chars` and the diff sha256s, but no normalization version, and the report does not say how it treats mixed limits. The parent requires that \"a report compares only results that match, and flags the rest\" (420-arch, Design Goals). Add a normalization rule version to the judgment and to the pair id, and have the report flag mixed versions. The judgment records also carry no `project_id`, though 421 keys records on it.",
+   "location": "project-documents/user/slices/426-slice.slice-cases.md:299-302"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "Judge failure modes are not enumerated",
+   "description": "Failure modes are enumerated for discovery, qualification and cf steps, not for these judge paths:\n- The over-size limit is one config key (line 274), not tied to the judge's real context. A prompt the judge cannot accept fails on every call. D15 treats every failed call as transient, so each rerun retries it and the report shows it as pending indefinitely. Tie the limit to the judge, or record a rejected prompt as a named absence.\n- If the cap is reached, or the second call fails after the first succeeded, the first call's cost is spent and not recorded. State whether it counts toward the cap and whether it is kept.\n- Reference reads at judge time (`git show`/`git diff`) cover only a missing sha. A timeout or non-zero exit has no stated path.\n- `normalize(bytes)` (line 245) does not say what happens on non-UTF-8 content.\n- A sidecar write failure is unstated here. 424 stops the benchmark on store write failure.\n\nEach path needs a named, logged outcome.",
+   "location": "project-documents/user/slices/426-slice.slice-cases.md:279-285"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "Requalification can change a case's identity, and the design does not say what happens",
+   "description": "`excluded_tests` is part of the case id (421 D1). Requalification in a new fork environment can therefore yield a different exclusion list and a different id. D8 (line 225) says only that the run \"qualifies again.\" It does not say whether the replay is dropped, the new case replaces the old one, or the case set changes. The parent says changed content makes a new case (420-arch, Principles), so a replay must not continue under the old id once its content has changed.\n\nAlso, `slice_qualification_for` must rebuild the record key (slice index and landing sha) from `provenance.source_ref`, a free-text label (`slice:<index>@<sha>`). The parent says labels are not logical structure. Store the index and landing as typed fields, and specify the drop-or-replace rule.",
+   "location": "project-documents/user/slices/426-slice.slice-cases.md:206-208"
+  },
+  {
+   "i": 8,
+   "severity": "CONCERN",
+   "title": "The edit inventory contradicts the scope claims",
+   "description": "Technical Scope says \"No edits to 424 or 425.\" The rest of the document says otherwise:\n- D7 says \"no 422 code changes\" (line 214), but `yield_report.py` gains slice-case rows (line 88).\n- `bench_report.py` (425's module) gains the per-kind grouping and pairwise section (line 87). 425 expects this addition, so it is planned, but the scope text should say so.\n- Line 321 says `CaseDrop.reason` \"widens\" to accept `SliceCandidateRejection`. It already accepts `str` (424-slice, Data model), and a `StrEnum` is a `str`, so the widening is unnecessary.\n\nReplace the claim with a list of every module outside 426's own that changes, why, and whether each change is additive.",
+   "location": "project-documents/user/slices/426-slice.slice-cases.md:42"
+  },
+  {
+   "i": 9,
+   "severity": "CONCERN",
+   "title": "The design is heavier than its effort rating, and cuts are available",
+   "description": "Effort is rated 3/5. 424 and 425 are each rated 4/5, yet this slice adds a judge with its own cap, bound, resume and two record types, a normalizer, a report section and yield rows. Most of the scope is required by the parent. These parts are not:\n- The binary-file marker in `normalize` (D11, line 250). No squadron slice in the 400 history is shown to need it, and the over-size rule already handles a base85 diff. Defer it until a case needs it.\n- The pairwise report's \"any others listed\" for other judges (D17, line 307). Show the latest judge only; the header already names it.\n- Reading the reference diff from the user's checkout at judge time (D16). The build already computes `fork..tip` (D4, line 117). Storing it as a sidecar removes one refusal path and one failure mode, though 425's grade still needs `--repo`.\n- The Overview and Success Criteria restate decisions D1\u2013D17. Trim them to the checks.\n\nRe-rate the effort, or record why it stays at 3/5.",
+   "location": "project-documents/user/slices/426-slice.slice-cases.md:521"
+  },
+  {
+   "i": 10,
+   "severity": "NOTE",
+   "title": "Frontmatter dependencies and interfaces do not match the body",
+   "description": "`dependencies` omits 403 (the `slice_ranges` record, D1 and D3) and 177 (`judge_pair`, `ReplaySandbox` composition, start-point patterns). The Interfaces Required and Consumes sections name both. `interfaces: []` is empty, while Integration Points provides `CfRegistration`, `normalize`, `judge_pair` and slice cases to later slices. The PM tooling uses these fields for ordering.",
+   "location": "project-documents/user/slices/426-slice.slice-cases.md:6-7"
+  },
+  {
+   "i": 11,
+   "severity": "NOTE",
+   "title": "Qualification's no-code check depends on the judge's normalization list",
+   "description": "D4 rejects `no_code_change` using the judge-only drop list from D11, which the document says is \"for the judge only.\" Qualification therefore depends on judge policy. Changing that list changes which cases qualify, so it must bump `SLICE_RULE_VERSION`. The document does not say so. Give the check its own path list, or state the bump rule.",
+   "location": "project-documents/user/slices/426-slice.slice-cases.md:190-193"
+  },
+  {
+   "i": 12,
+   "severity": "NOTE",
+   "title": "Pair verdicts are re-derived instead of reused",
+   "description": "425 D14 defines `PairVerdict` (`a_ahead`, `b_ahead`, `not_distinguishable`, `too_few_cases`) and the `MIN_PAIRED_CASES` threshold. D17 calls 425's interval but leaves the verdict mapping and the \"too few cases\" threshold unspecified. Reuse 425's verdict function and constant to avoid a second copy.",
+   "location": "project-documents/user/slices/426-slice.slice-cases.md:310-312"
+  }
+ ]
+}

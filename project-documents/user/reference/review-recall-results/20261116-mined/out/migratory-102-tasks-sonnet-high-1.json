@@ -1,0 +1,153 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "PASS",
+      "title": "Success criteria coverage and task sequencing",
+      "description": "Every functional criterion in the slice design maps to a task:\n- **BulkForce conformance:** covered by 3.1/3.2 and 4.1/4.2.\n- **Hand-constructed outputs:** the MomentumForce known case in 3.2, and the LeadershipForce known geometry in 4.2.\n- **Zero-force edge cases:** no neighbors, zero leadership and zero velocity are all in 3.2 and 4.2.\n- **`active_indices` isolation:** tested in both 3.2 and 4.2.\n- **Five-force `tick()` directional bias:** covered by 5.2.\n- **Profile differentiation:** covered by 5.3.\n- **Backward-incompatible `AgentState` and `BehavioralProfile` updates:** handled in 1.2 and 2.2.\n\nThe ordering also holds. State comes first, then profile, then MomentumForce and LeadershipForce, which depend on `state.leadership` and `profile.momentum_weight`, and finally the integration tests. Tests follow their implementation tasks directly. There are no circular dependencies, and nothing traces to scope outside the slice. A single task file is the right size for this slice.",
+      "file_ref": null,
+      "category": "coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:27-165"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Commit steps are checkbox tasks, and 6.3 is a catch-all commit",
+      "description": "Tasks 1.3, 2.3, 3.3, 4.3 and 5.4 are written as checkbox items (\"Commit: ...\"). Commit markers must be plain `**Commit**:` lines, never checkboxes. The placement after each working, tested section is sound and matches slice design step 7. Only the format needs to change.\n\nTask 6.3 is a final commit that adds \"any remaining changes\" as `docs: complete slice 102`. By this point everything is committed at 5.4, so the commit would hold only check-offs or notes. The project rules forbid a commit that only checks boxes or adds notes. Drop 6.3, or fold the `git status` clean-tree check into the 5.4 marker.",
+      "file_ref": null,
+      "category": "process",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:180-182"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Section 6 and task 5.1 add redundant work",
+      "description": "- **6.2** re-checks `isinstance(..., BulkForce)`. That is already verified in 3.1 and 4.1 and tested in 3.2 and 4.2. Cut it.\n- **6.1** repeats the full-suite run already required by the Verify steps in 1.2, 2.2, 3.2, 4.2 and 5.x. Fold it into the last section's Verify step and delete Section 6.\n- **5.1** is a smoke test (N=10, 10 steps) whose only assertion is \"runs without error\". Task 5.2 already drives all five forces through `tick()` with 50 agents over 300 ticks, so a failure to run would surface there. Merge 5.1 into 5.2, or cut it. The step \"confirm forces interact correctly\" has no stated assertion.",
+      "file_ref": null,
+      "category": "proportionality",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:141-145"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Integration and differentiation assertions are vague and could pass vacuously",
+      "description": "- **5.2** asserts only that the mean heading has a positive x-component. The 45 non-leader agents start with random velocities, so a positive x-component can occur by chance and the test would pass without any leadership effect. The slice criterion is that the heading \"converges toward the leaders' initial heading\". Assert a threshold on the mean unit-heading x-component, or assert that it exceeds the starting value.\n- **5.3** passes if either heading variance is lower or the eastward component is higher. That is two loose chances to pass, and \"statistically measurable\" has no tolerance. \"Heading variance\" is also never defined. Name the metric, for example the circular variance of unit headings, and require a strict, specific comparison against the flocking baseline. Say what to do if the chosen parameters do not separate the two runs, such as adjusting weights or tick count rather than weakening the assertion.\n- **4.2** (lines 126-127): the known-geometry case has a computable expected value. The weighted heading is (0.1\u00b7[0,1] + 0.9\u00b7[1,0]) / 1.0 = [0.9, 0.1], and agent 2 is stationary, so the force is [0.9, 0.1] \u00d7 `leadership_weight`. State it, as 3.2 does for MomentumForce. The uniform-leadership test says only \"similar to plain velocity averaging\". Specify an exact comparison, such as the mean neighbor velocity minus own velocity, times the weight.",
+      "file_ref": null,
+      "category": "test-quality",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:147-162"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Epsilon threshold is specified twice as an \"e.g.\" value",
+      "description": "Tasks 3.1 (line 86) and 4.1 (line 117) each give \"epsilon (e.g. 1e-10)\" for the zero-speed and zero-leadership-sum guards. The project rules forbid hard-coded and duplicated constants. The \"e.g.\" also leaves the value open to interpretation. Add one step in 3.1 to define a single module-level constant in `herding.py`, and have 4.1 reuse it. First check whether `flocking.py` already defines an equivalent constant, and reuse it if so.",
+      "file_ref": null,
+      "category": "code-quality",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:86"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "pass",
+      "category": "coverage",
+      "raw_category": null,
+      "summary": "Success criteria coverage and task sequencing",
+      "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:27-165",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "process",
+      "raw_category": null,
+      "summary": "Commit steps are checkbox tasks, and 6.3 is a catch-all commit",
+      "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:180-182",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "proportionality",
+      "raw_category": null,
+      "summary": "Section 6 and task 5.1 add redundant work",
+      "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:141-145",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "test-quality",
+      "raw_category": null,
+      "summary": "Integration and differentiation assertions are vague and could pass vacuously",
+      "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:147-162",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "code-quality",
+      "raw_category": null,
+      "summary": "Epsilon threshold is specified twice as an \"e.g.\" value",
+      "location": "project-documents/user/tasks/102-tasks.herding-and-leadership.md:86",
+      "location_verified": true
+    }
+  ],
+  "template_name": "tasks",
+  "input_files": {
+    "input": "project-documents/user/tasks/102-tasks.herding-and-leadership.md",
+    "against": "project-documents/user/slices/102-slice.herding-and-leadership.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/migratory-102-tasks"
+  },
+  "timestamp": "2026-11-16T10:20:21.104694",
+  "model": "claude-sonnet-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 2,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-sonnet-5-5",
+  "answering_models": [
+    "claude-sonnet-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 5,
+    "in_fences": 0,
+    "in_section": 5,
+    "surviving": 5
+  },
+  "effort": "high",
+  "profile": "sdk",
+  "turns": 3,
+  "prompt_tokens": 104465,
+  "cached_tokens": 23069,
+  "cache_write_tokens": 81392,
+  "completion_tokens": 7124,
+  "reasoning_tokens": null,
+  "duration_seconds": 57.070185207994655,
+  "cost_usd": 0.39962380000000003,
+  "cost_basis": "provider"
+}

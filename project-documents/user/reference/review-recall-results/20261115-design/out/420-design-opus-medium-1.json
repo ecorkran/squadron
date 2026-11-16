@@ -1,0 +1,171 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "D6 changes the architecture's config identity without updating the architecture",
+      "description": "The architecture defines a result's config as \"(alias, model, profile, effort sent)\" (`420-arch.model-benchmark.md:40`). D6 changes that in two ways:\n- It removes the alias from the identity.\n- It adds `tool_use` and `max_output_tokens`.\n\nThe section says this \"narrows\" the identity to what the slice plan requires. That is only half true. Dropping the alias narrows it. Adding the two alias fields widens it, and the slice plan does not ask for that. The widening is correct: without the alias, two aliases that differ only in `max_output_tokens` would merge into one row. But it is a new identity definition.\n\nLine 162 says the rule \"supersedes the architecture's\" for grouping, and line 186 tells slices 421\u2013427 to group by the D6 rule. Those slices will be designed against the architecture doc, which still says the opposite. That is a hidden dependency. The fix is to update the architecture's Design Goals line (and line 99) to the D6 tuple as part of this slice, and to state it as a widening as well as a narrowing.",
+      "file_ref": null,
+      "category": "architectural-alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/420-slice.effort-audit-across-dispatch-paths.md:142-147"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Old producer replays will split from new ones under the D6 identity",
+      "description": "The new `ProducerConfigRef.tool_use` and `max_output_tokens` fields default to `None` on old records (line 109). Both fields are part of the `config_identity` grouping key (line 146). So a replay recorded before this slice and one recorded after, from the same alias that sent the same model, profile and effort, become two report rows. The new row carries the alias's real values; the old row carries `None`.\n\nThis contradicts the slice's own success criterion: \"two replays \u2026 which sent the same model, profile and effort fall into one report row\" (line 177). It also runs against the architecture's goal that a report \"compares only results that match, and flags the rest\" (`420-arch.model-benchmark.md:40`). D3 deals with the same problem for `JudgeRef`. D6 does not.\n\nThe design should pick one behavior:\n- show pre-slice rows as a separate, flagged legacy identity; or\n- treat `None` in these fields as \"unknown\" and keep those rows out of comparisons with known values.\n\nIt should not leave them as quietly unequal keys.",
+      "file_ref": null,
+      "category": "data-compatibility",
+      "raw_category": null,
+      "location": "project-documents/user/slices/420-slice.effort-audit-across-dispatch-paths.md:109"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The findings-addressed judge sends effort but records it nowhere",
+      "description": "The slice plan requires that every path \"sends the alias's effort \u2026 or records that it could not.\" Path 7 meets the \"sends\" half once D3 lands. It writes no record of any kind, so the missing record is a 175 spend-coverage gap, not dropped effort scope. The design correctly excludes it and plans to file an issue (line 232). No consuming slice reads this judge's effort. The grader's review goes through paths 6 and 9, which do record it. No action needed beyond filing the issue.",
+      "file_ref": null,
+      "category": "scope",
+      "raw_category": null,
+      "location": "project-documents/user/slices/420-slice.effort-audit-across-dispatch-paths.md:68"
+    },
+    {
+      "severity": "PASS",
+      "title": "Inventory, per-path fixes and enforcement match the slice plan",
+      "description": "The 17-path table covers the SDK, one-shot, review and prompt-only paths the slice plan names. Each defect has its own decision (D2\u2013D5) and its own test. The AST enumeration test (D7) keeps the inventory current without adding runtime code. Keeping the \"not sent\" capability gate, tested with a fake provider where `applies_effort=False`, meets the plan's \"records not sent\" criterion even though no current provider needs it today. The out-of-scope paths (no alias to resolve) are reasoned exclusions, not dropped scope.",
+      "file_ref": null,
+      "category": "architectural-alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/420-slice.effort-audit-across-dispatch-paths.md#component-structure"
+    },
+    {
+      "severity": "PASS",
+      "title": "\"Not sent\" is explicit and the reader fails on bad input",
+      "description": "Three behaviors carry out the architecture's \"absent is not zero\" principle:\n- D1 keeps `null` meaning \"not sent\", which matches 175 D7, so no migration is needed.\n- D5 tells an absent key (old run, or failed before resolution) apart from a `null` value. The no-stamp failures are counted through replay's existing failure classes, not by effort.\n- `action_effort_sent` raises on an unrecognized stored value instead of returning `None`, and never substitutes the alias's value.\n\nRejecting a zero-spend `UsageRecord` also protects 175's priced and unpriced tallies.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/420-slice.effort-audit-across-dispatch-paths.md:133-140"
+    },
+    {
+      "severity": "PASS",
+      "title": "Proportionality and integration points",
+      "description": "The design adds one metadata key, one writer and one reader, plus optional fields on existing models. There is no new store record type and no shared identity type ahead of need; later slices apply the rule themselves. It changes no existing interfaces (931, 175, #216). The CHANGELOG bullet notes the cost and latency change for the findings-addressed gate, which serves the architecture's \"spend is visible\" goal. The architecture states no latency or throughput NFR for these paths, so none needs restating here.",
+      "file_ref": null,
+      "category": "proportionality",
+      "raw_category": null,
+      "location": "project-documents/user/slices/420-slice.effort-audit-across-dispatch-paths.md#integration-points"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "architectural-alignment",
+      "raw_category": null,
+      "summary": "D6 changes the architecture's config identity without updating the architecture",
+      "location": "project-documents/user/slices/420-slice.effort-audit-across-dispatch-paths.md:142-147",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "data-compatibility",
+      "raw_category": null,
+      "summary": "Old producer replays will split from new ones under the D6 identity",
+      "location": "project-documents/user/slices/420-slice.effort-audit-across-dispatch-paths.md:109",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "note",
+      "category": "scope",
+      "raw_category": null,
+      "summary": "The findings-addressed judge sends effort but records it nowhere",
+      "location": "project-documents/user/slices/420-slice.effort-audit-across-dispatch-paths.md:68",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "pass",
+      "category": "architectural-alignment",
+      "raw_category": null,
+      "summary": "Inventory, per-path fixes and enforcement match the slice plan",
+      "location": "project-documents/user/slices/420-slice.effort-audit-across-dispatch-paths.md#component-structure",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "pass",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "\"Not sent\" is explicit and the reader fails on bad input",
+      "location": "project-documents/user/slices/420-slice.effort-audit-across-dispatch-paths.md:133-140",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "pass",
+      "category": "proportionality",
+      "raw_category": null,
+      "summary": "Proportionality and integration points",
+      "location": "project-documents/user/slices/420-slice.effort-audit-across-dispatch-paths.md#integration-points",
+      "location_verified": null
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/420-slice.effort-audit-across-dispatch-paths.md",
+    "against": "project-documents/user/architecture/420-arch.model-benchmark.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261115-design/wt/420-design"
+  },
+  "timestamp": "2026-11-16T06:57:45.100530",
+  "model": "claude-opus-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 3,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-opus-5-5",
+  "answering_models": [
+    "claude-opus-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 6,
+    "in_fences": 0,
+    "in_section": 6,
+    "surviving": 6
+  },
+  "effort": "medium",
+  "profile": "sdk",
+  "turns": 4,
+  "prompt_tokens": 231770,
+  "cached_tokens": 132761,
+  "cache_write_tokens": 99003,
+  "completion_tokens": 3944,
+  "reasoning_tokens": null,
+  "duration_seconds": 55.14457254204899,
+  "cost_usd": 0.8982480999999999,
+  "cost_basis": "provider"
+}

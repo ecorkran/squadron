@@ -1,0 +1,47 @@
+{
+ "review": "r13",
+ "findings": [
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Architecture's structured-output constraint on the score field is not addressed",
+   "description": "The architecture commits the judge template to two things: \"a structured-output constraint for the score field *and* a score-with-rationale prompt shape\". The slice implements only the rationale half, as prose scaffolding with a lenient `score:` line. It neither adopts a structured-output constraint nor states why one is deferred or not applicable to the `review` engine. The unmet requirement is Technical Considerations item (b) of the architecture. Either name the mechanism the template uses, or record an explicit deferral with a reason. The score-absent and out-of-range failure rows currently carry all the weight that constraint was meant to share.",
+   "location": "project-documents/user/slices/302-slice.design-phase-judge-templates.md:152-183"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Failure-mode enumeration omits architecture-listed modes and has no observable-signal test",
+   "description": "The architecture enumerates these failure modes: unparseable response, missing or unreadable ground-truth file, and injected ground truth exceeding the cap. The slice's table covers neither the unreadable-file nor the over-cap case. It also does not cover an unparseable response beyond the score-absent row. Both judge templates take two documents (`input` and `against`), so the over-cap case is not hypothetical. A `SliceInfo` field being absent is different from a path that resolves to a missing file.\nThe table is also not backed by tests that check the failure is observable. The slice tests assert verdicts only (lines 300-305). The project's failure-mode rule requires at least one test asserting the WARNING+ log or metric for the failure. Add the missing rows, each mapped to `UNKNOWN` and logged. Add a test that asserts the log signal for the new `TEMPLATE_INPUTS` failure path.",
+   "location": "project-documents/user/slices/302-slice.design-phase-judge-templates.md:394-400"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Criteria and rubric for the judge are under-specified",
+   "description": "The slice says each template \"reuses the same list already proven in `slice.yaml` / `tasks.yaml`\". It does not fix the criterion names the `criteria:` map will use. The only names are the illustrative `alignment` and `scope` in the example (lines 169-171). It also gives no anchoring guidance for what a 60, 80 or 90 means. Without stable criterion keys per template, the reserved `criteria` map cannot be compared across runs, which the calibration initiative [320] relies on. The slice's own anchoring-reduction goal also has nothing concrete to work with. Name the criterion set for each template. State whether the top-level score is the model's holistic number or a defined roll-up of the criteria. The example text \"roll the criteria into the top-level `score:`\" leaves this open.",
+   "location": "project-documents/user/slices/302-slice.design-phase-judge-templates.md:198-206"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Defaults are asserted without tying them to the \"advisory until calibrated\" stance, and the data-flow example contradicts the table",
+   "description": "The architecture says early scores are advisory and defaults are deliberately conservative. The slice sets `pass_floor` at 78 for tasks-vs-slice and 82 for slice-vs-arch. It gives only a relative rationale (one stricter than the other), not an absolute one for why auto-pass at 78 is conservative for an uncalibrated judge. Add one sentence of justification or mark the values as provisional pending [320].\nThe data-flow example for `judge.slice-vs-arch` also shows `pass_floor(78)`. The threshold table sets that template's floor at 82, and 78 belongs to `judge.tasks-vs-slice`. The example also uses a score of 82, which sits exactly on the boundary. Fix the number and use a score that doesn't sit on the boundary.",
+   "location": "project-documents/user/slices/302-slice.design-phase-judge-templates.md:146"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "Document is overweight for the delivered scope; restatement can be cut",
+   "description": "The slice delivers two YAML files and two dict entries, yet the document carries material restating other slices.\n- **Data Flow diagram (lines 110-150):** it restates the full `review` action pipeline through `enforce_judge`, all of which is unchanged. A three-line \"unchanged path\" statement would do.\n- **Failure-mode table:** four of five rows are labelled \"Not new\". Keep only rows new to this slice, plus the added rows from the earlier finding.\n- **Provides and Consumes sections:** they repeat the Dependencies and Overview content.\n- **No-silent-pass paragraph (lines 402-408):** it restates the architecture NFR at length.\n- **Verification step 3:** the CLI shape is flagged as unconfirmed, and the success criterion uses a different invocation (`sq review slice-vs-arch <artifact> <against>`). Resolve this to one confirmed form or drop it to a pointer.",
+   "location": "project-documents/user/slices/302-slice.design-phase-judge-templates.md#risk-assessment"
+  },
+  {
+   "i": 7,
+   "severity": "NOTE",
+   "title": "Integration requirement about `sq review list` is unverified against the codebase",
+   "description": "The requirement says the listing \"shows both new templates alongside the existing four\". The slice does not cite where that count or listing surface comes from. Confirm during implementation, or drop the count.",
+   "location": "project-documents/user/slices/302-slice.design-phase-judge-templates.md:314-315"
+  }
+ ]
+}

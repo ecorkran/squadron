@@ -1,0 +1,54 @@
+{
+ "review": "r10",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "A temporary install failure becomes permanent case disqualification",
+   "description": "`EnvironmentFailureReason` has `no_lockfile`, `lockfile_unsupported`, `lock_stale_or_unresolvable`, `install_timeout` and `installer_missing`. If the network drops or PyPI returns an error during `uv sync --locked`, nothing tells that apart from \"a package that no longer downloads\". It lands in `lock_stale_or_unresolvable`. The architecture separates two outcomes:\n- \"A lockfile that no longer resolves disqualifies the case\" (Technical Considerations).\n- A harness-caused failure drops the case from comparison but does not count against it (\"Absent is not zero\").\n\n422 keys qualification on this reason, so one network blip would exclude a valid case and lower the yield report that decides the initiative's ordering. `install_timeout` has the same ambiguity: a slow mirror is not a stale lock.\n\n**Fix:** add a transient reason, such as `install_network_error`, picked from uv's exit status or stderr. State which reasons are permanent (disqualify the case) and which are transient (retry or drop for this run only), so 422 does not have to guess.",
+   "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:152"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "`EnvironmentIdentity` is in `benchmark/`, but 422 and 424 persist it in metrology records",
+   "description": "The design says \"Neither of those [`metrology/`, `replay/`] depends on `benchmark/`.\" It also puts `EnvironmentIdentity` in `benchmark/adapter.py` (line 82\u201383). Line 119 says 422's qualification records and 424's replay records will carry it. Those records are `MetrologyRecord` sibling payloads, so `metrology/` would have to import `benchmark/adapter.py`, which breaks the stated direction one slice later. 421 is the right place to fix this because it defines the type.\n\n**Fix:** put `EnvironmentIdentity`, which is a persisted value type, in `metrology/benchmark_models.py` next to `BenchmarkCase`, and have `benchmark/adapter.py` import it from there. `FailureKind`/`NodeOutcome` have the same issue if 422 persists per-node results.",
+   "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:97"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "The restricted `PATH` does not say how agent runtimes are found, and the auth check can't tell \"binary missing\" from \"auth failed\"",
+   "description": "`PATH` is the adapter's entries, `<id>.home/bin` (which only links `git` and `uv` through `HARNESS_TOOL_ALLOWLIST`), and `/usr/bin:/bin:/usr/sbin:/sbin`. Homebrew and `~/.local/bin` are left out on purpose. Line 174 says agent CLIs started by a scrubbed `sq run` inherit this environment. The design never says how those runtimes are located: the Claude Code CLI behind the `sdk` profile, or any `node`/CLI dependency of the OpenAI OAuth path.\n\nIf they normally resolve through Homebrew or `~/.local/bin`, every probe fails. D8 (line 184) reports only \"exit code and stderr\" and treats any failure as \"no\", so a missing binary looks like a lost login. The PM would then decide about auth for a problem that is really about `PATH`. This weakens the slice plan's criterion that the auth check gives a definite yes or no on auth.\n\n**Fix:** state per profile how the runtime binary is resolved under the scrub (bundled with the SDK, absolute path, or added to `HARNESS_TOOL_ALLOWLIST`). Have the probe report a separate reason, such as `runtime_not_found`, distinct from an auth failure.",
+   "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:168"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Two suite-runner output cases are undefined",
+   "description": "D10 handles a timeout (keep the lines written, mark the rest `not_run`) and \"a missing or unparseable JSONL file with a non-zero pytest exit\". Two cases are left open:\n1. **JSONL missing or empty with exit code 0.** For example, the output-path environment variable isn't read or the plugin writes elsewhere. The condition as written only raises on a non-zero exit, so this case could still produce the \"empty pass\" the design says must never happen.\n2. **Truncated last line after a timeout kill.** Killing the process group mid-write can leave a partial final line. The design doesn't say whether that line is skipped with a WARNING or turns the whole run into `SuiteRunError`.\n\n**Fix:** raise `SuiteRunError` whenever requested nodes have no records and pytest didn't time out, whatever the exit code. On timeout, drop a trailing partial line with a WARNING.",
+   "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:209"
+  },
+  {
+   "i": 4,
+   "severity": "NOTE",
+   "title": "Case sets keyed by name differ from the architecture's \"keyed on `ProjectId`\"",
+   "description": "The architecture (\"Extend 320's store\") and the slice plan's 421 entry both say the new record types are keyed on `ProjectId`. D2 keys `CaseSet` by name so that 422 can pool cases from several projects, an option the architecture itself names. The reason holds, and each case still carries `project_id`. Update the architecture's wording so later slices don't treat this as an inconsistency.",
+   "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:134"
+  },
+  {
+   "i": 5,
+   "severity": "NOTE",
+   "title": "Adding `reference_sha` to the case identity is a justified extension",
+   "description": "The architecture's identity list leaves out the reference commit. The slice adds it because hidden-test source is read from the reference at grading time. The design flags this as a departure and gives the reason. The exclusion list the slice plan requires is also in the identity (`excluded_tests`).",
+   "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:126"
+  },
+  {
+   "i": 6,
+   "severity": "NOTE",
+   "title": "Detecting a missing `mock.patch` target relies on CPython mock internals",
+   "description": "Reading the `_patch` object from the innermost frame was checked only on Python 3.13, but the plugin runs under each start commit's interpreter. If those internals differ, the `AttributeError`'s innermost frame is still in `mock.py`, not project source, so it falls to `other_exception`, which 422 excludes. That is the safe direction. A fixture test on the oldest Python squadron's history uses would confirm it.",
+   "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:207"
+  }
+ ]
+}

@@ -1,0 +1,40 @@
+{
+ "review": "r02",
+ "findings": [
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Design is heavier than the keystone needs; several items can be cut or deferred",
+   "description": "The architecture says this slice ends at a yield report, and that the report decides what comes next. Parts of the design go beyond that:\n- **`/sq:benchmark` slash command** (lines 44, 95, 324). It mirrors all three subcommands, and the yield answer is read once, by the PM, from the CLI. Defer it to 424/425, when the command surface is stable.\n- **`--json` on `yield`.** Nothing consumes it, except walkthrough step 6, which uses it to inspect the case-set version. `fix-cases show` or the build output can carry that instead.\n- **`--commit` and `--keep` flags.** These are debugging conveniences. Keep one at most.\n- **Renderer cutoff-less mode** (line 139). It exists \"for 423's live fix\", a consumer outside this slice, with no test here. Add it when 423 needs it.\n- **Two parallel boundary mechanisms** (D6 static references plus dynamic `sys.setprofile` crossings), plus a third interception layer for patching (D7). The architecture only requires \"where a check cannot decide, exclude\". Try the cheaper mechanism first. D6 itself says the static check cannot follow fixtures and helpers. Even so, a static pass over closure code objects (which D3 already builds) combined with the patch interception may cover the squadron cases. If the profile hook is kept, the slice should show a case it uniquely catches.\n- **Rebuild cost** (D10, line 241). Reuse still builds one sandbox, with its install, per candidate, because the digest includes the interpreter version. For ~50 candidates a no-op rebuild costs ~50 installs. That is heavy for \"resumability\".\n\nA 4/5 effort rating and 17+8 rejection reasons are a lot for a slice whose deliverable is a count.",
+   "location": "project-documents/user/slices/422-slice.fix-case-qualification-and-yield-report-keystone.md#Technical Scope"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Analytic separability bound is anti-conservative and drives the initiative-ordering decision",
+   "description": "- The architecture says the report states whether the qualified count can separate two configs \"under the paired statistic\" (paired bootstrap over cases).\n- D12 substitutes a bound with Var(D) \u2264 0.5/k per case. This is the worst case for within-case Bernoulli noise only. It ignores between-case variation in the true difference, which the document itself says raises the real variance.\n- The report therefore errs toward \"enough cases\", and that is the answer that keeps 423\u2192424\u2192425 as planned and avoids pooling across projects.\n- The caveat text beside the answer is good, but the output is binary.\n- Fix: either report the answer as \"not ruled out / enough only if per-case differences are similar\", or add a between-case variance term as a named, configured assumption. Do not simulate a bootstrap. D12 rightly rejects that.\n- At minimum, the table should show the MDD alongside a sensitivity case, so the PM is not handed a bare \"enough\".",
+   "location": "project-documents/user/slices/422-slice.fix-case-qualification-and-yield-report-keystone.md:253-265"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Harness-failure handling is split between \"record and continue\" and \"exit 1\", with no stated boundary",
+   "description": "- Line 285 says every harness failure (timeout, `SuiteRunError`, non-not-found `CodeHostError`) is logged at ERROR and recorded as `harness_error` for that candidate.\n- Line 304 says the build exits 1 \"on a harness failure that stops the build (for example, `gh` missing\u2026)\".\n- The design never says which failures abort the run and which only mark a candidate. For example, `gh` auth failing mid-run, or rate limiting on the per-candidate GraphQL call (new I/O path D2), could mark dozens of candidates `harness_error` and then count them in the yield table.\n- The design also gives no timeout values or config keys for:\n  - the sandbox install,\n  - the suite and trace runs,\n  - the resolver,\n  - `gh` calls.\n  It likewise does not cover `git show` or `git log` failures in the user's checkout.\n- Requirement left unmet: each new I/O path needs an explicit hang, timeout and peer-failure strategy that is observable.\n- Fix:\n  - Name the abort conditions, for example a fatal `gh` error or N consecutive harness errors.\n  - Name the timeout config keys.\n  - Say how `harness_error` counts show in the yield report. D12 lists them, but the effect on the separability n should be explicit.",
+   "location": "project-documents/user/slices/422-slice.fix-case-qualification-and-yield-report-keystone.md:285,304"
+  },
+  {
+   "i": 4,
+   "severity": "NOTE",
+   "title": "Trace runs before the fails-at-reference check, so a test's rejection reason can be misattributed",
+   "description": "- The trace runs on hidden candidates (D9 step 5) before the repeated reference runs (step 7) reveal `fails_at_reference`.\n- D6 says the trace runs \"where they pass so the whole path executes\". A test that fails at the reference gives a truncated trace.\n- Such a test could be rejected as `reaches_past_boundary` or `boundary_undecidable` instead of `fails_at_reference`. This skews the per-reason yield breakdown, which is the report's main output.\n- A cheap fix is to run a single reference pass on the hidden candidates before the trace, or to prefer `fails_at_reference` when both apply.",
+   "location": "project-documents/user/slices/422-slice.fix-case-qualification-and-yield-report-keystone.md:109,218-219"
+  },
+  {
+   "i": 5,
+   "severity": "NOTE",
+   "title": "Agent-auth-under-redirected-config check is not owned by this slice",
+   "description": "- The architecture's keystone entry lists \"whether agent auth survives the redirected config directory\" and says this slice \"builds the sandbox environment\" where that check belongs.\n- The slice defers it to 421 (\"If the 421 auth check answered no\u2026\").\n- If the slice plan assigns it to 421, this is consistent. Confirm against the slice plan, because the plan's entry for this slice decides whether dropping it is a scope gap.",
+   "location": "project-documents/user/slices/422-slice.fix-case-qualification-and-yield-report-keystone.md:365"
+  }
+ ]
+}

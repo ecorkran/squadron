@@ -1,0 +1,260 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "The keystone slice depends on project-declared limits that no config or format defines",
+      "description": "\"Limits come from the project\" says limits are read from \"limits the project declares in its own config\". Current State says squadron's limits live only in CLAUDE.md prose and \"no tool reads or checks them\". The document never names a config location, schema or owner. The keystone slice is meant to prove this \"against squadron itself\", but squadron has no declared limits to read. The first slice therefore either invents the format on its own or reports \"no limits set\" for the project that motivated the work. The document also says the project's size rules are checked by nothing. That goal is not met until the declaration mechanism exists. Decide where limits are declared, for example a `pyproject.toml` table or squadron project config, and what happens for brownfield projects that have none.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#architectural-principles"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Measuring a historical commit without modifying the repo is asserted but not designed",
+      "description": "The document says \"Taking a snapshot doesn't modify the measured repository\" and that a slice's before and after is \"the snapshot at its fork point against the snapshot at its merge\". Fork-point snapshots are historical, so they need a throwaway worktree or checkout. Several parts of that are unspecified:\n- Which config applies: the config at that commit, or the current one?\n- How exclusions are resolved.\n- Which tool versions run. The document also says a tool version change makes snapshots non-comparable, so back-filled snapshots would routinely be flagged incomparable.\n- What happens when the project's lint or type rules, or its tool config, changed between the two commits.\n- How tool side effects such as the ruff cache, `.coverage`, and pyright or node resolution are kept out of the repo.\n\n\"Dirty tree refused or recorded with a dirty marker\" is also left undecided. It is a load-bearing semantic, because it determines whether the record's key is stable.",
+      "file_ref": null,
+      "category": "feasibility",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#envisioned-state"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Slice attribution by \"fork point to merge commit\" conflicts with the project's git workflow",
+      "description": "The attribution paragraph assumes a merge commit exists. The project's rules run `git checkout {target}; git merge {branch}`, which fast-forwards when the target hasn't moved. A fast-forward leaves no merge commit and no recorded fork point. The documented hierarchy (`main` \u2190 integration branch \u2190 worktree branch \u2190 slice branch) also means the fork point is on a worktree branch, not `main`. Fork-point recovery through git topology is therefore unreliable, and the doc defers the choice to \"git topology, cf slice records, or both\". Per-slice reporting is a headline capability, so this should be decided here. At minimum, require that the fork SHA be recorded at slice start.",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#technical-considerations"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The \"noise floor for LLM sources\" claim has no method for review findings",
+      "description": "Design Goals and Envisioned State both say LLM-derived numbers, \"audit, review\", are \"shown against their noise floor\". The only noise-floor method that exists is 320's, which runs three audit runs per category. Nothing defines one for review findings, and no review-rerun mechanism is described. Either review findings are shown with no noise floor, which contradicts the text, or a new measurement protocol is implied. That protocol would add LLM spend and scope the document doesn't account for. State which it is.",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#design-goals"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Side-by-side review and audit counts per category are not comparable units",
+      "description": "The example \"error-handling findings: 4 from review, 2 from audit\" implies the two numbers are commensurable. Review findings come from a diff, or a slice of code, at a point in time. Audit findings come from a whole-codebase sweep. They have different denominators, scopes and severity scales, and the document keeps the severity scales apart on purpose. Putting the counts in the same bucket invites the misreading the \"breakdown, not a score\" principle is meant to prevent. The document should state the unit and scope of each source in the report contract. It should also say whether review and audit counts are ever shown in one row.",
+      "file_ref": null,
+      "category": "abstraction",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#design-goals"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The audit's category vocabulary may not fit review findings, and there is no resolution path",
+      "description": "The Non-Goals section forbids changing the audit skill, and says a vocabulary mismatch is \"a finding to report\". The whole normalization capability depends on the nine audit dimensions plus `other` covering review concerns. Reviews also cover design adherence, architecture fit, test gaps and process violations. If `other` swells, the normalization has no value, and the document gives no threshold or escalation owner. Add a measurable gate in the review-normalization slice, such as the `other` rate on a sample of historical reviews. Say what happens if the gate fails.",
+      "file_ref": null,
+      "category": "extension-points",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#non-goals"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The vocabulary is copied three times where one source could be generated",
+      "description": "The document accepts \"a third copy (enum, audit skill, review templates)\" guarded by an extended sync test. That is the maintenance burden the project's DRY rule says to avoid. Render the review template's category list from the `AuditCategory` enum at template-build or load time, and keep only the skill file as a checked copy. This cuts one copy and one sync-test surface.",
+      "file_ref": null,
+      "category": "dependencies",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#technical-considerations"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Core metric and adapter-contract definitions are deferred",
+      "description": "The \"adapter contract has to define each metric well enough that adapters agree\" is exactly the hard part, and it is left to the slice. The following are all unspecified, yet drive the record schema:\n- The unit of \"function\" (methods, lambdas, nested functions).\n- Whether lengths include blank lines and comments.\n- How duplication is defined: token or line based, with what minimum window.\n- How a type-error count is defined for languages without a type checker.\n- Which duplication tool is used.\n\n\"Absent is not zero\" and \"rule set named per count\" also require a typed, per-metric record shape. A per-metric `{value | absent+reason, tool, version, rule_set}` structure should be stated in the architecture. Otherwise the \"no schema migration\" claim is at risk once the real shape is known.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#technical-considerations"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Executing project tooling on brownfield repos has unaddressed security and failure modes",
+      "description": "Running adapters over code squadron didn't write means executing project-controlled configuration. Examples are ruff or eslint config, plugin loading, and `coverage` running the project's tests. The document flags coverage's \"security and environment cost\" but not config-driven code execution in lint tools. It also doesn't specify subprocess timeouts, output-size limits or a monorepo scale ceiling. Per the project's failure-mode rule (hang, timeout, partial output), each adapter run needs a defined absent-with-reason outcome for each of those cases, not only \"tool not installed\".",
+      "file_ref": null,
+      "category": "feasibility",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#technical-considerations"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Scope is heavy for what the stated consumers need",
+      "description": "Five slices plus multi-language adapters, three-source over-time trend reports, a dual rule-set option (\"either or both\"), per-slice attribution and automatic pipeline capture are anticipated. The named consumers (420 and 440) need two things: a deterministic snapshot, and a baseline. Candidates to cut or defer:\n- Dual rule-set recording. Pick the project's own rules first.\n- Over-time trend reports until a consumer asks for them.\n- Automatic slice-boundary capture, already marked optional.\n- The read-side mapping of historical reviews. Start write-side only, and report historical findings as unmapped.\n- Per-slice attribution, until the fork-point mechanism is settled.",
+      "file_ref": null,
+      "category": "antipattern",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#anticipated-slices"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Frontmatter dependencies and the store's growth are not accounted for",
+      "description": "The frontmatter lists `dependencies: [100, 320]`. The body also depends on 323 for the vocabulary and the disjoint-severity test, on 300 for the gating boundary, and on 440 and 420 as consumers. The user-level JSON store keeps one snapshot per commit and one finding per review item. The document names no retention, indexing or size expectation for it. It also doesn't say how ingest stays idempotent when review files are re-read, or how it handles review files that exist in a project checkout but not in the user-level store's project key.",
+      "file_ref": null,
+      "category": "dependencies",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "The keystone slice depends on project-declared limits that no config or format defines",
+      "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#architectural-principles",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "feasibility",
+      "raw_category": null,
+      "summary": "Measuring a historical commit without modifying the repo is asserted but not designed",
+      "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#envisioned-state",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "Slice attribution by \"fork point to merge commit\" conflicts with the project's git workflow",
+      "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#technical-considerations",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "The \"noise floor for LLM sources\" claim has no method for review findings",
+      "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#design-goals",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "abstraction",
+      "raw_category": null,
+      "summary": "Side-by-side review and audit counts per category are not comparable units",
+      "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#design-goals",
+      "location_verified": null
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "extension-points",
+      "raw_category": null,
+      "summary": "The audit's category vocabulary may not fit review findings, and there is no resolution path",
+      "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#non-goals",
+      "location_verified": null
+    },
+    {
+      "id": "F007",
+      "severity": "concern",
+      "category": "dependencies",
+      "raw_category": null,
+      "summary": "The vocabulary is copied three times where one source could be generated",
+      "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#technical-considerations",
+      "location_verified": null
+    },
+    {
+      "id": "F008",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "Core metric and adapter-contract definitions are deferred",
+      "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#technical-considerations",
+      "location_verified": null
+    },
+    {
+      "id": "F009",
+      "severity": "concern",
+      "category": "feasibility",
+      "raw_category": null,
+      "summary": "Executing project tooling on brownfield repos has unaddressed security and failure modes",
+      "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#technical-considerations",
+      "location_verified": null
+    },
+    {
+      "id": "F010",
+      "severity": "concern",
+      "category": "antipattern",
+      "raw_category": null,
+      "summary": "Scope is heavy for what the stated consumers need",
+      "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#anticipated-slices",
+      "location_verified": null
+    },
+    {
+      "id": "F011",
+      "severity": "note",
+      "category": "dependencies",
+      "raw_category": null,
+      "summary": "Frontmatter dependencies and the store's growth are not accounted for",
+      "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md",
+      "location_verified": null
+    }
+  ],
+  "template_name": "arch",
+  "input_files": {
+    "input": "project-documents/user/architecture/400-arch.code-quality-measurement.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/squadron-400-arch"
+  },
+  "timestamp": "2026-11-16T09:26:45.730298",
+  "model": "claude-sonnet-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 1,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-sonnet-5-5",
+  "answering_models": [
+    "claude-sonnet-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 11,
+    "in_fences": 0,
+    "in_section": 11,
+    "surviving": 11
+  },
+  "effort": "medium",
+  "profile": "sdk",
+  "turns": 2,
+  "prompt_tokens": 115628,
+  "cached_tokens": 12914,
+  "cache_write_tokens": 102710,
+  "completion_tokens": 4595,
+  "reasoning_tokens": null,
+  "duration_seconds": 41.323398207779974,
+  "cost_usd": 0.4588209,
+  "cost_basis": "provider"
+}

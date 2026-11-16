@@ -1,0 +1,297 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Non-SDK configs may lose the project's gate rules in a cf-free sandbox",
+      "description": "D4 says the gate commands come from project rules that \"SDK dispatches load natively and other dispatches get injected,\" but it never names the injector. D7 says the `commit-to: current` path makes no cf call, and the sandbox has no cf. If cf is the injector, a non-SDK config in a 424 sandbox runs with no rules and no gate commands, while SDK configs get them. The configs would then differ in context rather than model, which breaks the architecture's \"same environment\" requirement. Name the injector and show it works without cf. If it cannot, the fix prompt needs another route to the sandbox's instruction files, naming the paths and not their contents.",
+      "file_ref": null,
+      "category": "integration",
+      "raw_category": null,
+      "location": "project-documents/user/slices/423-slice.fix-pipeline.md:148"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Refusals and HEAD-moved have no failure kind, so 424 cannot apply absent-is-not-zero",
+      "description": "Only `fix_report` and `cost_cap` get failure kinds. The precondition refusals (dirty tree, wrong branch, detached HEAD, missing, empty or non-UTF-8 issue file) \"fail the action\" with a message and no kind. The HEAD-moved refusal (line 166, criterion at line 251) has none either. The architecture treats harness-caused absences (bad environment or input) as dropping the case from every config, and config-caused ones (the agent committed, the producer crashed) as a fail. In a sandbox, a missing issue file or dirty tree is harness-caused, and an agent commit during dispatch is config-caused. Without kinds, 424 cannot make that split. Give each refusal a named kind, for example `fix_precondition` and `fix_commit`, and state which ones 424 treats as harness-caused.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/423-slice.fix-pipeline.md:160-167"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Prompt-only report file and git commit have unstated failure handling",
+      "description": "The prompt-only path adds I/O with no stated failure handling. `sq _commit --report-file` does not say what happens if the file is missing, empty, or cut off because the session died. The commit does not say what happens if git rejects it after `changed_paths` has staged the tree. The project guidelines put the linter in the pre-commit hook, so a hook rejection at that point is a normal case. No git call has a stated timeout, and D2 gives one only to GitHub. Enumerate each path: a missing report is a `fix_report` refusal that names the file; a hook rejection is logged at ERROR, fails the action, and states what the index is left as; git calls get a timeout.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/423-slice.fix-pipeline.md:195-197"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The no-cf/no-gh sandbox check is not verified by the walkthrough or any test",
+      "description": "Success criterion line 248 requires the `commit-to=current` run to have cf and gh absent from PATH. Walkthrough step 4 builds PATH from the directory that holds `sq`. If `cf` or `gh` sits next to `sq`, a common layout, both are on that PATH, and the step's \"neither is on PATH\" is never checked. The test list (lines 257-265) covers a raising CodeHost factory in file mode, but no test shows `read_integration_target` is skipped under `commit-to: current`. Add a `command -v gh cf` check to step 4, and an executor-level test that runs `commit-to: current` with a `read_integration_target` that raises.",
+      "file_ref": null,
+      "category": "verification",
+      "raw_category": null,
+      "location": "project-documents/user/slices/423-slice.fix-pipeline.md:309-317"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`commit-to: current` is unrestricted in production and bypasses the target rule",
+      "description": "The architecture needs `current` only in the sandbox, where `issue-file` is always set. The slice exposes it on `sq run fix` for any run. The fix rule commits to the integration target and never infers it from the current branch. A user who runs `sq run fix 301 -p commit-to=current` on a feature branch gets a `fix:` commit there, and the target check in `fix-context` is skipped. Limit `current` to runs with `issue-file` set, or justify production use in this slice.",
+      "file_ref": null,
+      "category": "scope",
+      "raw_category": null,
+      "location": "project-documents/user/slices/423-slice.fix-pipeline.md:163"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The MCP criterion and the gate criterion are narrowed without a plan change",
+      "description": "The slice plan (420-slices, entry 4) gives 423 \"CLI, slash command and MCP give identical results\" and a pipeline that produces \"passing gates.\" This slice drops MCP (line 43) and reduces the gate criterion to gates that pass \"when re-run by hand\" (line 247). Dropping MCP is defensible: no pipeline has an MCP run tool, and the slice says so. But the plan is the contract for this work, and the change is not recorded there. Amend the plan entry (a PM decision, since it changes scope) and cite the amendment here.",
+      "file_ref": null,
+      "category": "scope",
+      "raw_category": null,
+      "location": "project-documents/user/slices/423-slice.fix-pipeline.md:43"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Gate and failed-before-change fields check the agent's claims, not the gates",
+      "description": "`failed_before_change` must be `true`, and every `exit_code` must be 0. The slice's risk section admits an agent can report gates it did not run (line 327). These checks confirm the shape of the agent's claim, which the architecture says is never evidence. They cost parsing and tests without adding verification. Keep them if they are cheap, but call them shape checks here, and do not present them to 424 or 425 as gate verification.",
+      "file_ref": null,
+      "category": "proportionality",
+      "raw_category": null,
+      "location": "project-documents/user/slices/423-slice.fix-pipeline.md:152-155"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Start HEAD is defined two ways",
+      "description": "State Management defines start HEAD as the HEAD when `fix-context` runs. D9 (line 197) reads it at render time in prompt-only mode, before the session runs `fix-context`. The commit refusal in both modes depends on this value. Define it once, for both modes, and state it in D2.",
+      "file_ref": null,
+      "category": "under-specification",
+      "raw_category": null,
+      "location": "project-documents/user/slices/423-slice.fix-pipeline.md:105"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The fix prompt depends on DispatchAction's fallback by output key",
+      "description": "`fix-context` emits the keys `cf-op(build_context)` uses, so DispatchAction's fallback, which takes the most recent prior output carrying assembled context, picks up the prompt. It works because `fix.yaml` has no step between the two actions. Nothing names this as a contract, so a later step inserted before dispatch would change the prompt silently. Add a test that fails if a second context-carrying output precedes dispatch, or pass the prompt under a named key.",
+      "file_ref": null,
+      "category": "dependencies",
+      "raw_category": null,
+      "location": "project-documents/user/slices/423-slice.fix-pipeline.md:139"
+    },
+    {
+      "severity": "NOTE",
+      "title": "424's `--io-dir` must hold only the frozen issue",
+      "description": "The architecture says the answer stays out of reach, and the sandbox is a directory, not a jail. The slice resolves `issue-file` against `--io-dir` (line 136), and 424 passes that directory (line 234). If the directory also holds hidden tests or the original diff, the agent can read them. State that a fix run's `--io-dir` holds only the frozen issue, or assign that check to 424 explicitly.",
+      "file_ref": null,
+      "category": "boundaries",
+      "raw_category": null,
+      "location": "project-documents/user/slices/423-slice.fix-pipeline.md:234-235"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The slice plan says 423 has no dependencies; this slice depends on 422",
+      "description": "The slice plan says 423 has \"none in this initiative\" and \"can be built earlier\" (plan entry 4 and the Notes). Fetched mode needs 422's `CodeHost.get_issue` and renderer (line 49), so the plan's claim is wrong for fetched mode. The 421\u2192422\u2192423 order covers it in practice. Correct the plan, or state that file mode can be built before 422.",
+      "file_ref": null,
+      "category": "dependencies",
+      "raw_category": null,
+      "location": "project-documents/user/slices/423-slice.fix-pipeline.md:6"
+    },
+    {
+      "severity": "PASS",
+      "title": "The sandbox path matches the architecture's frozen-text and no-GitHub rules",
+      "description": "File-mode text is read verbatim and hashed (lines 136, 140). No CodeHost is built in file mode (line 136). `commit-to: current` never reads cf (lines 163, 179). Nothing pushes (line 350). This matches the architecture's frozen-text and no-GitHub rules, and 424's invocation (lines 234-235) fits it.",
+      "file_ref": null,
+      "category": "integration",
+      "raw_category": null,
+      "location": "project-documents/user/slices/423-slice.fix-pipeline.md:136-140"
+    },
+    {
+      "severity": "PASS",
+      "title": "One production pipeline with one prompt source, and the 422 renderer contract matches",
+      "description": "The fix pipeline is a single producer step with no review (D1), and the prompt is one data file used by both modes (D8). That fits the architecture's rule that replays run production pipelines without drifting copies. D4 names the report fields without example values, as the project's hallucination-trap rule requires. The renderer matches 422: 422 keeps the cutoff for case creation and offers a no-cutoff mode for live fixes.",
+      "file_ref": null,
+      "category": "alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/423-slice.fix-pipeline.md:182-191"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "integration",
+      "raw_category": null,
+      "summary": "Non-SDK configs may lose the project's gate rules in a cf-free sandbox",
+      "location": "project-documents/user/slices/423-slice.fix-pipeline.md:148",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "Refusals and HEAD-moved have no failure kind, so 424 cannot apply absent-is-not-zero",
+      "location": "project-documents/user/slices/423-slice.fix-pipeline.md:160-167",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "Prompt-only report file and git commit have unstated failure handling",
+      "location": "project-documents/user/slices/423-slice.fix-pipeline.md:195-197",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "verification",
+      "raw_category": null,
+      "summary": "The no-cf/no-gh sandbox check is not verified by the walkthrough or any test",
+      "location": "project-documents/user/slices/423-slice.fix-pipeline.md:309-317",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "scope",
+      "raw_category": null,
+      "summary": "`commit-to: current` is unrestricted in production and bypasses the target rule",
+      "location": "project-documents/user/slices/423-slice.fix-pipeline.md:163",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "scope",
+      "raw_category": null,
+      "summary": "The MCP criterion and the gate criterion are narrowed without a plan change",
+      "location": "project-documents/user/slices/423-slice.fix-pipeline.md:43",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "note",
+      "category": "proportionality",
+      "raw_category": null,
+      "summary": "Gate and failed-before-change fields check the agent's claims, not the gates",
+      "location": "project-documents/user/slices/423-slice.fix-pipeline.md:152-155",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "note",
+      "category": "under-specification",
+      "raw_category": null,
+      "summary": "Start HEAD is defined two ways",
+      "location": "project-documents/user/slices/423-slice.fix-pipeline.md:105",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "note",
+      "category": "dependencies",
+      "raw_category": null,
+      "summary": "The fix prompt depends on DispatchAction's fallback by output key",
+      "location": "project-documents/user/slices/423-slice.fix-pipeline.md:139",
+      "location_verified": true
+    },
+    {
+      "id": "F010",
+      "severity": "note",
+      "category": "boundaries",
+      "raw_category": null,
+      "summary": "424's `--io-dir` must hold only the frozen issue",
+      "location": "project-documents/user/slices/423-slice.fix-pipeline.md:234-235",
+      "location_verified": true
+    },
+    {
+      "id": "F011",
+      "severity": "note",
+      "category": "dependencies",
+      "raw_category": null,
+      "summary": "The slice plan says 423 has no dependencies; this slice depends on 422",
+      "location": "project-documents/user/slices/423-slice.fix-pipeline.md:6",
+      "location_verified": true
+    },
+    {
+      "id": "F012",
+      "severity": "pass",
+      "category": "integration",
+      "raw_category": null,
+      "summary": "The sandbox path matches the architecture's frozen-text and no-GitHub rules",
+      "location": "project-documents/user/slices/423-slice.fix-pipeline.md:136-140",
+      "location_verified": true
+    },
+    {
+      "id": "F013",
+      "severity": "pass",
+      "category": "alignment",
+      "raw_category": null,
+      "summary": "One production pipeline with one prompt source, and the 422 renderer contract matches",
+      "location": "project-documents/user/slices/423-slice.fix-pipeline.md:182-191",
+      "location_verified": true
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/423-slice.fix-pipeline.md",
+    "against": "project-documents/user/architecture/420-arch.model-benchmark.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261115-design/wt/423-design"
+  },
+  "timestamp": "2026-11-16T07:31:10.270242",
+  "model": "claude-haiku-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 6,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-haiku-5-5",
+  "answering_models": [
+    "claude-haiku-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 13,
+    "in_fences": 0,
+    "in_section": 13,
+    "surviving": 13
+  },
+  "effort": "xhigh",
+  "profile": "sdk",
+  "turns": 7,
+  "prompt_tokens": 403970,
+  "cached_tokens": 270957,
+  "cache_write_tokens": 133005,
+  "completion_tokens": 67039,
+  "reasoning_tokens": null,
+  "duration_seconds": 300.68006325000897,
+  "cost_usd": 0.31308064999999996,
+  "cost_basis": "provider"
+}

@@ -1,0 +1,278 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Tick loop ownership and engine interface conflict with 100-arch",
+      "description": "The 300 doc says the world server owns the tick loop and that the engine \"does not manage the entity lifecycle itself\". 100-arch contradicts this in three places:\n- Its Scope lists \"the simulation tick loop\" as an engine responsibility.\n- Its interface includes \"register/remove agents\".\n- It calls the engine \"stateless between ticks\".\n\nThe result is two documents that each claim the loop and entity lifecycle, with no agreed interface. 300 step 3 says \"Receive updated positions and velocities\", while 100 says the engine \"Returns the updated state array\". It is unclear whether the engine mutates arrays in place or returns copies. That choice matters for \"state commit\" atomicity and for any thread offload. Settle one owner and one signature, and fix 100.",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md#Envisioned State"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Broken cross-references and mismatched document indices",
+      "description": "- 300 depends on `001-concept.migratory` and links `../project-guides/001-concept.migratory.md`. 100 depends on `000-concept.migratory`. A glob found no `001-concept.migratory.md`.\n- 100's Related Work points to `200-arch.world-server-foundation.md`. This document is `300-arch.worldserver-foundation.md`, and the name is spelled differently.\n- 100 says the world server doc \"describes... entity scaling tiers\". That is true, but the link is dead.",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md#Related Work"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Observer-driven multi-resolution simulation contradicts \"state flows outward\" and replay determinism",
+      "description": "Principles say nothing flows from clients into simulation state, and that the tick is deterministic and replayable. The scaling section then defines fidelity tiers by proximity to observers (\"near observers\", \"observer's vicinity\"). Clients are the only observers. This creates three problems:\n- Client camera position now determines which entities are simulated, at what rate, and whether they are aggregated. That is a client-to-simulation dependency.\n- Replay from \"initial state plus non-deterministic inputs\" fails unless observer positions and LOD decisions are logged as inputs.\n- With several clients, the LOD policy is undefined (union of vicinities?). Disaggregation \"spawned from the statistical model\" also needs a seeded RNG stream.\n\nThe doc must either define an observer-independent LOD policy for v1 or admit the one-way flow is false.",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md#Technical Considerations (Entity scaling)"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Tick loop has no step for LOD scheduling, so the \"designed for\" claim is unsupported",
+      "description": "The scaling section says the tick loop and entity management must support variable-rate ticking and aggregation \"from the start\". The six-step loop has no step that chooses the active subset. It has no aggregate entity representation in the state arrays and no place where reduced-rate positions are interpolated. It is also unclear whether interpolation is done server-side or by the client.\n\n100's \"Aggregation interface support\" slice has no counterpart in 300's Anticipated Slices. No slice in either document builds the server side of this. The extension point exists only in 100's subset parameter. At minimum, add a \"select active set\" step to the loop and a slice (or an explicit deferral) for it.",
+      "file_ref": null,
+      "category": "extension-points",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md#Envisioned State"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Entity ID versus array index semantics are unspecified",
+      "description": "The server \"assigns entity IDs, allocates space in the state arrays, and removes entities\". The doc does not say how removal works, and that choice affects most other components:\n- Swap-remove or compaction invalidates array indices. The behavior engine's subset arguments are index arrays or masks. Logs and client snapshots would then reference entities whose positions shifted.\n- A tombstone and free-list design needs an active mask, which changes the engine's input contract.\n- Spawn and removal sources are undefined. With no client commands and no birth or death rules in the behavior engine, \"removes entities when appropriate\" has no producer.\n- Step 4 applies \"lifecycle events queued during the tick\" without saying who queues them.\n\nThis is load-bearing for protocol, logging and the engine contract, and it should be decided in the architecture.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md#Envisioned State"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Synchronous tick on the asyncio loop starves WebSocket I/O, and the thread offload path is hand-waved",
+      "description": "Running the tick synchronously and yielding \"between ticks\" means the event loop is blocked for the whole compute time.\n- Pings and pongs, accepts and sends stall for the full tick.\n- At 20 tps with a tick near budget, I/O gets only the sleep remainder, so websocket keepalive timeouts and slow-client detection become unreliable.\n- On overrun there is no sleep at all, so I/O starves exactly when the system is stressed.\n\nThe upgrade path rests on \"NumPy releases the GIL\". NumPy releases it only inside some large array operations. The surrounding Python orchestration in a pure-NumPy force loop holds the GIL, so a thread gives only partial concurrency.\n\nOffloading to a thread also breaks \"tick as transaction\". The tick would mutate arrays while step 5 or a snapshot reads them, so double-buffering or copy-on-commit is required. Offloading to a process requires shared memory. Decide the concurrency model now, because it determines the state ownership structure. The simplest option is to run the sim in a dedicated thread from the start, with an immutable committed snapshot handed to the async layer.",
+      "file_ref": null,
+      "category": "technology",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md#Technical Considerations (Tick loop and asyncio coexistence)"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Client distribution can block the tick, and slow-client policy is deferred",
+      "description": "Step 5 pushes state to all clients inside the tick. The doc lists \"buffering, dropping frames, or disconnecting\" as strategies to consider but picks none. In asyncio, awaiting `send` on a stalled client blocks on backpressure. Unbounded buffering grows memory, and a snapshot per tick per client multiplies cost.\n\nThe failure modes are never enumerated: send timeout, mid-send disconnect, new-client snapshot racing with the tick, and the snapshot-versus-delta decision. The project rules require each I/O path to have an observable failure signal. The doc should choose a per-client bounded queue with a drop-or-disconnect policy and say that sending is decoupled from the tick.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md#Technical Considerations (Client connection lifecycle)"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Lifecycle, failure and persistence promises have no mechanism or slice",
+      "description": "\"Explicit lifecycle\" promises ordered init, graceful drain and \"persist state on shutdown\". The doc defines no persistence format, no restore on startup, and no slice for any of them. The Logging and replay slice covers logs only. The project is a \"persistent, ongoing simulation\", yet crash recovery and restart semantics are absent. These questions are also unanswered:\n- What happens if the behavior engine raises mid-tick? Under \"tick as transaction\", is the state left uncommitted, is the tick skipped, or does the process exit?\n- What if NaN or Inf values reach the state arrays?\n- What if the environment update fails?\n\nState the policy: fail fast with a logged exception, or skip the tick. Either way the failure must be observable.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md#Architectural Principles"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Scaling and multi-resolution content is out of proportion to a foundation architecture",
+      "description": "The scaling bullet is roughly a third of the document. It covers GPU and CuPy tiers, multi-GPU partitioning, multi-machine distribution, predictive partition rebalancing and 4M+ merging murmurations. All of it is explicitly out of scope (\"no distribution infrastructure\"), and the doc says it \"should not prescribe a solution\". The initial operating range is 10K\u201350K entities on one CPU.\n\nThis speculative material pulls requirements into v1, such as aggregation from the start and per-client frustum culling. It also makes unvalidated claims:\n- \"Memory is never the constraint\" ignores spatial index and neighbor buffers.\n- \"GPU particle simulations... the physics is similar\" compares particle systems with ~100-neighbor force queries.\n- \"Comfortable on a single CPU\" at 50K entities with pure-NumPy spatial hashing is asserted without any benchmark.\n\nCut the section to a short paragraph covering the v1 range, the two or three interface hooks that must exist, and a \"validate with a benchmark in slice 1\" note. Move the rest to a separate future-scaling note.",
+      "file_ref": null,
+      "category": "antipattern",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md#Technical Considerations (Entity scaling and multi-resolution simulation)"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Replay and logging design leaves determinism preconditions open",
+      "description": "Replay from \"initial state plus non-deterministic inputs\" assumes bit-exact determinism. That does not follow from a pure tick function in NumPy.\n- Results vary across NumPy and BLAS versions, platforms and thread counts.\n- The precision decision is open: 100 notes float64 for simulation versus float32 for transfer.\n- No RNG ownership or seed-stream policy is stated for spawning, disaggregation or environment generation.\n\nThe doc also says the log \"supports replay\" as a given, and then says the \"right balance depends on actual usage\". Pick the v1 contract. I suggest periodic full snapshots as the authoritative replay mechanism and treat determinism as best-effort, or explicitly require a pinned environment.",
+      "file_ref": null,
+      "category": "feasibility",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md#Technical Considerations (Logging format and replay fidelity)"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Load-bearing technology choices are left open",
+      "description": "\"YAML or similar\" is given for the configuration format. No config validation library is named (for example dataclasses, pydantic or jsonschema). The WebSocket library is not chosen (`websockets` versus `aiohttp` versus Starlette), though it constrains the backpressure and send APIs discussed above. The wire format \"minimal framing protocol\" has no endianness or dtype rule and no versioning. These can be decided in slices, but the framing and dtype decisions should be fixed before the client slice. The project's no-silent-defaults rule also implies config schema fields with no defaults.",
+      "file_ref": null,
+      "category": "technology",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md#Technical Considerations (Configuration surface)"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Slice ordering defers dependencies of earlier slices",
+      "description": "\"Behavior engine integration\" precedes \"Environment layer foundation\", yet the engine takes environment context as input and the tick loop already includes an environment update step. A stub environment interface is needed in the integration slice. \"Seasonal and temporal systems\" is last, even though step 2 and the seasonal time scale configuration assume it exists. State that these slices use stubs, or reorder them.",
+      "file_ref": null,
+      "category": "dependencies",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md#Anticipated Slices"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "Tick loop ownership and engine interface conflict with 100-arch",
+      "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md#Envisioned State",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "Broken cross-references and mismatched document indices",
+      "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md#Related Work",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "Observer-driven multi-resolution simulation contradicts \"state flows outward\" and replay determinism",
+      "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md#Technical Considerations (Entity scaling)",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "extension-points",
+      "raw_category": null,
+      "summary": "Tick loop has no step for LOD scheduling, so the \"designed for\" claim is unsupported",
+      "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md#Envisioned State",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "Entity ID versus array index semantics are unspecified",
+      "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md#Envisioned State",
+      "location_verified": null
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "technology",
+      "raw_category": null,
+      "summary": "Synchronous tick on the asyncio loop starves WebSocket I/O, and the thread offload path is hand-waved",
+      "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md#Technical Considerations (Tick loop and asyncio coexistence)",
+      "location_verified": null
+    },
+    {
+      "id": "F007",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "Client distribution can block the tick, and slow-client policy is deferred",
+      "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md#Technical Considerations (Client connection lifecycle)",
+      "location_verified": null
+    },
+    {
+      "id": "F008",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "Lifecycle, failure and persistence promises have no mechanism or slice",
+      "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md#Architectural Principles",
+      "location_verified": null
+    },
+    {
+      "id": "F009",
+      "severity": "concern",
+      "category": "antipattern",
+      "raw_category": null,
+      "summary": "Scaling and multi-resolution content is out of proportion to a foundation architecture",
+      "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md#Technical Considerations (Entity scaling and multi-resolution simulation)",
+      "location_verified": null
+    },
+    {
+      "id": "F010",
+      "severity": "concern",
+      "category": "feasibility",
+      "raw_category": null,
+      "summary": "Replay and logging design leaves determinism preconditions open",
+      "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md#Technical Considerations (Logging format and replay fidelity)",
+      "location_verified": null
+    },
+    {
+      "id": "F011",
+      "severity": "note",
+      "category": "technology",
+      "raw_category": null,
+      "summary": "Load-bearing technology choices are left open",
+      "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md#Technical Considerations (Configuration surface)",
+      "location_verified": null
+    },
+    {
+      "id": "F012",
+      "severity": "note",
+      "category": "dependencies",
+      "raw_category": null,
+      "summary": "Slice ordering defers dependencies of earlier slices",
+      "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md#Anticipated Slices",
+      "location_verified": null
+    }
+  ],
+  "template_name": "arch",
+  "input_files": {
+    "input": "project-documents/user/architecture/300-arch.worldserver-foundation.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/migratory-300-arch"
+  },
+  "timestamp": "2026-11-16T09:29:11.801534",
+  "model": "claude-sonnet-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 4,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-sonnet-5-5",
+  "answering_models": [
+    "claude-sonnet-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 12,
+    "in_fences": 0,
+    "in_section": 12,
+    "surviving": 12
+  },
+  "effort": "medium",
+  "profile": "sdk",
+  "turns": 5,
+  "prompt_tokens": 262181,
+  "cached_tokens": 171974,
+  "cache_write_tokens": 90199,
+  "completion_tokens": 6402,
+  "reasoning_tokens": null,
+  "duration_seconds": 58.29216416599229,
+  "cost_usd": 0.4424939,
+  "cost_basis": "provider"
+}

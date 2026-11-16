@@ -1,0 +1,26 @@
+{
+ "review": "r15",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Sandbox integration does not say which `sq` runs under 421's scrubbed PATH, or where the issue file must live",
+   "description": "The Integration Requirement says 424 can run `sq run fix` \"in a 421 sandbox under the scrubbed environment with no extra flags or code paths.\" 421 D7 (`421-slice.benchmark-sandbox-and-case-record.md:168`) builds that environment's `PATH` so that \"in a squadron sandbox `sq` resolves to the start commit's `.venv/bin/sq`.\" That binary predates the fix pipeline. If it ran, it would have no `fix` pipeline at all, or it would load a `data/prompts/fix.md` from the case's era. That would break the architecture rule that replays benchmark the production prompt and that results carry comparable prompt identity. The slice needs to state the contract: the harness runs its own `sq` by absolute path, with `cwd` set to the sandbox and the scrubbed env. The dispatched agent inherits only the scrubbed env, and nothing in the SDK path resolves `sq` from `PATH`.\n\nThe `issue-file`/`--io-dir` contract has a related gap. If 424 put the frozen file inside the working tree, `fix-context`'s clean-tree precondition (D5, line 165) would refuse the run, because the file would be untracked. The slice should say the issue file must lie outside the tree. It already does this implicitly in the walkthrough, which uses `/tmp`.\n\nWalkthrough step 4 (lines 313-317) has the same weakness. It puts `$(dirname \"$(command -v sq)\")` on `PATH`. That directory is usually `~/.local/bin`, where uv- and pipx-installed `cf` normally lives too. So the claim \"neither is on `PATH`\" is not guaranteed, and the setup contradicts the architecture's rule of leaving out the user's tool installs (`420-arch.model-benchmark.md:46`). Invoke `sq` by absolute path with `PATH=/usr/bin:/bin`, and add `! command -v cf && ! command -v gh` under the same env as part of the check.",
+   "location": "project-documents/user/slices/423-slice.fix-pipeline.md:268-270"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "The slice plan's MCP parity criterion is dropped but the plan is not updated",
+   "description": "The slice plan entry (`420-slices.model-benchmark.md:87`) has the success criterion \"CLI, slash command and MCP give identical results.\" The slice excludes MCP. Its reasoning is that squadron has no MCP server and uses MCP only as a client (line 43, D9 line 198). The source tree supports this: the only server is the uvicorn daemon. The decision is sound, but it removes scope the plan assigns to this slice, and the plan still lists the criterion. Amend the 423 entry in `420-slices.model-benchmark.md` to read \"CLI and `/sq:run`\", so the plan and the design agree and later reviews don't flag an unmet criterion.",
+   "location": "project-documents/user/slices/423-slice.fix-pipeline.md:43"
+  },
+  {
+   "i": 2,
+   "severity": "NOTE",
+   "title": "Dependency on 422 contradicts the plan's \"no dependencies in this initiative\"",
+   "description": "The frontmatter declares `dependencies: [422]`, and Prerequisites (line 49) explains that it covers fetched mode only (`CodeHost.get_issue`, renderer with an optional cutoff). 422 does provide both (`422-slice...md:77,85,139`), so the integration point matches. However, the slice plan says 423 \"has no dependencies in this initiative\" and \"can be built earlier\" (`420-slices.model-benchmark.md:88,166`). Production fetch mode, the slice's main user value, now waits on a 4/5 high-risk slice. The current 421\u2192422\u2192423 order makes this harmless, but update the plan's Dependencies line so the ordering note doesn't promise flexibility that isn't there.",
+   "location": "project-documents/user/slices/423-slice.fix-pipeline.md:6"
+  }
+ ]
+}

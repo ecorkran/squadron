@@ -1,0 +1,47 @@
+{
+ "review": "r16",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Case sets are keyed by name, not `ProjectId`, against a stated architecture principle",
+   "description": "The architecture principle \"Extend 320's store, don't fork it\" says new record types are \"keyed on `ProjectId`\". The slice plan entry for 421 says the same for case and case-set records. D2 keys `CaseSet` by name alone, so that 422 can pool cases from several projects. The reason is sound, and the architecture does raise pooling as a possible outcome (Technical Considerations, \"Fix-case yield\"). But this changes a principle other slices rely on: 424, 425 and the reports will look up sets and results by project. The slice doc should record this as a deliberate deviation and add a note to the architecture, so later slices know that sets work across projects and that each case carries its own `project_id`. Otherwise the next design will have to discover the exception for itself.",
+   "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:130-134"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "A network failure during install is filed as an unresolvable lock",
+   "description": "`EnvironmentFailureReason` has `no_lockfile`, `lockfile_unsupported`, `lock_stale_or_unresolvable`, `install_timeout` and `installer_missing`. If PyPI is unreachable, DNS fails or the uv cache is locked, `uv sync --locked` fails, and the only reason that fits is `lock_stale_or_unresolvable`. The architecture treats a lockfile that no longer resolves as grounds to drop the case, and 422 counts these failures per reason in its yield report. So a temporary network outage would permanently disqualify cases and skew the yield report that decides the plan's order. Add a separate reason, such as `install_failed_transient`, chosen from uv's exit status or stderr, so that 422 can retry it rather than record a disqualification. \"Nothing retries without the lock\" can stay as it is. Retrying the same locked install is a different matter.",
+   "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:150-155"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "The scrubbed `PATH` does not say how agent runtimes are found, so the auth check can report a missing binary as an auth failure",
+   "description": "D7 builds `PATH` from the adapter's entries, then `<id>.home/bin` (which holds only `git` and `uv` via `HARNESS_TOOL_ALLOWLIST`), then the system directories. Homebrew, `~/.local/bin` and global npm installs are left out on purpose. The auth probe (D8, line 182) sends a prompt \"through the same agent-creation path a dispatch uses\". For `sdk`, that path starts a Claude Code CLI process, which may need `claude` and `node` from exactly the directories the scrub removes. Any lookup that relies on `Path.home()` now points at the scrubbed home. If the executable is not found, the probe exits non-zero and the table shows `no`.\n\nThe slice plan's success criterion is \"a definite yes or no for each agent provider\" on auth. A \"not found\" reported as \"no\" answers a different question, and it would send a wrong question to the PM. The design should do two things:\n- Say how agent runtime executables are made available to the producer: add them to `HARNESS_TOOL_ALLOWLIST` per profile, or state that the SDK's bundled CLI is required.\n- Have the probe report \"runtime not found\" separately from \"auth refused\".",
+   "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:166-168"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "The sandbox root sits inside the real squadron config directory, one `../..` from the store",
+   "description": "The architecture's first principle says the producer runs with squadron's config pointed away from the user's: no store, no memory. It also says scanning \"cannot see file access inside scripts the model writes\". D4 puts benchmark sandboxes under `~/.config/squadron/benchmark/`, beside `metrology/`, `runs/` and `reviews/`. The producer's working directory is then two levels below the user's store and run history, which include past replay diffs and reviews. D4 accepts this and passes it to 424's transcript scan, but that scan by design cannot catch access from inside a script. Nothing requires the sandbox to live there; it only mirrors 177's `replays/` layout. A root outside `~/.config/squadron` costs the same and removes the most direct leak path instead of relying on a scan to catch it. Choose a root that is not an ancestor or sibling of the store, and keep the scan as a second line of defence.",
+   "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:146"
+  },
+  {
+   "i": 4,
+   "severity": "NOTE",
+   "title": "Adding `reference_sha` to the case identity is a justified deviation",
+   "description": "The architecture lists start commit, task text, hidden and superseded sets, and grader commands as the identity. D1 adds `reference_sha` and the exclusion list. The exclusion list is required by the slice plan. The reference is justified because hidden test source is read from it at grading time. Both changes make identity stricter, never looser, which fits the principle that cases are immutable. Worth adding to the architecture's identity list when it is next edited.",
+   "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:126"
+  },
+  {
+   "i": 5,
+   "severity": "NOTE",
+   "title": "`sweep_orphans` takes a mode flag, which D4 rejects for `ReplaySandbox`",
+   "description": "D4 rejects an optional `slice_index` on `ReplaySandbox` because it \"turns one class into two behind a flag\". It then gives `sweep_orphans` a flag for whether to sweep `replay-` cf projects. That is small and contained, but the same reasoning suggests a separate cf-project sweep called only by `sq replay`.",
+   "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:145-147"
+  }
+ ]
+}

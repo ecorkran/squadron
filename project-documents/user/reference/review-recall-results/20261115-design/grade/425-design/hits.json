@@ -1,0 +1,108 @@
+{
+ "case": "425-design",
+ "flaws": [
+  {
+   "id": "F1",
+   "text": "D12 measure_snapshot extracted from take_snapshot_at with no file list; code measures exported.files which a sandbox tree lacks",
+   "hits": {}
+  },
+  {
+   "id": "F2",
+   "text": "Schema says grade record stays under 16 KB but GradeResult holds unbounded hidden, hidden_id_map and review findings",
+   "hits": {
+    "r06": [
+     9
+    ]
+   }
+  },
+  {
+   "id": "F3",
+   "text": "D13 keys rows on (alias, model, profile, effort_sent) vs Prerequisites' 420 five-field identity",
+   "hits": {
+    "r01": [
+     4
+    ],
+    "r02": [
+     4
+    ],
+    "r03": [
+     2
+    ],
+    "r04": [
+     2
+    ],
+    "r05": [
+     4
+    ],
+    "r06": [
+     3
+    ],
+    "r07": [
+     7
+    ],
+    "r08": [
+     2
+    ],
+    "r10": [
+     1
+    ],
+    "r11": [
+     0
+    ],
+    "r12": [
+     2
+    ],
+    "r13": [
+     1
+    ],
+    "r14": [
+     1
+    ],
+    "r15": [
+     2
+    ],
+    "r16": [
+     1
+    ],
+    "r17": [
+     3
+    ],
+    "r18": [
+     0
+    ]
+   }
+  },
+  {
+   "id": "F4",
+   "text": "D7 rules_hash in ReviewerRef from start commit tree (per case) vs D10 grader identity one value per benchmark",
+   "hits": {
+    "r02": [
+     3
+    ],
+    "r05": [
+     0
+    ],
+    "r09": [
+     2
+    ],
+    "r12": [
+     3
+    ],
+    "r14": [
+     2
+    ]
+   }
+  },
+  {
+   "id": "F5",
+   "text": "inject_hidden(tree, case, reference) signature vs D4 needing start tree for conftest import lines",
+   "hits": {}
+  },
+  {
+   "id": "F6",
+   "text": "lockfile_sha256: str required but D5 records it only on reinstall and a tree may have no lock",
+   "hits": {}
+  }
+ ],
+ "note": "r07-2 and r06-2 mention rules/ReviewerRef but not the per-case rules_hash vs D10 conflict, so not counted for F4."
+}

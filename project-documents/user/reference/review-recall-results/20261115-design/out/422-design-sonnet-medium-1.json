@@ -1,0 +1,171 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "PASS",
+      "title": "Fairness rule, test sets and record model match the architecture",
+      "description": "- D5, D6 and D7 implement the architecture's three fairness conditions: test-first, packaging boundary only, and no patching of project code.\n- Undecidable results exclude the case with a named reason, as the architecture requires (\"never admitted\").\n- D3 sorts tests into hidden and superseded sets per node id, and excluded tests are part of the case id (D9).\n- D10 keys qualification records on environment identity and re-qualifies on a mismatch.\n- D4 runs the reference in the same start environment that replays use.\n- The dependency direction is correct: `benchmark/` depends on `metrology/` and `codehost/`, and 421 is consumed unchanged.",
+      "file_ref": null,
+      "category": "alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/422-slice.fix-case-qualification-and-yield-report-keystone.md#D5"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Design is heavier than the keystone needs; several items can be cut or deferred",
+      "description": "The architecture says this slice ends at a yield report, and that the report decides what comes next. Parts of the design go beyond that:\n- **`/sq:benchmark` slash command** (lines 44, 95, 324). It mirrors all three subcommands, and the yield answer is read once, by the PM, from the CLI. Defer it to 424/425, when the command surface is stable.\n- **`--json` on `yield`.** Nothing consumes it, except walkthrough step 6, which uses it to inspect the case-set version. `fix-cases show` or the build output can carry that instead.\n- **`--commit` and `--keep` flags.** These are debugging conveniences. Keep one at most.\n- **Renderer cutoff-less mode** (line 139). It exists \"for 423's live fix\", a consumer outside this slice, with no test here. Add it when 423 needs it.\n- **Two parallel boundary mechanisms** (D6 static references plus dynamic `sys.setprofile` crossings), plus a third interception layer for patching (D7). The architecture only requires \"where a check cannot decide, exclude\". Try the cheaper mechanism first. D6 itself says the static check cannot follow fixtures and helpers. Even so, a static pass over closure code objects (which D3 already builds) combined with the patch interception may cover the squadron cases. If the profile hook is kept, the slice should show a case it uniquely catches.\n- **Rebuild cost** (D10, line 241). Reuse still builds one sandbox, with its install, per candidate, because the digest includes the interpreter version. For ~50 candidates a no-op rebuild costs ~50 installs. That is heavy for \"resumability\".\n\nA 4/5 effort rating and 17+8 rejection reasons are a lot for a slice whose deliverable is a count.",
+      "file_ref": null,
+      "category": "proportionality",
+      "raw_category": null,
+      "location": "project-documents/user/slices/422-slice.fix-case-qualification-and-yield-report-keystone.md#Technical Scope"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Analytic separability bound is anti-conservative and drives the initiative-ordering decision",
+      "description": "- The architecture says the report states whether the qualified count can separate two configs \"under the paired statistic\" (paired bootstrap over cases).\n- D12 substitutes a bound with Var(D) \u2264 0.5/k per case. This is the worst case for within-case Bernoulli noise only. It ignores between-case variation in the true difference, which the document itself says raises the real variance.\n- The report therefore errs toward \"enough cases\", and that is the answer that keeps 423\u2192424\u2192425 as planned and avoids pooling across projects.\n- The caveat text beside the answer is good, but the output is binary.\n- Fix: either report the answer as \"not ruled out / enough only if per-case differences are similar\", or add a between-case variance term as a named, configured assumption. Do not simulate a bootstrap. D12 rightly rejects that.\n- At minimum, the table should show the MDD alongside a sensitivity case, so the PM is not handed a bare \"enough\".",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "project-documents/user/slices/422-slice.fix-case-qualification-and-yield-report-keystone.md:253-265"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Harness-failure handling is split between \"record and continue\" and \"exit 1\", with no stated boundary",
+      "description": "- Line 285 says every harness failure (timeout, `SuiteRunError`, non-not-found `CodeHostError`) is logged at ERROR and recorded as `harness_error` for that candidate.\n- Line 304 says the build exits 1 \"on a harness failure that stops the build (for example, `gh` missing\u2026)\".\n- The design never says which failures abort the run and which only mark a candidate. For example, `gh` auth failing mid-run, or rate limiting on the per-candidate GraphQL call (new I/O path D2), could mark dozens of candidates `harness_error` and then count them in the yield table.\n- The design also gives no timeout values or config keys for:\n  - the sandbox install,\n  - the suite and trace runs,\n  - the resolver,\n  - `gh` calls.\n  It likewise does not cover `git show` or `git log` failures in the user's checkout.\n- Requirement left unmet: each new I/O path needs an explicit hang, timeout and peer-failure strategy that is observable.\n- Fix:\n  - Name the abort conditions, for example a fatal `gh` error or N consecutive harness errors.\n  - Name the timeout config keys.\n  - Say how `harness_error` counts show in the yield report. D12 lists them, but the effect on the separability n should be explicit.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/422-slice.fix-case-qualification-and-yield-report-keystone.md:285,304"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Trace runs before the fails-at-reference check, so a test's rejection reason can be misattributed",
+      "description": "- The trace runs on hidden candidates (D9 step 5) before the repeated reference runs (step 7) reveal `fails_at_reference`.\n- D6 says the trace runs \"where they pass so the whole path executes\". A test that fails at the reference gives a truncated trace.\n- Such a test could be rejected as `reaches_past_boundary` or `boundary_undecidable` instead of `fails_at_reference`. This skews the per-reason yield breakdown, which is the report's main output.\n- A cheap fix is to run a single reference pass on the hidden candidates before the trace, or to prefer `fails_at_reference` when both apply.",
+      "file_ref": null,
+      "category": "design-detail",
+      "raw_category": null,
+      "location": "project-documents/user/slices/422-slice.fix-case-qualification-and-yield-report-keystone.md:109,218-219"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Agent-auth-under-redirected-config check is not owned by this slice",
+      "description": "- The architecture's keystone entry lists \"whether agent auth survives the redirected config directory\" and says this slice \"builds the sandbox environment\" where that check belongs.\n- The slice defers it to 421 (\"If the 421 auth check answered no\u2026\").\n- If the slice plan assigns it to 421, this is consistent. Confirm against the slice plan, because the plan's entry for this slice decides whether dropping it is a scope gap.",
+      "file_ref": null,
+      "category": "scope",
+      "raw_category": null,
+      "location": "project-documents/user/slices/422-slice.fix-case-qualification-and-yield-report-keystone.md:365"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "pass",
+      "category": "alignment",
+      "raw_category": null,
+      "summary": "Fairness rule, test sets and record model match the architecture",
+      "location": "project-documents/user/slices/422-slice.fix-case-qualification-and-yield-report-keystone.md#D5",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "proportionality",
+      "raw_category": null,
+      "summary": "Design is heavier than the keystone needs; several items can be cut or deferred",
+      "location": "project-documents/user/slices/422-slice.fix-case-qualification-and-yield-report-keystone.md#Technical Scope",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Analytic separability bound is anti-conservative and drives the initiative-ordering decision",
+      "location": "project-documents/user/slices/422-slice.fix-case-qualification-and-yield-report-keystone.md:253-265",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "Harness-failure handling is split between \"record and continue\" and \"exit 1\", with no stated boundary",
+      "location": "project-documents/user/slices/422-slice.fix-case-qualification-and-yield-report-keystone.md:285,304",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "design-detail",
+      "raw_category": null,
+      "summary": "Trace runs before the fails-at-reference check, so a test's rejection reason can be misattributed",
+      "location": "project-documents/user/slices/422-slice.fix-case-qualification-and-yield-report-keystone.md:109,218-219",
+      "location_verified": null
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "scope",
+      "raw_category": null,
+      "summary": "Agent-auth-under-redirected-config check is not owned by this slice",
+      "location": "project-documents/user/slices/422-slice.fix-case-qualification-and-yield-report-keystone.md:365",
+      "location_verified": true
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/422-slice.fix-case-qualification-and-yield-report-keystone.md",
+    "against": "project-documents/user/architecture/420-arch.model-benchmark.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261115-design/wt/422-design"
+  },
+  "timestamp": "2026-11-16T07:00:19.306452",
+  "model": "claude-sonnet-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 2,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-sonnet-5-5",
+  "answering_models": [
+    "claude-sonnet-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 6,
+    "in_fences": 0,
+    "in_section": 6,
+    "surviving": 6
+  },
+  "effort": "medium",
+  "profile": "sdk",
+  "turns": 3,
+  "prompt_tokens": 135769,
+  "cached_tokens": 11400,
+  "cache_write_tokens": 124365,
+  "completion_tokens": 5763,
+  "reasoning_tokens": null,
+  "duration_seconds": 51.63927404093556,
+  "cost_usd": 0.5570068,
+  "cost_basis": "provider"
+}

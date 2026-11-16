@@ -1,0 +1,207 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "Part A makes resume replay every paused step, contradicting the design's own non-loop criterion",
+      "description": "Two functional requirements cannot both hold:\n- Line 303 says `first_unfinished_step` returns the paused step itself, for all steps.\n- Line 307 says resuming a paused non-loop step behaves exactly as today.\n\nToday a non-loop step paused at its checkpoint is treated as done, and resume starts at its successor. Under D2 the same step is \"unfinished\", so resume re-executes it from its first action: the dispatch and review run again and the checkpoint is re-evaluated. Nothing in the design tells the re-run that the checkpoint was already resolved, and the doc itself notes `CheckpointState` steers nothing (lines 98-101).\n\nThis changes checkpoint resume for every pipeline, not just loops. The Risk section only anticipates the `FAILED` case, and Verification step 5 covers only a clean run.\n\nThe fix must be in the design: either scope the status filter to loop steps, or record and consume a \"checkpoint resolved\" marker. Add a non-loop paused-resume regression test either way.",
+      "file_ref": null,
+      "category": "integration-contract",
+      "raw_category": null,
+      "location": "project-documents/user/slices/915-slice.loop-checkpoint-pause-resume-correctness.md:303-308"
+    },
+    {
+      "severity": "FAIL",
+      "title": "`on_exhaust: checkpoint` loops become un-resumable under Parts A+B",
+      "description": "A loop that exhausts with `on_exhaust: checkpoint` also returns `PAUSED`, with `iteration = max`. In persisted state it is indistinguishable from an inner-checkpoint pause. With this design:\n- Part A returns resume to the loop.\n- Part B starts it at round `max`, which re-runs that round.\n- If `until:` is still unmet, the loop exhausts and pauses again, on every resume.\n\nThe human can no longer proceed past an exhausted loop, which is the purpose of that mode. Each resume also runs an extra round, violating D1's \"resume does not grant extra rounds\" (lines 180-182).\n\nThe Excluded list covers only `on_exhaust: skip`; this mode is not mentioned. Including `FAILED` adds the same extra round for `on_exhaust: fail`.\n\nThe design needs a persisted distinction between \"paused mid-round\" and \"paused at exhaustion\", and a stated resume behavior for the latter.",
+      "file_ref": null,
+      "category": "failure-modes",
+      "raw_category": null,
+      "location": "project-documents/user/slices/915-slice.loop-checkpoint-pause-resume-correctness.md:128-130"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "D1's rationale inverts the checkpoint resolution semantics",
+      "description": "Rationale 2 says a human who chose Continue is silently overridden. Rationale 3 says Exit remains the \"human takes over\" escape hatch that re-entry does not remove.\n\nIn the current executor, the checkpoint prompts in-process. Accept or Override continues the same round without pausing. Only Exit produces `PAUSED`. So the bug only occurs after Exit, and re-entry on resume is the behavior of the Exit path, not something separate from it.\n\nThe decision to re-enter may still be right, and rationale 1 and 4 stand alone. But two of four supporting arguments describe behavior that does not exist, and the \"human is taking over\" reading the plan entry asked to be weighed is dismissed on a false premise. Re-justify D1 against the real flow.\n\nThe same error affects two other passages:\n- Line 39 (\"hits this on its first non-passing round\") holds only if the human exits.\n- Verification step 1 never says to choose Exit.",
+      "file_ref": null,
+      "category": "design-rationale",
+      "raw_category": null,
+      "location": "project-documents/user/slices/915-slice.loop-checkpoint-pause-resume-correctness.md:161-171"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Re-entry replays the paused round without findings feedback, and the replay is not counted",
+      "description": "The pause fires at a checkpoint that normally follows the round's dispatch and review, so round N's work is already done. Resuming at round N re-runs it in full, which has two consequences:\n- **Round count:** a loop paused at round 2 of 3 executes round 2 twice, so \"at most rounds 2\u20133\" understates the dispatches against `max:`.\n- **Lost feedback:** the replay runs with empty `prior_iteration_step_outputs`. A resumed round N > 1 gets no prior findings, which is the defect slice 910 fixed. The round N review that triggered the pause is persisted in the paused step's `action_results` but is not used.\n\nDeferring rehydration to \"911/305 territory\" leaves the plan entry's goal of a correct resume on this code path only partly met. Either state the degraded round as a Known Limitation with its consequence, or seed the resumed round from the persisted results.",
+      "file_ref": null,
+      "category": "under-specification",
+      "raw_category": null,
+      "location": "project-documents/user/slices/915-slice.loop-checkpoint-pause-resume-correctness.md:258-264"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Multiple records per step name after re-entry are unspecified",
+      "description": "`_append_step` appends unconditionally, which D2 keeps. A re-entered loop therefore leaves two or more `StepState` entries with the same `step_name`, for example paused at round 1 then paused at round 2.\n\n`resume_iteration_for` is specified only as \"return the recorded iteration for a named step\". It must say the latest record wins; otherwise a second resume can restart at the earlier round. The Part A predicate also needs a stated rule for mixed-status duplicates, with a test for a twice-paused loop.",
+      "file_ref": null,
+      "category": "under-specification",
+      "raw_category": null,
+      "location": "project-documents/user/slices/915-slice.loop-checkpoint-pause-resume-correctness.md:287"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Including `FAILED` in the predicate is scope beyond the plan entry",
+      "description": "The plan entry and issue #48 cover checkpoint-paused loops. Making `FAILED` steps resumable changes `--resume` for every failed run in every pipeline, and it interacts with `on_exhaust: fail` as noted above. It has one line of acceptance criteria and no walkthrough step. Cut it from this slice and file it as its own issue; that also shrinks the blast radius the Risk section worries about.",
+      "file_ref": null,
+      "category": "scope",
+      "raw_category": null,
+      "location": "project-documents/user/slices/915-slice.loop-checkpoint-pause-resume-correctness.md:204-208"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Two sentinels for one coordinate",
+      "description": "`start_from_iteration` defaults to 0, `start_iteration` defaults to 1, and there is a clamp to `>= 1` between them. A recorded iteration of 0 on a loop step is silently coerced. State whether that is expected or should be an explicit error, given the project's no-silent-fallback rule.",
+      "file_ref": null,
+      "category": "under-specification",
+      "raw_category": null,
+      "location": "project-documents/user/slices/915-slice.loop-checkpoint-pause-resume-correctness.md:230-250"
+    },
+    {
+      "severity": "PASS",
+      "title": "Architectural fit and plan-entry obligations",
+      "description": "- **Initiative fit:** a non-trivial bug fix, small (2/5), independently deliverable, with dependencies on 910 and 911 matching the slice plan.\n- **Plan obligations:** the re-enterability question is answered in the design, and abandonment is made observable through a WARNING with a test.\n- **Boundaries:** the CLI reads state and the executor stays state-free, so dependency direction is sound.\n- **Not applicable:** no new I/O paths are added and the parent architecture states no NFRs.",
+      "file_ref": null,
+      "category": "alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/915-slice.loop-checkpoint-pause-resume-correctness.md"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "integration-contract",
+      "raw_category": null,
+      "summary": "Part A makes resume replay every paused step, contradicting the design's own non-loop criterion",
+      "location": "project-documents/user/slices/915-slice.loop-checkpoint-pause-resume-correctness.md:303-308",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "fail",
+      "category": "failure-modes",
+      "raw_category": null,
+      "summary": "`on_exhaust: checkpoint` loops become un-resumable under Parts A+B",
+      "location": "project-documents/user/slices/915-slice.loop-checkpoint-pause-resume-correctness.md:128-130",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "design-rationale",
+      "raw_category": null,
+      "summary": "D1's rationale inverts the checkpoint resolution semantics",
+      "location": "project-documents/user/slices/915-slice.loop-checkpoint-pause-resume-correctness.md:161-171",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "under-specification",
+      "raw_category": null,
+      "summary": "Re-entry replays the paused round without findings feedback, and the replay is not counted",
+      "location": "project-documents/user/slices/915-slice.loop-checkpoint-pause-resume-correctness.md:258-264",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "under-specification",
+      "raw_category": null,
+      "summary": "Multiple records per step name after re-entry are unspecified",
+      "location": "project-documents/user/slices/915-slice.loop-checkpoint-pause-resume-correctness.md:287",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "scope",
+      "raw_category": null,
+      "summary": "Including `FAILED` in the predicate is scope beyond the plan entry",
+      "location": "project-documents/user/slices/915-slice.loop-checkpoint-pause-resume-correctness.md:204-208",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "note",
+      "category": "under-specification",
+      "raw_category": null,
+      "summary": "Two sentinels for one coordinate",
+      "location": "project-documents/user/slices/915-slice.loop-checkpoint-pause-resume-correctness.md:230-250",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "pass",
+      "category": "alignment",
+      "raw_category": null,
+      "summary": "Architectural fit and plan-entry obligations",
+      "location": "project-documents/user/slices/915-slice.loop-checkpoint-pause-resume-correctness.md",
+      "location_verified": null
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/915-slice.loop-checkpoint-pause-resume-correctness.md",
+    "against": "project-documents/user/architecture/900-arch.maintenance-and-refactoring.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261115-design/wt/915-design"
+  },
+  "timestamp": "2026-11-16T06:57:52.320471",
+  "model": "claude-fable-5-2",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 11,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-fable-5-2",
+  "answering_models": [
+    "claude-fable-5-2"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 8,
+    "in_fences": 0,
+    "in_section": 8,
+    "surviving": 8
+  },
+  "effort": "medium",
+  "profile": "sdk",
+  "turns": 12,
+  "prompt_tokens": 499325,
+  "cached_tokens": 384063,
+  "cache_write_tokens": 115248,
+  "completion_tokens": 7928,
+  "reasoning_tokens": null,
+  "duration_seconds": 86.16545425006188,
+  "cost_usd": 2.2386567,
+  "cost_basis": "provider"
+}

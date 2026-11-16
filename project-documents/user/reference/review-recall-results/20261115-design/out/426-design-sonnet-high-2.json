@@ -1,0 +1,207 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "PASS",
+      "title": "Core architectural principles are carried through",
+      "description": "- **Production pipeline:** replays run producer-only `P6` rather than a benchmark-only prompt (D8).\n- **Grading:** it uses the objective grader unchanged, with an empty hidden set (D10).\n- **Reports:** slice cases get their own tables, as the architecture's \"Grading slice cases\" note requires (D17).\n- **Reference:** it is a reference line and is never ranked (D17).\n- **Judging:** the pairwise judge is not folded into the grade, and no composite is computed (D17).\n- **Absent is not zero:** harness absences drop the case, and config absences forfeit (D15).\n- **Over-size diffs:** they are excluded and counted, never truncated (D14). That is one of the two rules the architecture's \"Diffs for the judge\" note allows.\n- **Test sets:** no slice tests are used as hidden tests (D5).\n- **Judge pairing:** pairs are limited to sample-matched cross-config pairs plus each replay against the reference. That avoids the quadratic growth the architecture's Cost section warns about (D13).",
+      "file_ref": null,
+      "category": "alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/426-slice.slice-cases.md#Technical Decisions"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Statements about edits to 421, 424 and 425 contradict each other",
+      "description": "- **The claim:** Technical Scope says \"No edits to 424 or 425\", because 424 already provides `CaseKindRunner.requalify` and 425 already provides `bootstrap_mean_interval`.\n- **Contradicting lines:**\n  - Line 451 says `tests/benchmark/` passes unchanged \"except where D8 routes re-qualification and D17 extracts the interval\". That implies the interval helper is not yet extracted.\n  - D17 and Consumes say `bench_report` (425's module) \"gains the per-kind grouping and the pairwise section\".\n  - Line 321 widens 424's `CaseDrop.reason`.\n  - D8 says a slice case set \"now plans instead of refusing (424 D5)\". That is a change to 424's behaviour, or to its registry contract.\n  - Whether `requalify` already exists on the seam is not settled. D8 says `SliceCaseRunner.requalify` \"calls\" it, but the wording does not say 424 defines it.\n- **Why it matters:** Slices 424 and 425 are the providers on the other side of these integration points. They need an unambiguous statement of what 426 modifies and what it assumes already exists.\n- **Fix:** Add one table of every touchpoint in 421, 424, 425, 177 and 422. For each, mark it as \"consumed as-is\" or \"modified here (what, and why no provider change is needed)\". Drop the \"No edits\" claim, or make it true.",
+      "file_ref": null,
+      "category": "integration-points",
+      "raw_category": null,
+      "location": "project-documents/user/slices/426-slice.slice-cases.md:42"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The judge cost bound is labelled an upper bound but can understate",
+      "description": "- **The architecture requirement:** Design Goals say a run \"states its upper bound in dollars before any dispatch\". Cost says judging is estimated from observed costs, and that the stated bound includes overshoot.\n- **The gap:** D16 multiplies every call by one figure, the largest observed `DiffJudgment` cost for the alias or `--judge-cost`. It then prints `at most $3.88`.\n  - Judge prompts contain the task text, which can run to tens of KB (line 527), plus two diffs. The over-size limit allows prompts up to 400k characters.\n  - A per-call figure observed on small cases, or typed in by the user on a first run, does not bound a call near the limit.\n  - The final \"one call of overshoot\" is also priced at that same figure.\n- **Fix:** The bound is printed after every pair prompt has been built, so each pair's prompt length is already known. Derive a cost-per-character rate from observed judgments, or from `--judge-cost` as a rate for a stated prompt size. Price each pair by its own length, and price the overshoot at the longest pair. Alternatively, print \"estimate\", not \"at most\".",
+      "file_ref": null,
+      "category": "nfr",
+      "raw_category": null,
+      "location": "project-documents/user/slices/426-slice.slice-cases.md:289-296"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The judge command's own I/O paths have no failure-mode handling",
+      "description": "- **Covered:** D15 and D16 cover failed judge calls. They are left unrecorded, logged at ERROR, retried on rerun and counted. They also cover a missing run cap and a `tip_sha` absent from `--repo`.\n- **Not covered:** these new I/O paths in `diff_judge_runner` have no stated handling.\n  - A `git diff start..tip` in the user's checkout that fails or times out for a reference or replay diff. This is different from a missing sha.\n  - A failed sidecar write for a normalized diff.\n  - A failed or truncated diff read.\n  - A second `judge` run, or a `run` or `grade`, contending for `<id>.judge.lock`. The doc says only \"same process lock\" without naming wait, fail or timeout.\n  - A store write failing after a call has been paid for.\n- **Why it matters:** The project's Failure-Mode Enumeration rule says each failure must be explicit and observable. D6 enumerates these for the build side (git failures become `harness_error`), but nothing parallel exists for judging.\n- **Fix:** Add a short list. A git failure for a case makes that case \"not judged, ERROR log, counted as harness-failed, retried on rerun\". A held lock makes the command refuse, naming the lock. Add one test asserting the log signal for the git-failure case.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/426-slice.slice-cases.md#D15 \u2014 Absences in judging"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The design carries scope that can be cut or deferred",
+      "description": "- **Restated dependency lists:** Prerequisites, Interfaces Required, \"Consumes from Other Slices\" and Technical Scope restate the same dependencies four times. Keep Prerequisites and the touchpoint table recommended in the first finding. Delete the rest.\n- **Speculative \"Provides\":** `normalize` \"for any consumer that shows implementation diffs\" and slice cases \"usable by 427 if planted defects are drawn from slice diffs\" have no consumer today. Cut them. The `CfRegistration` and `judge_pair` provisions are real, because this slice uses them.\n- **Unused record field:** `max_prompt_chars` is stored on every `DiffJudgment`. Nothing reads it, because the limit is already on `OverSizeCase` and in the report line.\n- **Undescribed flag:** `--keep` on `slice-cases build` appears only in the CLI signature and is not described anywhere. Define it or cut it.\n- **Effort estimate:** \"Effort: 3/5\" looks light for the work. It covers about 13 new modules, four record types, three cross-slice extractions, a live spike that can block the slice, a new judge runner, and report changes. If the effort number drives sequencing, re-estimate it.",
+      "file_ref": null,
+      "category": "proportionality",
+      "raw_category": null,
+      "location": "project-documents/user/slices/426-slice.slice-cases.md:414-428"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The reference is `tip_sha`, where the architecture says \"landing commit\"",
+      "description": "The architecture's Envisioned State says \"the landing commit is the reference\". D2 uses `tip_sha` and gives a sound reason: on a merge landing, `fork..after` includes unrelated target work. The deviation is justified and documented. The next architecture revision should say \"slice branch tip\".",
+      "file_ref": null,
+      "category": "alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/426-slice.slice-cases.md#D2 \u2014 Landing and reference selection"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Lockfile and changelog filenames are hardcoded in a layer the doc keeps language-neutral",
+      "description": "The Component Structure says build and qualify reach the language only through the adapter. `diff_normalize.py` hardcodes `uv.lock`. That is acceptable under the Python-only scope, since the constants are defined once. A second language would need the lockfile name to move onto the adapter. Record that in the design as a known follow-up.",
+      "file_ref": null,
+      "category": "layering",
+      "raw_category": null,
+      "location": "project-documents/user/slices/426-slice.slice-cases.md#D11 \u2014 Diff normalization for the judge"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The frontmatter `dependencies` list omits 403 and 177",
+      "description": "The body names 403 (`slice_ranges`) and 177 (judge core, `ReplaySandbox`) as hard prerequisites, but the frontmatter lists only `[421, 422, 424, 425]`. If tooling orders work from the frontmatter, the mismatch could hide a dependency.",
+      "file_ref": null,
+      "category": "dependencies",
+      "raw_category": null,
+      "location": "project-documents/user/slices/426-slice.slice-cases.md:6"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "pass",
+      "category": "alignment",
+      "raw_category": null,
+      "summary": "Core architectural principles are carried through",
+      "location": "project-documents/user/slices/426-slice.slice-cases.md#Technical Decisions",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "integration-points",
+      "raw_category": null,
+      "summary": "Statements about edits to 421, 424 and 425 contradict each other",
+      "location": "project-documents/user/slices/426-slice.slice-cases.md:42",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "nfr",
+      "raw_category": null,
+      "summary": "The judge cost bound is labelled an upper bound but can understate",
+      "location": "project-documents/user/slices/426-slice.slice-cases.md:289-296",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "The judge command's own I/O paths have no failure-mode handling",
+      "location": "project-documents/user/slices/426-slice.slice-cases.md#D15 \u2014 Absences in judging",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "proportionality",
+      "raw_category": null,
+      "summary": "The design carries scope that can be cut or deferred",
+      "location": "project-documents/user/slices/426-slice.slice-cases.md:414-428",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "alignment",
+      "raw_category": null,
+      "summary": "The reference is `tip_sha`, where the architecture says \"landing commit\"",
+      "location": "project-documents/user/slices/426-slice.slice-cases.md#D2 \u2014 Landing and reference selection",
+      "location_verified": null
+    },
+    {
+      "id": "F007",
+      "severity": "note",
+      "category": "layering",
+      "raw_category": null,
+      "summary": "Lockfile and changelog filenames are hardcoded in a layer the doc keeps language-neutral",
+      "location": "project-documents/user/slices/426-slice.slice-cases.md#D11 \u2014 Diff normalization for the judge",
+      "location_verified": null
+    },
+    {
+      "id": "F008",
+      "severity": "note",
+      "category": "dependencies",
+      "raw_category": null,
+      "summary": "The frontmatter `dependencies` list omits 403 and 177",
+      "location": "project-documents/user/slices/426-slice.slice-cases.md:6",
+      "location_verified": true
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/426-slice.slice-cases.md",
+    "against": "project-documents/user/architecture/420-arch.model-benchmark.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261115-design/wt/426-design"
+  },
+  "timestamp": "2026-11-16T07:19:51.330825",
+  "model": "claude-sonnet-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 2,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-sonnet-5-5",
+  "answering_models": [
+    "claude-sonnet-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 8,
+    "in_fences": 0,
+    "in_section": 8,
+    "surviving": 8
+  },
+  "effort": "high",
+  "profile": "sdk",
+  "turns": 3,
+  "prompt_tokens": 138200,
+  "cached_tokens": 33487,
+  "cache_write_tokens": 104709,
+  "completion_tokens": 9263,
+  "reasoning_tokens": null,
+  "duration_seconds": 76.5924097080715,
+  "cost_usd": 0.5155896000000001,
+  "cost_basis": "provider"
+}

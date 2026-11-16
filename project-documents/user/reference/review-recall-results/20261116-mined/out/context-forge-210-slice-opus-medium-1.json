@@ -1,0 +1,207 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "PASS",
+      "title": "Layer boundaries and dependency direction kept",
+      "description": "Rule compilation stays in the guide submodule's `scripts/setup-ide`. CF core's job stays the same (validate, check guides, check for the managed marker, run the script, propagate). `init.ts`, `packages/core` and `mcp-server` are untouched. This matches the slice plan's \"composition over new infrastructure\" note and the 202 integration point: `--ide <target>` already passes through to `setupIdeAction`. The non-goals (Cursor, two-way sync, custom agents) match the plan.",
+      "file_ref": null,
+      "category": "architecture",
+      "raw_category": null,
+      "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md#compilation-lives-in-the-guides-submodule-not-cf-core"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Overwrite check skips `.github/instructions/` and `.github/prompts/`, and the AGENTS.md behaviour is not tested",
+      "description": "Step 4 checks for the managed marker only in `.github/copilot-instructions.md` and `AGENTS.md`. The script also writes into `.github/instructions/*.instructions.md` and `.github/prompts/*.prompt.md`. Repos that already use Copilot often have hand-written files there, and a name clash (for example `typescript.instructions.md`) would be overwritten silently. That breaks the plan criterion \"Re-running on a project with existing unmanaged files prompts before overwriting\". `AGENTS.md` is often written by hand and shared with other tools, yet the tests (line 125) only cover an unmanaged `copilot-instructions.md`.\n\nFixes needed:\n- Say whether the check also covers each target file in the two directories, or that generated files carry a CF-specific name or prefix that cannot clash.\n- Say whether one prompt covers several unmanaged files or there is one prompt per file.\n- Name the backup path for `AGENTS.md`.\n- Add a test for an unmanaged `AGENTS.md`.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:98-100"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Unclear where compiled files come from: may require `.claude/` output for Copilot-only users",
+      "description": "The file layout annotates outputs as \"from `.claude/rules/typescript.md`\" and \"from `.claude/skills/commit.md`\". Read literally, the Copilot backend reads the Claude target's output. The slice's main user is a Copilot-only user who cancelled Claude. For them, `.claude/` will not exist unless they first run `cf setup-ide claude`, which writes `CLAUDE.md` and `.claude/`. That contradicts the additive rule \"never touch `.claude/` or `CLAUDE.md`\" (line 55).\n\nThe doc should state that the copilot backend compiles from the guide's own rule and skill sources (the same input the claude backend uses), not from `.claude/`. It should also add a test for `cf setup-ide copilot` on a project that has no `.claude/` directory.",
+      "file_ref": null,
+      "category": "hidden-dependency",
+      "raw_category": null,
+      "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:36-49"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Propagation and regeneration leave stale files and skip subfolders",
+      "description": "The new `copilot` block is described only as copying \"the four Copilot dirs/files\". The existing Claude block in `propagateToWorktrees` copies only top-level files (`entry.isFile()`), and the reference tool guide notes that VS Code searches `.github/instructions/` recursively. Two cases are not covered:\n1. **Subfolders:** if the guide emits nested instruction folders, they will not be copied.\n2. **Stale files:** when a rule or skill is removed from the source, its generated `.instructions.md` or `.prompt.md` stays at the root and in every worktree. VS Code combines all instruction files, so the deleted rule stays in effect.\n\nSpecify flat output (and say so), and define how stale managed files are removed. One option: delete files that carry the marker before regenerating.",
+      "file_ref": null,
+      "category": "integration",
+      "raw_category": null,
+      "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:89"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Guide-version dependency left undeclared, with no specified handling when the script lacks a `copilot` case",
+      "description": "The frontmatter has `dependencies: []`, but the slice cannot work without a released guide version that has a `copilot` case. The Risks section says an older guide \"will fail at the script step with a clear error\". However, the current `setupIdeAction` turns any non-zero exit into a generic \"setup-ide exited with code N\". How clear the error is depends entirely on what the old script prints. Under the failure-mode rule (every new I/O path needs an explicit, visible handling strategy), the design should:\n- name the minimum guide version, or a way to detect support (for example, the script listing its supported targets);\n- specify the user-facing message telling the user to run `cf guides update`;\n- add a test for the \"guide lacks copilot backend\" path.",
+      "file_ref": null,
+      "category": "hidden-dependency",
+      "raw_category": null,
+      "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:133"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Scope from the slice plan dropped: tool-guide reference and custom-agent mapping",
+      "description": "The slice plan's success criteria require \"Tool guide (`project-documents/user/tool-guides/copilot-vscode/setup-ide.md`) referenced in slice design, promoted to a proper published tool guide if needed\". The design never references it. The plan's mapping table also says custom agents should be \"document[ed]\" even if not implemented. Line 54 says \"document the mapping but defer\", but no mapping is documented. The manual criterion \"AI agent in VS Code Copilot can \u2026 follow project conventions\" is also missing from Test Coverage.\n\nFixes needed:\n- Reference the tool guide and decide whether it gets promoted.\n- Add a short `.claude/agents` \u2192 Copilot custom agent mapping note.\n- List the manual verification step.",
+      "file_ref": null,
+      "category": "scope",
+      "raw_category": null,
+      "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md#technical-scope"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Helper name and signature differ between sections",
+      "description": "Technical Scope defines `isManagedCopilot(filePath)` (one file at a time, like `isManagedClaudeMd`). Files Changed (line 109) defines `isManagedCopilotFiles(projectPath)`, which checks two files. Pick one. The per-file form reuses the existing pattern and extends naturally to the directory files in the first concern.",
+      "file_ref": null,
+      "category": "under-specification",
+      "raw_category": null,
+      "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:29"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Help-text update item is already done by existing code",
+      "description": "The `setup-ide` argument description is already built with `VALID_TARGETS.join(', ')`, so adding `'copilot'` to `VALID_TARGETS` updates the help text automatically. Drop this as a separate work item.",
+      "file_ref": null,
+      "category": "proportionality",
+      "raw_category": null,
+      "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:34"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "pass",
+      "category": "architecture",
+      "raw_category": null,
+      "summary": "Layer boundaries and dependency direction kept",
+      "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md#compilation-lives-in-the-guides-submodule-not-cf-core",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "Overwrite check skips `.github/instructions/` and `.github/prompts/`, and the AGENTS.md behaviour is not tested",
+      "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:98-100",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "hidden-dependency",
+      "raw_category": null,
+      "summary": "Unclear where compiled files come from: may require `.claude/` output for Copilot-only users",
+      "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:36-49",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "integration",
+      "raw_category": null,
+      "summary": "Propagation and regeneration leave stale files and skip subfolders",
+      "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:89",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "hidden-dependency",
+      "raw_category": null,
+      "summary": "Guide-version dependency left undeclared, with no specified handling when the script lacks a `copilot` case",
+      "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:133",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "scope",
+      "raw_category": null,
+      "summary": "Scope from the slice plan dropped: tool-guide reference and custom-agent mapping",
+      "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md#technical-scope",
+      "location_verified": null
+    },
+    {
+      "id": "F007",
+      "severity": "note",
+      "category": "under-specification",
+      "raw_category": null,
+      "summary": "Helper name and signature differ between sections",
+      "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:29",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "note",
+      "category": "proportionality",
+      "raw_category": null,
+      "summary": "Help-text update item is already done by existing code",
+      "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:34",
+      "location_verified": true
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md",
+    "against": "project-documents/user/architecture/200-slices.developer-onboarding.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/context-forge-210-slice"
+  },
+  "timestamp": "2026-11-16T09:21:06.614379",
+  "model": "claude-opus-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 7,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 1,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-opus-5-5",
+  "answering_models": [
+    "claude-opus-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 8,
+    "in_fences": 0,
+    "in_section": 8,
+    "surviving": 8
+  },
+  "effort": "medium",
+  "profile": "sdk",
+  "turns": 8,
+  "prompt_tokens": 395681,
+  "cached_tokens": 300687,
+  "cache_write_tokens": 94982,
+  "completion_tokens": 5009,
+  "reasoning_tokens": null,
+  "duration_seconds": 62.87470633420162,
+  "cost_usd": 0.9208071000000001,
+  "cost_basis": "provider"
+}

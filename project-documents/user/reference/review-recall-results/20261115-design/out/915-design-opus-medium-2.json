@@ -1,0 +1,189 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "PASS",
+      "title": "The slice fits the maintenance initiative and covers the slice plan entry",
+      "description": "This is a non-trivial bug fix (issue #48) that doesn't belong to an active feature slice, so it fits the scope of `900-arch` (\"Bug fixes: Non-trivial bugs\u2026\"). The slice plan entry asks for three things, and all three are covered:\n- the re-enterability question is answered rather than deferred again (D1);\n- abandoned iterations become observable (Part C / D4);\n- all three affected loop shapes are listed (phase-bodied, gate-bearing, `review:` with `checkpoint:`).\n\nThe size is reasonable for the arch guideline that slices be \"small and focused\": three parts, overall effort 2/5. The configurable `on_pause` option was rejected, which is the right call. The design passes `pipeline_name` and the iteration as parameters instead of giving the executor access to state, so dependencies point the right way (CLI \u2192 state read \u2192 pure executor).",
+      "file_ref": null,
+      "category": "alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/915-slice.loop-checkpoint-pause-resume-correctness.md#overview"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "D1's rationale relies on checkpoint options that don't exist, and resuming at the paused round can pause again forever",
+      "description": "There are two problems here.\n\n**1. The options D1 cites aren't the real ones.** Rationale points 2 and 3 depend on `Continue` and `Exit` being the checkpoint's answer options. The checkpoint action actually emits `human_options: [\"approve\", \"revise\", \"skip\", \"abort\"]`. Nothing in the design says how the resume path receives or uses the human's answer at all. \"The current behavior silently overrides an explicit human answer\" can't be judged when no answer is passed into resume.\n\n**2. Resume re-runs the same round, which can trap the run.**\n- D1 point 2 says \"proceed\" means \"the next round\".\n- The `max:` consequence and D3 resume at the *paused* round N and re-run its whole body (`range(start_iteration, \u2026)`).\n- The checkpoint fires on the prior review's verdict, with no other input. So re-running round N repeats dispatch and review, and that review likely returns CONCERNS again (see the next finding: it gets no feedback from earlier rounds).\n- The checkpoint then pauses at round N again. Every resume can repeat this without the loop ever moving forward or using up `max:`.\n\n**Fix:** state which human answers lead to which resume behavior (e.g. approve \u2192 start at N+1; revise \u2192 re-run N; skip \u2192 exit the loop and record why; abort \u2192 end the run). Then fix D1's rationale to use the real vocabulary. Also add a success criterion: resuming a loop paused at round N must not pause at round N again unless the body actually produces a new non-passing verdict.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "project-documents/user/slices/915-slice.loop-checkpoint-pause-resume-correctness.md:161-182"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "A resumed round gets no findings from earlier rounds, which undoes slice 910's convergence fix",
+      "description": "D3 sets `prior_iteration_step_outputs` to empty on re-entry and calls rebuilding it \"911/305 territory\". Slice 910 Part A made convergence depend on passing the previous round's findings into the next round. So a resumed round runs without them: it repeats the work that produced CONCERNS, and with the trigger above it is likely to pause again.\n\nD1 justifies re-entry by protecting the `until:` convergence contract, but this choice undermines that same contract. The findings are already saved in the paused run's `action_results`.\n\n**Fix:** either restore `prior_iteration_step_outputs` from the latest recorded entry for the step (a contained read, since the record exists), or say plainly that a resumed round runs without feedback. In the second case, add that to Known Limitation with its effect on convergence, and give it a test.",
+      "file_ref": null,
+      "category": "integration",
+      "raw_category": null,
+      "location": "project-documents/user/slices/915-slice.loop-checkpoint-pause-resume-correctness.md:258-264"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Behavior with duplicate state records for one step is not specified",
+      "description": "Because `_append_step` always appends, a step that pauses, resumes and pauses again (or pauses and then completes) will have several `completed_steps` entries with the same `step_name`. The design doesn't define what happens in that case:\n- **`resume_iteration_for`:** which entry it reads. It must be the latest one; the first one would resume at a stale round.\n- **The Part A set:** whether it should use only the latest entry per step. For example, a step that once completed and later failed after a manual re-run should count as unfinished.\n\n**Fix:** specify \"latest entry per step name wins\" for both functions and add a test with several entries for one step.",
+      "file_ref": null,
+      "category": "under-specification",
+      "raw_category": null,
+      "location": "project-documents/user/slices/915-slice.loop-checkpoint-pause-resume-correctness.md:189-202"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Stale or missing resume positions fall back silently or log only at DEBUG",
+      "description": "Resume reads persisted state to decide where to re-enter, which is a new read path, but its failure cases aren't listed:\n- **Missing iteration** (state written before 911, or `iteration=0`): it is silently \"clamped to \u22651\", which restarts the loop at round 1. That is the silent fallback the project rules forbid.\n- **Iteration greater than `max`** (pipeline YAML edited between pause and resume): `range` is empty, so zero rounds run. Whether `on_exhaust` then fires, or the loop counts as passed, is not defined.\n- **Target step no longer a loop:** the iteration is ignored with only a DEBUG log. `review-code.md` requires failure modes to be observable at WARNING or above.\n\n**Fix:** list these three cases with explicit handling (WARNING or an explicit error), and test the signal for each.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/915-slice.loop-checkpoint-pause-resume-correctness.md:246-250"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The Part A check is a denylist, while the text describes an allowlist",
+      "description": "The text says a step is done when it is \"present **and** in a terminal-complete status\". The sketch instead excludes `{PAUSED, FAILED}`, so any other status, including ones added later, counts as complete. An allowlist (`COMPLETED`, plus any genuinely terminal status such as skipped) would fail closed and match the stated rule.\n\nAdding `FAILED` goes beyond issue #48. It is justified (the same mechanism causes it) and flagged in Risk Assessment, so no action is needed for that part.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/915-slice.loop-checkpoint-pause-resume-correctness.md:191-202"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Line numbers differ between the slice plan and the design",
+      "description": "The slice plan cites `executor.py:930-933`; the design cites `769-772` and explains why the line numbers moved. That's fine. Consider updating the slice plan entry so the two documents agree.",
+      "file_ref": null,
+      "category": "documentation",
+      "raw_category": null,
+      "location": "project-documents/user/slices/915-slice.loop-checkpoint-pause-resume-correctness.md:51-53"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "pass",
+      "category": "alignment",
+      "raw_category": null,
+      "summary": "The slice fits the maintenance initiative and covers the slice plan entry",
+      "location": "project-documents/user/slices/915-slice.loop-checkpoint-pause-resume-correctness.md#overview",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "D1's rationale relies on checkpoint options that don't exist, and resuming at the paused round can pause again forever",
+      "location": "project-documents/user/slices/915-slice.loop-checkpoint-pause-resume-correctness.md:161-182",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "integration",
+      "raw_category": null,
+      "summary": "A resumed round gets no findings from earlier rounds, which undoes slice 910's convergence fix",
+      "location": "project-documents/user/slices/915-slice.loop-checkpoint-pause-resume-correctness.md:258-264",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "under-specification",
+      "raw_category": null,
+      "summary": "Behavior with duplicate state records for one step is not specified",
+      "location": "project-documents/user/slices/915-slice.loop-checkpoint-pause-resume-correctness.md:189-202",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "Stale or missing resume positions fall back silently or log only at DEBUG",
+      "location": "project-documents/user/slices/915-slice.loop-checkpoint-pause-resume-correctness.md:246-250",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "The Part A check is a denylist, while the text describes an allowlist",
+      "location": "project-documents/user/slices/915-slice.loop-checkpoint-pause-resume-correctness.md:191-202",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "note",
+      "category": "documentation",
+      "raw_category": null,
+      "summary": "Line numbers differ between the slice plan and the design",
+      "location": "project-documents/user/slices/915-slice.loop-checkpoint-pause-resume-correctness.md:51-53",
+      "location_verified": true
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/915-slice.loop-checkpoint-pause-resume-correctness.md",
+    "against": "project-documents/user/architecture/900-arch.maintenance-and-refactoring.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261115-design/wt/915-design"
+  },
+  "timestamp": "2026-11-16T07:05:47.988056",
+  "model": "claude-opus-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 7,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-opus-5-5",
+  "answering_models": [
+    "claude-opus-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 7,
+    "in_fences": 0,
+    "in_section": 7,
+    "surviving": 7
+  },
+  "effort": "medium",
+  "profile": "sdk",
+  "turns": 8,
+  "prompt_tokens": 572018,
+  "cached_tokens": 558636,
+  "cache_write_tokens": 13366,
+  "completion_tokens": 5778,
+  "reasoning_tokens": null,
+  "duration_seconds": 75.81333787506446,
+  "cost_usd": 0.3349508,
+  "cost_basis": "provider"
+}

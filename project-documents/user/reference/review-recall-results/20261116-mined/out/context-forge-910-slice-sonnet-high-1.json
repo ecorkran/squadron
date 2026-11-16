@@ -1,0 +1,189 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "PASS",
+      "title": "Alignment with the maintenance architecture",
+      "description": "The slice sits under the architecture's \"hard-coded values \u2192 configuration or constants\" scope and its \"Hard-coded values audit\" theme. It has concrete success criteria rather than an open-ended cleanup. It depends only on slice 241 and provides nothing downstream, so the dependency direction is correct. The doc has no new I/O path and no NFR from the parent, so failure-mode enumeration and NFR restatement do not apply.",
+      "file_ref": null,
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md#Overview"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "WorkflowNavigator sites are SliceStatus sites, which TD-3 excludes",
+      "description": "The table lists `WorkflowNavigator.ts` with 3 `=== 'complete'` checks to sweep, and Order of work step 4 repeats this. The actual literals are `slice.status === 'complete'` at lines 312 and 345, and `{ ...base, status: 'complete', taskProgress }` at line 588. These compare and assign the `SliceStatus.status` workflow-position union, because `slice` is the current-slice status. They are not `NormalizedStatus` values. TD-3 and the Excluded list say that union must not be swept, since sweeping it \"implies the two unions are related.\"\n\nThe one genuine `NormalizedStatus` comparison in that file, `taskResult.inferredStatus === STATUS.Complete` at line 577, already uses `STATUS`. As written, the slice either violates its own TD-3 or the `WorkflowNavigator.ts` row is wrong. Fix: remove `WorkflowNavigator.ts` from the sweep, which drops step 4. Alternatively, reverse TD-3 deliberately and justify it.",
+      "file_ref": null,
+      "category": "scope-boundary",
+      "raw_category": null,
+      "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md:36"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The site inventory and \"no tests assert literals\" claim do not match the code",
+      "description": "Several stated facts are wrong, and the sweep is driven from them:\n- **Tests:** The doc says \"grep confirms zero `.test.ts` files assert against these literals.\" Tests live under `packages/core/tests/` (for example `ConsistencyChecker.test.ts` and `statusNormalizer.test.ts`) and contain many such literals. The doc's grep is rooted at `packages/core/src` and never reaches them. The conclusion that no test changes are needed is still sound, because runtime values are unchanged, but the stated evidence is false. Restate it as \"tests keep literals, which is fine because `STATUS.X === 'x'`.\"\n- **Excluded site:** The doc says `ProjectModelBuilder.ts` line 179 holds a literal `'unknown'`. Line 179 is a comment that mentions `'not-started'`, and the `'unknown'` fallback is on line 181. No sweep is needed, but the reasoning for excluding it is wrong.\n- **Counts:** The per-file counts (36, 16, 8 and the total of ~65 across \"6 files\" while the table lists 7) and the \"Before: ~75\" figure do not reconcile with a grep of production core source, which finds 63 matching lines. Re-derive the inventory from the code.",
+      "file_ref": null,
+      "category": "accuracy",
+      "raw_category": null,
+      "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md:29-51"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "A production site outside `packages/core` is not accounted for",
+      "description": "The Migration Plan says no consumer updates are needed outside `packages/core`, and scope is limited to `packages/core/src`. `packages/cli/src/commands/arch.ts:189` has `init.slices.filter((s) => s.status === 'complete')`. The slice must either sweep it, if that status is a `NormalizedStatus`, or list it under Excluded with the reason. Otherwise the Functional Requirement \"no bare literals remain in production code\" fails at the repo level, and the sweep leaves a drifting definition behind.",
+      "file_ref": null,
+      "category": "scope-boundary",
+      "raw_category": null,
+      "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md:84"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Success-criteria grep cannot return the stated result",
+      "description": "The grep claims \"zero matches in the six swept files,\" but it cannot reach zero. It uses `-o` without `-n`, so the `types.ts:[3-6]:` exclusion never matches. `types.ts:269` (the `SliceStatus` union), the `ProjectModelBuilder.ts:179` comment, and `frontmatterSchema.ts` would all still match. Walkthrough step 1 then gives a different expected figure (\"4 + 3 + 4\"). Define a single verification command, with line numbers, that lists exactly the allowed leftovers: the `STATUS` definition, the `STATUS_MAP` keys, `frontmatterSchema.ts`, the `SliceStatus` union, and comments. Include `packages/cli/src` in its scope.",
+      "file_ref": null,
+      "category": "verification",
+      "raw_category": null,
+      "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md:135"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Proportionality: restated rationale and redundant verification can be cut",
+      "description": "For a find-and-replace sweep, the doc is heavier than it needs to be.\n- The reasoning for excluding `frontmatterSchema.ts` and `SliceStatus.status` appears twice, in the Excluded list and again in TD-2 and TD-3. Keep it once.\n- Verification steps 2 (a deliberate typo spot-check) and 4 (live `cf status` and `cf list` runs) add nothing beyond `pnpm -r build && pnpm -r test`, since `STATUS.X === 'x'` by construction. Cut them.\n- The slice-912 `ConsistencyChecker.ts` file-size exclusion is stated in three places. Keep one line.\n- The Technical Requirements section repeats the baseline pass counts from the Migration Plan.",
+      "file_ref": null,
+      "category": "proportionality",
+      "raw_category": null,
+      "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md:45-52, 100-106, 145-165"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Retyping `inferredStatus` to `NormalizedStatus` is reasonable",
+      "description": "This removes a second definition of the same values and matches the \"define once\" rule. It widens the type to include `'deprecated'`, which the field never takes. The slice should confirm that no exhaustive switch on `inferredStatus` exists, so the widening cannot produce a new compile error. The build check in step 1 would surface this.",
+      "file_ref": null,
+      "category": "type-design",
+      "raw_category": null,
+      "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md:43"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "pass",
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "summary": "Alignment with the maintenance architecture",
+      "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md#Overview",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "scope-boundary",
+      "raw_category": null,
+      "summary": "WorkflowNavigator sites are SliceStatus sites, which TD-3 excludes",
+      "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md:36",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "accuracy",
+      "raw_category": null,
+      "summary": "The site inventory and \"no tests assert literals\" claim do not match the code",
+      "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md:29-51",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "scope-boundary",
+      "raw_category": null,
+      "summary": "A production site outside `packages/core` is not accounted for",
+      "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md:84",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "verification",
+      "raw_category": null,
+      "summary": "Success-criteria grep cannot return the stated result",
+      "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md:135",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "proportionality",
+      "raw_category": null,
+      "summary": "Proportionality: restated rationale and redundant verification can be cut",
+      "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md:45-52, 100-106, 145-165",
+      "location_verified": null
+    },
+    {
+      "id": "F007",
+      "severity": "note",
+      "category": "type-design",
+      "raw_category": null,
+      "summary": "Retyping `inferredStatus` to `NormalizedStatus` is reasonable",
+      "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md:43",
+      "location_verified": true
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md",
+    "against": "project-documents/user/architecture/900-arch.maintenance-and-refactoring.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/context-forge-910-slice"
+  },
+  "timestamp": "2026-11-16T10:18:49.883745",
+  "model": "claude-sonnet-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 10,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-sonnet-5-5",
+  "answering_models": [
+    "claude-sonnet-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 7,
+    "in_fences": 0,
+    "in_section": 7,
+    "surviving": 7
+  },
+  "effort": "high",
+  "profile": "sdk",
+  "turns": 11,
+  "prompt_tokens": 365838,
+  "cached_tokens": 278865,
+  "cache_write_tokens": 86961,
+  "completion_tokens": 6331,
+  "reasoning_tokens": null,
+  "duration_seconds": 51.77919516712427,
+  "cost_usd": 0.43975909999999996,
+  "cost_basis": "provider"
+}

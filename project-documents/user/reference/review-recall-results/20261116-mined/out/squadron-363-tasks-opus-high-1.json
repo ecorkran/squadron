@@ -1,0 +1,243 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "PASS",
+      "title": "Coverage, sequencing, and scope trace cleanly",
+      "description": "- **Covered:** SC1 (Tasks 1, 8.5), SC2 (5.1\u20135.3, 8.1), SC3 (3.1\u20133.4, 8.1), SC5 (5.1, 8.2), SC6 (6.1, 8.1, 8.4), SC8 (6.2, 8.4), SC9 (7.2, 8.1) and SC11 (3.1, 8.6) each have an authoring task and a verification step.\n- **Order:** the sequence is premises \u2192 selector \u2192 preconditions \u2192 sources \u2192 mapping \u2192 interview \u2192 write contract \u2192 output/provenance \u2192 walkthrough. Each step depends only on earlier ones and there are no cycles.\n- **Scope:** 7.1's pointer update and 7.4's cross-reference fix both trace to the design's Implementation Notes (design lines 448\u2013451), so they are not scope creep.\n- **Load tests:** the slice states no NFR, so no load-test or CI task is needed.",
+      "file_ref": null,
+      "category": "coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/363-tasks.concept-generation.md"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "8.2 decline path will hit re-run semantics instead of the interview",
+      "description": "8.2 runs on \"a scratch copy of the tree\" after 8.1 has already written `000-concept.squadron.md` to the real tree. A copy made at that point contains the document. Under 6.2's rules the flow would report the existing document and stop by default, so the two questions are never asked and the decline path (SC5) never runs.\n\nThere is a second risk. Precondition 3 requires the cf project registration to resolve a name, and this repo's cf config is stored per checkout directory. A copy at a new path may not resolve `squadron`, which would trigger a terminal stop before the interview.\n\nFix: tell 8.2 to delete `000-concept.squadron.md` from the copy, or make the copy before 8.1. Also add a pre-step that confirms `cf get` resolves `squadron` inside the copy.",
+      "file_ref": null,
+      "category": "sequencing",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/363-tasks.concept-generation.md:320-324"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "8.5 writes comprehension documents that 8.6's scope check forbids",
+      "description": "8.5 runs the comprehension flow twice in the real tree (no argument, then `comprehension`). According to `commands/analysis/understand.md:347-356`, every comprehension run writes a new `project-documents/user/analysis/9nn-analysis.codebase-comprehension.md` at a fresh index and never overwrites.\n\n8.6 then requires `git diff --name-only main` to show only the skill file, the generated concept, this slice's documents and the DEVLOG. The two new analysis files make that check fail, or tempt the implementer to bend it.\n\nFix: run 8.5 on a scratch copy, or have 8.5 confirm routing and then remove the generated analysis files before 8.6.",
+      "file_ref": null,
+      "category": "sequencing",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/363-tasks.concept-generation.md:338-347"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "SC10 is only partly verified",
+      "description": "SC10 requires three things:\n- per-section sourcing over the full outcome set\n- the engagement-questions and inferred-claims lines\n- every `[INFERRED]` sentence satisfying the checkable rule\n\n8.1 checks only the engagement-questions line, the inferred-claims line, and the extracted-and-corrected outcome for the Overview. Nothing checks that all seven sections have a sourcing entry, and nothing audits each `[INFERRED]` sentence against 7.1's rule (derived from a named field but not literally stated in it).\n\nFix: add both checks to 8.1.",
+      "file_ref": null,
+      "category": "coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/363-tasks.concept-generation.md:308-316"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "SC4 (dropped topics absent) has no verification step",
+      "description": "4.1 writes the dropped-topics rule into the skill, but neither 8.1 nor 8.2 checks the written documents for it. SC4 says why-now, audience-evolution and methodology-preference must appear nowhere, either as content or as gap markers.\n\n8.2 is where gap markers are most likely to spread, so the check matters there. Fix: add a \"no dropped-topic content or gap marker\" check to 8.1 and 8.2.",
+      "file_ref": null,
+      "category": "coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/363-tasks.concept-generation.md:308-324"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Commit markers are checkboxes, not plain `**Commit**:` lines",
+      "description": "All commit points are written as checklist items (`- [ ] Commit: ...`), at lines 99, 125, 164, 185, 221, 254, 296 and 351. Commit markers should be plain `**Commit**:` lines, not checkboxes, so they aren't confused with work items or left unchecked.\n\nThe cadence is fine: one commit per task matches this repo's \"at least once per task\" rule, and each one comes after a verification subtask. Only the format needs changing.",
+      "file_ref": null,
+      "category": "task-format",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/363-tasks.concept-generation.md:99"
+    },
+    {
+      "severity": "NOTE",
+      "title": "SC7's absent/unreadable cases are not exercised",
+      "description": "8.3 tests only a renamed heading. SC7 also covers a guide that is absent or unreadable, which should produce a different stop message (6.1 Check 1). The design's walkthrough has the same gap.\n\nA one-line variant of 8.3 would cover it: point the check at a missing scratch path and confirm the stop names that path.",
+      "file_ref": null,
+      "category": "coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/363-tasks.concept-generation.md:326-330"
+    },
+    {
+      "severity": "NOTE",
+      "title": "SC12 has no recorded outcome",
+      "description": "\"A concept a PM would edit rather than discard\" has no matching check. The PM is already present for 8.1, so the 9.2 DEVLOG entry could record their verdict on the generated document. This adds no new gate.",
+      "file_ref": null,
+      "category": "coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/363-tasks.concept-generation.md:364-368"
+    },
+    {
+      "severity": "NOTE",
+      "title": "1.2 and 4.2 repeat their parent tasks' success lines",
+      "description": "1.2 repeats 1.1's success line (\"selector covers all four argument cases\"), and 8.5 tests the same thing live. 4.2 (lines 181\u2013184) repeats 4.1's \"row-for-row\" success line.\n\nBoth could fold into their parent task's success criteria without losing coverage. 5.3 should stay separate: its byte-identity check guards SC2 directly.",
+      "file_ref": null,
+      "category": "proportionality",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/363-tasks.concept-generation.md:94-98"
+    },
+    {
+      "severity": "NOTE",
+      "title": "0.1 states the target instead of reading it",
+      "description": "\"Integration branch is unset; target is `main`\" is a fact recorded at planning time. The project's git rules say to read `cf config get git.integration_branch` before starting rather than relying on memory. Fix: replace the claim with that command.",
+      "file_ref": null,
+      "category": "process",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/363-tasks.concept-generation.md:60-61"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "pass",
+      "category": "coverage",
+      "raw_category": null,
+      "summary": "Coverage, sequencing, and scope trace cleanly",
+      "location": "project-documents/user/tasks/363-tasks.concept-generation.md",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "sequencing",
+      "raw_category": null,
+      "summary": "8.2 decline path will hit re-run semantics instead of the interview",
+      "location": "project-documents/user/tasks/363-tasks.concept-generation.md:320-324",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "sequencing",
+      "raw_category": null,
+      "summary": "8.5 writes comprehension documents that 8.6's scope check forbids",
+      "location": "project-documents/user/tasks/363-tasks.concept-generation.md:338-347",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "coverage",
+      "raw_category": null,
+      "summary": "SC10 is only partly verified",
+      "location": "project-documents/user/tasks/363-tasks.concept-generation.md:308-316",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "coverage",
+      "raw_category": null,
+      "summary": "SC4 (dropped topics absent) has no verification step",
+      "location": "project-documents/user/tasks/363-tasks.concept-generation.md:308-324",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "task-format",
+      "raw_category": null,
+      "summary": "Commit markers are checkboxes, not plain `**Commit**:` lines",
+      "location": "project-documents/user/tasks/363-tasks.concept-generation.md:99",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "note",
+      "category": "coverage",
+      "raw_category": null,
+      "summary": "SC7's absent/unreadable cases are not exercised",
+      "location": "project-documents/user/tasks/363-tasks.concept-generation.md:326-330",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "note",
+      "category": "coverage",
+      "raw_category": null,
+      "summary": "SC12 has no recorded outcome",
+      "location": "project-documents/user/tasks/363-tasks.concept-generation.md:364-368",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "note",
+      "category": "proportionality",
+      "raw_category": null,
+      "summary": "1.2 and 4.2 repeat their parent tasks' success lines",
+      "location": "project-documents/user/tasks/363-tasks.concept-generation.md:94-98",
+      "location_verified": true
+    },
+    {
+      "id": "F010",
+      "severity": "note",
+      "category": "process",
+      "raw_category": null,
+      "summary": "0.1 states the target instead of reading it",
+      "location": "project-documents/user/tasks/363-tasks.concept-generation.md:60-61",
+      "location_verified": true
+    }
+  ],
+  "template_name": "tasks",
+  "input_files": {
+    "input": "project-documents/user/tasks/363-tasks.concept-generation.md",
+    "against": "project-documents/user/slices/363-slice.concept-generation.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/squadron-363-tasks"
+  },
+  "timestamp": "2026-11-16T10:07:42.128777",
+  "model": "claude-opus-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 6,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-opus-5-5",
+  "answering_models": [
+    "claude-opus-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 10,
+    "in_fences": 0,
+    "in_section": 10,
+    "surviving": 10
+  },
+  "effort": "high",
+  "profile": "sdk",
+  "turns": 7,
+  "prompt_tokens": 424231,
+  "cached_tokens": 343404,
+  "cache_write_tokens": 80817,
+  "completion_tokens": 8192,
+  "reasoning_tokens": null,
+  "duration_seconds": 89.84759312495589,
+  "cost_usd": 0.8795724000000001,
+  "cost_basis": "provider"
+}

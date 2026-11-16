@@ -1,0 +1,47 @@
+{
+ "review": "r09",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "FAIL",
+   "title": "D1's reasoning for re-entering the loop misreads how checkpoints work",
+   "description": "The slice plan requires the design to \"state and justify one answer\" to the re-enterability question (`900-slices\u2026md:192`). Two of D1's four reasons depend on a description of checkpoints that doesn't match the code:\n\n- **Reason 2 (lines 161-166)** says a human who chose `Continue` at an in-loop checkpoint gets overridden by the current behavior. That can't happen. In `_execute_step_once`, `ACCEPT` and `OVERRIDE` (there is no \"continue\" option) inject instructions and carry on inside the step and the loop (`executor.py:1026-1028`). A step returns `PAUSED` only when the human picks `EXIT` (`executor.py:1018-1025`), or when the session is non-interactive and the prompt silently defaults to `EXIT` (`executor.py:338-343`). So the bug never touches a human who said \"continue\".\n- **Reason 3 (lines 168-171)** says choosing `Exit` \"ends the run\" and stays available as the \"human takes over\" escape hatch, unaffected by re-entry. In fact `Exit` is the pause. It is the exact input this slice will turn into \"resume re-enters the loop\". Once the slice lands, a human who wants to take over from a paused loop has no way to say so; today that reading is the default.\n\nThe decision itself may still be right. In non-interactive runs, resuming is arguably the only \"continue\" signal there is. But the rationale has to be rewritten around the real triggers (`EXIT` and non-interactive default-exit). It should also state that \"human takes over\" will no longer be expressible, or else name how it can be expressed. The vocabulary also needs fixing: `checkpoint.py:106` offers `approve/revise/skip/abort`, while `CheckpointResolution` uses `accept/override/exit`. \"Continue\" appears in neither.",
+   "location": "project-documents/user/slices/915-slice.loop-checkpoint-pause-resume-correctness.md:145-187"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Resuming at the paused round runs that round again, which contradicts \"resume does not grant extra rounds\"",
+   "description": "The round number is recorded when the checkpoint fires. In the `[dispatch, review, checkpoint]` shapes the design lists (lines 105-112), that is after round N's dispatch and review have already finished. D3 then restarts at `range(start_iteration, \u2026)` with `start_iteration = N`, so round N is dispatched and reviewed a second time. That is an extra round, against lines 181-182.\n\nThere is a worse case. A non-interactive run whose redo of round N again gets CONCERNS will default-exit and pause at N again. Every resume repeats round N and the loop never reaches `max:`. D1's own reason 2 says \"proceed \u2026 means the next round\" (line 165), which disagrees with the \"resume at round N\" rule. Pick one:\n- Resume at N+1. Exhaustion is then handled when N = max.\n- Or keep N, justify why the round is repeated, and explain how repeated pauses at the same round are bounded.",
+   "location": "project-documents/user/slices/915-slice.loop-checkpoint-pause-resume-correctness.md:180-182"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Pauses from `on_exhaust: checkpoint` are not handled",
+   "description": "`_loop_exhaust_result` also returns `PAUSED`, with `iteration=max_iter` (`executor.py:1064-1073`). This pause goes through the same `_append_step` path, so it is recorded the same way. Under Part A, resume now returns to the exhausted loop instead of moving past it. Under Part B, `resume_iteration_for` returns `max` and the loop runs round `max` again. That is an extra round, and it changes what `on_exhaust: checkpoint` means today (\"all rounds used up, a human reviews, the run moves on\"). D4's WARNING would also report \"0 rounds not run\" for a pause that didn't come from a short-circuit.\n\nThe design needs to tell exhaustion pauses apart from in-body checkpoint pauses and say what resume does with each. One option is to record the cause, or to have `resume_iteration_for` treat `iteration == max` as exhausted. Whichever is chosen needs a test.",
+   "location": "project-documents/user/slices/915-slice.loop-checkpoint-pause-resume-correctness.md#d3--part-b-one-resume-coordinate-threaded-to-the-loop-only"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "`resume_iteration_for` doesn't say which record it reads when there are several",
+   "description": "`_append_step` always appends and never replaces (`state.py:304`). So a loop paused, resumed and paused again leaves several `StepState` entries with the same `step_name`. D2's set-based check handles that correctly. `resume_iteration_for` is only described as \"return the recorded `iteration` for a named step\", without saying it must take the latest entry. The design also doesn't cover three other cases:\n- No entry exists for the step.\n- The recorded iteration is greater than the current definition's `max` because the pipeline file was edited between pause and resume. `range(start, max+1)` would be empty and the loop would drop straight into the exhaustion branch without saying so.\n- The entry is a `FAILED` step. Should that re-enter at its round, or restart?\n\nEach of these needs a stated behavior and a test. Per the project's fail-fast rule, an out-of-range iteration should raise an error or at least log a WARNING, not quietly run zero rounds.",
+   "location": "project-documents/user/slices/915-slice.loop-checkpoint-pause-resume-correctness.md:287"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "The Part C WARNING leaves out the single-action loop, which has the same silent short-circuit",
+   "description": "`_execute_loop_step` stops on an inner `PAUSED` just as silently (\"Checkpoint pause always stops the loop\", `executor.py:1135-1137`). Part B threads `start_iteration` through both functions (line 289). The component table, however, adds the WARNING only to `_execute_loop_body`. The functional requirement at lines 305-306 says \"a loop that short-circuits\", which covers both. The table and the test list (line 318) should name both sites. Alternatively, move the log to the one place both return paths pass through.",
+   "location": "project-documents/user/slices/915-slice.loop-checkpoint-pause-resume-correctness.md:290"
+  },
+  {
+   "i": 5,
+   "severity": "NOTE",
+   "title": "D2's prose and its code sketch describe different checks",
+   "description": "The prose says \"present **and** in a terminal-complete status\", which is an allow-list. The sketch excludes `{PAUSED, FAILED}`, which is a deny-list. With today's four `ExecutionStatus` members (`executor.py:132-135`) both give the same result, with `SKIPPED` counted as complete. They will diverge if a status is added later. Choose one and state it.",
+   "location": "project-documents/user/slices/915-slice.loop-checkpoint-pause-resume-correctness.md:191-202"
+  }
+ ]
+}

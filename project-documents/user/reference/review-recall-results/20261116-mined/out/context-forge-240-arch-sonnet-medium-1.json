@@ -1,0 +1,224 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Gate placement only supports `pre-advance`, but four transitions are declared in scope",
+      "description": "The gate is a single branch \"between Priority 5 and Priority 6\" (`complete \u2192 advance`). `pending-review` is defined as \"tasks complete, review gate configured\". That only fits `pre-advance`. `pre-tasks` (slice review before task breakdown) and `pre-implementation` (tasks review before implementing) fire at `needs-tasks` and `in-implementation`, which come earlier in the cascade. Nothing places those gates in `getNext()`. Scope and Anticipated Slices say v1 implements \"the four slice-level transitions\", but the design only describes one insertion point.\n\n`SliceStatus` is also a single scalar per slice. When several gates are configured, the doc doesn't say which gate `pending-review` refers to, or how `deriveSliceStatus()` knows which transition applies. The `pending-review` rationale hard-codes \"(type: code)\".",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/240-arch.review-aware-workflow-gating.md#gate-insertion-point"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "\"Most recent by sort order\" is wrong for the filename convention given",
+      "description": "The pattern is `NNN-review.{type}.{slice-name}.md`, for example `210-review.code.github-copilot-vs-code-ide-support.md`. Everything after the type is the slice name, not a timestamp. Lexicographic-last therefore doesn't pick the latest review. With two reviewers or two models producing artifacts for the same index, the winner is arbitrary by name.\n\nThe doc also has no staleness model. A passing review from before later code changes still clears the gate. A `FAIL` review stays `review-failed` forever unless a new file happens to sort after it. The re-review loop (`blocked` \u2192 rerun review \u2192 re-evaluate) isn't specified, and it depends on this ordering rule. Pick the artifact by frontmatter date or mtime, or require a single canonical file per `(index, type)` that is overwritten.",
+      "file_ref": null,
+      "category": "feasibility",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/240-arch.review-aware-workflow-gating.md#review-artifact-discovery"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Verdict/threshold/unknown vocabularies are under-specified and contradict each other",
+      "description": "- `review_unknown_as` takes `\"fail\"` (config example) and `\"concern\"` (Technical Considerations). The Slice status section also says UNKNOWN may be \"treated as pending\", which implies a third value. The valid set is never listed.\n- `review_threshold` values `\"pass\"` and `\"concerns\"` are lowercase, while verdicts are uppercase. Case-insensitive matching isn't stated. The Parsing & Pattern Matching convention calls for lenient parsing, and an exact-case match against Squadron's frontmatter would produce spurious `UNKNOWN`.\n- \"CONCERNS clears if threshold = concerns or lower\" implies an ordered scale. No threshold below `concerns` exists, and FAIL \"always blocks\", so the \"or lower\" clause has no meaning.\n- UNKNOWN maps to `review-failed` under the default (`fail`) but to `pending-review` under another policy. That makes the status depend on a policy string, which weakens the \"named states, not inferred conditions\" goal.\n- A parse failure on an existing file produces a `pending-review` rationale of \"no review artifact found\", which is wrong. The rationale templates cover only the missing-file and clean-FAIL cases.\n\nDefine one verdict-evaluation function with a decision-matrix table covering every verdict, threshold and policy combination.",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/240-arch.review-aware-workflow-gating.md#verdict-handling"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Gate evaluation logic is spread across four places with no single owner",
+      "description": "Review discovery sits in `documentDetector`, status derivation in `deriveSliceStatus()`, routing in `getNext()`, and a separate rule in `ConsistencyChecker`. The doc never introduces a shared `ReviewGate` evaluator that all of them call. The checker's triggers already differ from the navigator's: the checker fires on \"slice marked complete in the slice plan\" and the navigator fires on \"tasks complete\". Without a shared evaluator, `cf next` and `cf check` can disagree.\n\n`deriveSliceStatus()` would also need config and review state injected, so it stops being a function of artifacts alone. The doc doesn't address that.",
+      "file_ref": null,
+      "category": "abstraction",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/240-arch.review-aware-workflow-gating.md#envisioned-state"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "\"Purely additive\" is not true for the enum and recommendation changes",
+      "description": "Adding `pending-review` and `review-failed` to `SliceStatus`, and `review` and `blocked` to `recommendation`, changes closed unions. The Current State section calls `SliceStatus` \"a closed enum\". Exhaustive switches, MCP output schemas, the visualizer, and Amoeba's Runner can break at compile time or runtime. The \"must not change the `NextAction` return type\" constraint is hollow if `recommendation` is a string-literal union.\n\nThe doc doesn't say whether `blocked` already exists, and it doesn't audit existing consumers. `riskLevel: low` and `relatedSlices: []` understate this. There's also a naming slip: the doc contrasts `review-failed` with `in-progress`, but the actual enum value is `in-implementation`.",
+      "file_ref": null,
+      "category": "dependencies",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/240-arch.review-aware-workflow-gating.md#related-work"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Config schema decision deferred, and `pre-slice-plan` is accepted but inert",
+      "description": "`review_gates` nested tables are the load-bearing config surface. The doc admits `ConfigKeyDefinition` doesn't support nested shapes, and defers the choice to slice design. The first anticipated slice includes this config work, so the decision blocks it.\n\n\"Fail-fast on configuration errors \u2026 `validate` hook is the enforcement point\" can't cover per-gate validation (unknown transition names, unknown `reviewType`, bad threshold) with a scalar hook. Defining `pre-slice-plan` in the schema while implementing no logic for it means a user can configure a gate that silently does nothing. That violates the project's no-silent-fallback and fail-fast rules. Either reject it at validation in v1 or implement it.\n\nTransition names and `reviewType` strings (`arch`/`slice`/`tasks`/`code`) are also not tied to a single defined enum. The project convention is to define such values once.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/240-arch.review-aware-workflow-gating.md#technical-considerations"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Overweight for v1; cut scope",
+      "description": "The stated need is \"don't advance past a failing or missing code review\". The design adds four per-transition gates with per-gate thresholds, a `review_unknown_as` policy knob, a pre-slice-plan gate, score-gating \"code paths\", carried `criteria`/`provenance` fields, and worktree-scoped resolution. Ship `pre-advance` only, with `review_enabled` plus a threshold, and `UNKNOWN` always blocking. Defer the nested `review_gates` table (and with it the config-shape problem), `review_unknown_as`, the score path and `pre-slice-plan`. That removes the config-shape blocker and the transition-placement ambiguity.",
+      "file_ref": null,
+      "category": "antipattern",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/240-arch.review-aware-workflow-gating.md#design-goals"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Review-directory location and index matching are hard-coded assumptions",
+      "description": "`project-documents/user/reviews/` is hard-coded, with no config key and no stated behavior when the directory is missing or when worktree scope (180) relocates documents. Matching on `NNN` also conflates the arch index (240) with slice indices for `reviewType = arch`.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/240-arch.review-aware-workflow-gating.md#review-artifact-discovery"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Failure-mode observability is described only for parse errors",
+      "description": "The doc says the rationale names the parse failure. The project rules require each I/O failure to be observable (log at WARNING or higher) and to have a test. Add a logging requirement for unreadable or malformed review files, and for an unreadable or missing review directory. Make the \"Full unit test coverage\" item in the gate-logic slice include these failure-signal assertions.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/240-arch.review-aware-workflow-gating.md#technical-considerations"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "Gate placement only supports `pre-advance`, but four transitions are declared in scope",
+      "location": "project-documents/user/architecture/240-arch.review-aware-workflow-gating.md#gate-insertion-point",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "feasibility",
+      "raw_category": null,
+      "summary": "\"Most recent by sort order\" is wrong for the filename convention given",
+      "location": "project-documents/user/architecture/240-arch.review-aware-workflow-gating.md#review-artifact-discovery",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "Verdict/threshold/unknown vocabularies are under-specified and contradict each other",
+      "location": "project-documents/user/architecture/240-arch.review-aware-workflow-gating.md#verdict-handling",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "abstraction",
+      "raw_category": null,
+      "summary": "Gate evaluation logic is spread across four places with no single owner",
+      "location": "project-documents/user/architecture/240-arch.review-aware-workflow-gating.md#envisioned-state",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "dependencies",
+      "raw_category": null,
+      "summary": "\"Purely additive\" is not true for the enum and recommendation changes",
+      "location": "project-documents/user/architecture/240-arch.review-aware-workflow-gating.md#related-work",
+      "location_verified": null
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "Config schema decision deferred, and `pre-slice-plan` is accepted but inert",
+      "location": "project-documents/user/architecture/240-arch.review-aware-workflow-gating.md#technical-considerations",
+      "location_verified": null
+    },
+    {
+      "id": "F007",
+      "severity": "concern",
+      "category": "antipattern",
+      "raw_category": null,
+      "summary": "Overweight for v1; cut scope",
+      "location": "project-documents/user/architecture/240-arch.review-aware-workflow-gating.md#design-goals",
+      "location_verified": null
+    },
+    {
+      "id": "F008",
+      "severity": "note",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "Review-directory location and index matching are hard-coded assumptions",
+      "location": "project-documents/user/architecture/240-arch.review-aware-workflow-gating.md#review-artifact-discovery",
+      "location_verified": null
+    },
+    {
+      "id": "F009",
+      "severity": "note",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "Failure-mode observability is described only for parse errors",
+      "location": "project-documents/user/architecture/240-arch.review-aware-workflow-gating.md#technical-considerations",
+      "location_verified": null
+    }
+  ],
+  "template_name": "arch",
+  "input_files": {
+    "input": "project-documents/user/architecture/240-arch.review-aware-workflow-gating.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/context-forge-240-arch"
+  },
+  "timestamp": "2026-11-16T09:27:29.953511",
+  "model": "claude-sonnet-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 1,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-sonnet-5-5",
+  "answering_models": [
+    "claude-sonnet-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 9,
+    "in_fences": 0,
+    "in_section": 9,
+    "surviving": 9
+  },
+  "effort": "medium",
+  "profile": "sdk",
+  "turns": 2,
+  "prompt_tokens": 100364,
+  "cached_tokens": 12914,
+  "cache_write_tokens": 87446,
+  "completion_tokens": 4715,
+  "reasoning_tokens": null,
+  "duration_seconds": 41.749420458916575,
+  "cost_usd": 0.3988064,
+  "cost_basis": "provider"
+}

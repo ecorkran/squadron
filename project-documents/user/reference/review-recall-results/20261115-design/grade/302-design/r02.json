@@ -1,0 +1,54 @@
+{
+ "review": "r02",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "FAIL",
+   "title": "The `sq review` CLI cannot run a judge template, and would skip the judge checks if it did",
+   "description": "The Value section says \"a pipeline step (or the `sq review` CLI) can run `template: judge.slice-vs-arch` and receive \u2026 a threshold-derived verdict\". Success Criterion 3 (lines 277-282) and Verification step 3 (lines 361-368) both depend on that. The current CLI has no way to do it:\n- The only subcommands are `slice`, `arch`, `tasks`, `code` and `list`. There is no `slice-vs-arch` command.\n- `review slice` passes the template name `\"slice\"` as a fixed string to `_run_review_command`, and there is no `--template` option.\n- The CLI path calls `run_review_with_profile` directly. The `enforce_judge` checks from slice 301 live only in `ReviewAction` (the pipeline path). So a judge run from the CLI would persist the parsed verdict `UNKNOWN`, with no threshold-derived verdict and no `provenance=\"judge\"`.\n\nThe note at lines 376-379 (\"confirm against the current `sq review` CLI surface during implementation\") hides this gap. It does not settle it. Pick one:\n- (a) Remove the CLI from Value, SC3 and the walkthrough, and verify end to end through a pipeline `review` step or `ReviewAction`. This keeps the \"one required code change\" claim true.\n- (b) Make CLI support part of the slice explicitly, including running the judge checks on the CLI path. That adds scope and breaks the \"no engine change\" framing, so it must be stated.\n\n(a) is the lighter choice and meets the slice plan's success criteria.",
+   "location": "project-documents/user/slices/302-slice.design-phase-judge-templates.md:31-35"
+  },
+  {
+   "i": 1,
+   "severity": "FAIL",
+   "title": "The no-silent-pass claim is false for missing or over-cap ground truth",
+   "description": "The architecture lists \"missing/unreadable ground-truth file\" and \"injected ground truth exceeding the cap\" as failure modes that must never silently produce a pass. The slice's failure-mode table leaves both out, then says \"every row above terminates in either `UNKNOWN` \u2026 or a score-derived verdict\" and restates the NFR as met. In the current engine, neither case reaches `UNKNOWN`:\n- `_inject_file_contents` skips any input path that is not a file (`if not path.is_file(): continue`) and logs nothing.\n- When the injection cap is reached, it logs a WARNING, skips the file, and the review carries on.\n- File-reading providers get the path and may score anyway when the file is missing.\n\nIn each case the judge can score the slice design without having seen the architecture and return a derived `PASS`. That is exactly the silent pass the architecture rules out. The `KeyError` row in the slice's table only covers a key missing from `SliceInfo`. It does not cover a path that exists in `SliceInfo` but is missing, unreadable or truncated on disk.\n\nThis slice is the first one to send real ground truth through this path, so the design must handle it. Either:\n- add a check before the call so that an `against`/`input` file that is missing or would be truncated becomes `UNKNOWN` with a WARNING, or\n- log it as a 301 defect (standing fixes) and remove the guarantee from this doc until that fix lands.",
+   "location": "project-documents/user/slices/302-slice.design-phase-judge-templates.md:381-408"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "The structured-output requirement for the score was dropped without saying so",
+   "description": "The architecture (Technical Considerations (b)) commits the judge template to \"a structured-output constraint for the score field\". The slice plan's success criteria for 302 include \"The score-with-rationale shape is enforced by the template's structured output\". Slice 300's parser also hands this work to 302 (`_extract_criteria` docstring: \"The structured-output/JSON variant is slice 302\").\n\nThe design uses prompt instructions only. It says outright that `## Rationale` is \"prose scaffolding \u2026 not a new parser target\", so the rationale is requested but nothing enforces it. Structured output is never mentioned. Either:\n- specify the structured-output mechanism, or\n- record a deliberate deviation, with the reason (for example, the provider-agnostic engine has no structured-output hook today), and update the slice plan's criterion and the parser docstring that points here. Then move the work to Future Work.",
+   "location": "project-documents/user/slices/302-slice.design-phase-judge-templates.md#score-with-rationale-prompt-shape"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Criterion keys and the roll-up into the overall score are not specified",
+   "description": "The design reuses the `criteria:` map to carry the rationale and says the model will \"roll the criteria into the top-level `score:`\". It does not specify:\n- the fixed set of criterion keys for each template. The example shows `alignment` and `scope`, but the criteria reused from `slice.yaml` have about eight items.\n- how they roll up: mean, weighted, or the model's own overall judgment.\n\nIf the model picks the keys, the `criteria` maps cannot be compared across runs. That defeats the point of persisting them as queryable data for 320, and makes \"per criterion, a short justification\" impossible to check. Name the keys for each template in the design and state the roll-up rule. Alternatively, if the rule is that the model decides, say so and tell 320 that the criteria are not comparable.",
+   "location": "project-documents/user/slices/302-slice.design-phase-judge-templates.md:152-159"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Concrete numbers in the example output risk anchoring the model",
+   "description": "The architecture includes the rationale step specifically to reduce anchoring. The project's hallucination-trap rule warns against putting a concrete example value near an instruction that asks the model to produce that value. The example shape has `score: 82`, `alignment: 85` and `scope: 80`, and nothing in the design says these numbers stay out of the real system prompt. Anyone writing the YAML from this design is likely to copy the block as written, and the model then tends to settle near 80\u201385, which is right next to both pass floors. State that the prompt must use placeholders (for example `score: <0-100>`) and no numeric example values.",
+   "location": "project-documents/user/slices/302-slice.design-phase-judge-templates.md:161-178"
+  },
+  {
+   "i": 5,
+   "severity": "NOTE",
+   "title": "The data-flow example uses the wrong pass floor",
+   "description": "The data flow for `judge.slice-vs-arch` shows `score=82 \u2265 pass_floor(78) \u2192 PASS`. The threshold table (lines 223-226) and the walkthrough both give `slice-vs-arch` a `pass_floor` of 82. 78 is the `tasks-vs-slice` value. Fix it so tests are not written against the wrong band.",
+   "location": "project-documents/user/slices/302-slice.design-phase-judge-templates.md:146"
+  },
+  {
+   "i": 6,
+   "severity": "NOTE",
+   "title": "Copying the criteria does not prevent drift",
+   "description": "The design says reusing the criteria from `slice.yaml`/`tasks.yaml` \"avoids drift\". Copying the list into a second YAML file creates two copies that will drift. Without a template include mechanism (which would be an engine change), the honest wording is \"copied at authoring time; keep in sync by hand\". Reword it rather than adding machinery.",
+   "location": "project-documents/user/slices/302-slice.design-phase-judge-templates.md:198-206"
+  }
+ ]
+}

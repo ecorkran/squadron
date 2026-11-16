@@ -1,0 +1,171 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "The synthetic finding blames the wrong limit when the total injection budget drops the diff",
+      "description": "D3 (lines 123-125) treats a diff skipped by `review.max_total_injection_bytes` as truncation to zero: `DiffInjection(total_chars=len(diff), injected_chars=0)`. But the D4 finding template always cites `review.max_file_size_bytes` and tells the user to raise it. `DiffInjection` (D1, line 111) only stores `total_chars` and `injected_chars`, so the finding can't tell which limit caused the cut.\n\nIn the D3 case the artifact would say \"the first 0 reached the model (review.max_file_size_bytes)\u2026 Raise review.max_file_size_bytes\". That advice is wrong. Raising that limit changes nothing, because the total budget is what dropped the diff.\n\nThe slice plan requires the outcome to be \"observable in the artifact, not in a log\". A finding that names the wrong cause is observable but misleading. D3 is also the path the design itself calls \"worse\" (line 19).\n\nFix: add a field to `DiffInjection` that records the limiting key (or a small enum: file-size vs total-budget), and pick the finding wording from it. Add one test case to the \"over total limit\" test in the Technical Requirements (line 302) that checks the finding text.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:139-150"
+    },
+    {
+      "severity": "PASS",
+      "title": "All three parts of the slice-plan entry are covered, and each decision the plan asked for is made",
+      "description": "The plan entry (900-slices line 440-444) asks for four things:\n- **Part A:** \"the minimum that lets a gate decide\". D1 chooses a frontmatter boolean, with the counts in the header and JSON.\n- **Part B:** choose between forcing CONCERNS and failing the run. D4 chooses CONCERNS with a synthetic finding and explains why. A truncated diff where the model successfully read files keeps its own verdict, as the plan requires.\n- **Part C:** decide what counts as \"differs\" for dated or routed ids. D9 is an exact snapshot rule that reports a substitution when unsure, plus a step that captures each profile's real ids.\n- **Both paths:** CLI and pipeline parity holds by construction, because everything goes through `ReviewResult` and `format_review_markdown` (line 101).\n\nThe plan's Not-in-scope items (default limits, #114) are excluded at lines 42-43.",
+      "file_ref": null,
+      "category": "alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md#technical-decisions"
+    },
+    {
+      "severity": "PASS",
+      "title": "Deferring diff ordering and `--stat` is allowed by the plan",
+      "description": "The plan makes these \"in scope only if design shows it is small; otherwise it becomes an issue.\" D7 gives a reason (deciding what counts as source is a policy question) and files #137. Truncation of file bodies is a separate issue (#138), explicitly excluded with a reason. Neither deferral drops scope the plan assigned to this slice.",
+      "file_ref": null,
+      "category": "scope",
+      "raw_category": null,
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md#d7--diff-ordering-and---stat-deferred-to-137"
+    },
+    {
+      "severity": "PASS",
+      "title": "Failure modes for reading the answering model are listed, and each has a handling rule",
+      "description": "The new data source is the model id each provider reports. Every way it can be missing or misleading has a stated outcome:\n- **Provider reports nothing (Codex):** D11 keeps the requested id and states this in the Run Digest. That is a recorded fact, not a silent fallback.\n- **Placeholder `<synthetic>` messages:** skipped, and defined once as a constant.\n- **Subagent messages:** excluded via `parent_tool_use_id`.\n- **Choice-less usage chunks:** still read.\n- **More than one model answered:** D12 uses the last one for `aiModel`, lists all of them in the digest, and logs a WARNING.\n- **Hand-built results:** left untouched because the check uses `== []`, not falsiness.\n\nThe design adds no new network or I/O path, so hang and timeout handling stays with the existing provider code. No NFR in the parent document applies to this path.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:168-206"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`aiModel` changing meaning is a cross-tool contract change, and only `verdictSource` readers were checked",
+      "description": "The plan rates the risk Low-Medium because context-forge gates read these fields, and entry 911 says frontmatter is the documented boundary with Context Forge. D5 reports a grep of context-forge for `verdictSource` readers. Integration Points says the new `aiModel` meaning is \"the meaning its consumers assumed all along\", but no similar check is recorded for `aiModel`, `diffTruncated` or `requestedModel`.\n\nInside squadron, the one consumer of `metadata[\"model\"]` is the INFO log line in the pipeline executor, so the change to pipeline metadata is safe. A one-line grep of context-forge for `aiModel` would back up the claim. This doesn't block anything.",
+      "file_ref": null,
+      "category": "integration",
+      "raw_category": null,
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:271-274"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The D6 render change goes beyond the plan, but the design's own fix needs it",
+      "description": "D6 changes how the \"Findings Not Parsed\" notice is shown in persistence and in the terminal. The plan doesn't ask for this. But without it, the synthetic finding from D4 would hide a partly failed parse, which would break the slice's own principle. The change is small and has its own success criterion (SC7), so the size is reasonable.",
+      "file_ref": null,
+      "category": "scope",
+      "raw_category": null,
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md#d6--a-synthetic-finding-must-not-hide-a-degraded-parse"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "The synthetic finding blames the wrong limit when the total injection budget drops the diff",
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:139-150",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "pass",
+      "category": "alignment",
+      "raw_category": null,
+      "summary": "All three parts of the slice-plan entry are covered, and each decision the plan asked for is made",
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md#technical-decisions",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "pass",
+      "category": "scope",
+      "raw_category": null,
+      "summary": "Deferring diff ordering and `--stat` is allowed by the plan",
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md#d7--diff-ordering-and---stat-deferred-to-137",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "pass",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "Failure modes for reading the answering model are listed, and each has a handling rule",
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:168-206",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "integration",
+      "raw_category": null,
+      "summary": "`aiModel` changing meaning is a cross-tool contract change, and only `verdictSource` readers were checked",
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:271-274",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "scope",
+      "raw_category": null,
+      "summary": "The D6 render change goes beyond the plan, but the design's own fix needs it",
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md#d6--a-synthetic-finding-must-not-hide-a-degraded-parse",
+      "location_verified": null
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md",
+    "against": "project-documents/user/architecture/900-slices.maintenance-and-refactoring.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/squadron-927-design"
+  },
+  "timestamp": "2026-11-16T09:18:20.927611",
+  "model": "claude-opus-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 6,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-opus-5-5",
+  "answering_models": [
+    "claude-opus-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 6,
+    "in_fences": 0,
+    "in_section": 6,
+    "surviving": 6
+  },
+  "effort": "medium",
+  "profile": "sdk",
+  "turns": 7,
+  "prompt_tokens": 584279,
+  "cached_tokens": 471595,
+  "cache_write_tokens": 112672,
+  "completion_tokens": 4352,
+  "reasoning_tokens": null,
+  "duration_seconds": 55.315149624831975,
+  "cost_usd": 1.0834552000000002,
+  "cost_basis": "provider"
+}

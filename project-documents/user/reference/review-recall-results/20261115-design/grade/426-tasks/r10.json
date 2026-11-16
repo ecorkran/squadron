@@ -1,0 +1,26 @@
+{
+ "review": "r10",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Load tests are added with no NFR behind them and no CI gate",
+   "description": "The Context Summary announces \"two small\" load tests: concurrent `SliceCaseRunner.invoke` in Task 24 and the 200-pair slow/hung dispatcher in Task 33. The slice design has no NFR section, so these tests trace to no requirement.\n\nThe tests are also not in `tests/load/`, and no task wires them into CI. The slice-level checks require a CI gating task whenever a load test exists.\n\nThe behaviors themselves are worth testing. The concurrency test backs the \"distinct scrubbed homes\" failure-mode claim, and the hung-dispatcher test backs the failure-mode rule. Pick one fix:\n- Keep both as ordinary unit tests under `tests/benchmark/` and drop the \"load test\" wording from line 53, Task 24 and Task 33.\n- Or move them to `tests/load/` and add a CI wiring task.\n\nI recommend the first, since the design restates no NFR.",
+   "location": "project-documents/user/tasks/426-tasks.slice-cases.md:53"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Qualification and judge-plan work is split into more tasks and test files than the design needs",
+   "description": "Tasks 15\u201319 build one function, `qualify_slice_candidate`, across five tasks with five test files:\n- `test_slice_qualify_checks`\n- `test_slice_qualify_sets`\n- `test_slice_qualify_repeats`\n- `test_slice_qualify_case`\n- `test_slice_qualify_errors`\n\nTasks 16, 17 and 18 each add a few lines to one function, and none is a working or committed point. The single commit arrives at Task 19.\n\nMerge 16 and 17 into one \"sandboxes, test sets, repeats\" task. Merge 18 and 19 into one \"regression selection, case and harness errors\" task. Use one or two test files.\n\nThe same pattern appears at lines 264-282. Tasks 31\u201334 all extend `plan_judge` and `diff_judge_runner.py` with four test files, and Task 33's 200-pair test is described in more detail than the criteria need. Merge 31 and 32 into one planning task. Merge 33 and 34 into one \"bound, cap, lock, resume\" task.\n\nAt 42 tasks and about 45 test files for an effort-3 slice, the breakdown is heavy. Merging cuts overhead without dropping any success criterion.",
+   "location": "project-documents/user/tasks/426-tasks.slice-cases.md:167-191"
+  },
+  {
+   "i": 2,
+   "severity": "NOTE",
+   "title": "Task 21 and Task 22 are coupled",
+   "description": "Task 21 says \"until then print the lines only\", and Task 22's success item says \"Task 21's command prints the rows\". That means Task 22 edits Task 21's command. Both sit under one commit, so the sequencing is workable. Putting the yield-row task before the command task would remove the stub.",
+   "location": "project-documents/user/tasks/426-tasks.slice-cases.md:201-209"
+  }
+ ]
+}

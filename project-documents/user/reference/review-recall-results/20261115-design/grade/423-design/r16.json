@@ -1,0 +1,33 @@
+{
+ "review": "r16",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "The dispatch fallback won't pick up `fix-context` output unless `DispatchAction` changes",
+   "description": "D2 says the assembled prompt is stored \"under the same keys `cf-op(build_context)` uses (`operation: build_context`, `context`)\" and that \"`DispatchAction` does not change\". Two things in `DispatchAction._resolve_prompt` make that false:\n- The fallback only accepts a prior result where `result.action_type == ActionType.CF_OP` **and** `outputs[\"operation\"] == \"build_context\"` **and** `outputs[\"stdout\"]` is set. The key is `stdout`, not `context`.\n- A `FIX_CONTEXT` result fails the action-type check whatever keys it carries. The dispatch then falls through to the review-findings fallback, finds nothing, and raises `KeyError`.\n\nEven if this were worked around, the dispatch would record `PromptSource.BUILD_CONTEXT`. That mislabels the prompt identity D8 depends on for 424 and 425. Also, `replay/outcome.py:_build_context_text` filters on the same `operation == build_context` output to get `task_prompt`, so the fix prompt would be invisible to replay records there too.\n\nFix:\n- Revise D2 and the Interfaces Required list so `DispatchAction` gains one branch that accepts `ActionType.FIX_CONTEXT` output.\n- Add `PromptSource.FIX_CONTEXT`.\n- Name the output key (`stdout` or a constant).\n- Note for 424 that its task-prompt lookup must accept this source.\n\nDon't pretend the output is a cf-op result.",
+   "location": "project-documents/user/slices/423-slice.fix-pipeline.md:139"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "MCP parity from the slice plan is dropped, but the plan still lists it",
+   "description": "The slice plan entry for 423 has the success criterion \"CLI, slash command and MCP give identical results\". The slice excludes MCP. Its reason is correct: squadron has no MCP server. `server/daemon.py` serves uvicorn HTTP/UDS, not MCP, and `tools/mcp_bridge.py` is client-side only. But this is still scope the plan gave to this slice. The fix is to change the 423 entry in `420-slices.model-benchmark.md` to \"CLI and slash command\", so the plan and the slice agree. Building an MCP server isn't needed, and the slice is right not to.",
+   "location": "project-documents/user/slices/423-slice.fix-pipeline.md:43"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Failure handling is missing for commit failures and the prompt-only report file",
+   "description": "Two failure modes in the new paths have no stated handling:\n1. **`git commit` fails after staging.** For example, the project's pre-commit hook rejects the commit (this repo runs ruff in pre-commit). The commit step has already staged everything. The design doesn't say:\n   - whether the index is left staged or reset\n   - what `failure_kind` is used\n   - that the next `sq run fix` will then refuse the dirty tree\n\n   The user needs that last point the same way D4 spells it out for `blocked`.\n2. **`--report-file` in prompt-only mode** (D9). If the session never writes the temp file, or writes something unreadable, the outcome isn't specified. `parse_fix_report` covers \"no JSON object\", but a missing or unreadable file happens before that.\n\nState the refusal for each, with the logged level and message, and add one unit test for each to the Technical Requirements list.",
+   "location": "project-documents/user/slices/423-slice.fix-pipeline.md#D5 \u2014 Commit destination and preconditions"
+  },
+  {
+   "i": 3,
+   "severity": "NOTE",
+   "title": "The dependency on 422 differs from the slice plan, but it is justified and limited",
+   "description": "The plan says 423 has no dependencies in this initiative. The slice depends on 422, but only for fetch mode (`CodeHost.get_issue` and the renderer with an optional cutoff). The 422 slice does provide that renderer: \"The renderer takes an optional cutoff. With no cutoff (423's live fix) \u2026\". File mode and the parts 424 needs don't depend on 422, and the development order (fetch at step 4) keeps them independent. No action needed. The plan's ordering note could mention the partial dependency.",
+   "location": "project-documents/user/slices/423-slice.fix-pipeline.md:49"
+  }
+ ]
+}

@@ -1,0 +1,297 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "Dependency observations need function- and class-level node data that the architecture forbids",
+      "description": "Section 6 says function- and class-level edge endpoints are \"resolved to their owning file's layer rather than dropped,\" so a `calls` edge between two functions counts as an inter-layer signal. The design never says how. The design's own measurement (lines 101-102) shows `layers[].nodeIds` holds only file-level nodes, so function IDs are not in any layer. Resolving them means reading function nodes or parsing their IDs, and the design does neither.\n\nThis conflicts with three sources:\n- The architecture: \"function- and class-level nodes are not read\" (`360-arch:107-110`).\n- The design's own success criterion 9: \"no function- or class-level node is read\" (lines 332-333).\n- The Correction 1 cross-check (lines 138-141), which classifies `nodeIds` entries as function or class nodes.\n\nSection 6 is a required output (`360-arch:162-163`, success criterion 3), so the conflict has to be settled.\n\nOptions: (a) resolve only file-level endpoints and report the count of excluded function/class-endpoint edges as a stated number. This is the cut I recommend. (b) Amend the architecture and SC 9 to allow id/type-only lookups, and define the ID-to-file mapping. Option (b) also needs SC 9 reworded, since the Correction 2 selector already reads `.type` on every node.",
+      "file_ref": null,
+      "category": "architecture-boundary",
+      "raw_category": null,
+      "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:218-220"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Edge types for dependency observations are inconsistent",
+      "description": "Line 216 counts inter-layer `imports` and `depends_on` only. Lines 219-220 then count `calls` edges. The design never says what happens to `contains`, `configures`, or `documents`, which the architecture lists (`360-arch:96-97`). \"Ties by `weight`\" also does not say how weight aggregates across multiple edges between one layer pair (sum, max, or mean). Fix: one explicit list of counted edge types and one aggregation rule. This falls out of the FAIL resolution.",
+      "file_ref": null,
+      "category": "under-specification",
+      "raw_category": null,
+      "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:215-220"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The \"closing observation\" exception reopens the inference the design bans",
+      "description": "The `[INFERRED]` section forbids inference, then allows a \"closing observation\" per section under a test: it must be \"derivable from the table directly above it.\" The example, \"complexity concentrates in the seams where squadron meets an external SDK,\" is not derivable from complexity tiers and file paths. It is interpretation. The architecture defines a claim as structural only when a named field supports it, and as intent otherwise (`360-arch:225-226`).\n\nThe design also adopts the fact/inference discipline from `analyze-codebase-prompt.md` (lines 262-263), then removes the marker that enforces it. Under CLAUDE.md's hallucination-trap rule, a sample sentence like this will be reproduced whatever the data says. Fix: drop closing observations, or allow only a fixed template filled from named fields (for example, \"N of M files are `complex`; the top tier sits in layers X, Y\"). Remove the example.",
+      "file_ref": null,
+      "category": "under-specification",
+      "raw_category": null,
+      "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:245-248"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "363 cannot reuse the mapping for two of its concept sections",
+      "description": "The design says 363 reuses the mapping \"verbatim\" (lines 36-38, 299-301), and the slice plan assigns 363 Solution Approach and Initial Technical Direction (`360-slices:132-133`). The architecture names two inputs these need that row 5 does not supply:\n- `tour[]` **node ordering** (`360-arch:219`). This needs `nodeIds`, which the architecture says squadron reads (\"reads the tour as structured data with node IDs,\" `360-arch:103`). Row 5 (line 178) selects only `order`, `title`, `description`.\n- `config` nodes for Initial Technical Direction (`360-arch:220`). The design has no row for them.\n\nFix: add `nodeIds` to row 5. Then either add config-node sourcing or record that 363 owns it.",
+      "file_ref": null,
+      "category": "integration",
+      "raw_category": null,
+      "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:299-301"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The file-level selector changes the architecture's definition without amending it",
+      "description": "The architecture defines file-level as a closed set of nine types (`360-arch:107-109`). Correction 2 replaces that allow-list with \"not function, not class\" (lines 154-161). That is an open set that admits any future node type carrying a `filePath`. The design says neither correction is \"an upstream contract change\" (lines 115-117). That is true, but the change is to squadron's own definition, which the architecture states.\n\nOn this graph the two selectors agree on 238 nodes, so today's output is the same. They diverge on the next upstream release. Fix: either amend the architecture's file-level definition and its `layers[]` contract line (`360-arch:98`) and record the decision, or keep the allow-list and warn when unknown types appear.",
+      "file_ref": null,
+      "category": "architecture-boundary",
+      "raw_category": null,
+      "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:143-161"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Failure modes for the two new file reads are not enumerated",
+      "description": "Coverage adds reads of `config.json` (JSON) and `.understandignore` (text). The design defines only \"unreadable\" (row 7 \u2192 `[GAP]`). It does not say what happens if `config.json` is absent (gap or not?), if it is not valid JSON, or if `.understandignore` is absent. An absent `.understandignore` is the normal state for a project with no ignore file. Lines 230-231 (\"do not report an absent optional setting as a gap\") cover config keys, not the file itself.\n\nThe architecture requires absence and malformation to get different outcomes (`360-arch:135-136`). Each case needs a distinct, observable outcome (a gap marker in the body and provenance, or a warning). Walkthrough step 5 covers only the `meta.json` case. Fix: enumerate absent / unreadable / malformed / empty for each file, and add one walkthrough case per file.",
+      "file_ref": null,
+      "category": "failure-modes",
+      "raw_category": null,
+      "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:180"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Coverage section exceeds the slice plan entry, and config.json reporting is low-value",
+      "description": "The slice plan entry for 362 (`360-slices:85-109`) does not assign coverage, `config.json`, or `.understandignore`. The architecture supports two of them: `analyzedFiles` as a staleness signal (`360-arch:86`), and `.understandignore` \"when explaining coverage gaps\" (`360-arch:89`). `config.json` is read-only and here holds one key (`outputLanguage`, line 107). Neither 363 nor 364 consumes it.\n\nThe design says 361 \"explicitly deferred\" these three fields (lines 54-55, 222-223). I searched the 361 design for `defer`, `analyzedFiles`, `config.json`, `understandignore`, and `coverage`, and found no matches. Fix: keep the `analyzedFiles` reconciliation (it is the verifiable part, and it matches the architecture). Keep `.understandignore` as one optional line. Drop the `config.json` bullet and its failure modes. Remove the deferral claim, or point it at where it is actually recorded.",
+      "file_ref": null,
+      "category": "scope",
+      "raw_category": null,
+      "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:222-231"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Design weight: restated read discipline and repeated figures",
+      "description": "The 473-line design is large for a slice plan entry of about 25 lines rated 3/5 effort. Specific cuts:\n- The \"Read discipline, unchanged\" section (282-293) restates 361's read discipline. It then changes the filter, so \"unchanged\" is inaccurate. Replace it with a reference to 361 plus the one changed filter.\n- The counts 34, 6, and 238 appear in the facts table (98-109), the corrections (132-133), success criteria 4-5 (322-326), and walkthrough steps 1-2 (367-369). Keep them in the facts table and reference that table elsewhere, so a graph refresh changes one place.",
+      "file_ref": null,
+      "category": "proportionality",
+      "raw_category": null,
+      "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:282-293"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The `model:` frontmatter has no defined source",
+      "description": "The `model:` field, inherited from 361 as `{generating model id}`, has no source. The skill would have to self-report its model ID, which invites a plausible value. Walkthrough step 3 checks that it \"is not a placeholder,\" but no mechanism produces the value. Specify the source, or emit a gap marker when it is unavailable.",
+      "file_ref": null,
+      "category": "under-specification",
+      "raw_category": null,
+      "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:380-381"
+    },
+    {
+      "severity": "NOTE",
+      "title": "\"Retained unchanged, as the architecture requires\" misstates the architecture",
+      "description": "The architecture says the `analyze-codebase-prompt.md` document is \"retained, not superseded\" (`360-arch:369-371`). It does not require the document to be unchanged. The same paragraph adds a cross-reference line, and success criterion 7 expects that line. Reword to \"retained; gains one cross-reference line.\"",
+      "file_ref": null,
+      "category": "traceability",
+      "raw_category": null,
+      "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:277-280"
+    },
+    {
+      "severity": "PASS",
+      "title": "Output path, docType, and index range match the architecture",
+      "description": "`user/analysis/{index}-analysis.codebase-comprehension.md` with `docType: analysis`, the 940+ index range with overflow past 949 (`360-arch:347-356`), and an independent sample per run (`360-arch:348-350`) all match. Leaving the 943 sample unedited follows the same rule.",
+      "file_ref": null,
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:367-369"
+    },
+    {
+      "severity": "PASS",
+      "title": "Scope boundaries with 363, 364, 365, and 366 match the slice plan",
+      "description": "Interview (363), initiative candidates (364), dispatcher and README (366), and any change to `src/` or the installer are excluded. This matches ownership in the slice plan (`360-slices:111-121`, `:140-148`, `:197-204`) and the architecture's non-goals (`360-arch:400-412`).",
+      "file_ref": null,
+      "category": "scope",
+      "raw_category": null,
+      "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:57-65"
+    },
+    {
+      "severity": "PASS",
+      "title": "Preflight, staleness, hygiene, and provenance are inherited, not re-specified",
+      "description": "The design delegates validation, warn-not-block staleness, the git-skip reporting, `.gitignore` hygiene, and the provenance block to 361 unchanged. This matches the architecture's flow (`360-arch:127-155`) and 361's ownership of those contracts.",
+      "file_ref": null,
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:71-72"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "architecture-boundary",
+      "raw_category": null,
+      "summary": "Dependency observations need function- and class-level node data that the architecture forbids",
+      "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:218-220",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "under-specification",
+      "raw_category": null,
+      "summary": "Edge types for dependency observations are inconsistent",
+      "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:215-220",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "under-specification",
+      "raw_category": null,
+      "summary": "The \"closing observation\" exception reopens the inference the design bans",
+      "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:245-248",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "integration",
+      "raw_category": null,
+      "summary": "363 cannot reuse the mapping for two of its concept sections",
+      "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:299-301",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "architecture-boundary",
+      "raw_category": null,
+      "summary": "The file-level selector changes the architecture's definition without amending it",
+      "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:143-161",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "failure-modes",
+      "raw_category": null,
+      "summary": "Failure modes for the two new file reads are not enumerated",
+      "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:180",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "concern",
+      "category": "scope",
+      "raw_category": null,
+      "summary": "Coverage section exceeds the slice plan entry, and config.json reporting is low-value",
+      "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:222-231",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "concern",
+      "category": "proportionality",
+      "raw_category": null,
+      "summary": "Design weight: restated read discipline and repeated figures",
+      "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:282-293",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "note",
+      "category": "under-specification",
+      "raw_category": null,
+      "summary": "The `model:` frontmatter has no defined source",
+      "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:380-381",
+      "location_verified": true
+    },
+    {
+      "id": "F010",
+      "severity": "note",
+      "category": "traceability",
+      "raw_category": null,
+      "summary": "\"Retained unchanged, as the architecture requires\" misstates the architecture",
+      "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:277-280",
+      "location_verified": true
+    },
+    {
+      "id": "F011",
+      "severity": "pass",
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "summary": "Output path, docType, and index range match the architecture",
+      "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:367-369",
+      "location_verified": true
+    },
+    {
+      "id": "F012",
+      "severity": "pass",
+      "category": "scope",
+      "raw_category": null,
+      "summary": "Scope boundaries with 363, 364, 365, and 366 match the slice plan",
+      "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:57-65",
+      "location_verified": true
+    },
+    {
+      "id": "F013",
+      "severity": "pass",
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "summary": "Preflight, staleness, hygiene, and provenance are inherited, not re-specified",
+      "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:71-72",
+      "location_verified": true
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md",
+    "against": "project-documents/user/architecture/360-slices.document-intelligence.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/squadron-362-design"
+  },
+  "timestamp": "2026-11-16T09:34:36.575136",
+  "model": "claude-haiku-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 11,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 1,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-haiku-5-5",
+  "answering_models": [
+    "claude-haiku-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 13,
+    "in_fences": 0,
+    "in_section": 13,
+    "surviving": 13
+  },
+  "effort": "xhigh",
+  "profile": "sdk",
+  "turns": 12,
+  "prompt_tokens": 571664,
+  "cached_tokens": 402629,
+  "cache_write_tokens": 169023,
+  "completion_tokens": 58815,
+  "reasoning_tokens": null,
+  "duration_seconds": 266.6238327079918,
+  "cost_usd": 0.23824549,
+  "cost_basis": "provider"
+}

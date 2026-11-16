@@ -1,0 +1,225 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Commit steps are checkbox tasks, not plain `**Commit**:` markers",
+      "description": "Tasks 2C, 3C, 5C, 6C, 8C, 9C, 11C, 13C, 14C and 15C are written as `- [ ] **Task NC: Commit** \u2014 ...`. Commit markers must be plain lines, never checkboxes. A checkbox commit cannot be checked off inside the commit it describes, so each one either stays unchecked or forces a follow-up commit that only checks a box.\n\nFix: replace each with a plain line, e.g. `**Commit**: feat(core): add adoption.state config key and state helpers`. Placement is good and needs no change; every marker sits after an implementation and test pair.",
+      "file_ref": null,
+      "category": "commit-markers",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:78"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Parity test builds from two directories, but the facts carry absolute paths",
+      "description": "Task 13 builds \"twice from identical copies\" and asserts identical prompt strings. D5 says CI matches are absolute paths, and `recognizeCi` returns `join(dir, name)` values (`packages/core/src/detection/ciDetection.ts:57`). If the fixture contains a CI file, the two prompts differ by temp-directory path and the test fails for a reason unrelated to parity. Any other absolute path the template emits would have the same effect.\n\nFix, either of:\n- Build both paths from one directory, resetting `adoption.state` to `''` between the two builds.\n- State that the fixture has no CI file and that the temp root is normalized before comparing.",
+      "file_ref": null,
+      "category": "test-design",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:247-249"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Two success criteria have no automated check at the CLI/MCP boundary",
+      "description": "- **`context_build` returns the `AdoptionError` as an error result.** No task tests this. Tasks 10T and 12.12 stop at the integrator and pipeline rejecting. The existing `catch` in `packages/mcp-server/src/tools/contextTools.ts:210-213` makes it work by construction, but nothing asserts it. Add one case to Task 11's `contextTools.test.ts` work: the mocked pipeline rejects with `AdoptionError`, and the result has `isError: true` with the message.\n- **`cf build` exits non-zero.** This is covered only by the manual walkthrough step 4 in Task 15. A matching `build.test.ts` case in Task 11 would close it cheaply.\n- **`renderAdoptionFacts` for \"every outcome\".** Task 8T covers `brownfield`, `adoption-in-progress` and `NOT_EVALUATED`. Task 8 requires an exhaustive switch, so `greenfield`, `already-planned` and `adoption-closed` have render branches with no test. Add one assertion per remaining kind to 8T.",
+      "file_ref": null,
+      "category": "coverage-gap",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:217-223"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Walkthrough step 1 does not say where the `main` build runs",
+      "description": "\"A temporary `git worktree add` of `main`, built there\" can be read as running `cfl build` inside the temporary worktree. That is a different, unregistered checkout path, so the diff could show differences that have nothing to do with the slice. Say explicitly: compile `main`'s CLI in the temporary worktree, then run that binary with the slice checkout as the working directory.",
+      "file_ref": null,
+      "category": "clarity",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:262"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Shallow-clone fixture depends on commit order",
+      "description": "Fixture 4 clones fixture 3. If fixture 3 is committed after its build, the clone carries `state = \"in_progress\"`. The test would then pass through the resume path, not through detection. State that the commit is made before any build, or assert the state-set notice in the clone's facts.",
+      "file_ref": null,
+      "category": "test-design",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:235"
+    },
+    {
+      "severity": "PASS",
+      "title": "Success criteria coverage",
+      "description": "All Functional Requirements map to Task 12 fixtures 1\u201313, with the \"no source walk\" spy in 9T and invalid-value rejection in 1T. The unit-test list maps to 1T\u20139T, the parity test to Task 13, and caller updates to Task 11. The Integration Requirements map to `renderSquadronFact` (Task 8), the `adoption/` exports (Task 2) and the byte-identical diff (Task 15).",
+      "file_ref": null,
+      "category": "coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:229-245"
+    },
+    {
+      "severity": "PASS",
+      "title": "Sequencing and test-with pattern",
+      "description": "Dependencies are respected. `contracts.ts` moves ahead of the design's step 5 because Task 3 needs `AdoptionError`, and `BROWNFIELD_MIN_SOURCE_LINES` is created in Task 3 before the walk imports it. Each implementation task is followed directly by its test task. There are no circular dependencies, and the `ConfigKeys` and `import type` cycle avoidance is spelled out.",
+      "file_ref": null,
+      "category": "sequencing",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:50-225"
+    },
+    {
+      "severity": "PASS",
+      "title": "No load test needed",
+      "description": "D2 states the sub-second target and says tests assert the caps, not timings. Task 3T covers both caps (early exit and `MAX_WALK_ENTRIES`), so no requirement is left unmet by the absence of a `tests/load/` task or CI gate.",
+      "file_ref": null,
+      "category": "nfr",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:38"
+    },
+    {
+      "severity": "PASS",
+      "title": "Proportionality and scope",
+      "description": "Sixteen tasks in one file fit a slice with nine decisions and three touched packages. The step detail mirrors the design's contracts and does not invent any. I found no task without a success-criterion trace; Task 6's pattern extraction is justified by D6's \"other read errors throw\".",
+      "file_ref": null,
+      "category": "proportionality",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "commit-markers",
+      "raw_category": null,
+      "summary": "Commit steps are checkbox tasks, not plain `**Commit**:` markers",
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:78",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "test-design",
+      "raw_category": null,
+      "summary": "Parity test builds from two directories, but the facts carry absolute paths",
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:247-249",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "coverage-gap",
+      "raw_category": null,
+      "summary": "Two success criteria have no automated check at the CLI/MCP boundary",
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:217-223",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "note",
+      "category": "clarity",
+      "raw_category": null,
+      "summary": "Walkthrough step 1 does not say where the `main` build runs",
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:262",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "test-design",
+      "raw_category": null,
+      "summary": "Shallow-clone fixture depends on commit order",
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:235",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "pass",
+      "category": "coverage",
+      "raw_category": null,
+      "summary": "Success criteria coverage",
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:229-245",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "pass",
+      "category": "sequencing",
+      "raw_category": null,
+      "summary": "Sequencing and test-with pattern",
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:50-225",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "pass",
+      "category": "nfr",
+      "raw_category": null,
+      "summary": "No load test needed",
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:38",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "pass",
+      "category": "proportionality",
+      "raw_category": null,
+      "summary": "Proportionality and scope",
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md",
+      "location_verified": null
+    }
+  ],
+  "template_name": "tasks",
+  "input_files": {
+    "input": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md",
+    "against": "project-documents/user/slices/261-slice.detection-and-adoption-state.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/context-forge-261-tasks"
+  },
+  "timestamp": "2026-11-16T09:13:41.864273",
+  "model": "claude-fable-5-2",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 14,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-fable-5-2",
+  "answering_models": [
+    "claude-fable-5-2"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 9,
+    "in_fences": 0,
+    "in_section": 9,
+    "surviving": 9
+  },
+  "effort": "medium",
+  "profile": "sdk",
+  "turns": 15,
+  "prompt_tokens": 401342,
+  "cached_tokens": 255705,
+  "cache_write_tokens": 145629,
+  "completion_tokens": 11190,
+  "reasoning_tokens": null,
+  "duration_seconds": 106.98332187486812,
+  "cost_usd": 2.8296009,
+  "cost_basis": "provider"
+}

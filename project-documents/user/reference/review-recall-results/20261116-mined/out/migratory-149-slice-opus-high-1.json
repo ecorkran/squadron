@@ -1,0 +1,225 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "The four gate commands are really two, so the per-intervention comparison cannot be run",
+      "description": "Step 3 lists four runs: baseline counter-gating, early exit only, subdivision only, and both. The commands themselves come in two identical pairs. The \"baseline\" and \"early exit only\" runs are both `--subdivision-factor 1 --ticks 200`, and the other two are both `--subdivision-factor 3`. Intervention 1 adds the `break` with no switch to turn it off (lines 36\u201346). So after this slice ships, the \"S=1, counter-gating \u2014 should reproduce slice 145 ~38 TPS\" run cannot happen, and A2 (\u22655\u00d7 faster than the slice 145 baseline) has nothing measured on the same build to compare against.\n\nThe lighter fix is to drop the counter-gating rows. Take the baseline from the slice 145 CUDA numbers already on record (`145-notes.fused-tick-measurements.md`, 38 TPS), or from a run of the pre-149 commit, and say so in the walkthrough. Do not add a toggle for early exit only to support this measurement. Also, the walkthrough uses a `--subdivision-factor` CLI flag, but the task file sets S through a workload YAML (`mid-flock-50k-s3.yaml`). Pick one so the demo script matches what gets built.",
+      "file_ref": null,
+      "category": "verification",
+      "raw_category": null,
+      "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:158-178"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The candidate count for subdivision alone is wrong",
+      "description": "Line 58 says \"With S=3 alone: candidates loaded drops to ~5000.\" A 7\u00d77 scan of cells holding about 555 agents each loads 49 \u00d7 555 \u2248 27,000 candidates. That is (2S+1)\u00b2/S\u00b2 \u00d7 5000, not 5000. The source diagnosis (`148-notes.rediagnosis.md`, Intervention 2) gives ~27,000. With both interventions, line 58's \"~555\" is not the number loaded either: the scan stops after the first ~32 accepted, whatever the cell boundaries are.\n\nSo the design overstates what subdivision gains on its own, by about 5\u00d7. That number is part of why S=3 is the default gate configuration (line 128). Correct the figure. Then state the real reason subdivision helps once early exit is in place. Smaller cells mean fewer of the scanned candidates fall outside the query radius, so the cap is reached in fewer iterations.",
+      "file_ref": null,
+      "category": "design-rationale",
+      "raw_category": null,
+      "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:58"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The design does not say exactly how `cell_size` is calculated, and the wrong reading drops neighbors",
+      "description": "The design writes `cell_size = query_radius / S` and shows `BenchConfig` holding both `cell_size` and `subdivision_factor` (lines 85\u201387). Line 80 says the harness \"reads [cell_size] from config.\" That leaves two points open:\n- **Which radius:** `query_radius` is a per-profile parameter (slice 145 \u00a7Parameters). Slice 145 sets cell size to `max_query_radius`.\n- **Derived or set:** the design does not say whether `cell_size` is calculated from S or can still be set separately.\n\nThe kernel's \u00b1S scan only covers the full neighborhood when `cell_size \u00d7 S \u2265 max_query_radius`. If someone sets `cell_size` separately, or bases it on a single profile's radius, neighbors are silently lost.\n\nThe task file (T2) already settles this as `cell_size = max_query_radius / subdivision_factor`, calculated in `GpuAgentState.setup()`. The design should say the same in one line: the value is derived and never set on its own. Drop `cell_size` from the `BenchConfig` box in the diagram.",
+      "file_ref": null,
+      "category": "under-specification",
+      "raw_category": null,
+      "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:50-56, 84-87"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Slice 146 gets no path to the subdivision speedup",
+      "description": "The design puts S in the *bench* configuration (line 50) with a default of S=1, and says 146 is \"unblocked\" because setup()/tick() do not change (line 111). The success criteria present A3's 100 TPS as headroom \"before slice 146 wires the GPU tick into the production engine\" (line 116). But that 100 TPS is measured at S=3 (line 128).\n\nAccording to the plan entry for (146), that slice is what brings Tier 2 to the live world server. As designed, the production path would run at S=1, which leaves the live server at whatever early exit achieves alone. Add one sentence to the interface section saying how S reaches `GpuAgentState` outside the bench `Workload`. That can be a statement that 146 must carry `subdivision_factor` into the engine config, or that the default S changes once it is measured. This is an interface item to record, not new scope for this slice.",
+      "file_ref": null,
+      "category": "integration",
+      "raw_category": null,
+      "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md#cross-slice-dependencies-and-interfaces"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The rationale for the S \u2264 8 cap is wrong, and the limit should be one named constant",
+      "description": "Rejecting bad S values with a hard error at config time is right. But the stated reason, that S=8 \"risks pushing \u2026 auxiliary arrays past practical GPU memory\", does not hold. Grid arrays grow with the number of cells. At S=8 in a world of about 756 units that is around 15k cells, which is trivial. The real cost of a large S is the (2S+1)\u00b2 cells each agent scans. Also, the limit appears as `8` both in the validation and inside the error message. The project rules require a value used in comparisons to be defined once, so define it as a single named constant.",
+      "file_ref": null,
+      "category": "design-rationale",
+      "raw_category": null,
+      "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:69-78"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The warp-divergence argument assumes agents are ordered by location",
+      "description": "The argument says threads in a warp are \"agents with similar spatial index.\" That is only true if the outer `for i` loop runs in spatially sorted order, not in agent-ID order. The conclusion holds either way. A warp can never take longer than its slowest thread, and with counter-gating every thread already did the full scan. So the `break` cannot be meaningfully slower than the current code. Rest the claim on that bound rather than on an ordering the design does not establish.",
+      "file_ref": null,
+      "category": "design-rationale",
+      "raw_category": null,
+      "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:27"
+    },
+    {
+      "severity": "PASS",
+      "title": "The early-exit placement and the seam handling are sound",
+      "description": "Putting the `break` on the inner `for kk` loop respects the Quadrants limit on breaking out of the outer parallel loop. Option A keeps the `get_neighbors_first_k` seam that slice 145 A7 reserved for distance-ranked selection. Counter-gating accepted exactly the first k candidates in scan order, so the `break` produces the same accepted set at S=1. A4 parity for Intervention 1 is therefore met by construction. The `max_neighbors > 0` guard keeps the uncapped path working.",
+      "file_ref": null,
+      "category": "architecture",
+      "raw_category": null,
+      "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:29-46"
+    },
+    {
+      "severity": "PASS",
+      "title": "The NFR is restated and the exit criteria match the slice plan",
+      "description": "The slice restates the architecture's Tier 2 target (60 TPS at N=50k on CUDA). A2, A3 and A4 match the plan entry for (149) exactly: \u22655\u00d7 faster force_total, \u2265100 TPS, and parity within 20%. A5 (no register spill) carries over the zero-local-memory baseline from slice 148. Out of Scope correctly leaves distance-ranked k-nearest and the GPU prefix sum for later, as the 148 diagnosis recommends.",
+      "file_ref": null,
+      "category": "nfr",
+      "raw_category": null,
+      "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:114-128"
+    },
+    {
+      "severity": "PASS",
+      "title": "Scope and layer boundaries hold",
+      "description": "The changes stay inside the `quadrants-fused` kernel and its configuration. `TickResult`, the world server, the numpy/numba backends and the agent state layout are untouched, which keeps the tick return type contract from slice 140 as the only shared interface. The design is proportionate: no extra abstractions, and no new I/O paths that would need failure-mode handling.",
+      "file_ref": null,
+      "category": "architecture",
+      "raw_category": null,
+      "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:102-106"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "verification",
+      "raw_category": null,
+      "summary": "The four gate commands are really two, so the per-intervention comparison cannot be run",
+      "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:158-178",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "design-rationale",
+      "raw_category": null,
+      "summary": "The candidate count for subdivision alone is wrong",
+      "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:58",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "under-specification",
+      "raw_category": null,
+      "summary": "The design does not say exactly how `cell_size` is calculated, and the wrong reading drops neighbors",
+      "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:50-56, 84-87",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "integration",
+      "raw_category": null,
+      "summary": "Slice 146 gets no path to the subdivision speedup",
+      "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md#cross-slice-dependencies-and-interfaces",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "design-rationale",
+      "raw_category": null,
+      "summary": "The rationale for the S \u2264 8 cap is wrong, and the limit should be one named constant",
+      "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:69-78",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "design-rationale",
+      "raw_category": null,
+      "summary": "The warp-divergence argument assumes agents are ordered by location",
+      "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:27",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "pass",
+      "category": "architecture",
+      "raw_category": null,
+      "summary": "The early-exit placement and the seam handling are sound",
+      "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:29-46",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "pass",
+      "category": "nfr",
+      "raw_category": null,
+      "summary": "The NFR is restated and the exit criteria match the slice plan",
+      "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:114-128",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "pass",
+      "category": "architecture",
+      "raw_category": null,
+      "summary": "Scope and layer boundaries hold",
+      "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:102-106",
+      "location_verified": true
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md",
+    "against": "project-documents/user/architecture/140-slices.simulation-scaling.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/migratory-149-slice"
+  },
+  "timestamp": "2026-11-16T10:13:28.333184",
+  "model": "claude-opus-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 8,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-opus-5-5",
+  "answering_models": [
+    "claude-opus-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 9,
+    "in_fences": 0,
+    "in_section": 9,
+    "surviving": 9
+  },
+  "effort": "high",
+  "profile": "sdk",
+  "turns": 9,
+  "prompt_tokens": 398744,
+  "cached_tokens": 315019,
+  "cache_write_tokens": 83715,
+  "completion_tokens": 7940,
+  "reasoning_tokens": null,
+  "duration_seconds": 89.85121266590431,
+  "cost_usd": 0.8921041000000001,
+  "cost_basis": "provider"
+}

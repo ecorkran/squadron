@@ -1,0 +1,243 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Scrubbed PATH does not say how the agent runtime's executables are reached",
+      "description": "- **Gap:** D7 limits `PATH` to the adapter entries, `<id>.home/bin` (only `git` and `uv`) and the system directories, and explicitly drops `~/.local/bin`, Homebrew, pipx and uv tool installs. Those are the usual homes of the agent CLIs, `node` and `cf`, and the design never says whether the dispatch path needs any of them on `PATH`.\n- **Consequence for the auth check:** D8's probe would report a missing binary as an auth `no`. The architecture's question (\"whether the agent's auth still works with its config directory redirected\") would then be answered wrongly.\n- **Consequence for 424:** the slice plan has 424 consume this environment unchanged for `sq run`, so it inherits the same gap.\n- **Fix:** list the runtime executables each profile needs. Either add them to `HARNESS_TOOL_ALLOWLIST` or state that the runtime resolves them without `PATH`. Give the probe a distinct result for \"runtime not found\" versus \"auth failed\".",
+      "file_ref": null,
+      "category": "hidden-dependencies",
+      "raw_category": null,
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:168"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Install failure reasons have no case for network or build failure",
+      "description": "- **Gap:** the install step is a new network I/O path, but `EnvironmentFailureReason` has only `no_lockfile`, `lockfile_unsupported`, `lock_stale_or_unresolvable`, `install_timeout` and `installer_missing`. A dropped connection, an index outage or a failed sdist build has nowhere to go except `lock_stale_or_unresolvable`.\n- **Why it matters:** the architecture says \"a lockfile that no longer resolves disqualifies the case\", and 422's yield report counts exclusions per reason. A transient outage would be recorded as a permanent property of the case, which defeats \"Absent is not zero\".\n- **Fix:** add a reason for install failures that are not attributable to the lock (or an explicit `install_failed` catch-all), and state how uv's output maps to each reason.\n- **Related criterion:** line 308 and walkthrough step 5 require that a stale lock leaves no `.venv`. I believe `uv sync --locked` creates the environment before it validates the lock; if so, the criterion cannot pass as written. Either confirm uv's ordering or reword it to \"the sandbox is removed\".",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:152"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`EnvironmentIdentity` placement conflicts with the stated dependency direction",
+      "description": "- **Conflict:** line 97 says `metrology/` does not depend on `benchmark/`. But `EnvironmentIdentity` is defined in `benchmark/adapter.py`, and line 119 says 422's qualification records and 424's replay records carry it. Those are store payloads under D3, in `metrology/benchmark_models.py`.\n- **Consequence:** 422 must either import `benchmark/` from `metrology/` or duplicate the model. The same applies to `FailureKind` if qualification records store it.\n- **Fix:** decide here, since this slice owns the seam. Either put the persisted value types in `metrology/benchmark_models.py`, or state that records carry only `identity_digest` and plain strings.",
+      "file_ref": null,
+      "category": "dependency-direction",
+      "raw_category": null,
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:97"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Case sets are not keyed on `ProjectId`, and the replacement keying is under-specified",
+      "description": "- **Deviation:** the architecture (\"optional sibling payloads, no migration, keyed on `ProjectId`\") and the 421 plan entry both key new records on `ProjectId`. D2 keys `CaseSet` by a global name instead.\n- **What holds up:** the pooling rationale is sound, and the deviation is stated openly.\n- **What is missing:**\n  - What the `MetrologyRecord` envelope's project field holds for a `case_set` record.\n  - How existing per-project queries treat that record.\n  - What stops two projects that reuse a name from silently versioning each other's set, since `write_case_set` would write v2 of the other project's set.\n- **Fix:** specify the envelope value, and either scope the name (for example an optional project qualifier) or reject a write whose case ids share no project with the previous version.",
+      "file_ref": null,
+      "category": "architectural-alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:134"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Sandbox tree sits two directories from the store that now holds the answers",
+      "description": "`~/.config/squadron/benchmark/<id>/` is a sibling of `metrology/`, which after this slice holds `reference_sha` and the hidden test ids for the case being replayed. Redirecting `HOME` does not hide a relative `../../metrology`. D4 acknowledges this and defers to 424's scan, which matches the architecture's \"directory, not a jail\" position and 177's precedent. 424 should treat the path as a required scan entry.",
+      "file_ref": null,
+      "category": "leak-containment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:146"
+    },
+    {
+      "severity": "PASS",
+      "title": "Scope matches the slice plan entry",
+      "description": "- All four planned items are present: records, environment resolution, scrubbed environment with auth check, and the adapter seam with the suite runner.\n- Discovery, fairness, injection, leak scan and grading are correctly excluded to 422\u2013425.\n- Both \"open for slice design\" questions are answered: lockfile-less projects in D5 and the adapter shape in D9.\n- The single-entry registry, the two CLI verification commands and the three timeout keys are each used by this slice's own success criteria. Nothing is cuttable.",
+      "file_ref": null,
+      "category": "scope",
+      "raw_category": null,
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md#technical-scope"
+    },
+    {
+      "severity": "PASS",
+      "title": "Case identity and immutability",
+      "description": "- The identity covers the architecture's fields plus the exclusion list the slice plan requires.\n- Adding `reference_sha` is justified, because hidden-test source is read from the reference.\n- Tamper rejection on read fails explicitly and never yields a second case under an old id.\n- Set versions are never rewritten.",
+      "file_ref": null,
+      "category": "architectural-alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:125-128"
+    },
+    {
+      "severity": "PASS",
+      "title": "Scrubbed environment follows the leak principle",
+      "description": "- Building from an allowlist, redirecting `HOME`, seeding without store or memory, and ordering `PATH` so the start commit's `sq` wins all implement the architecture's \"answer stays out of reach\" principle.\n- `scrub_spec_version` in the environment identity satisfies the requirement that qualification runs in the same environment as replays.\n- Auth failure is reported and never worked around.",
+      "file_ref": null,
+      "category": "architectural-alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:163-174"
+    },
+    {
+      "severity": "PASS",
+      "title": "Suite runner classification supports the fairness rule",
+      "description": "- The kinds separate the architecture's test-first disqualifiers (collection error, import error, module `AttributeError`, missing patch target) from the qualifying ones (assertion, project exception).\n- `other_exception` sends ambiguous cases to \"excluded with that reason, never admitted\".\n- Timeout, missing JSONL and old pytest each have an explicit, non-silent outcome.",
+      "file_ref": null,
+      "category": "integration",
+      "raw_category": null,
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:211-221"
+    },
+    {
+      "severity": "PASS",
+      "title": "Store extension and sandbox extraction",
+      "description": "- Records are sibling payloads with no schema bump or migration, as the architecture requires.\n- `HistoryFreeSandbox` is extracted by composition, and `ReplaySandbox`'s surface and tests are unchanged. That reuses 177 without forking it.",
+      "file_ref": null,
+      "category": "architectural-alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:136-147"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "hidden-dependencies",
+      "raw_category": null,
+      "summary": "Scrubbed PATH does not say how the agent runtime's executables are reached",
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:168",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "Install failure reasons have no case for network or build failure",
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:152",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "dependency-direction",
+      "raw_category": null,
+      "summary": "`EnvironmentIdentity` placement conflicts with the stated dependency direction",
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:97",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "architectural-alignment",
+      "raw_category": null,
+      "summary": "Case sets are not keyed on `ProjectId`, and the replacement keying is under-specified",
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:134",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "leak-containment",
+      "raw_category": null,
+      "summary": "Sandbox tree sits two directories from the store that now holds the answers",
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:146",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "pass",
+      "category": "scope",
+      "raw_category": null,
+      "summary": "Scope matches the slice plan entry",
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md#technical-scope",
+      "location_verified": null
+    },
+    {
+      "id": "F007",
+      "severity": "pass",
+      "category": "architectural-alignment",
+      "raw_category": null,
+      "summary": "Case identity and immutability",
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:125-128",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "pass",
+      "category": "architectural-alignment",
+      "raw_category": null,
+      "summary": "Scrubbed environment follows the leak principle",
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:163-174",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "pass",
+      "category": "integration",
+      "raw_category": null,
+      "summary": "Suite runner classification supports the fairness rule",
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:211-221",
+      "location_verified": true
+    },
+    {
+      "id": "F010",
+      "severity": "pass",
+      "category": "architectural-alignment",
+      "raw_category": null,
+      "summary": "Store extension and sandbox extraction",
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:136-147",
+      "location_verified": true
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md",
+    "against": "project-documents/user/architecture/420-arch.model-benchmark.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261115-design/wt/421-design"
+  },
+  "timestamp": "2026-11-16T06:56:28.926218",
+  "model": "claude-fable-5-2",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 4,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-fable-5-2",
+  "answering_models": [
+    "claude-fable-5-2"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 10,
+    "in_fences": 0,
+    "in_section": 10,
+    "surviving": 10
+  },
+  "effort": "medium",
+  "profile": "sdk",
+  "turns": 5,
+  "prompt_tokens": 253953,
+  "cached_tokens": 119090,
+  "cache_write_tokens": 134857,
+  "completion_tokens": 8952,
+  "reasoning_tokens": null,
+  "duration_seconds": 97.04267037496902,
+  "cost_usd": 2.5404264,
+  "cost_basis": "provider"
+}

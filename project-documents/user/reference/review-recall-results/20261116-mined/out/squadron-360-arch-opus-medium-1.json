@@ -1,0 +1,350 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Index-range policy contradicts itself and the \"no convention change\" claim",
+      "description": "Output Conventions says generated docs take 940-949 and then \"overflow into 950+ is sanctioned \u2026 remaining slots in the 900 band.\" Resolved Design Decisions (line 332-333) says \"in the 940-949 reserved range. No new convention, no gate change.\" Both can't hold. Using the 950+ band for analysis documents changes what the naming convention allows, even if no gate enforces it. That contradicts \"no change to `file-naming-conventions.md`\" (line 245). The 900 band also already has other owners: the standing-fixes slice is 990. Writing \"remaining slots in the 900 band\" with no exclusion list invites index collisions across document types. Fix: pick one rule and list the slots that are excluded. Better still, see the next finding, which removes most of the pressure on the range.",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md:249-258"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Per-run index allocation is wrong for the overview and unspecified for both capabilities",
+      "description": "The \"incrementing per run, each run an independent sample\" model comes from tech-debt audits. It makes sense for comprehension snapshots. It does not fit the overview, which is a living restatement of the current plan. Regenerating it after a status change should revise the document, not use up a new index. With 7 slots left in 940-949, a few regenerations would exhaust the range. That is the real cause of the \"overflow\" problem. The document also never says how the next index is found (scan `user/analysis/` for the highest 9xx? only `*-analysis.*`?). It never says what an overview's `status` value means: an overview has no lifecycle that fits `not_started`/`complete`. Specify: the overview is regenerated in place at a stable index (with the topic-suffix variant), comprehension runs increment, the allocation algorithm, and the status value written.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md#output-conventions"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Capability 2's interview fallback breaks \"derived, not authored\"",
+      "description": "Design Goals (line 51-52) says the client document \"is not a place where new claims about the project appear.\" Translation rules (line 234) say \"Every claim traces to an input artifact.\" Inputs (line 197-200) say that when the concept is absent the skill \"sources purpose from the initiative plan plus interview.\" It also calls this the *common, tested* case. In the field schema, Problem, Audience and Approach come only from the concept. So in the common case those three fields come from an interview answer that exists in no artifact. Either say the fallback is \"write a concept first (or run Capability 1), then generate\", or record the interview answers in an artifact (for example the concept's User-Provided Concept section) before the overview cites them.",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md#capability-2-planning-artifacts--client-facing-document"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Audience-emphasis parameter is both specified and rejected",
+      "description": "Translation rules say \"Emphasis is a generation parameter.\" Resolved Design Decisions (line 328-331) says it is \"one neutral document \u2026 An emphasis parameter is added only if real use demonstrates the need.\" Slice design will implement whichever line it reads first. Remove the parameter from the translation rules.",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md:238-239"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "A client-ready document with required YAML frontmatter, stored under internal paths",
+      "description": "Translation rules say \"docType frontmatter never appear[s].\" Output Conventions requires `docType: analysis` frontmatter, and project convention requires frontmatter on every markdown file. The output file is therefore never hand-off-ready. Every delivery needs a manual strip, or the stakeholder sees `docType`, `status: not_started` and the index in the filename. Either define the frontmatter as metadata the downstream conversion drops (and say so), or have the command also emit a body-only rendering. As written, the \"markdown converts cleanly to PDF\" rationale (line 204-205) doesn't hold.",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md#translation-rules"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The source for \"Status is honest\" is undefined, and the real input disagrees with itself",
+      "description": "Status is sourced from \"Initiative statuses.\" In squadron's own `001-initiative-plan.squadron.md`, initiative 900 reads `13. [x] **(900) \u2026** Status: not_started`: the checkbox and the status field disagree. Initiative-level status also doesn't reflect slice progress: an initiative can be `in_progress` with 1 of 8 slices done. The document must say which signal is authoritative, what happens when signals conflict (flag, don't pick), and whether slice-plan status is consulted. The translation example \"Initiative 140 status draft\" also uses `draft`, which Output Conventions (line 261) calls an invalid value.",
+      "file_ref": null,
+      "category": "feasibility",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md#document-field-schema"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Staleness check will warn on every committed graph and can fail on rewritten history",
+      "description": "The document tracks `meta.json` (line 186-188) and compares its `gitCommitHash` to `HEAD`. Committing the regenerated graph creates a new HEAD that differs from the recorded hash. A freshly analyzed and committed graph is therefore reported as stale, always. That trains the PM to ignore the \"prominent\" warning that the document calls the real failure mode. Also, \"commit distance\" (`git rev-list --count hash..HEAD`) fails when the recorded hash isn't an ancestor of HEAD: squash/rebase, analysis on another branch or worktree, or a shallow clone. Define: compare against the source files that changed since the hash (excluding `.understand-anything/`), and say what happens when the hash is unreachable.",
+      "file_ref": null,
+      "category": "feasibility",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md:130-135"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Tracking the graph has costs that aren't weighed, and `intermediate/` is left untracked and un-ignored",
+      "description": "The document calls `knowledge-graph.json` too large to read into context (line 107), yet tracks it. Every `/understand` run rewrites it, which causes large diffs, repo growth and guaranteed merge conflicts on a generated file across branches and worktrees. The design should at least state that trade-off. Separately, `intermediate/scan-result.json` is in neither the ignore entry nor the \"Not ignored\" list. It will show up as an untracked file after every run, which violates the \"Leave the working tree clean\" goal. Decide its status explicitly.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md#working-tree-hygiene"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Graph extraction is the hard part and gets the least design: grep over JSON, with no schema contract",
+      "description": "\"Grep for the needed section before reading\" assumes a line-oriented, pretty-printed JSON layout. A minified graph is one line, so grep returns the whole file. That is the strict-format dependence the project's parsing rules forbid. Filtering nodes by `type` across thousands of entries and joining `layers[].nodeIds`/`tour[].nodeIds` back to file nodes is not something an LLM does reliably with grep. Upstream is \"actively developed\" (v2.8.1), but no schema or version is pinned and there is no check that fails loudly on shape drift. Squadron already uses Pydantic models at file-parsing boundaries. A small extractor that validates the subset squadron needs and prints a compact summary (`jq` or a Python helper) would make this deterministic. It costs the \"no CLI change\" claim, which is the right trade.",
+      "file_ref": null,
+      "category": "technology",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md:107-110"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "No defined behavior when target planning artifacts already exist",
+      "description": "Capability 1 writes `000-concept.{project}.md` and may write initiative-plan candidates. The document never says what happens when either file already exists. The User-Provided Concept section is protected and must not be rewritten. Squadron itself has a `001-initiative-plan` (retroactive). Specify: refuse, write alongside, or merge into an existing concept/plan. Also say where confirmed candidates land when a plan already exists.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md#outputs"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The codebase-comprehension analysis document duplicates the plugin's descriptive output",
+      "description": "The document's boundary with the plugin (line 114-121) is \"plugin is descriptive, squadron is prescriptive; no functional overlap.\" The `{index}-analysis.codebase-comprehension.md` output, \"layers, complexity hotspots, entry points, dependency observations\", is descriptive, and overlaps `/understand-onboard`'s ONBOARDING.md. Either cut it (the concept and initiative candidates already carry the prescriptive value, and they also feed the index-range pressure above) or narrow it to prescriptive content, such as risk-ranked hotspots tied to candidate initiatives.",
+      "file_ref": null,
+      "category": "antipattern",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md:152-153"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Plugin-installation detection is unspecified and unnecessary",
+      "description": "Precondition 1 says \"verify the plugin is installed.\" For a markdown skill, that means inspecting Claude Code's plugin registry, at user, project or other scope, which is undocumented ground. It is also not required. The skill consumes data, and a graph committed by a teammate is valid without the plugin installed locally (that is the whole point of tracking it). Cut the check: the graph's presence (plus the schema check above) is the only precondition. Mention the plugin only in the \"graph missing\" message.",
+      "file_ref": null,
+      "category": "antipattern",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md:127-128"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Provenance and traceability are required but never designed",
+      "description": "This spans the document. Capability 1 requires the staleness warning to \"appear in the generated document's provenance\" (line 134, 335), and its Draft step attributes claims to \"graph\" vs \"interview\" (line 143-144). Capability 2 requires every claim to trace to an input artifact. No provenance section, frontmatter field or inline citation convention is defined for either output. The `[INFERRED]` convention is left as an open question (line 341-342), but it is load-bearing for the \"never fabricate\" and \"derive, never invent\" goals. Define one provenance block (graph commit, staleness distance, input document paths and dates) and one claim-source marker, shared by both capabilities.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "unverified"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Reusing the name `understand` overloads one word for two different operations",
+      "description": "The dispatcher delegates to `/analysis:{skill}` (`commands/sq/analysis.md:22`), so the squadron skill installs as `/analysis:understand` next to the plugin's `/understand`. The two names don't technically collide. But \"build comprehension\" and \"turn comprehension into plans\" are different actions. The skill's own \"graph missing \u2192 run `/understand`\" message then sits next to a squadron command with the same verb, which makes misrouting by the model or the user more likely. The stated justification (\"a second vocabulary word for one concept\") treats them as one concept, and they aren't one.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md#delivery"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Existing analysis-pack installs won't receive the new skill until reinstalled",
+      "description": "The \"no installer, manifest, or CLI change\" claim checks out: `installer.py:87` globs `*.md`, and `skills.toml` is pack-level. But install receipts record `files_written` from the original install. Users who already installed `analysis` get the updated dispatcher only when they rerun `install-commands`, and get `understand.md` only after `sq skills install analysis` again. The dispatcher's \"not installed\" message covers that case only partly. The release notes should say so.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md#delivery"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Dependency on [100] is cited for a CLI surface neither capability adds",
+      "description": "\"[100] \u2014 CLI command registration for any command surface.\" Both capabilities are markdown commands or skills, and Delivery states \"no \u2026 CLI change.\" The real dependency on 100 is the `install-commands` copy mechanism for `commands/sq/overview.md`. State it that way so the dependency doesn't look like a CLI change.",
+      "file_ref": null,
+      "category": "dependencies",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md#dependencies"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "Index-range policy contradicts itself and the \"no convention change\" claim",
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md:249-258",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "Per-run index allocation is wrong for the overview and unspecified for both capabilities",
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md#output-conventions",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "Capability 2's interview fallback breaks \"derived, not authored\"",
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md#capability-2-planning-artifacts--client-facing-document",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "Audience-emphasis parameter is both specified and rejected",
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md:238-239",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "A client-ready document with required YAML frontmatter, stored under internal paths",
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md#translation-rules",
+      "location_verified": null
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "feasibility",
+      "raw_category": null,
+      "summary": "The source for \"Status is honest\" is undefined, and the real input disagrees with itself",
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md#document-field-schema",
+      "location_verified": null
+    },
+    {
+      "id": "F007",
+      "severity": "concern",
+      "category": "feasibility",
+      "raw_category": null,
+      "summary": "Staleness check will warn on every committed graph and can fail on rewritten history",
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md:130-135",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "Tracking the graph has costs that aren't weighed, and `intermediate/` is left untracked and un-ignored",
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md#working-tree-hygiene",
+      "location_verified": null
+    },
+    {
+      "id": "F009",
+      "severity": "concern",
+      "category": "technology",
+      "raw_category": null,
+      "summary": "Graph extraction is the hard part and gets the least design: grep over JSON, with no schema contract",
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md:107-110",
+      "location_verified": true
+    },
+    {
+      "id": "F010",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "No defined behavior when target planning artifacts already exist",
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md#outputs",
+      "location_verified": null
+    },
+    {
+      "id": "F011",
+      "severity": "concern",
+      "category": "antipattern",
+      "raw_category": null,
+      "summary": "The codebase-comprehension analysis document duplicates the plugin's descriptive output",
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md:152-153",
+      "location_verified": true
+    },
+    {
+      "id": "F012",
+      "severity": "concern",
+      "category": "antipattern",
+      "raw_category": null,
+      "summary": "Plugin-installation detection is unspecified and unnecessary",
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md:127-128",
+      "location_verified": true
+    },
+    {
+      "id": "F013",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "Provenance and traceability are required but never designed",
+      "location": "unverified",
+      "location_verified": null
+    },
+    {
+      "id": "F014",
+      "severity": "note",
+      "category": "other",
+      "raw_category": null,
+      "summary": "Reusing the name `understand` overloads one word for two different operations",
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md#delivery",
+      "location_verified": null
+    },
+    {
+      "id": "F015",
+      "severity": "note",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "Existing analysis-pack installs won't receive the new skill until reinstalled",
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md#delivery",
+      "location_verified": null
+    },
+    {
+      "id": "F016",
+      "severity": "note",
+      "category": "dependencies",
+      "raw_category": null,
+      "summary": "Dependency on [100] is cited for a CLI surface neither capability adds",
+      "location": "project-documents/user/architecture/360-arch.document-intelligence.md#dependencies",
+      "location_verified": null
+    }
+  ],
+  "template_name": "arch",
+  "input_files": {
+    "input": "project-documents/user/architecture/360-arch.document-intelligence.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/squadron-360-arch"
+  },
+  "timestamp": "2026-11-16T09:19:58.062905",
+  "model": "claude-opus-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 13,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-opus-5-5",
+  "answering_models": [
+    "claude-opus-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 16,
+    "in_fences": 0,
+    "in_section": 16,
+    "surviving": 16
+  },
+  "effort": "medium",
+  "profile": "sdk",
+  "turns": 14,
+  "prompt_tokens": 741520,
+  "cached_tokens": 650252,
+  "cache_write_tokens": 91248,
+  "completion_tokens": 9619,
+  "reasoning_tokens": null,
+  "duration_seconds": 110.6241939580068,
+  "cost_usd": 1.05313,
+  "cost_basis": "provider"
+}

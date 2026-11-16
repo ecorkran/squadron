@@ -1,0 +1,189 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "`adoptionBuild.integration.test.ts` outlives the pipeline seam, so the 3.7 gate cannot pass",
+      "description": "Task 3.3 changes `createContextPipeline` to take one argument and removes the resolver from the integrator. But `core/tests/adoption/adoptionBuild.integration.test.ts` is only deleted in task 4.1. This test drives the real pipeline: line 68 calls `createContextPipeline(dir, { adoptionStateWrites, squadronProbe: fakeProbe })`, and it asserts on `FACTS_HEADING = '### Adoption Facts'` (line 24) and on state writes.\n\nThe compiler will not catch this. Core's `typecheck` is `tsc --noEmit` against `tsconfig.json`, which includes only `src/**/*`. The extra argument is ignored at runtime, so the test runs and its adoption assertions fail. The targeted test run in 3.3 doesn't include it, but `pnpm --filter @context-forge/core test` in 3.4's flow and `pnpm -r test` in 3.7 both will. A junior implementer would hit a red gate and might \"fix\" the test rather than delete it.\n\n**Fix:** move the deletion of `adoptionBuild.integration.test.ts` from 4.1 into 3.3, next to the `pipeline-integration` brownfield deletions.",
+      "file_ref": null,
+      "category": "sequencing",
+      "raw_category": null,
+      "location": "packages/core/tests/adoption/adoptionBuild.integration.test.ts:68"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Commits are written as checkbox items, not plain `**Commit**:` markers",
+      "description": "Every commit point is a checkbox: `- [ ] **2.3 Commit**`, `- [ ] **3.2a Commit the render removal**`, and `- [ ] Commit: ...` in 3.7, 4.1\u20134.4, 5.1 and 6.3. Project rules say implementers commit only at `**Commit**:` markers, and that a file with no markers is committed at the end of each top-level task. Read literally, this file has no markers. That would merge 3.2a into 3.7 and turn 4.1\u20134.4 into one commit, which loses the per-task compile-safe commits section 4's header promises.\n\nCheckbox commits also cause a loop. The rule is implement, then run task-checker, then commit. Ticking \"Commit\" after committing leaves a change that only ticks a box, which is forbidden. Task 1.1 already has to work around task-file changes carrying across commits.\n\nThe commit points themselves are placed well, at working, tested states. **Fix:** turn each one into a plain `**Commit**: \\`<message>\\`` line. Merge task 3.2a's check into a marker after 3.2.",
+      "file_ref": null,
+      "category": "task-structure",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/268-tasks.pure-cf-build.md:79"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "6.2 export audit checks the wrong list and would flag symbols the slice keeps",
+      "description": "The audit tells the implementer to remove any export that doesn't have a consumer \"listed under the design's Interfaces Required\" and isn't in `history`, `comprehensionAnalysis` or `adoptionOutcome`. Interfaces Required lists only detection modules plus those three. Several kept symbols are not on it:\n- `AdoptionError` (`contracts.ts`, still thrown by kept detection modules)\n- `readAdoptionState` and the `ADOPTION_STATES` re-export (`adoptionState.ts`, used by navigation)\n\nThe Context Summary (line 39) says to keep all of these, so the task file contradicts itself, and a literal reading would remove exports that are still needed. The slice's actual requirement is \"No exported symbol remains that only the deleted code used.\" **Fix:** reword the audit so each export must have at least one remaining production consumer, or appear in the Context Summary's Kept list.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/268-tasks.pure-cf-build.md:200"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Success check for 3.4 doesn't cover the test-file edits it asks for",
+      "description": "Task 3.4 says to \"remove any remaining references in core tests and helpers\". Its success check, `pnpm --filter @context-forge/core typecheck`, only compiles `src/`. Leftover `adoptionFacts`/`fileComprehension` uses in tests would only show up as runtime failures. Adding the core test run to 3.4's success check would close this gap. The same blind spot is behind the FAIL above.",
+      "file_ref": null,
+      "category": "verification",
+      "raw_category": null,
+      "location": "packages/core/tsconfig.json:20"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Purity test runs after the deletions instead of right after the seam removal",
+      "description": "Test 5.1 checks the behaviour changed in section 3 and doesn't depend on section 4. Running it after 3.7 would confirm no writes and no `sq` spawn before deleting code. The current order follows the design's Development Approach, so this is optional.",
+      "file_ref": null,
+      "category": "test-with",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/268-tasks.pure-cf-build.md:175"
+    },
+    {
+      "severity": "PASS",
+      "title": "Success criteria coverage",
+      "description": "Each success criterion maps to tasks:\n- **No read/write of `adoption.state`, no detection, no `sq` spawn:** 3.3\u20133.6, 4.4 and 5.1.\n- **Brownfield Phase 0 returns the concept prompt and writes nothing:** 5.1.\n- **Byte identity:** 2.1\u20132.2, checked again in 3.7 and 6.1.\n- **CLI/MCP parity:** 5.1.\n- **`MIN_GUIDE_VERSION` warning still shown:** 3.5, 3.6 and 6.1, which compares `expect` lines against the target.\n- **`services/` imports nothing from `adoption/` or `detection/`:** 3.3 and 6.2. I checked: only `ContextIntegrator.ts` and `CoreServiceFactory.ts` import from those folders today.\n- **No orphan exports:** 4.1\u20134.4 and 6.2.\n- **Lint, typecheck and tests:** 6.1.\n- **Walkthrough:** 6.3.\n\nEvery file in the Migration Plan's code and test tables has a task. No load-test or CI task is needed, because the slice states no NFR.",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "project-documents/user/slices/268-slice.pure-cf-build.md:186-200"
+    },
+    {
+      "severity": "PASS",
+      "title": "Sequencing of the deletions",
+      "description": "The order in 4.1\u20134.4 is safe:\n1. Delete the resolver, facts and completion modules, along with their `index.ts` re-exports.\n2. Trim `contracts.ts`, which drops its `ProbeOutcome` import.\n3. Remove the writer and the `adoption-completed` variant. Only the resolver builds `adoption-completed` (`adoptionOutcome.ts:14`), and it is already gone.\n4. Delete the probe.\n\nRunning the golden capture first (section 2) matches D6. Golden runs don't depend on a real `sq`: greenfield Phase 0 doesn't reach the probe, and Phase 4 skips the resolver.",
+      "file_ref": null,
+      "category": null,
+      "raw_category": null,
+      "location": "packages/core/src/adoption/index.ts"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "sequencing",
+      "raw_category": null,
+      "summary": "`adoptionBuild.integration.test.ts` outlives the pipeline seam, so the 3.7 gate cannot pass",
+      "location": "packages/core/tests/adoption/adoptionBuild.integration.test.ts:68",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "task-structure",
+      "raw_category": null,
+      "summary": "Commits are written as checkbox items, not plain `**Commit**:` markers",
+      "location": "project-documents/user/tasks/268-tasks.pure-cf-build.md:79",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "6.2 export audit checks the wrong list and would flag symbols the slice keeps",
+      "location": "project-documents/user/tasks/268-tasks.pure-cf-build.md:200",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "note",
+      "category": "verification",
+      "raw_category": null,
+      "summary": "Success check for 3.4 doesn't cover the test-file edits it asks for",
+      "location": "packages/core/tsconfig.json:20",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "test-with",
+      "raw_category": null,
+      "summary": "Purity test runs after the deletions instead of right after the seam removal",
+      "location": "project-documents/user/tasks/268-tasks.pure-cf-build.md:175",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "pass",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "Success criteria coverage",
+      "location": "project-documents/user/slices/268-slice.pure-cf-build.md:186-200",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "pass",
+      "category": "uncategorized",
+      "raw_category": null,
+      "summary": "Sequencing of the deletions",
+      "location": "packages/core/src/adoption/index.ts",
+      "location_verified": null
+    }
+  ],
+  "template_name": "tasks",
+  "input_files": {
+    "input": "project-documents/user/tasks/268-tasks.pure-cf-build.md",
+    "against": "project-documents/user/slices/268-slice.pure-cf-build.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/context-forge-268-tasks"
+  },
+  "timestamp": "2026-11-16T10:10:24.397718",
+  "model": "claude-opus-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 16,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-opus-5-5",
+  "answering_models": [
+    "claude-opus-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 7,
+    "in_fences": 0,
+    "in_section": 7,
+    "surviving": 7
+  },
+  "effort": "high",
+  "profile": "sdk",
+  "turns": 17,
+  "prompt_tokens": 1027205,
+  "cached_tokens": 935643,
+  "cache_write_tokens": 91540,
+  "completion_tokens": 11731,
+  "reasoning_tokens": null,
+  "duration_seconds": 127.54039537510835,
+  "cost_usd": 1.1548893,
+  "cost_basis": "provider"
+}

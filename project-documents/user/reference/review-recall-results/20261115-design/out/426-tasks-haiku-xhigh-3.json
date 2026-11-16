@@ -1,0 +1,333 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "Discovery rejections are never recorded, so the per-index criterion and yield counts are unmet",
+      "description": "The design requires a `SliceQualification` for every slice index, with none silently dropped (`project-documents/user/slices/426-slice.slice-cases.md:434`). It also says every rejection is counted by reason in the yield rows (line 506). Task 13 returns `multiple_landings` and `branch_contains_merges` only as `DiscoveryResult` entries. Task 15 writes records only for failures after discovery. Task 20 prints a line for these candidates but writes no record. Task 22 counts only stored `SliceQualification`s, so those two reasons can never appear in the yield rows. Task 23's check (\"every index has a line\") passes without anything being stored. A `multiple_landings` slice also has no single `landing_after_sha`, so the record key in Task 12 (`slicequal-\u2026-<landing[:12]>-\u2026`) cannot be filled as written. The task needs to persist discovery rejections, define the key for multi-landing slices, and add a test that yield counts them.",
+      "file_ref": null,
+      "category": "functional-gap",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/426-tasks.slice-cases.md:153"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The cf spike runs bare `sq` under a scrubbed PATH",
+      "description": "Task 10 says to run `sq run P6 \u2026` with `env=<scrubbed>`. Under 421's scrubbed PATH, `sq` is not found unless it is on that path. The design (D8) and Task 24 both run the installed `sq` by absolute path. As written, the spike fails for a reason unrelated to cf and can produce a false `BLOCKED:` on D9. The task should say to resolve the absolute installed path once, outside the scrubbed environment, and use it.",
+      "file_ref": null,
+      "category": "instruction-error",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/426-tasks.slice-cases.md:135"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Requalification has no way to recover the slice index and landing sha from a case",
+      "description": "Task 25 calls `slice_qualification_for`, which keys on (project, index, landing, fork digest). The case carries only `CaseProvenance.source_ref = \"slice:<index>@<landing_after_sha>\"` (Task 18). Nothing says how `requalify` gets the index and landing back. Parsing the label string is the fragile pattern the project rules reject, and the case schema belongs to 421. The task should name a source: a structured field if 421's provenance can carry one, or a lookup of the stored `SliceQualification` by `case_id`, which the record already stores.",
+      "file_ref": null,
+      "category": "underspecified-contract",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/426-tasks.slice-cases.md:227"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The \"load tests\" are placed in functional files with no CI gate",
+      "description": "The Context Summary calls two tests load tests: the eight-concurrent-invoke test (Task 24, line 223) and the 200-pair network test (Task 33). The project rule requires load tests for network, concurrency and environment-layer code in `tests/load/`, and CI must gate them. Slice 421 (Task 26) and slice 424 (Task 10) both put their load tests in `tests/load/` and add a task that confirms CI collects them. This breakdown does neither, so the gate is implicit. Move both tests to `tests/load/`, make them assert latency or resource bounds (the `timeout_s` cut, the cap stop), and add a CI-confirmation task after Task 33 modelled on 424 Task 10.",
+      "file_ref": null,
+      "category": "test-coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/426-tasks.slice-cases.md:276"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Discovery and task-text work waits behind the 421\u2013425 gate without needing it",
+      "description": "Tasks 13\u201314 depend on `get_slice_ranges` (`src/squadron/metrology/store.py:543`), `ProcessRunner` (`src/squadron/core/process_runner.py:73`, which accepts `env`), `plan_file_for` (`src/squadron/stats/planning_docs.py:255`), `artifact_pattern` (Task 2) and `is_dropped` (Task 7). The only piece that needs 421\u2013425 is `SliceCandidateRejection`, and only because Task 11 puts it in `benchmark_models.py` alongside the 424 `CaseDrop` widening. Move the enum to a module that does not depend on 421\u2013425, and run Tasks 13\u201314 and their tests before the gate. I did not confirm that `metrology/benchmark_models.py` exists in this tree.",
+      "file_ref": null,
+      "category": "sequencing",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/426-tasks.slice-cases.md:153"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Task 1 changes design behavior without a traceable decision record",
+      "description": "Task 1 writes several behavior choices into the design: `judge_pair`'s `on_call` parameter, the `CfRegistration.registered` property, the registration branch, `--keep` output, the over-size count rule, and \"a harness error stops the build\". The design's D6 says harness failures are recorded and never blame the slice. It does not say one failure stops the run, though the API contract implies it. The gap bullets are clear, but the choices are not labelled as decisions. Add a D-number for each behavior choice so a reader can see what was decided and why.",
+      "file_ref": null,
+      "category": "traceability",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/426-tasks.slice-cases.md:48"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The file is overweight: 42 tasks, several too granular, some restating criteria",
+      "description": "A slice adding about twenty modules can justify 42 tasks, but this file is 344 lines and several items can be cut or merged:\n- Merge Task 22 into 21 (same CLI surface).\n- Merge Task 40 into 35 (both are slash mirrors of finished commands).\n- Merge Task 39 into 41 (one integration test).\n- Merge Tasks 31\u201334 into two (plan and bound/cap; lock and resume).\n- Cut repeated test assertions: Task 27 lists nine, and Task 35 repeats the `--help` checks.\n- Task 12 mixes id functions, record payloads and store methods, and should be split.",
+      "file_ref": null,
+      "category": "proportionality",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/426-tasks.slice-cases.md:58"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The Task 5 test pointer leads to the wrong file",
+      "description": "Task 5 says to add tests to the keys file under `tests/config/` and to grep for `metrology.judge_timeout_s` to find the pattern. That grep returns `tests/metrology/test_config.py`. `tests/config/test_keys.py` exists, so name it directly.",
+      "file_ref": null,
+      "category": "instruction-clarity",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/426-tasks.slice-cases.md:99"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The shared-name rule points at an unnamed module",
+      "description": "The Context Summary says `SliceCandidateRejection` is defined \"only in the slice models module (Task 11)\". Task 11 puts it in `metrology/benchmark_models.py` and moves it only if that file would exceed about 300 lines. Name one module. The design (line 321) says `benchmark_models.py`.",
+      "file_ref": null,
+      "category": "instruction-clarity",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/426-tasks.slice-cases.md:51"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Tasks add modules that the design's component list omits",
+      "description": "Tasks add `benchmark/pairwise_report.py` (Task 37), and possibly `benchmark/slice_report.py`, `metrology/slice_case_models.py` and `replay/judge_pair.py`. None appear in the design's Component Structure. Task 42 names some of them. Record them in the design during Task 1 so the design and the code agree.",
+      "file_ref": null,
+      "category": "design-drift",
+      "raw_category": null,
+      "location": "project-documents/user/slices/426-slice.slice-cases.md:76"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`is_dropped` is described as a set lookup, but the set includes prefixes",
+      "description": "Task 7 defines `is_dropped(path)` as \"true when the path is in the dropped set\". The set includes directory prefixes (`{DOCS_ROOT}/user/tasks/` and the others), so the function must match prefixes. Add a test for a nested dropped path, such as a file under `project-documents/user/tasks/`. The current tests cover the root files and a nested path that is not under `DOCS_ROOT`.",
+      "file_ref": null,
+      "category": "instruction-clarity",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/426-tasks.slice-cases.md:113"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Task 7 creates the `benchmark` package before slice 421 does",
+      "description": "The project state says `src/squadron/benchmark/` does not exist yet. Task 7 creates it before 421 does. If 421 also creates `benchmark/__init__.py`, the two branches will conflict. I did not read 421's file list in full, so this is unverified.",
+      "file_ref": null,
+      "category": "merge-risk",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/426-tasks.slice-cases.md:113"
+    },
+    {
+      "severity": "PASS",
+      "title": "Success criteria map to tasks",
+      "description": "Apart from the discovery-record gap above, every functional and technical criterion has a task. Build outcomes and case fields are covered by Tasks 13\u201318 and 20. Fixture rejections are covered by Tasks 6, 13\u201315 and 18. Run and cf isolation are covered by Tasks 24\u201326. Grade and report are covered by Tasks 36 and 41. Normalization is covered by Task 7. Over-size, forfeits and absences are covered by Tasks 27, 29, 31\u201332, 34 and 38. Failure-signal tests are in Tasks 4, 12, 13, 19, 24, 31, 34 and 35. Unchanged `tests/replay/` is covered by Tasks 3\u20134. Hand-computed pairwise tests are in Task 37. Mixed kinds and yield are covered by Tasks 22 and 39. Task 1 covers all ten gap bullets.",
+      "file_ref": null,
+      "category": "coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/426-tasks.slice-cases.md:58"
+    },
+    {
+      "severity": "PASS",
+      "title": "Dependencies are acyclic and the BLOCKED gate is well formed",
+      "description": "The forward references (Task 16 to `keep` in 21, Task 21 to yield rows in 22, Task 30 to the cap hook in 33) are injected, not circular. The Task 8 gate is the named `BLOCKED:` mechanism. The names it checks match the code where I verified them: `_register_with_cf` and `_initiative` (`src/squadron/replay/sandbox.py:168\u2013181`), `_call` and `_judge_pair` (`src/squadron/replay/judging.py:169,183`), `_KINDS`, `_ArtifactKind` and `_suffix_order` (`src/squadron/replay/start_point.py:23,28,124`), `judge_timeout_s` (`src/squadron/config/keys.py:350`) and `get_positive_int_config` (`src/squadron/config/manager.py:145`). The Task 4 extraction also matches the code, because `ProcessRunner.run` already accepts `env` (`src/squadron/core/process_runner.py:76\u201384`).",
+      "file_ref": null,
+      "category": "sequencing",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/426-tasks.slice-cases.md:121"
+    },
+    {
+      "severity": "PASS",
+      "title": "Test-with pattern and commit markers",
+      "description": "Each implementation task carries its tests as sub-items. There are 21 `**Commit**:` markers, at tested points, and no marker follows every task. Unmarked work (Tasks 10, 13, 15\u201318, 20\u201321, 24, 27\u201329) commits at the next marker. The spike's DEVLOG entry from Task 10 will therefore ride into the next commit.",
+      "file_ref": null,
+      "category": "commit-cadence",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/426-tasks.slice-cases.md:66"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "functional-gap",
+      "raw_category": null,
+      "summary": "Discovery rejections are never recorded, so the per-index criterion and yield counts are unmet",
+      "location": "project-documents/user/tasks/426-tasks.slice-cases.md:153",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "instruction-error",
+      "raw_category": null,
+      "summary": "The cf spike runs bare `sq` under a scrubbed PATH",
+      "location": "project-documents/user/tasks/426-tasks.slice-cases.md:135",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "underspecified-contract",
+      "raw_category": null,
+      "summary": "Requalification has no way to recover the slice index and landing sha from a case",
+      "location": "project-documents/user/tasks/426-tasks.slice-cases.md:227",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "test-coverage",
+      "raw_category": null,
+      "summary": "The \"load tests\" are placed in functional files with no CI gate",
+      "location": "project-documents/user/tasks/426-tasks.slice-cases.md:276",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "sequencing",
+      "raw_category": null,
+      "summary": "Discovery and task-text work waits behind the 421\u2013425 gate without needing it",
+      "location": "project-documents/user/tasks/426-tasks.slice-cases.md:153",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "traceability",
+      "raw_category": null,
+      "summary": "Task 1 changes design behavior without a traceable decision record",
+      "location": "project-documents/user/tasks/426-tasks.slice-cases.md:48",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "concern",
+      "category": "proportionality",
+      "raw_category": null,
+      "summary": "The file is overweight: 42 tasks, several too granular, some restating criteria",
+      "location": "project-documents/user/tasks/426-tasks.slice-cases.md:58",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "note",
+      "category": "instruction-clarity",
+      "raw_category": null,
+      "summary": "The Task 5 test pointer leads to the wrong file",
+      "location": "project-documents/user/tasks/426-tasks.slice-cases.md:99",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "note",
+      "category": "instruction-clarity",
+      "raw_category": null,
+      "summary": "The shared-name rule points at an unnamed module",
+      "location": "project-documents/user/tasks/426-tasks.slice-cases.md:51",
+      "location_verified": true
+    },
+    {
+      "id": "F010",
+      "severity": "note",
+      "category": "design-drift",
+      "raw_category": null,
+      "summary": "Tasks add modules that the design's component list omits",
+      "location": "project-documents/user/slices/426-slice.slice-cases.md:76",
+      "location_verified": true
+    },
+    {
+      "id": "F011",
+      "severity": "note",
+      "category": "instruction-clarity",
+      "raw_category": null,
+      "summary": "`is_dropped` is described as a set lookup, but the set includes prefixes",
+      "location": "project-documents/user/tasks/426-tasks.slice-cases.md:113",
+      "location_verified": true
+    },
+    {
+      "id": "F012",
+      "severity": "note",
+      "category": "merge-risk",
+      "raw_category": null,
+      "summary": "Task 7 creates the `benchmark` package before slice 421 does",
+      "location": "project-documents/user/tasks/426-tasks.slice-cases.md:113",
+      "location_verified": true
+    },
+    {
+      "id": "F013",
+      "severity": "pass",
+      "category": "coverage",
+      "raw_category": null,
+      "summary": "Success criteria map to tasks",
+      "location": "project-documents/user/tasks/426-tasks.slice-cases.md:58",
+      "location_verified": true
+    },
+    {
+      "id": "F014",
+      "severity": "pass",
+      "category": "sequencing",
+      "raw_category": null,
+      "summary": "Dependencies are acyclic and the BLOCKED gate is well formed",
+      "location": "project-documents/user/tasks/426-tasks.slice-cases.md:121",
+      "location_verified": true
+    },
+    {
+      "id": "F015",
+      "severity": "pass",
+      "category": "commit-cadence",
+      "raw_category": null,
+      "summary": "Test-with pattern and commit markers",
+      "location": "project-documents/user/tasks/426-tasks.slice-cases.md:66",
+      "location_verified": true
+    }
+  ],
+  "template_name": "tasks",
+  "input_files": {
+    "input": "project-documents/user/tasks/426-tasks.slice-cases.md",
+    "against": "project-documents/user/slices/426-slice.slice-cases.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261115-design/wt/426-tasks"
+  },
+  "timestamp": "2026-11-16T07:34:28.141774",
+  "model": "claude-haiku-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 11,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-haiku-5-5",
+  "answering_models": [
+    "claude-haiku-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 15,
+    "in_fences": 0,
+    "in_section": 15,
+    "surviving": 15
+  },
+  "effort": "xhigh",
+  "profile": "sdk",
+  "turns": 12,
+  "prompt_tokens": 783421,
+  "cached_tokens": 608833,
+  "cache_write_tokens": 174576,
+  "completion_tokens": 52411,
+  "reasoning_tokens": null,
+  "duration_seconds": 233.8284157498274,
+  "cost_usd": 0.33489537,
+  "cost_basis": "provider"
+}

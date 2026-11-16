@@ -1,0 +1,75 @@
+{
+ "review": "r06",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Task 28: frontmatter on the diff-judge prompt will be sent to the judge",
+   "description": "Task 28 says to add `data/benchmark/pairwise-diff-judge.md` \"(frontmatter per `file-naming-conventions`)\" and to load it \"as `replay/judge.py` loads its own\". `judge_prompt()` at `src/squadron/replay/judge.py:25-27` returns `read_text()` unchanged. 177's `src/squadron/data/replay/pairwise-judge.md` has no frontmatter. So the YAML block would go into every judge prompt and into `JudgeRef.prompt_hash`. Pick one:\n- drop the frontmatter requirement for packaged prompt data, matching 177; or\n- load the file through `strip_frontmatter` (`judge.py:65`) and hash the stripped text.\n\nAdd a test in `test_diff_prompt.py` that the built prompt does not start with `---`.",
+   "location": "project-documents/user/tasks/426-tasks.slice-cases.md:248"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Tasks 29\u201330: the over-size check may run on raw diffs",
+   "description": "D14 measures the prompts the judge would actually see, which hold normalized diffs. But:\n- Task 27's `Contestant` holds \"diff bytes\".\n- Task 29's `check_size` \"build[s] every pair's longer prompt\" and never mentions normalization.\n- Normalization is first introduced in Task 30's per-case loop.\n- Task 32's `plan_judge` calls `check_size` before that loop runs.\n\nA junior implementer will likely measure raw diffs. A large `uv.lock` or DEVLOG change would then mark a case `over_size` even though the judge would never see that text. The fix: normalize once, when contestants are built (Task 27 or 32), and pass `NormalizedDiff.text` to both `check_size` and the loop. Add a test in Task 29 where a raw diff is over the limit but its normalized form fits, and the case is judged.",
+   "location": "project-documents/user/tasks/426-tasks.slice-cases.md:242-258"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "`judge` with no `--max-cost`: Click exits 2, which collides with \"cap reached\"",
+   "description": "The contract sets exit 2 for \"run cap reached\" and exit 1 for a refusal. The success criteria say `judge` without `--max-cost` \"refuses and names what is missing\". Task 35 writes the option as `--max-cost USD` (not bracketed, so required), and Task 31 has a \"no run cap\" refusal. If Typer declares the option required, Click rejects a missing value with its own usage error and exit 2. That never reaches the Task 31 refusal and looks the same as a cap stop. Task 35 should declare `--max-cost` optional at the Typer level, so `plan_judge` gives the refusal and exit 1. Its test should assert exit 1 with the message naming `--max-cost`, not just \"each refusal of Task 31\".",
+   "location": "project-documents/user/tasks/426-tasks.slice-cases.md:285-286"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Task 17 rebuilds 422's repeat-and-exclude step",
+   "description": "The design lists \"the repeat-and-exclude step\" as a 422 prerequisite (Dependencies \u2192 422; Consumes \u2192 \"the repeat step \u2026 unchanged\"). Task 17 instead describes the logic from scratch: run N times, classify `flaky` and `fails_at_reference`. Task 8's gate (line 122) checks `test_sets` and `QualificationOutcome` but not 422's repeat function. That invites a second copy of the classification that could drift from 422 D9. Add 422's repeat-and-exclude function to the Task 8 grep list, and have Task 17 call it and test only that its result is mapped onto `excluded_with_reasons`.",
+   "location": "project-documents/user/tasks/426-tasks.slice-cases.md:179"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Yield rows are never wired into `slice-cases build`",
+   "description": "The API contract says the build prints one line per candidate, \"then the slice-case yield rows\". Task 21 says \"until then print the lines only\". Task 22's success line says \"Task 21's command prints the rows\", but Task 22 has no step that changes the command and no CLI test that checks for the rows. Either move Task 22 before Task 21, so Task 21 wires and tests the rows directly, or add a bullet to Task 22 that edits `benchmark_slice.py` and extends `test_benchmark_slice_build.py` to assert the rows follow the candidate lines.",
+   "location": "project-documents/user/tasks/426-tasks.slice-cases.md:201-209"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "The empty-regression fixture is built but never qualified",
+   "description": "The criterion \"Fixture slices produce each rejection: \u2026 an empty regression selection\" asks for a fixture-driven rejection. Task 6 builds \"a slice whose every test changed and one whose regression selection would be empty\". The only `no_regression_signal` test is in Task 18, and it uses adapter and sandbox doubles, so neither builder goes through qualification. The \"every test changed\" builder traces to no criterion at all: D5 says test-data changes are not rejected, and nothing asserts that. Choose one:\n- run one Task 18 test on the empty-regression builder through the real Python adapter; or\n- drop both builders and say the criterion is met by the double-based test.\n\nEither way, delete the \"every test changed\" builder.",
+   "location": "project-documents/user/tasks/426-tasks.slice-cases.md:105,185"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "Proportionality: the \"load tests\" are not needed, repeat other tests, and have no CI wiring",
+   "description": "The slice design states no NFR, so no load test is required. The Context Summary still adds two \"load tests\":\n- **Task 33's \"network-layer load test\" (200-pair plan, slow and hung dispatcher):** repeats Task 3 (a hung dispatcher is cut at `timeout_s`), Task 30 (a timed-out pair is unrecorded, logged at ERROR, counted, and later pairs still run), and Task 33's own cap test. Cut it.\n- **Task 24's eight-way concurrent `invoke`:** reasonable as an isolation unit test (each sandbox has its own home), but it should not be called a load test.\n\nCalling them load tests also raises the CI-gating rule, and no CI wiring task exists. Remove the label and line 53, and keep Task 24's test as an ordinary unit test. Two smaller cuts:\n- Task 3's separate \"hung dispatcher\" case duplicates its own \"first call times out\" case.\n- Task 21's `--help` / `option.hidden` check duplicates Task 40's comparison against `--help`.",
+   "location": "project-documents/user/tasks/426-tasks.slice-cases.md:53,276"
+  },
+  {
+   "i": 7,
+   "severity": "NOTE",
+   "title": "Task 7 checks the normalization cases one at a time, not as one combined diff",
+   "description": "The criterion describes a single test diff that has DEVLOG, CHANGELOG, task, review, slice-document and `uv.lock` changes, plus a rename and a binary file, and normalizes to code changes, the kept rename and the marker line. Task 7 tests each element separately. Adding one combined synthetic case would match the criterion word for word and catch problems that only appear when the sections interact.",
+   "location": "project-documents/user/tasks/426-tasks.slice-cases.md:114"
+  },
+  {
+   "i": 8,
+   "severity": "NOTE",
+   "title": "The spike comes after Tasks 2\u20139, not first as the design said",
+   "description": "The design's mitigation is \"The D9 spike runs first\". The task file puts the extractions, the precondition gate and `with_tools` first. That is justified: the spike needs `CfRegistration` (Task 4) and `with_tools` (Task 9), and Task 1 records the change in the design. If the spike fails, the branch keeps refactors that are useful anyway. No change needed.",
+   "location": "project-documents/user/tasks/426-tasks.slice-cases.md:50,133"
+  },
+  {
+   "i": 9,
+   "severity": "NOTE",
+   "title": "The spike's DEVLOG entry lands in the records commit",
+   "description": "Task 10 has no commit marker, so its DEVLOG entry goes into Task 12's `feat: add slice qualification\u2026` commit. A `docs:` marker after Task 10 would keep the spike result in its own commit. This is optional.",
+   "location": "project-documents/user/tasks/426-tasks.slice-cases.md:133-151"
+  }
+ ]
+}

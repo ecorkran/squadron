@@ -1,0 +1,243 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "In replay, the producer's own report decides whether a commit happens, so its claims affect the grade",
+      "description": "D4 has the commit action refuse to commit in three cases:\n- the agent's self-reported `failed_before_change` is not `true`\n- any reported gate has a non-zero `exit_code`\n- `failing_tests` or `gates` is empty\n\nUnder 424, the replay stops at the producer's committed tree. The architecture also says \"a failure the config caused (the producer \u2026 committed nothing) is a fail for that config\" (arch:67) and \"A producer's claim that tests pass is never evidence\" (arch:48). Together these give the wrong incentive:\n- A producer that honestly reports a failing lint gate commits nothing and is scored as a fail.\n- A producer that over-reports gets a commit and is graded on its merits.\n\nSo the self-report gates the benchmark outcome, and it rewards dishonest reports over honest ones. The slice says \"425 grades on its own and does not trust the report\" (line 235). That is true of grading, but this check runs before grading.\n\nFix: keep the production refusal. Then state either of these:\n- (a) Under replay, report defects other than `blocked` are recorded but do not stop the commit. This needs a mode signal; `commit-to: current` is already there and could carry it.\n- (b) The behaviour is intended, with an explicit note that 424/425 count a `fix_report` refusal as a harness-classified outcome, not a config fail.\n\nEither way, record the decision so 424 and 425 don't each make it differently.",
+      "file_ref": null,
+      "category": "architecture",
+      "raw_category": null,
+      "location": "project-documents/user/slices/423-slice.fix-pipeline.md:155-158"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Drops the slice plan's MCP parity criterion without updating the plan",
+      "description": "The slice plan entry for 423 requires \"CLI, slash command and MCP give identical results\" (420-slices.model-benchmark.md:87). The slice excludes MCP and narrows parity to the CLI and `/sq:run` (D9).\n\nThe reasoning holds up. Squadron has no MCP server: `src/squadron/server/daemon.py` serves HTTP/UDS through uvicorn, not MCP. But removing a criterion the plan assigned to this slice still has to be visible in the plan. Fix: amend the 423 entry in the slice plan to drop the MCP criterion, or point it to a future issue, so later slices and reviews don't treat it as owed.",
+      "file_ref": null,
+      "category": "scope",
+      "raw_category": null,
+      "location": "project-documents/user/slices/423-slice.fix-pipeline.md:43"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Adds a dependency on 422 that the slice plan says does not exist",
+      "description": "The slice plan says 423 has \"no dependencies in this initiative \u2026 it can be built earlier\" (420-slices:88, 166). The slice declares `dependencies: [422]` for `CodeHost.get_issue` and the renderer with an optional cutoff.\n\n422 does provide exactly that:\n- `get_issue(locator, number) -> IssueSnapshot` (422:138)\n- \"With no cutoff (423's live fix) it renders \u2026 every comment\" (422:139)\n\nSo the integration point matches. The slice also limits the risk: file mode needs nothing from 422, and the fetched source is built last (step 4). Still, the plan's ordering note is now wrong, and 422 is the plan's High-risk slice. Update the plan entry's Dependencies line to name the partial dependency.",
+      "file_ref": null,
+      "category": "dependencies",
+      "raw_category": null,
+      "location": "project-documents/user/slices/423-slice.fix-pipeline.md:6"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Two failure modes in the prompt-only commit path are not listed",
+      "description": "`sq _commit --report-file {tmp_path}` relies on the session writing the report file. The doc does not say what happens if:\n- the file is missing, empty or not JSON\n- `git commit` itself fails, for example a pre-commit hook rejects it, which matters because squadron runs ruff in its hook\n\nThe likely answer for the first is \"the same `fix_report` refusal as no JSON object\". The likely answer for the second is \"whatever CommitAction already does\". Each could be stated in one line.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/423-slice.fix-pipeline.md:197"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`IssueSource.github` names a host even though access goes through the `CodeHost` abstraction",
+      "description": "The fetched path goes through `CodeHost`, but the recorded source value is `github`. Only one host exists today (422:366), so this costs nothing now. `fetched` (or the host's own name) would keep the record honest if another host is added.",
+      "file_ref": null,
+      "category": "naming",
+      "raw_category": null,
+      "location": "project-documents/user/slices/423-slice.fix-pipeline.md:140"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Walkthrough step 2 hard-codes `main` instead of the target",
+      "description": "`git checkout main` assumes the target is `main`. D5 and the project rules read it from `git.integration_branch`. Use the resolved target, as step 3 implicitly does.",
+      "file_ref": null,
+      "category": "documentation",
+      "raw_category": null,
+      "location": "project-documents/user/slices/423-slice.fix-pipeline.md:288"
+    },
+    {
+      "severity": "PASS",
+      "title": "The fix pipeline runs in a sandbox as the architecture requires",
+      "description": "The architecture requires the pipeline to run in a sandbox without GitHub access, using frozen text it is given, and committing to the sandbox branch (arch:117). The slice meets this:\n- `issue-file` together with `commit-to: current` makes no `gh` or cf calls.\n- `--io-dir` is reused, so 424 needs no new flag.\n- The run state records the source and a sha256 of the text, so 424 can confirm the replay used the frozen text.",
+      "file_ref": null,
+      "category": "architecture",
+      "raw_category": null,
+      "location": "project-documents/user/slices/423-slice.fix-pipeline.md#D7 \u2014 The fix step does not declare a Context Forge need"
+    },
+    {
+      "severity": "PASS",
+      "title": "One producer step, no embedded review, and the prompt's identity is recorded",
+      "description": "The step expands to `fix-context \u2192 dispatch \u2192 commit` with no review. That gives 424's producer-only mode a single step and nothing to strip. The prompt is one packaged data file used by both modes (D8), and its identity is recorded. This satisfies \"Replays run the production pipelines\" and the comparability goal.",
+      "file_ref": null,
+      "category": "architecture",
+      "raw_category": null,
+      "location": "project-documents/user/slices/423-slice.fix-pipeline.md#D1 \u2014 A `fix` step type, not a pipeline of generic steps"
+    },
+    {
+      "severity": "PASS",
+      "title": "The fetch path and preconditions are given explicit failure handling",
+      "description": "- **Fetch path:** timeout (30 s, `HostCommandTimeoutError`), not-found, auth and transport errors each fail the action before dispatch, with no retry and no fallback.\n- **Issue file:** a missing, empty or non-UTF-8 file fails before any model call.\n- **Preconditions and checks:** dirty tree, wrong branch, detached HEAD and a moved HEAD each have a named refusal, logged at WARNING. Unit tests cover the timeout and the \"no CodeHost in file mode\" case.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/423-slice.fix-pipeline.md:136-137"
+    },
+    {
+      "severity": "PASS",
+      "title": "The cost-cap requirement is restated with a test",
+      "description": "The architecture's spend requirement (`pipeline.max_cost_usd`, `--max-cost`) is restated. The slice has a success criterion and a walkthrough step that check `failure_kind: cost_cap` and that nothing is committed.",
+      "file_ref": null,
+      "category": "nfr",
+      "raw_category": null,
+      "location": "project-documents/user/slices/423-slice.fix-pipeline.md:252"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "architecture",
+      "raw_category": null,
+      "summary": "In replay, the producer's own report decides whether a commit happens, so its claims affect the grade",
+      "location": "project-documents/user/slices/423-slice.fix-pipeline.md:155-158",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "scope",
+      "raw_category": null,
+      "summary": "Drops the slice plan's MCP parity criterion without updating the plan",
+      "location": "project-documents/user/slices/423-slice.fix-pipeline.md:43",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "note",
+      "category": "dependencies",
+      "raw_category": null,
+      "summary": "Adds a dependency on 422 that the slice plan says does not exist",
+      "location": "project-documents/user/slices/423-slice.fix-pipeline.md:6",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "note",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "Two failure modes in the prompt-only commit path are not listed",
+      "location": "project-documents/user/slices/423-slice.fix-pipeline.md:197",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "naming",
+      "raw_category": null,
+      "summary": "`IssueSource.github` names a host even though access goes through the `CodeHost` abstraction",
+      "location": "project-documents/user/slices/423-slice.fix-pipeline.md:140",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "documentation",
+      "raw_category": null,
+      "summary": "Walkthrough step 2 hard-codes `main` instead of the target",
+      "location": "project-documents/user/slices/423-slice.fix-pipeline.md:288",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "pass",
+      "category": "architecture",
+      "raw_category": null,
+      "summary": "The fix pipeline runs in a sandbox as the architecture requires",
+      "location": "project-documents/user/slices/423-slice.fix-pipeline.md#D7 \u2014 The fix step does not declare a Context Forge need",
+      "location_verified": null
+    },
+    {
+      "id": "F008",
+      "severity": "pass",
+      "category": "architecture",
+      "raw_category": null,
+      "summary": "One producer step, no embedded review, and the prompt's identity is recorded",
+      "location": "project-documents/user/slices/423-slice.fix-pipeline.md#D1 \u2014 A `fix` step type, not a pipeline of generic steps",
+      "location_verified": null
+    },
+    {
+      "id": "F009",
+      "severity": "pass",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "The fetch path and preconditions are given explicit failure handling",
+      "location": "project-documents/user/slices/423-slice.fix-pipeline.md:136-137",
+      "location_verified": true
+    },
+    {
+      "id": "F010",
+      "severity": "pass",
+      "category": "nfr",
+      "raw_category": null,
+      "summary": "The cost-cap requirement is restated with a test",
+      "location": "project-documents/user/slices/423-slice.fix-pipeline.md:252",
+      "location_verified": true
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/423-slice.fix-pipeline.md",
+    "against": "project-documents/user/architecture/420-arch.model-benchmark.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261115-design/wt/423-design"
+  },
+  "timestamp": "2026-11-16T07:23:46.102421",
+  "model": "claude-opus-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 7,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-opus-5-5",
+  "answering_models": [
+    "claude-opus-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 10,
+    "in_fences": 0,
+    "in_section": 10,
+    "surviving": 10
+  },
+  "effort": "medium",
+  "profile": "sdk",
+  "turns": 8,
+  "prompt_tokens": 557575,
+  "cached_tokens": 477101,
+  "cache_write_tokens": 80462,
+  "completion_tokens": 5527,
+  "reasoning_tokens": null,
+  "duration_seconds": 64.91100645810366,
+  "cost_usd": 0.8504752999999998,
+  "cost_basis": "provider"
+}

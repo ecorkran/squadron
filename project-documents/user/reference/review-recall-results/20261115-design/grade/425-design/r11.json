@@ -1,0 +1,47 @@
+{
+ "review": "r11",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Report row key contradicts 420's D6 identity rule and the slice's own Dependencies",
+   "description": "D13 keys rows by `(alias, model, profile, effort_sent)`. Line 58 of the same slice says rows group by 420's D6 rule: (model, profile, effort sent, `tool_use`, `max_output_tokens`). The 420 slice's D6 says this rule replaces the architecture's alias-based tuple. With D13 as written:\n- Two aliases that send identical requests become separate rows.\n- One alias whose `tool_use` or `max_output_tokens` changed between runs stays in one row.\n\nThat breaks the architecture goal that \"results stay comparable over time\" and only matching results are compared. 420 ships `config_identity` as a private function in `replay/report.py` and no shared type. So the slice must also say whether 425 promotes it to a shared helper or writes its own, so that two copies of the rule don't drift apart. Fix D13 to use the D6 key and name where the key function lives.",
+   "location": "project-documents/user/slices/425-slice.grading-and-paired-report.md:263"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Reinstall failure is always a config absence, even when the harness caused it",
+   "description": "D5 records any failed `uv sync --locked` after a dependency change as `producer_env_unresolvable` and charges it to the config. A reinstall can also fail for harness reasons: the network is down, the index is unreachable, the cache is corrupt, or the call hangs. The architecture's \"Absent is not zero\" principle says \"the environment did not resolve\" is a harness absence that drops the case for every config. Under D5, a network blip during grading counts as a fail for that config.\n\nThe design also names no timeout for the reinstall. That leaves the \"what if this hangs\" failure mode unanswered for this I/O path.\n\nFix:\n- Classify the failure: a lock that doesn't resolve means config, a network or timeout failure means harness `environment_failed`.\n- Run the reinstall under a named timeout.",
+   "location": "project-documents/user/slices/425-slice.grading-and-paired-report.md:193-197"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Report has no case-kind split, so the architecture's separate-tables rule depends on future edits",
+   "description": "The architecture says reports must keep fix cases and slice cases in separate tables. Its reason is that slice cases are \"weaker evidence\". 426's success criteria repeat this. D13 does not group by case kind:\n- the per-config pass fraction averages over all included cases;\n- D14's paired bootstrap resamples over all cases.\n\nIf a benchmark ever mixes kinds, a slice case passes on \"no regressions\" alone (line 464) and is pooled with fix cases. The Integration Requirements say 426 can add its table \"without editing `grade_runner.py`\", but `bench_report.py` names no extension point. Fix: make case kind a grouping key in `BenchmarkReport` now, with one table and one set of paired comparisons per kind. 426 then only adds rendering.",
+   "location": "project-documents/user/slices/425-slice.grading-and-paired-report.md#D13 \u2014 Report contents and order"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Grading cap departs from the architecture, and the printed bound isn't a real bound",
+   "description": "The architecture's design goal is that a benchmark run \"stops at its own cap, which covers grading and judging as well as the replays\", with the total bound stated before any dispatch. D9 instead makes grading a separate command with its own cap. The justification is reasonable: separate lock scopes, and the ability to regrade under a new reviewer. But the slice only says the architecture \"should say so\" and that 424's sentence \"should change\", without changing either. Until they change, three documents disagree on the cost model, and 426 has no settled rule for where judging cost goes.\n\nSeparately, the bound sample (lines 229-230) prints \"at most $15.18\". But D9 itself says the per-review figure is an estimate and no per-review cap exists. A review that costs more than the largest observed cost makes that number false. The architecture's replay overshoot is backed by a real per-pipeline cap; this one is not.\n\nFix:\n- Amend the architecture's Cost section and 424's sentence as part of this slice. Also state where 426's judging spend falls.\n- Change the bound wording to say it is an estimate, for example \"estimated overshoot \u2264 one review at max observed\".",
+   "location": "project-documents/user/slices/425-slice.grading-and-paired-report.md:220-236"
+  },
+  {
+   "i": 4,
+   "severity": "NOTE",
+   "title": "Sample-count estimate reaches back into 422's yield command",
+   "description": "The slice plan asks for the estimate to be \"recorded and shown in the report\". Persisting `SampleSizeEstimate` meets that. Showing it in `sq benchmark yield` is extra: 422's command gets a read of a 425 record type (`latest_estimate`), which adds a backward edge from an earlier slice to a later one. It is small and useful, but it could be dropped. The report already shows the measured estimate, and 422's analytic bound can stay as it is.",
+   "location": "project-documents/user/slices/425-slice.grading-and-paired-report.md:282-291"
+  },
+  {
+   "i": 5,
+   "severity": "NOTE",
+   "title": "Grading rebuilds a fresh sandbox instead of reusing the producer's",
+   "description": "The architecture says grading runs \"in the same sandbox\". D1 rebuilds the tree from `start_sha` plus the stored diff, and checks that the environment digest matches the replay's. The outcome is equivalent, and it is what makes regrading and resume possible. When the architecture is amended for D9, this wording should be updated too.",
+   "location": "project-documents/user/slices/425-slice.grading-and-paired-report.md:161-162"
+  }
+ ]
+}

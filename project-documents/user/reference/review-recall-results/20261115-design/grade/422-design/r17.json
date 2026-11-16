@@ -1,0 +1,68 @@
+{
+ "review": "r17",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "`FixQualification` in `metrology/` embeds a type owned by `benchmark/`",
+   "description": "`FixQualification` is placed in `metrology/benchmark_models.py` and added as a payload on `MetrologyRecord` (lines 335-352). Its `environment` field is 421's `EnvironmentIdentity`, which 421 defines in `benchmark/adapter.py`. 421 states that `benchmark/` depends on `metrology/` and that `metrology/` does not depend on `benchmark/`. As written, the store's envelope model would import from `benchmark/`, reversing that direction.\n\nLine 395 says 421 is \"used unchanged\", so the slice cannot quietly move the type. The design should pick one:\n- relocate `EnvironmentIdentity` to `metrology/` as a named 421 change, or\n- store only the digest plus a serialized identity in the record.",
+   "location": "project-documents/user/slices/422-slice.fix-case-qualification-and-yield-report-keystone.md:79-82"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Which qualification record counts is undefined once a commit has more than one",
+   "description": "The record id is keyed on `(project, commit, env digest or \"pre\")`, so one commit can hold several records. This happens after a `uv` or interpreter upgrade changes the digest. It also happens when a commit moves between a pre-sandbox rejection and a sandbox outcome, for example when a later commit closes the same issue and turns it into `multiple_closing_commits`.\n\nThe gaps this leaves:\n- **Yield counts.** `yield_report` \"reads `FixQualification` records for the given projects\" (line 114) with no selection rule, so counts can double. That breaks the plan's requirement for a qualified count per project.\n- **Record-count criterion.** \"The number of records equals the number of closing commits\" (line 373) holds only on a first build.\n- **Pre-sandbox reuse.** The reuse rule (line 241) does not say whether `\"pre\"` records are reused. `issue_edited_after_fix` and `multiple_closing_commits` are not stable over time.\n- **Case-set membership.** `build --set` writes \"the current repository's qualified ids\" (line 271), but `--commit` limits the run (line 302) and a transient `harness_error` removes a candidate. Either one would write a new, smaller set version.\n- **Walkthrough step 6.** It expects `yield --json` to show the case set name and version (line 426), which no `FixQualification` field carries.\n\nState the selection rule (for example, latest record per commit for the current environment) and what feeds `write_case_set`.",
+   "location": "project-documents/user/slices/422-slice.fix-case-qualification-and-yield-report-keystone.md:240-241"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Re-qualification in a different environment can yield a different case id, and the 424 contract does not cover it",
+   "description": "`excluded_tests` and `hidden_tests` are part of the case id (line 227, 421 D1). They come out of the repeated runs, so they depend on the environment. When 424 calls `qualify_candidate` for a case whose environment differs, the result can be \"qualified\" with a different exclusion or hidden list, which is a different `case_id` that is not in the versioned set.\n\nThe design covers only \"valid record\" and \"no longer qualifies \u2192 dropped\". The architecture requires every result to reference the case and the set version it ran under, and a re-qualified case to be either kept or dropped with a reason. Define the third outcome: drop with a reason such as `case_identity_changed`, or some other explicit rule.",
+   "location": "project-documents/user/slices/422-slice.fix-case-qualification-and-yield-report-keystone.md:242"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Known boundary gaps admit tests where the architecture requires exclusion",
+   "description": "The architecture says: \"Where a check cannot decide, the case is excluded with that reason, never admitted.\" D6 lists two cases the trace cannot see and admits both:\n- reading a non-callable project constant through an allowed module, and\n- module-level instances whose type is defined outside the project.\n\nOnly project modules, classes and functions are recorded as static references. A test can therefore import any non-exported module-level object from an internal module (a registry dict, a Typer app, a client instance) and pass the \"packaging boundary only\" rule.\n\nThe in-process \"drive the CLI\" example also passes through this gap, not through the allowed set. The script target is stored as `(module, attr)`, but nothing matches a referenced instance against it.\n\nA lighter rule would close this without the rejected AST-only approach. Treat any test-side global bound to an object that came from a project module as a reference. Allow it only if it is identical to a resolved allowed target, and otherwise return `reaches_past_boundary` or `boundary_undecidable`.",
+   "location": "project-documents/user/slices/422-slice.fix-case-qualification-and-yield-report-keystone.md:194"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Failure modes on the new I/O paths are only partly enumerated",
+   "description": "Suite timeouts and `CodeHostError` are handled. These are not:\n- **Unbounded sandbox runs.** `collect`, `trace` and the boundary resolver are new adapter methods that do not go through `run_suite`. The resolver imports every top-level package. No timeout key or bound is named for any of them, and a hang has no stated outcome. Line 389 tests only a resolver crash.\n- **`gh` hang.** No timeout is stated for the `get_issue` call.\n- **Comment pagination.** `get_issue` is \"one GraphQL query\" (line 138), but the comments connection is paginated. An issue with more comments than one page would silently produce truncated `task_text` and skip the edited-after check on the missing comments. Either paginate or reject with a reason.\n- **Deterministic hangs at the parent.** A hidden test that hangs at the parent, where the bug being fixed is a hang, hits the suite timeout and becomes `harness_error` (line 177). `harness_error` is never reused (line 120), so every rebuild re-runs it for the full timeout and it never appears as a rejection reason in the yield. A per-node timeout at the parent should be a `TestRejection`, not a harness error.",
+   "location": "project-documents/user/slices/422-slice.fix-case-qualification-and-yield-report-keystone.md:285"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Title edits are outside the edited-after-fix check",
+   "description": "The frozen text includes the issue title, but `issue_edited_after_fix` checks only `lastEditedAt` on the body and comments. If that field does not reflect title renames (GitHub records those as separate timeline events \u2014 worth confirming), a title rewritten after the fix to describe the cure enters `task_text`. That is the leak the architecture's frozen-issue-text principle exists to prevent. Either check the rename events or state that the title is covered.",
+   "location": "project-documents/user/slices/422-slice.fix-case-qualification-and-yield-report-keystone.md:140-141"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "The no-cutoff render mode is scope for 423 and creates an undeclared dependency",
+   "description": "D2 adds a no-cutoff rendering path \"for 423's live fix\". Nothing in this slice uses it. The slice plan says 423 has no dependencies in this initiative and can be built earlier, and this slice's `interfaces` frontmatter lists only 424, 425 and 426. Cut the mode here and let 423 add it against `get_issue`, or declare the 423 interface in both documents.",
+   "location": "project-documents/user/slices/422-slice.fix-case-qualification-and-yield-report-keystone.md:139"
+  },
+  {
+   "i": 7,
+   "severity": "NOTE",
+   "title": "Fairness methods live in a separate protocol, not on 421's seam",
+   "description": "421 D9 expected 422 to add fairness-rule methods to `BenchmarkAdapter`. This slice defines `FixCaseAdapter` separately and adds a second mapping in 421's `registry.py`. The interface-segregation reasoning is sound and the registry stays the only importer of concrete adapters. 421's text should be updated to match.",
+   "location": "project-documents/user/slices/422-slice.fix-case-qualification-and-yield-report-keystone.md:284"
+  },
+  {
+   "i": 8,
+   "severity": "NOTE",
+   "title": "The separability bound is not an upper bound, and the design says so",
+   "description": "The arithmetic is consistent: k=3 and d=0.20 give n=33, matching the sample output. The bound ignores case-to-case variation in the true difference, so \"enough cases\" can be optimistic. The report prints that caveat beside the answer and 425 replaces it with the measured paired bootstrap. That satisfies the plan's \"states the separability answer\" without simulating data.",
+   "location": "project-documents/user/slices/422-slice.fix-case-qualification-and-yield-report-keystone.md:256-260"
+  }
+ ]
+}

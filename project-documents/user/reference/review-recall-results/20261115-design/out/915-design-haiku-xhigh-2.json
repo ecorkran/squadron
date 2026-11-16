@@ -1,0 +1,243 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "Resumed round re-enters with no prior-round outputs, breaking 910 feedback and the 305 gate",
+      "description": "D3 sets the prior-round context to empty on re-entry and defers rehydration to \"911/305 territory.\" Neither consumer supports that:\n- Slice plan entry 8 (910 Part A) has dispatch read the prior round's REVIEW findings from `prior_outputs`. A resumed round N \u2265 2 would run the un-fed prompt, so the #42 symptom returns on every resume past round 1.\n- 305's Screen 0 treats \"no prior review result in `prior_outputs`\" as round 1 and returns `PASS` with `no_prior_round: true`. A resumed round \u2265 2 therefore passes the addressed leg without checking anything, which is the fail-open this slice exists to remove.\n- 305 lists resume rehydration as an unverified Phase 6 item (Decision 5, Risk Assessment). Its success criteria contain no resume test, so the hand-off points at work no slice owns.\n\nThe data is available: the doc says the prior results live in the paused run's `action_results`, which `_append_step` persists. Before implementation, the design must choose one of two options. Either rehydrate the prior round's review and action results from state on re-entry, with a test that a resumed round \u2265 2 receives the findings and the gate sees the prior review. Or refuse re-entry at iteration \u2265 2 with an explicit error until rehydration exists. The sentence saying this is \"stated in the round contract (Part C docs)\" should also be fixed, because Part C in scope covers only the WARNING.",
+      "file_ref": null,
+      "category": "integration",
+      "raw_category": null,
+      "location": "project-documents/user/slices/915-slice.loop-checkpoint-pause-resume-correctness.md:258-264"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Part B adds a resume capability without a scope classification",
+      "description": "The 900 architecture excludes \"new features or capabilities.\" The doc says there is \"no existing notion of 'resume into step X at iteration N'\" (lines 89-96), so Part B adds one. Slice plan entry 10 moved 305 out of 900 on exactly this ground. The parts cannot be split to shrink scope: Part A without Part B makes resume re-run the loop from round 1, which D1 forbids. The doc should state in Technical Scope why Part B is part of the bug fix (restoring the `max:`/`until:` contract on resume). It should also reconcile the \"Changing checkpoint semantics \u2014 unchanged\" exclusion (lines 137-138) with D1, which changes what a `Continue` resolution does inside a loop.",
+      "file_ref": null,
+      "category": "scope",
+      "raw_category": null,
+      "location": "project-documents/user/slices/915-slice.loop-checkpoint-pause-resume-correctness.md:121-123"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Pause-time WARNING fires on the designed path",
+      "description": "Under D1, a pause followed by resume is the intended path. The loop continues at the paused round and nothing is abandoned. Part C nonetheless logs a WARNING \"rounds not run\" on every in-loop pause. That is a false alarm on the happy path and labels suspension as abandonment. D4's justification (\"stays correct even if a future D1 makes abandonment intentional\") gets this backwards: the WARNING is wrong under the current D1. Under D1, abandonment happens only when the human chooses `Exit` or the run ends while paused. Move the WARNING to that point, or make the pause-time message INFO. Verification step 4 (lines 357-359) and the Part C test list must follow.",
+      "file_ref": null,
+      "category": "observability",
+      "raw_category": null,
+      "location": "project-documents/user/slices/915-slice.loop-checkpoint-pause-resume-correctness.md:271-280"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Silent clamp and DEBUG-only ignore break the observability rules",
+      "description": "`start_from_iteration` is \"clamped to `>= 1`\" when the target is a loop. That is a silent fallback, which CLAUDE.md forbids. The non-loop case is logged at DEBUG. A non-loop target carrying a non-zero iteration means the state and the pipeline disagree, which is a WARNING-level event under the failure-mode rule in `review-code.md`, and it needs a test asserting that signal. Replace the clamp with an explicit error or a WARNING, and raise the ignored case to WARNING.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/915-slice.loop-checkpoint-pause-resume-correctness.md:246-250"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Re-entry edge cases are unspecified",
+      "description": "The design does not say what happens in two cases:\n- **Recorded iteration absent or 0 for a paused loop.** The clamp turns this into a silent restart at round 1. That resets the count and grants extra rounds, against D1.\n- **Pipeline edited between pause and resume so `max` is below the recorded iteration.** `range(start, max + 1)` is empty. The doc does not say whether zero rounds takes the `on_exhaust:` branch, passes the loop, or errors. A pass is the trust defect this slice is meant to remove.\n\nEach case needs an explicit outcome, a log level, and a test.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/915-slice.loop-checkpoint-pause-resume-correctness.md:235-244"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "FAILED steps become resumable: outside the plan entry, and it widens `each:`/`fan_out:` restarts",
+      "description": "Slice plan entry 13 scopes the fix to checkpoint pauses inside loops. Adding `FAILED` changes resume for every pipeline, as the Risk Assessment acknowledges. The justification (same mechanism) is true, but the doc does not treat the change as a requirement. Its consequence is also unhandled. A failed `each:`/`fan_out:` step will now re-run all branches on resume, including branches that already succeeded, which duplicates model spend and side effects. The Known Limitation (lines 365-377) covers only a checkpoint inside an `each:` body and calls Part A \"a strict improvement\" without accounting for this. Either move `FAILED` to a follow-up with its own plan entry, or add the plan change and specify the `each:`/`fan_out:` handling for failed steps, with a test.",
+      "file_ref": null,
+      "category": "scope",
+      "raw_category": null,
+      "location": "project-documents/user/slices/915-slice.loop-checkpoint-pause-resume-correctness.md:204-208"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Overweight for a maintenance slice; cut the restated sections",
+      "description": "The 900 architecture asks for \"lighter-weight\" maintenance slices, and the plan rates this one 2/5. The doc runs to about 400 lines. Cut:\n- Verification Walkthrough steps 2\u20135 (lines 324\u2013363) restate the Success Criteria. Keep step 1, the reproduce-before-fix step.\n- Known Limitation (lines 365\u2013377) restates the Excluded bullet (lines 130\u2013136). Keep one.\n- Component Structure (lines 282\u2013292) repeats Technical Scope and D2\u2013D4.\n- \"Which loops are affected\" (lines 103\u2013112) repeats plan entry 13.\n\nKeep the two verified facts, D1's rationale, the rejected alternatives, and the risk section.",
+      "file_ref": null,
+      "category": "proportionality",
+      "raw_category": null,
+      "location": "project-documents/user/slices/915-slice.loop-checkpoint-pause-resume-correctness.md"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Integration points missing from frontmatter and the consumer list",
+      "description": "`interfaces: []` is empty. This slice changes the `execute_pipeline` signature that the CLI calls, and it changes the resumed-round contract that 910 (findings feedback), 911 (per-iteration commits and `revision_number:` stamping on re-run rounds), and 305 (prior-round lookup) all read. 911 records `interfaces: [305]` for a comparable dependency, so the convention exists. Record these consumers and tie the round contract to the first finding.",
+      "file_ref": null,
+      "category": "integration",
+      "raw_category": null,
+      "location": "project-documents/user/slices/915-slice.loop-checkpoint-pause-resume-correctness.md:7"
+    },
+    {
+      "severity": "PASS",
+      "title": "Dependencies match the plan and the re-entry question is answered",
+      "description": "`dependencies: [910, 911]` matches slice plan entry 13. Both are complete, so the slice can be picked up without violating \"no strict ordering.\" D1 answers the plan's required re-enterability question. Parts A and C cover the plan's observability requirement, and the affected-loop list matches the plan. Checked against plan entry 13 and the 910, 911, and 305 slice docs.",
+      "file_ref": null,
+      "category": "dependencies",
+      "raw_category": null,
+      "location": "project-documents/user/slices/915-slice.loop-checkpoint-pause-resume-correctness.md:6"
+    },
+    {
+      "severity": "PASS",
+      "title": "Layering and state format preserved",
+      "description": "D3 keeps run-state reads in the CLI and passes an integer into the executor, so the executor remains a function of its arguments. D2 adds no persisted field and compares status through `ExecutionStatus` members, as the project rule requires. Other readers of the state record (911, 305, `find_matching_run`) see no format change.",
+      "file_ref": null,
+      "category": "architecture",
+      "raw_category": null,
+      "location": "project-documents/user/slices/915-slice.loop-checkpoint-pause-resume-correctness.md:252-256"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "integration",
+      "raw_category": null,
+      "summary": "Resumed round re-enters with no prior-round outputs, breaking 910 feedback and the 305 gate",
+      "location": "project-documents/user/slices/915-slice.loop-checkpoint-pause-resume-correctness.md:258-264",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "scope",
+      "raw_category": null,
+      "summary": "Part B adds a resume capability without a scope classification",
+      "location": "project-documents/user/slices/915-slice.loop-checkpoint-pause-resume-correctness.md:121-123",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "observability",
+      "raw_category": null,
+      "summary": "Pause-time WARNING fires on the designed path",
+      "location": "project-documents/user/slices/915-slice.loop-checkpoint-pause-resume-correctness.md:271-280",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "Silent clamp and DEBUG-only ignore break the observability rules",
+      "location": "project-documents/user/slices/915-slice.loop-checkpoint-pause-resume-correctness.md:246-250",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "Re-entry edge cases are unspecified",
+      "location": "project-documents/user/slices/915-slice.loop-checkpoint-pause-resume-correctness.md:235-244",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "scope",
+      "raw_category": null,
+      "summary": "FAILED steps become resumable: outside the plan entry, and it widens `each:`/`fan_out:` restarts",
+      "location": "project-documents/user/slices/915-slice.loop-checkpoint-pause-resume-correctness.md:204-208",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "concern",
+      "category": "proportionality",
+      "raw_category": null,
+      "summary": "Overweight for a maintenance slice; cut the restated sections",
+      "location": "project-documents/user/slices/915-slice.loop-checkpoint-pause-resume-correctness.md",
+      "location_verified": null
+    },
+    {
+      "id": "F008",
+      "severity": "concern",
+      "category": "integration",
+      "raw_category": null,
+      "summary": "Integration points missing from frontmatter and the consumer list",
+      "location": "project-documents/user/slices/915-slice.loop-checkpoint-pause-resume-correctness.md:7",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "pass",
+      "category": "dependencies",
+      "raw_category": null,
+      "summary": "Dependencies match the plan and the re-entry question is answered",
+      "location": "project-documents/user/slices/915-slice.loop-checkpoint-pause-resume-correctness.md:6",
+      "location_verified": true
+    },
+    {
+      "id": "F010",
+      "severity": "pass",
+      "category": "architecture",
+      "raw_category": null,
+      "summary": "Layering and state format preserved",
+      "location": "project-documents/user/slices/915-slice.loop-checkpoint-pause-resume-correctness.md:252-256",
+      "location_verified": true
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/915-slice.loop-checkpoint-pause-resume-correctness.md",
+    "against": "project-documents/user/architecture/900-arch.maintenance-and-refactoring.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261115-design/wt/915-design"
+  },
+  "timestamp": "2026-11-16T07:15:29.985399",
+  "model": "claude-haiku-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 7,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-haiku-5-5",
+  "answering_models": [
+    "claude-haiku-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 10,
+    "in_fences": 0,
+    "in_section": 10,
+    "surviving": 10
+  },
+  "effort": "xhigh",
+  "profile": "sdk",
+  "turns": 8,
+  "prompt_tokens": 353984,
+  "cached_tokens": 203551,
+  "cache_write_tokens": 150425,
+  "completion_tokens": 47205,
+  "reasoning_tokens": null,
+  "duration_seconds": 212.60447600018233,
+  "cost_usd": 0.17448441000000003,
+  "cost_basis": "provider"
+}

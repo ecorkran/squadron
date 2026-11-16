@@ -1,0 +1,54 @@
+{
+ "review": "r11",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "MCP parity criterion from the slice plan is dropped without amending the plan",
+   "description": "The slice plan entry for 423 lists \"CLI, slash command and MCP give identical results\" as a success criterion. The slice excludes MCP (line 43, and D9 at line 198) and narrows the parity criterion to the CLI and `/sq:run` (line 253). The reasoning is sound: squadron has no MCP server for any pipeline, and adding the first one here would be scope creep. But this is still plan-assigned scope dropped by the slice alone. Amend the plan entry in `420-slices.model-benchmark.md` to remove MCP, or move it to Future Work, so the slice and its parent agree.",
+   "location": "project-documents/user/slices/423-slice.fix-pipeline.md:43"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "New dependency on 422 contradicts the slice plan",
+   "description": "The plan says 423 has \"none in this initiative\" for dependencies, repeats in its notes that it \"can be built earlier\", and lists only the existing executor and cost cap as consumed. The slice declares `dependencies: [422]` and consumes `CodeHost.get_issue` and the `issue_freeze` renderer from it. Reusing 422's renderer is the right call, and 422's design already names 423 as the no-cutoff consumer. The consequences are not stated, though:\n- **Blocked criterion:** the first functional criterion (a real fix from a fetched issue, line 247) and walkthrough step 3 cannot pass until 422 lands. 422 is a High-risk, 4/5 slice.\n- **What can ship early:** only file mode (Development Approach steps 1\u20133) is buildable before 422.\n\nUpdate the plan's dependency, interface and ordering notes. The slice should also state that file mode can be delivered and verified before 422, and fetched mode cannot.",
+   "location": "project-documents/user/slices/423-slice.fix-pipeline.md:49"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "`commit-to: current` has no recorded branch to check against at commit time",
+   "description": "D5 defines the destination as \"the branch checked out when `fix-context` runs\", and the data flow lists a \"branch check\" in `fix_commit_plan` (line 98). But the recorded outputs (line 140) hold only `start_head` and `commit_to`, not the branch name. The prompt-only `sq _commit` arguments (line 197) carry no branch either.\n\nUnder `current`, the commit step therefore cannot tell that the agent ran `git checkout -b other`. HEAD still equals `start_head`, so the HEAD check passes and the commit lands on the wrong branch. That leaves unmet both D5's own contract and the 424 integration point that \"the commit is on the sandbox branch\" (line 234).\n\nRecord the start branch in the `fix-context` outputs, pass it to `sq _commit`, and refuse when it differs. Add the case to the `fix_commit_plan` unit tests next to \"HEAD moved\".",
+   "location": "project-documents/user/slices/423-slice.fix-pipeline.md:163"
+  },
+  {
+   "i": 3,
+   "severity": "NOTE",
+   "title": "Gate-failure refusal can charge a config for a case-level condition",
+   "description": "D4 refuses the commit on any non-zero gate `exit_code`. In a replay that surfaces to 424 as \"committed nothing\", which the architecture's \"Absent is not zero\" principle counts as a config-caused fail. Two effects are worth stating for 424 and 425:\n- **Pre-existing gate failures:** a gate that already fails at the start commit, or fails only in the sandbox environment, makes every honest config fail that case. That is a case or harness condition, not a config one. 422's qualification runs the reference grade, not the agent-chosen gates at the parent.\n- **Honesty penalty:** an agent that reports a failing lint gate truthfully gets no grade, while one that misreports is graded.\n\nAll of this sits under one `FailureKind.FIX_REPORT`, so 424 cannot separate \"malformed report\" from \"gate non-zero\" from \"blocked\" without reading message text. Consider a recorded sub-reason field in the commit action's metadata.",
+   "location": "project-documents/user/slices/423-slice.fix-pipeline.md:155"
+  },
+  {
+   "i": 4,
+   "severity": "NOTE",
+   "title": "Clean-tree precondition against sandbox and I/O artifacts",
+   "description": "`fix-context` refuses any untracked, non-ignored path, and the commit stages everything. The 424 invocation (line 234) passes `--io-dir <dir>` with the frozen issue file. If that directory, or anything 421's environment resolution creates such as a virtualenv, sits inside the sandbox tree and is not ignored at the start commit, every replay refuses before dispatch or the artifact lands in the producer's diff. Walkthrough step 4 puts the file in `/tmp`, outside the tree. State that as a requirement in \"Provides to Other Slices\": the I/O directory and environment artifacts must be outside the working tree or ignored.",
+   "location": "project-documents/user/slices/423-slice.fix-pipeline.md:165"
+  },
+  {
+   "i": 5,
+   "severity": "NOTE",
+   "title": "Prompt-only report-file failure mode not enumerated",
+   "description": "`sq _commit --report-file {tmp_path}` adds a file-read path. A missing, empty or unreadable report file is presumably covered by the \"no JSON object\" refusal, but the document does not say so. The `issue-file` path in D2 is fully enumerated; one sentence here would match it.",
+   "location": "project-documents/user/slices/423-slice.fix-pipeline.md:197"
+  },
+  {
+   "i": 6,
+   "severity": "NOTE",
+   "title": "Walkthrough step 2 hard-codes `main`",
+   "description": "`git checkout main` assumes the target is `main`. D5 reads the target from `git.integration_branch`, so the walkthrough should return to the resolved target.",
+   "location": "project-documents/user/slices/423-slice.fix-pipeline.md:288"
+  }
+ ]
+}

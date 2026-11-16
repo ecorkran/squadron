@@ -1,0 +1,54 @@
+{
+ "review": "r12",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "FAIL",
+   "title": "No task writes a `SliceQualification` for discovery rejections",
+   "description": "The design's first functional requirement says `build` \"writes a `SliceQualification` for every slice index\" and that every rejected slice has a `SliceCandidateRejection` or `harness_error` with detail (slice design line 434).\n\n- **What the tasks do:** Task 13's `discover` returns `multiple_landings`, `branch_contains_merges` and discovery-time `harness_error` entries only in an in-memory `DiscoveryResult`. Task 15 writes records only for the task-text and no-code rejections. Task 20 calls `qualify_slice_candidate` \"for each candidate\" and prints a line per index, but never persists the discovery rejections.\n- **What breaks:** Task 22 counts yield rows from stored `SliceQualification`s, so those two rejections never appear in `sq benchmark yield`. The design's risk mitigation (line 506) names exactly those two as the ones to watch.\n- **Fix:** add a step and a test to Task 20 (or Task 13) that writes a `rejected` record with `start_environment=None` for each discovery rejection, and a `harness_error` record for a discovery git failure. State which landing supplies `landing_after_sha`, `fork_sha` and `tip_sha` for a `multiple_landings` slice, since the record id needs one.\n- **Related:** the build-stop rule leaves later indexes with no record, which also contradicts line 434. Task 1 corrects API Contracts for this but does not list the Success Criteria line among its edits; add it.",
+   "location": "project-documents/user/tasks/426-tasks.slice-cases.md:195-198"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Task 21 depends on Task 22 for its own output",
+   "description": "Task 21 builds the command \"then the slice-case yield rows \u2026 (Task 22 supplies them; until then print the lines only)\". Task 22 edits only `yield_report.py`, yet its success line says \"Task 21's command prints the rows\". No step wires the rows into the command, and no test asserts the command prints them. Swap the two tasks so the yield rows exist first, and add the assertion to `tests/cli/test_benchmark_slice_build.py`.",
+   "location": "project-documents/user/tasks/426-tasks.slice-cases.md:200-209"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Qualification and judge-runner tasks are split finer than the slice needs",
+   "description": "The file has 42 tasks for an effort-3/5 slice, and two areas are over-split:\n\n- **Tasks 15\u201319:** one function, `qualify_slice_candidate`, is spread over five tasks and five test files. Merge 16\u201318 into one task (sandboxes, repeats, case) and fold Task 19's error wrapping into Task 15, so harness errors are handled from the first stage instead of retrofitted.\n- **Tasks 31\u201334:** `plan_judge` and its runner are spread over four tasks and four test files. Merge 31 with 32 (plan) and 33 with 34 (bound, cap, lock, resume).\n- **Load tests:** the two tests labelled \"load test\" (Task 24's eight concurrent `invoke` calls, Task 33's 200-pair slow-dispatcher plan) trace to no success criterion, and the design restates no NFR. Keep the hung-dispatcher and distinct-home assertions as ordinary unit tests and cut the 200-pair run. If they stay as load tests, put them in `tests/load/`, where the project's load tests live.",
+   "location": "project-documents/user/tasks/426-tasks.slice-cases.md:167-191"
+  },
+  {
+   "i": 3,
+   "severity": "NOTE",
+   "title": "Empty-regression fixture repository is built but never used",
+   "description": "Task 6 builds a repository \"whose regression selection would be empty\", but Tasks 16\u201318 test `no_regression_signal` with adapter and sandbox doubles. The design asks for fixture slices producing each rejection (line 436). Either drive that builder through a test or drop it. The sentence describing the builder is also garbled (\"a slice whose every test changed and one whose\u2026\") and should say whether it is one shape or two.",
+   "location": "project-documents/user/tasks/426-tasks.slice-cases.md:105"
+  },
+  {
+   "i": 4,
+   "severity": "NOTE",
+   "title": "Task 5's grep pointer finds nothing under `tests/config/`",
+   "description": "The task says to find the keys test file under `tests/config/` by grepping for `metrology.judge_timeout_s`. That string appears only in `tests/metrology/test_config.py` and `tests/cli/test_replay_judge.py`. Name `tests/config/test_keys.py` directly.",
+   "location": "project-documents/user/tasks/426-tasks.slice-cases.md:99"
+  },
+  {
+   "i": 5,
+   "severity": "NOTE",
+   "title": "Task 10's DEVLOG entry has no commit point",
+   "description": "Task 10 writes the spike result to the DEVLOG, but no marker follows it, and Task 1 requires staging by path. The entry lands only if the implementer remembers to stage the DEVLOG at Task 12's marker. Say so there.",
+   "location": "project-documents/user/tasks/426-tasks.slice-cases.md:133-138"
+  },
+  {
+   "i": 6,
+   "severity": "NOTE",
+   "title": "Everything from Task 9 is blocked until 421\u2013425 are implemented",
+   "description": "The frontmatter records that `src/squadron/benchmark` does not exist; I confirmed it is absent. A run will commit Tasks 1\u20137 and stop at Task 8 with `BLOCKED:`. This is a legitimate use of the gate, and the tasks before it need nothing from 421\u2013425.",
+   "location": "project-documents/user/tasks/426-tasks.slice-cases.md:121-124"
+  }
+ ]
+}

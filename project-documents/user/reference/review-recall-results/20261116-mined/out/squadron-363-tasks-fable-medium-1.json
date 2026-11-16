@@ -1,0 +1,207 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "SC4 (dropped topics absent from the document) has no verification step",
+      "description": "Task 4.1 authors the dropped-topics rule, but no walkthrough task checks the generated document for it. SC4 is a claim about the output: why-now, audience-evolution and methodology-preference appear \"neither as content nor as gap markers\". Neither the 8.1 checklist (lines 308\u2013316) nor the 8.2 decline path covers it. The decline path is where a stray `[GAP: ...]` for a dropped topic is most likely to appear.\n\nFix: add one check to 8.1 and one to 8.2 that the written concept has no content and no gap marker for the three dropped topics. This needs no new task.",
+      "file_ref": null,
+      "category": "coverage-gap",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/363-tasks.concept-generation.md:304-324"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Commit markers are checkbox sub-items, not plain `**Commit**:` lines",
+      "description": "All eight commit points are written as `- [ ] Commit: ...` checkboxes nested inside a verify task (lines 99, 125, 164, 185, 221, 254, 296, 351). Markers must be plain `**Commit**:` lines, never checkboxes. Task 9.3's \"commit remaining changes\" (line 371) is an unmarked ninth commit.\n\nPlacement is otherwise fine: each sits after a verification step. Two smaller points:\n- The Task 7 commit (line 296) follows 7.4 with no verification of 7.1\u20137.3.\n- The Task 1 commit leaves `concept` routing to an empty section shell.\n\nFix: convert each to a plain `**Commit**: \\`type: summary\\`` line placed after its task group.",
+      "file_ref": null,
+      "category": "commit-markers",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/363-tasks.concept-generation.md:99"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Verify tasks duplicate earlier checks; seven commits is heavy for one markdown section",
+      "description": "The slice is a single sibling section in one file (design effort 3/5), yet the task file has 31 subtasks and 8\u20139 commits. Specific cuts:\n\n- **6.3 (lines 249\u2013254):** fully redundant. Both checks (guide readable, `grep -c '^## User-Provided Concept'` returns 1) already ran in 0.2. Drop it.\n- **2.2 (lines 120\u2013125):** the guide path and `project.name` checks repeat 0.2. Only the `cf get` Name resolution is new; move that one check into 0.2 and drop 2.2.\n- **1.2 and 4.2:** these re-read text just written against the same design lines the authoring task's Success line already names. Fold each into its authoring task (1.1, 4.1).\n- **7.4:** edits the sentence at `commands/analysis/understand.md:393`, directly next to the argument-handling text 1.1 rewrites at line 392. Merge it into 1.1 so the paragraph is touched once.\n- **Commits:** Tasks 2\u20137 could commit two or three times (preconditions and sources; mapping and interview; contract, governance and output) without losing a working checkpoint.\n\nKeep 3.4 (it executes the `jq` selections) and 5.3 (the byte-identical question diff is the core SC2 check).",
+      "file_ref": null,
+      "category": "proportionality",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/363-tasks.concept-generation.md:94-254"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Several criteria are verified only on their happy half",
+      "description": "These mirror the design's own draft walkthrough, so they are not gaps against it, but the design says the walkthrough is \"refined during Phase 6\":\n\n- **SC8, mechanical refillability:** 8.4 re-runs against the 8.1 document, which will have few or no `[GAP]` sections, so the refill half of augment is never exercised. Running augment against the 8.2 decline-path scratch document would cover it.\n- **SC7:** 8.3 tests only the renamed heading. The guide-absent and guide-tree-absent stops (naming the setup step) and precondition 3's no-registration stop are authored but not exercised.\n- **SC10:** 8.1 confirms the inferred-claims line exists but not that each `[INFERRED]` sentence satisfies the checkable rule.\n- **SC3:** absence-as-observation cannot show up on squadron, where all signals are present; it is verified by text only.",
+      "file_ref": null,
+      "category": "verification-depth",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/363-tasks.concept-generation.md:320-336"
+    },
+    {
+      "severity": "NOTE",
+      "title": "8.3 \"point the check at it\" is not executable as written",
+      "description": "The skill reads the guide from a fixed path, so there is nothing to point at a scratch copy of the guide alone. Running the two checks by hand also makes \"nothing is written\" trivially true. Running the flow inside the 8.2 scratch tree with the heading renamed there would exercise the real stop and still leave the real guide untouched.",
+      "file_ref": null,
+      "category": "task-clarity",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/363-tasks.concept-generation.md:326-330"
+    },
+    {
+      "severity": "NOTE",
+      "title": "PM involvement is understated for 8.2 and 8.4",
+      "description": "The PM interaction notice names only 8.1 as needing the PM live. But 8.2 needs someone to decline both questions, and 8.4's augment needs new answers. Whatever is answered in 8.4 is appended verbatim to the real, committed User-Provided Concept, so the task should say who answers and that the answers must be real.\n\nSeparately, 9.3's \"report for merge authorization\" (line 373) is a PM gate with no named rule behind it; ending Phase 6 committed on the slice branch is enough.",
+      "file_ref": null,
+      "category": "task-clarity",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/363-tasks.concept-generation.md:48-53"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Minor reference inaccuracies",
+      "description": "- Task 7.1 cites design lines 278\u2013280 for the `[INFERRED]` rule; the rule is at 277\u2013279, so the citation misses its first line. The other eleven line citations check out.\n- Task 1.1 says \"extend the argument handling\" without saying that text lives inside Flow: Comprehension Analysis (`commands/analysis/understand.md:392`). Meanwhile 7.4's success line says \"no other comprehension-flow text changed\". State where the selector lives so the two do not conflict.",
+      "file_ref": null,
+      "category": "accuracy",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/363-tasks.concept-generation.md:259"
+    },
+    {
+      "severity": "PASS",
+      "title": "Success criteria coverage, sequencing and scope",
+      "description": "- **Coverage:** every criterion has an authoring task. SC1 \u2192 1.1/8.5; SC2 \u2192 5.1\u20135.3/8.1; SC3 \u2192 3.1\u20133.4/8.1; SC4 \u2192 4.1 (authoring only, see the first finding); SC5 \u2192 5.1/8.2; SC6 \u2192 6.1/8.1/8.4; SC7 \u2192 2.1/6.1/8.3; SC8 \u2192 6.2/8.4; SC9 \u2192 7.2/8.1; SC10 \u2192 7.1/7.3/8.1; SC11 \u2192 3.1/8.6; SC12 \u2192 8.1 with the PM live.\n- **Scope:** no task falls outside the design. Tasks 0 and 9 are standard workflow, and 7.1's pointer update and 7.4 trace to the Implementation Notes.\n- **Sequencing:** dependencies are respected with no cycles; forward references (5.x to the provenance block in 7.3) are within the same document.\n- **Anchors:** the ones I checked exist \u2014 `tests/skills/`, the sentence at `understand.md:393`, and the Gap markers `[INFERRED]` pointer at `understand.md:286`.\n- **Load tests:** the slice restates no NFR, so no load-test or CI-gating task is required.",
+      "file_ref": null,
+      "category": "coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/363-tasks.concept-generation.md"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "coverage-gap",
+      "raw_category": null,
+      "summary": "SC4 (dropped topics absent from the document) has no verification step",
+      "location": "project-documents/user/tasks/363-tasks.concept-generation.md:304-324",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "commit-markers",
+      "raw_category": null,
+      "summary": "Commit markers are checkbox sub-items, not plain `**Commit**:` lines",
+      "location": "project-documents/user/tasks/363-tasks.concept-generation.md:99",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "proportionality",
+      "raw_category": null,
+      "summary": "Verify tasks duplicate earlier checks; seven commits is heavy for one markdown section",
+      "location": "project-documents/user/tasks/363-tasks.concept-generation.md:94-254",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "note",
+      "category": "verification-depth",
+      "raw_category": null,
+      "summary": "Several criteria are verified only on their happy half",
+      "location": "project-documents/user/tasks/363-tasks.concept-generation.md:320-336",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "task-clarity",
+      "raw_category": null,
+      "summary": "8.3 \"point the check at it\" is not executable as written",
+      "location": "project-documents/user/tasks/363-tasks.concept-generation.md:326-330",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "task-clarity",
+      "raw_category": null,
+      "summary": "PM involvement is understated for 8.2 and 8.4",
+      "location": "project-documents/user/tasks/363-tasks.concept-generation.md:48-53",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "note",
+      "category": "accuracy",
+      "raw_category": null,
+      "summary": "Minor reference inaccuracies",
+      "location": "project-documents/user/tasks/363-tasks.concept-generation.md:259",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "pass",
+      "category": "coverage",
+      "raw_category": null,
+      "summary": "Success criteria coverage, sequencing and scope",
+      "location": "project-documents/user/tasks/363-tasks.concept-generation.md",
+      "location_verified": null
+    }
+  ],
+  "template_name": "tasks",
+  "input_files": {
+    "input": "project-documents/user/tasks/363-tasks.concept-generation.md",
+    "against": "project-documents/user/slices/363-slice.concept-generation.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/squadron-363-tasks"
+  },
+  "timestamp": "2026-11-16T09:11:43.372783",
+  "model": "claude-fable-5-2",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 5,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-fable-5-2",
+  "answering_models": [
+    "claude-fable-5-2"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 8,
+    "in_fences": 0,
+    "in_section": 8,
+    "surviving": 8
+  },
+  "effort": "medium",
+  "profile": "sdk",
+  "turns": 6,
+  "prompt_tokens": 226295,
+  "cached_tokens": 112608,
+  "cache_write_tokens": 113681,
+  "completion_tokens": 7806,
+  "reasoning_tokens": null,
+  "duration_seconds": 73.7943882921245,
+  "cost_usd": 2.1543001999999998,
+  "cost_basis": "provider"
+}

@@ -1,0 +1,54 @@
+{
+ "review": "r08",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "`FixQualification` in `metrology/` reverses the dependency direction 421 fixed",
+   "description": "`FixQualification` goes in `metrology/benchmark_models.py` (lines 80\u201381, schema at 335\u2013350) and carries `environment: EnvironmentIdentity | None` (line 341). 421 defines `EnvironmentIdentity` in `benchmark/adapter.py` and states that \"`benchmark/` depends on `metrology/` \u2026 Neither of those depends on `benchmark/`\" (421 slice, Component Structure). Putting the record there makes `metrology` import `benchmark`, which creates a cycle. The same problem applies to `TestRejection` values, which are tied to `FairnessVerdict` in `benchmark/fairness.py`. Fix: either move `EnvironmentIdentity` (and any shared enums) down into `metrology/`, or keep `FixQualification` in `benchmark/` and have `MetrologyRecord` hold it in a way that keeps the import direction. Say which one the slice uses.",
+   "location": "project-documents/user/slices/422-slice.fix-case-qualification-and-yield-report-keystone.md:80-82"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Yield counts are not de-duplicated across environments, \"pre\" records or stale rule versions",
+   "description": "The record id is `fixqual-<project>-<commit>-<env digest or \"pre\">` (line 240). Overwriting happens only within one key. One commit can therefore end up with several records:\n- a `pre` rejection from one run and an env-keyed record from a later run (for example, after an issue fetch error clears);\n- one record per environment digest once the lockfile, interpreter or `scrub_spec_version` changes.\n\n`yield_report` \"reads `FixQualification` records for the given projects\" (line 114) and does not say which record per commit counts. This breaks the success criterion \"the number of records equals the number of closing commits\" (line 373) as soon as a second build runs in a changed environment, and it would inflate the separability answer that sets initiative order. Fix: state the selection rule, for example the latest record per `(project_id, commit_sha)` under the current `rule_version`. Also say whether `pre` records are replaced or kept when a commit later reaches the sandbox.",
+   "location": "project-documents/user/slices/422-slice.fix-case-qualification-and-yield-report-keystone.md:240-241"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Re-qualification that changes `excluded_tests` gives a new case id, and the 424 contract does not cover it",
+   "description": "`excluded_tests` is part of the case id (D9, line 227; 421 D1). When 424 calls `qualification_for(case, environment)` in a new environment and then `qualify_candidate`, one of three things happens:\n- the candidate still qualifies with the same exclusions;\n- it is rejected, which the design covers;\n- it still qualifies but with a different flaky or failing-at-reference set.\n\nIn the third case the new record's `case_id` is not in the case set version 424 loaded. Line 242 covers only the rejection case. The record is keyed on commit, not case id, so the new record silently points at a case that is not in the set. Fix: define what 424 gets back here. Options: treat it as a drop with a named reason, as a substitution that 424 records, or as a requirement to write a new case set version. The architecture requires results to reference \"the case and the set version it was run under\", so this cannot stay implicit.",
+   "location": "project-documents/user/slices/422-slice.fix-case-qualification-and-yield-report-keystone.md:242"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Cutoff-free issue rendering for 423 is scope and a dependency the slice plan does not have",
+   "description": "D2 adds a no-cutoff rendering mode \"(423's live fix)\" that skips the edited-after-fix check. The slice plan says 423 has \"no dependencies in this initiative\" and \"can be built earlier\". This slice's `interfaces` frontmatter lists only [424, 425, 426]. Designing a 423 code path here creates a hidden dependency from 423 back to 422 and adds a mode that nothing in 422 uses. Fix: cut the no-cutoff mode and let 423 own its issue rendering, or reuse `get_issue` only. If sharing is wanted, list 423 in `interfaces` and in Provides to Other Slices, and fix the slice plan's dependency statement.",
+   "location": "project-documents/user/slices/422-slice.fix-case-qualification-and-yield-report-keystone.md:139"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Failure modes are incomplete for the trace/collect/resolver subprocesses, `gh`, and `run_suite` timeouts",
+   "description": "Several new I/O paths have no stated hang or timeout handling, or have conflicting handling.\n\n- **Trace plugin and collect mode (D3, D6, D7).** These are new pytest invocations in `python_fairness.py`, not 421's `run_suite`. The design does not say which timeout bounds them (`benchmark.suite_timeout_s`?), or what happens when their output file is missing or unparseable, or when they are killed mid-run. 421 D10 defines this for its reporter (raise `SuiteRunError`, never an empty pass). The trace output needs the same rule, or a trace that wrote nothing could read as \"no crossings, no patches\" and admit a coupled test.\n- **Boundary resolver (D6).** Line 389 tests \"resolver crash\", but a hanging import has no stated timeout. D6 maps an import failure to `boundary_undecidable`, which blames the case. It does not say how a harness-caused failure (timeout, interpreter missing) is told apart and recorded as `harness_error`.\n- **`get_issue` (D2).** No timeout or config key is given for the `gh` GraphQL call. `CodeHostError` maps to `harness_error` (line 285), but nothing covers a hang.\n- **`run_suite` timeout conflict.** Line 177 says a timeout records `harness_error`. 421 D10, however, *returns* `SuiteRun(timed_out=True)` and marks unfinished nodes `not_run`, and line 176 maps `not_run` to `undecidable_failure_at_parent`. The order (check `timed_out` before mapping per-node outcomes) must be explicit, or a timeout will be filed as a rejection that blames the test.\n\nFix: add one failure-mode table covering each subprocess and network call (bound, kill behavior, missing output, resulting outcome), and add the matching tests to Technical Requirements (line 389).",
+   "location": "project-documents/user/slices/422-slice.fix-case-qualification-and-yield-report-keystone.md:171-177"
+  },
+  {
+   "i": 5,
+   "severity": "NOTE",
+   "title": "Small inconsistencies with 421's stated seam",
+   "description": "Line 395 says 421 is \"used unchanged\". This slice does add a `FixCaseAdapter` mapping to 421's `registry.py` (line 98) and a sibling payload to `MetrologyRecord`. Both are additive, and 421 D3 anticipated the payload. Separately, 421 D9 says \"422 adds fairness-rule methods\", which reads as extending `BenchmarkAdapter`. 422 instead creates a separate protocol (line 284). That is the better ISP choice, but 421's wording should be brought into line so the two documents agree.",
+   "location": "project-documents/user/slices/422-slice.fix-case-qualification-and-yield-report-keystone.md:395"
+  },
+  {
+   "i": 6,
+   "severity": "NOTE",
+   "title": "The separability bound may understate variance when it says \"enough\"",
+   "description": "The p = 0.5 bound is the worst case only for within-case binomial variance. Between-case differences in the true effect can push the real variance above it, and the doc says so (line 260). Since this answer sets initiative order, the report should treat \"enough cases\" as provisional until 425 measures real variance. Line 321 already says this. No change is needed beyond keeping that caveat next to the verdict.",
+   "location": "project-documents/user/slices/422-slice.fix-case-qualification-and-yield-report-keystone.md:256-260"
+  }
+ ]
+}

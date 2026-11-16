@@ -1,0 +1,207 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "A fourth `RATE_LIMIT_MARKER` site is missed, so success criterion 6 can break",
+      "description": "The LLD names three gate sites, and Task 6 (task file line 63) replaces \"both\" gates in `agent.py`, at lines 167 and 216. There is a fourth substring check, at line 180: `if RATE_LIMIT_MARKER in str(exc): raise ProviderRateLimitError(...)`. This check decides whether query mode's final failure becomes `ProviderRateLimitError` or a plain `ProviderError`.\n\nTask 2 (line 32) says `RateLimitRejected` must do nothing beyond subclassing. No task says what message the raise sites in Tasks 6 and 7 must pass. If a `RateLimitRejected` text does not contain `\"rate_limit\"`, line 180 sends it down the `ProviderError` path. `metrology/audit.py:693` only catches `ProviderRateLimitError`, so the audit would no longer report `AuditRunFailure.RATE_LIMITED`. That is criterion 6, and it is exactly the silent-degradation risk the slice exists to remove.\n\nTask 10's rewritten `test_exhausted_rate_limit_raises_a_distinct_error` may catch this as a red test, but the plan gives the implementer no fix. Add a step to Task 6 that changes line 180 to `_is_throttle(exc)`. Also check whether the client-mode re-raise at line 228 is converted the same way further up, and say so in the step.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "src/squadron/providers/sdk/agent.py:180-182"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Behavior changes land before their tests, and several commits leave the suite red",
+      "description": "Tasks 6, 7, 8 and 9 change production behavior, but their tests come later, in Tasks 10 and 11. That breaks the test-with pattern, and several commit points fall where tests fail:\n- **Task 6:** it removes the `is_rate_limit_event` special case from `_skip_unparseable`. `test_a_rejected_rate_limit_event_reaches_the_backoff` still builds a `MessageParseError` with a rate-limit payload. That error is now skipped with a WARNING instead of triggering backoff, so the test fails at Task 6's commit.\n- **Task 9:** it deletes `install_rate_limit_parser_shim`, while the four `test_the_shim_*` tests in `test_agent.py` still import it. They are only removed in Task 10, so test collection fails at Task 9's commit.\n- **Task 1:** it commits the SDK bump while the old substring detection is still the only gate. Native parsing means it never fires, so that commit carries the exact \"silent loss of backoff\" state the LLD calls high-impact.\n\nTasks 6\u20139 also include no test-run step, so a junior implementer would not notice any of this. Restructure so each commit is green:\n- Merge Task 1 into the first re-key commit.\n- Pair Task 6 with Task 10.\n- Pair Tasks 7 and 8 with Task 11.\n- Move the shim-test deletions into Task 9.",
+      "file_ref": null,
+      "category": "sequencing",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/920-tasks.claude-agent-sdk-upgrade-and-rate-limit-parser-shim-retirement.md:58-101"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Task 6 contradicts itself on informational events",
+      "description": "For informational events, the step says \"continue the loop without yielding it to the caller \u2026 let it flow to translation as normal\". Those are opposite instructions. The ambiguity starts in the LLD: D4 says \"skip (informational events must not reach translation)\", while the Data Flow section and D6 say they continue to translation.\n\nTask 7 (line 70) picks \"flow to translation\", so the two dispatch paths could end up behaving differently. The plan should choose one behavior, presumably yield-through to match D6 and Task 4, and state it the same way in Tasks 6 and 7. If the choice is skip, Task 4's translation branch can only ever be reached from the pipeline path, and that should be said explicitly.",
+      "file_ref": null,
+      "category": "clarity",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/920-tasks.claude-agent-sdk-upgrade-and-rate-limit-parser-shim-retirement.md:61"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Criterion 3 is not tested on every path, and its WARNING is never asserted",
+      "description": "Criterion 3 requires that a rejected event on each of the three dispatch paths increments `RateLimitStats.throttles` and logs a WARNING naming the attempt number. The gaps:\n- **Pipeline path:** Task 11's rewrite only asserts `\"done\" in result` and `call_count == 3`. It does not check `throttles`.\n- **Agent paths:** Task 10 does not say which rewritten tests cover query mode and which cover client mode, so a junior implementer cannot confirm both have a real-event test.\n- **WARNING:** no unit test checks the WARNING (for example with `caplog`). The only check is the forced-throttle step in Task 15, which is manual and covers one path.\n\nAdd one named, real-event test per path that asserts both the `throttles` increment and the WARNING text. The cheapest fix is to extend the existing rewrites rather than add new tests.",
+      "file_ref": null,
+      "category": "test-coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/920-tasks.claude-agent-sdk-upgrade-and-rate-limit-parser-shim-retirement.md:93-105"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Commit markers are checkboxes and there is one after every task",
+      "description": "Every task ends with `- [ ] Commit: ...`. Commit markers should be plain `**Commit**:` lines, not checkboxes. The plan also has 14 of them, one per task, including test-only and lint-only commits. Task 13's `chore: format and lint pass` commit may even be empty.\n\nChange them to plain `**Commit**:` lines and keep them only at the green, tested points from the regrouping above. That gives roughly 4\u20135 commits: classification helpers with tests, translation with test, agent re-key with tests, pipeline re-key with tests, and closeout.",
+      "file_ref": null,
+      "category": "process",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/920-tasks.claude-agent-sdk-upgrade-and-rate-limit-parser-shim-retirement.md:28"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The breakdown is heavier than an effort-3 slice needs",
+      "description": "There are 16 tasks for a slice the design itself calls a \"small diff\". Specific cuts:\n- **Task 12** changes nothing; it only confirms that two files pass unmodified. Merge it into Task 13's regression run. The DEVLOG note about it can stay.\n- **Tasks 2/3 and 4/5:** each pair could be one task with its test, which also satisfies test-with.\n- **Task 8:** a single-tuple edit that belongs in Task 7.\n- **Tasks 14 and 15:** could be one live-verification task.",
+      "file_ref": null,
+      "category": "proportionality",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/920-tasks.claude-agent-sdk-upgrade-and-rate-limit-parser-shim-retirement.md:110-125"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Hedged test-location wording",
+      "description": "Two test locations are left open:\n- **Task 3** says \"or a new focused test module if preferred\" for tests of `rate_limit.py` helpers. Name one location.\n- **Task 5** says \"create if it does not exist\", but `tests/providers/sdk/test_translation.py` already exists. Drop the hedge.",
+      "file_ref": null,
+      "category": "clarity",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/920-tasks.claude-agent-sdk-upgrade-and-rate-limit-parser-shim-retirement.md:39"
+    },
+    {
+      "severity": "PASS",
+      "title": "Criteria 1, 2, 4, 7, 8, 9 and 10 have tasks that trace to them",
+      "description": "Each of these criteria has a task:\n- **Criterion 1 (dependency floor):** Task 1.\n- **Criterion 2 (shim symbols gone):** Task 9's greps.\n- **Criterion 4 (informational events are not throttles):** Tasks 8, 10 and 11.\n- **Criterion 7 (substring path retained):** Task 3's `_is_throttle` test.\n- **Criterion 8 (unknown types still skipped):** the `TestUnparseableMessages` tests kept in Task 10.\n- **Criteria 9\u201310 (real-event tests):** the rewrites in Tasks 10 and 11.\n\nThe out-of-scope OpenAI test file is correctly left untouched. Live walkthrough steps 3\u20135 map to Tasks 14 and 15. No scope creep was found. There is no NFR, so no load-test task is needed.",
+      "file_ref": null,
+      "category": "coverage",
+      "raw_category": null,
+      "location": "project-documents/user/slices/920-slice.claude-agent-sdk-upgrade-and-rate-limit-parser-shim-retirement.md:360-411"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "A fourth `RATE_LIMIT_MARKER` site is missed, so success criterion 6 can break",
+      "location": "src/squadron/providers/sdk/agent.py:180-182",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "sequencing",
+      "raw_category": null,
+      "summary": "Behavior changes land before their tests, and several commits leave the suite red",
+      "location": "project-documents/user/tasks/920-tasks.claude-agent-sdk-upgrade-and-rate-limit-parser-shim-retirement.md:58-101",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "clarity",
+      "raw_category": null,
+      "summary": "Task 6 contradicts itself on informational events",
+      "location": "project-documents/user/tasks/920-tasks.claude-agent-sdk-upgrade-and-rate-limit-parser-shim-retirement.md:61",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "test-coverage",
+      "raw_category": null,
+      "summary": "Criterion 3 is not tested on every path, and its WARNING is never asserted",
+      "location": "project-documents/user/tasks/920-tasks.claude-agent-sdk-upgrade-and-rate-limit-parser-shim-retirement.md:93-105",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "process",
+      "raw_category": null,
+      "summary": "Commit markers are checkboxes and there is one after every task",
+      "location": "project-documents/user/tasks/920-tasks.claude-agent-sdk-upgrade-and-rate-limit-parser-shim-retirement.md:28",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "proportionality",
+      "raw_category": null,
+      "summary": "The breakdown is heavier than an effort-3 slice needs",
+      "location": "project-documents/user/tasks/920-tasks.claude-agent-sdk-upgrade-and-rate-limit-parser-shim-retirement.md:110-125",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "note",
+      "category": "clarity",
+      "raw_category": null,
+      "summary": "Hedged test-location wording",
+      "location": "project-documents/user/tasks/920-tasks.claude-agent-sdk-upgrade-and-rate-limit-parser-shim-retirement.md:39",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "pass",
+      "category": "coverage",
+      "raw_category": null,
+      "summary": "Criteria 1, 2, 4, 7, 8, 9 and 10 have tasks that trace to them",
+      "location": "project-documents/user/slices/920-slice.claude-agent-sdk-upgrade-and-rate-limit-parser-shim-retirement.md:360-411",
+      "location_verified": true
+    }
+  ],
+  "template_name": "tasks",
+  "input_files": {
+    "input": "project-documents/user/tasks/920-tasks.claude-agent-sdk-upgrade-and-rate-limit-parser-shim-retirement.md",
+    "against": "project-documents/user/slices/920-slice.claude-agent-sdk-upgrade-and-rate-limit-parser-shim-retirement.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/squadron-920-tasks"
+  },
+  "timestamp": "2026-11-16T09:18:41.552263",
+  "model": "claude-opus-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 5,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-opus-5-5",
+  "answering_models": [
+    "claude-opus-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 8,
+    "in_fences": 0,
+    "in_section": 8,
+    "surviving": 8
+  },
+  "effort": "medium",
+  "profile": "sdk",
+  "turns": 6,
+  "prompt_tokens": 333459,
+  "cached_tokens": 229274,
+  "cache_write_tokens": 104175,
+  "completion_tokens": 7321,
+  "reasoning_tokens": null,
+  "duration_seconds": 76.47837941604666,
+  "cost_usd": 1.0264688,
+  "cost_basis": "provider"
+}

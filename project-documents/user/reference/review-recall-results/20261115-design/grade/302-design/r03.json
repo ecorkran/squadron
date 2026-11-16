@@ -1,0 +1,40 @@
+{
+ "review": "r03",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Score-with-rationale \"structured output\" enforcement is dropped",
+   "description": "The slice plan's 302 success criteria say \"The score-with-rationale shape is enforced by the template's structured output\". The architecture (Technical Considerations, reliability bullet (b)) commits that \"the judge template uses a structured-output constraint for the score field and a score-with-rationale prompt shape\". The slice design delivers only prompt instructions. It states that `## Rationale` is \"prose scaffolding for the model, not a new parser target\", and no structured-output constraint appears anywhere in the design. Nothing checks that a rationale was emitted, or that it precedes the score. Dropping scope the slice plan assigns is a CONCERN. Either specify the constraint, or record explicitly, with the reason, that the plan criterion is relaxed to \"prompt-instructed\". If a constraint is feasible with the existing template or provider mechanism, name it.",
+   "location": "project-documents/user/slices/302-slice.design-phase-judge-templates.md#score-with-rationale-prompt-shape"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Failure-mode table omits ground-truth file and injection-cap cases",
+   "description": "The architecture enumerates \"missing/unreadable ground-truth file\" and \"injected ground truth exceeding the cap\" as judge failure modes that must map to `UNKNOWN` with a WARNING+ log. The slice's table covers a `SliceInfo` missing a field, which is only a missing key. It doesn't cover a key that resolves to a path that doesn't exist or can't be read. It also doesn't cover a design or architecture doc too large to inject for non-file-reading providers. These two templates are the first real judges, and the arch doc against slice design pair is the largest ground truth the system will inject. State how each case is handled, or cite the 301/review-subsystem behavior that covers it. Add a test or verification step for at least the unreadable-file case.",
+   "location": "project-documents/user/slices/302-slice.design-phase-judge-templates.md#failure-modes-on-the-judge-template-path"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Rogue-verdict discard is silent",
+   "description": "The row the slice labels \"New to this slice\" says a model-emitted verdict is \"parsed but discarded\". The review-code rule requires each identified failure mode to be observable (WARNING+ log or metric), with a test asserting the signal. The only required test (Technical Requirements) checks that the derived verdict wins. It doesn't check that any signal is emitted. The prompt-compliance failure is also useful tuning data, since the Technical Risks section already treats early runs as data. Either add a WARNING log with a test asserting it, or state that discarding it silently is intentional and why.",
+   "location": "project-documents/user/slices/302-slice.design-phase-judge-templates.md:398"
+  },
+  {
+   "i": 3,
+   "severity": "NOTE",
+   "title": "Criterion names are not defined per template",
+   "description": "The `criteria:` map keys (`alignment`, `scope`) appear only in an illustrative example. The design says the evaluation criteria are reused from `slice.yaml` and `tasks.yaml`, but it doesn't say which keys each template emits. Because `criteria` is a reserved, non-final shape in the architecture, and 320 will compare runs, fixing the key set per template at authoring time would avoid drift. It is cheap to specify in the task breakdown.",
+   "location": "project-documents/user/slices/302-slice.design-phase-judge-templates.md#reuse-existing-evaluation-criteria-dont-re-derive-them"
+  },
+  {
+   "i": 4,
+   "severity": "NOTE",
+   "title": "Some content restates other slices",
+   "description": "The data-flow diagram re-narrates the 301 enforcement path. Three of the five failure-mode rows are labeled \"Not new\" and only point back to 300/301. Trimming these to a single sentence referencing 301, and keeping the two rows new to this slice, would shorten the document without losing a requirement. The slice is otherwise proportionate: two data files and two registry entries, matching the plan's Low risk and 2/5 effort.",
+   "location": "project-documents/user/slices/302-slice.design-phase-judge-templates.md#failure-modes-on-the-judge-template-path"
+  }
+ ]
+}

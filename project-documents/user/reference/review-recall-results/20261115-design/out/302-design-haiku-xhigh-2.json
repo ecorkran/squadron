@@ -1,0 +1,297 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Score-reliability mitigation (b) only partly specified",
+      "description": "Architecture line 87(b) commits the judge template to two things: a structured-output constraint on the score field, and a score-with-rationale prompt shape. The slice implements only the prompt shape (154\u2013159). Nothing constrains the score field's output format, and Functional Requirement #2 (273\u2013276) asks only for prompt text. The slice also does not say whether the example block (161\u2013178) is prompt text or documentation. That block contains concrete values (`score: 82`, `alignment: 85`, `scope: 80`), and 82 is the slice-vs-arch pass floor. If the block reaches the system prompt, it anchors the model on the numbers (b) is meant to keep it from anchoring on. Specify the structured-output mechanism, or name the engine limit and its replacement. Also specify that the prompt uses placeholders, not sample scores.",
+      "file_ref": null,
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/302-slice.design-phase-judge-templates.md:154-178"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Gating posture not reconciled with \"advisory until calibrated\"",
+      "description": "The architecture says two things. Line 45 says tasks-vs-slice \"can be trusted to gate.\" Line 87(a) says scores \"are treated as advisory until 320 calibrates a judge at an artifact level.\" Since 320 does not exist yet, the slice has to decide which applies. It sets auto-PASS floors (78 and 82) but never says whether a pipeline step using either template advances on PASS or only records advice. State the posture for each template in this release. If tasks-vs-slice gates, cite the line-45 basis. The numbers themselves are slice-design detail (line 85) and are not disputed here.",
+      "file_ref": null,
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/302-slice.design-phase-judge-templates.md:218-234"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Two enumerated failure modes are unmapped; the injection cap is not mentioned",
+      "description": "Architecture line 89 enumerates five failure modes. The table covers provider unavailability and absent or out-of-range score. It does not cover:\n- A ground-truth file named in `SliceInfo` that is missing or unreadable. Row 399 covers only a `SliceInfo` that lacks a field.\n- Injected ground truth exceeding the cap (line 93). The slice never mentions the cap, its location, or what happens when it is hit.\n\nUnparseable response is implied by \"score absent,\" but the table should say so. The \"No silent pass\" paragraph (402\u2013408) claims every row ends in UNKNOWN or a derived verdict, and that claim is only as complete as the table. Add rows for both missing modes, with handling and verdict (UNKNOWN per line 89).",
+      "file_ref": null,
+      "category": "failure-modes",
+      "raw_category": null,
+      "location": "project-documents/user/slices/302-slice.design-phase-judge-templates.md:394-408"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Two failure rows are silent, and no test checks a log signal",
+      "description": "The review rules require each failure mode to be observable at WARNING or above. Row 398 says a rogue verdict is \"parsed but discarded, never surfacing,\" with no log. Row 400 says malformed criteria give \"criteria absent from result,\" also with no log. The unit-test bullets (295\u2013305) assert `ActionResult` values only. They do not assert the WARNING that rows 396, 397, and 399 promise. Add a WARNING to the rogue-verdict discard and to malformed criteria. Add a test that asserts the log for at least one row on each new path.",
+      "file_ref": null,
+      "category": "failure-modes",
+      "raw_category": null,
+      "location": "project-documents/user/slices/302-slice.design-phase-judge-templates.md:398-400"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Per-criterion sub-scores required ahead of the architecture's plan",
+      "description": "Architecture line 59 says \"Scalar now,\" and the criteria map is \"reserved as a cheap, optional, latent field, not committed as a final schema.\" The slice makes a `criteria:` block of per-criterion numbers mandatory for both judges (FR #2, 273\u2013276). Score-with-rationale under line 87(b) needs a justification before the number, not a sub-score per criterion. The slice's own row 400 already treats criteria as optional. The lighter option meets the requirement: one rationale block before `score:`, with `criteria:` unset. Cut the per-criterion sub-score requirement, or have the architecture commit the map now and update line 59.",
+      "file_ref": null,
+      "category": "proportionality",
+      "raw_category": null,
+      "location": "project-documents/user/slices/302-slice.design-phase-judge-templates.md:152-183"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Python registry edit conflicts with \"connective work is just authoring\"",
+      "description": "Architecture line 91 says the connective work for a judge is \"just *authoring* the judge templates and the threshold/escalation config.\" Line 65 places required inputs in \"template data, not hardcoded.\" This slice adds a Python `TEMPLATE_INPUTS` entry per judge, calls it \"the one required code change\" (53\u201355), and cites \"the architecture's 'no engine change' commitment\" (61\u201363). The architecture's wording at line 65 covers the prompt, model, file injection, and verdict contract. It does not cover input mapping. The Provides section (254\u2013257) also makes every future judge a code edit. Choose one:\n- (a) Move source-function mapping into the template YAML, so a judge is data-only, as the architecture describes.\n- (b) Amend the architecture to record that input-source resolution is a per-template registry, and correct line 65.\n\nUntil one is chosen, drop the \"no engine change\" framing.",
+      "file_ref": null,
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/302-slice.design-phase-judge-templates.md:51-63"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Frontmatter dependencies and interfaces do not match the body",
+      "description": "`dependencies: [301]` and the Prerequisites section (80\u201383) omit slice 300. The body depends on 300 in three places: the `_extract_score`/`_extract_criteria` parser (92\u201395, 263\u2013265), the `criteria:` shape, and the persisted `score:` frontmatter the walkthrough expects (366). Add 300 to the frontmatter and to Prerequisites, with its status. `interfaces: [303, 304]` lists 304, but the body describes only 303 (251\u2013253, 310\u2013313). Either state what 304 consumes from this slice (judge score and provenance, per architecture line 97), or remove 304.",
+      "file_ref": null,
+      "category": "dependencies",
+      "raw_category": null,
+      "location": "project-documents/user/slices/302-slice.design-phase-judge-templates.md:6-7"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The parser contract is asserted but has no offline test",
+      "description": "The slice's central integration claim is that the prompt's output fits slice 300's parser with \"no parser change needed\" (92\u201395, 263\u2013265). Every test named in this section mocks the review call or checks template loading. None feeds a judge-shaped output (`score:`, `criteria:`, rationale, findings) through the parser and asserts the extracted score. The mitigation (419\u2013424) relies on live runs, which are manual and non-deterministic. Add a unit test whose fixture uses the exact format the prompt requests, plus a variant with a stray verdict line. Per the project's parser-test rule, the fixture must match production output.",
+      "file_ref": null,
+      "category": "integration",
+      "raw_category": null,
+      "location": "project-documents/user/slices/302-slice.design-phase-judge-templates.md:295-305"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Overweight design; several sections can be cut",
+      "description": "The code change is two YAML files and two dict entries, which the slice itself estimates at \"four lines.\" The document runs about 450 lines. Cut:\n- **Data Flow (110\u2013150).** It re-traces ReviewAction \u2192 `run_review_with_profile` \u2192 parser \u2192 `enforce_judge`, which slices 300 and 301 own. This slice changes none of those steps. Replace it with one sentence and a link.\n- **Verification Walkthrough steps 1\u20132 (320\u2013359).** They repeat FR #1, FR #4, and the unit tests. Keep step 3 (live run) and step 4 (suite).\n- **Development Approach (426\u2013439).** Task ordering belongs in the task breakdown.\n- **Overview's second paragraph (23\u201327)** restates the architecture. Replace it with a link.\n\nKeep the failure-mode table, prompt shape, thresholds, and risks, which the architecture requires.",
+      "file_ref": null,
+      "category": "proportionality",
+      "raw_category": null,
+      "location": "project-documents/user/slices/302-slice.design-phase-judge-templates.md:110-150"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Claims that depend on slice 301 are unverified here",
+      "description": "The \"no new code\" claims rest on slice 301: `enforce_judge` ignores the model's verdict; the `execute()` exception handler re-looks up the template to produce UNKNOWN (396); `resolve_thresholds` reads `template.judge`; and the `judge:` block parses as described. The 301 document was not provided, so I could not check these. Verify them against 301 before the task breakdown relies on them.",
+      "file_ref": null,
+      "category": "dependencies",
+      "raw_category": null,
+      "location": "project-documents/user/slices/302-slice.design-phase-judge-templates.md:78-83"
+    },
+    {
+      "severity": "PASS",
+      "title": "Judge is a review template; no new action or dispatch signal",
+      "description": "This matches architecture lines 25 and 91 and non-goal line 113. Judges run on the existing review action. `is_judge` (the `judge:` block) is the dispatch signal. The slice states that the `judge.` name has no runtime meaning, consistent with the project rule against label-based logic.",
+      "file_ref": null,
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/302-slice.design-phase-judge-templates.md:185-196"
+    },
+    {
+      "severity": "PASS",
+      "title": "Verdict is derived from the score; the prompt forbids a verdict",
+      "description": "This matches architecture lines 51\u201353: the score is authoritative and the verdict is its projection. Telling the model not to emit a verdict keeps two conflicting judgments out of the persisted file.",
+      "file_ref": null,
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/302-slice.design-phase-judge-templates.md:208-216"
+    },
+    {
+      "severity": "PASS",
+      "title": "Threshold locus follows template-with-step-override",
+      "description": "This matches architecture line 85. Defaults live in the template's `judge:` block, with step-level override through slice 301, and no thresholds are hardcoded in code.",
+      "file_ref": null,
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/302-slice.design-phase-judge-templates.md:447-449"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "summary": "Score-reliability mitigation (b) only partly specified",
+      "location": "project-documents/user/slices/302-slice.design-phase-judge-templates.md:154-178",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "summary": "Gating posture not reconciled with \"advisory until calibrated\"",
+      "location": "project-documents/user/slices/302-slice.design-phase-judge-templates.md:218-234",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "failure-modes",
+      "raw_category": null,
+      "summary": "Two enumerated failure modes are unmapped; the injection cap is not mentioned",
+      "location": "project-documents/user/slices/302-slice.design-phase-judge-templates.md:394-408",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "failure-modes",
+      "raw_category": null,
+      "summary": "Two failure rows are silent, and no test checks a log signal",
+      "location": "project-documents/user/slices/302-slice.design-phase-judge-templates.md:398-400",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "proportionality",
+      "raw_category": null,
+      "summary": "Per-criterion sub-scores required ahead of the architecture's plan",
+      "location": "project-documents/user/slices/302-slice.design-phase-judge-templates.md:152-183",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "summary": "Python registry edit conflicts with \"connective work is just authoring\"",
+      "location": "project-documents/user/slices/302-slice.design-phase-judge-templates.md:51-63",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "concern",
+      "category": "dependencies",
+      "raw_category": null,
+      "summary": "Frontmatter dependencies and interfaces do not match the body",
+      "location": "project-documents/user/slices/302-slice.design-phase-judge-templates.md:6-7",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "concern",
+      "category": "integration",
+      "raw_category": null,
+      "summary": "The parser contract is asserted but has no offline test",
+      "location": "project-documents/user/slices/302-slice.design-phase-judge-templates.md:295-305",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "concern",
+      "category": "proportionality",
+      "raw_category": null,
+      "summary": "Overweight design; several sections can be cut",
+      "location": "project-documents/user/slices/302-slice.design-phase-judge-templates.md:110-150",
+      "location_verified": true
+    },
+    {
+      "id": "F010",
+      "severity": "note",
+      "category": "dependencies",
+      "raw_category": null,
+      "summary": "Claims that depend on slice 301 are unverified here",
+      "location": "project-documents/user/slices/302-slice.design-phase-judge-templates.md:78-83",
+      "location_verified": true
+    },
+    {
+      "id": "F011",
+      "severity": "pass",
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "summary": "Judge is a review template; no new action or dispatch signal",
+      "location": "project-documents/user/slices/302-slice.design-phase-judge-templates.md:185-196",
+      "location_verified": true
+    },
+    {
+      "id": "F012",
+      "severity": "pass",
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "summary": "Verdict is derived from the score; the prompt forbids a verdict",
+      "location": "project-documents/user/slices/302-slice.design-phase-judge-templates.md:208-216",
+      "location_verified": true
+    },
+    {
+      "id": "F013",
+      "severity": "pass",
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "summary": "Threshold locus follows template-with-step-override",
+      "location": "project-documents/user/slices/302-slice.design-phase-judge-templates.md:447-449",
+      "location_verified": true
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/302-slice.design-phase-judge-templates.md",
+    "against": "project-documents/user/architecture/300-arch.eval-actions-llm-as-judge-scoring.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261115-design/wt/302-design"
+  },
+  "timestamp": "2026-11-16T07:16:31.490859",
+  "model": "claude-haiku-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 4,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 1,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-haiku-5-5",
+  "answering_models": [
+    "claude-haiku-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 13,
+    "in_fences": 0,
+    "in_section": 13,
+    "surviving": 13
+  },
+  "effort": "xhigh",
+  "profile": "sdk",
+  "turns": 5,
+  "prompt_tokens": 196866,
+  "cached_tokens": 91154,
+  "cache_write_tokens": 105706,
+  "completion_tokens": 51680,
+  "reasoning_tokens": null,
+  "duration_seconds": 226.28975737513974,
+  "cost_usd": 0.04849164,
+  "cost_basis": "provider"
+}

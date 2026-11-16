@@ -1,0 +1,117 @@
+{
+ "review": "r07",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "FAIL",
+   "title": "Grading runs under its own cap, against the architecture's run-level cap",
+   "description": "The architecture's Design Goals say a benchmark \"stops at its own cap, which covers grading and judging as well as the replays.\" Its Cost section says the run-level cap \"covers all of it.\" D9 makes `sq benchmark grade` a separate command with its own `--max-cost`, and 424 D8 relies on that split. No single cap now bounds a benchmark's total spend. The slice acknowledges the departure and asks for the architecture to be changed to match. That is an architecture decision for the PM. Resolve it before D9 or 424 D8 is built: either the PM amends the architecture's cost goal, or grading moves under the run's cap.",
+   "location": "project-documents/user/slices/425-slice.grading-and-paired-report.md:236"
+  },
+  {
+   "i": 1,
+   "severity": "FAIL",
+   "title": "Producer-added test-side files reach the regression run",
+   "description": "The architecture says the regression suite comes \"from the start commit, not the producer's tree.\" D6 restores only existing test-side files that the producer modified or deleted. A test-side file the producer adds, such as a new `tests/conftest.py` in a directory that had none at start, is never removed. pytest applies that conftest to every start test under the directory, so an autouse fixture or `pytest_plugins` line can change regression outcomes. It also applies to the injected hidden tests beside it. 422's `is_test_side` is path-based, so such files can be identified. Remove test-side files that are absent from the start before the regression run, the same way D4 deletes tool-config files the start lacked.",
+   "location": "project-documents/user/slices/425-slice.grading-and-paired-report.md:201"
+  },
+  {
+   "i": 2,
+   "severity": "FAIL",
+   "title": "Review rules are read from the producer's tree",
+   "description": "D7 says the review's rules come \"from the sandbox tree's own rules directory (the start commit's).\" But D1 runs the review first, \"on the producer's commit exactly as written, before the grader changes anything.\" At review time the tree is the producer's commit, so its rules directory is the producer's version. A producer can add text to the rules that steers the findings the report compares. That breaks the architecture's \"the producer cannot change the grade\" principle and contradicts D7's own intent. Read the rules from `start_sha` through `TreeReader`, and add a test in which the producer edits a rules file and the injected rules are still the start's.",
+   "location": "project-documents/user/slices/425-slice.grading-and-paired-report.md:208"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Tool-config restoration omits setup.cfg and tox.ini",
+   "description": "The architecture restores `[tool.*]` tables and \"any standalone ruff.toml or pyrightconfig.json\" from the start commit, and says producer edits are \"counted and reported, never silently honored.\" `TOOL_CONFIG_FILES` omits `setup.cfg` and `tox.ini`. pytest reads `[tool:pytest]` and `[pytest]` settings from these files, such as `addopts` and `filterwarnings`, when pyproject has no pytest table. A producer edit to either one changes the regression run and is not recorded in `config_edits`. Add both files to the list.",
+   "location": "project-documents/user/slices/425-slice.grading-and-paired-report.md:189"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "The grade is rebuilt in a fresh sandbox, not the same one",
+   "description": "The architecture says the grade runs \"in the same sandbox\" as the producer. D1 rebuilds the tree from `start_sha` plus the stored diff, and says this is \"as 424 states.\" 424 stores the diff but does not state a rebuild. The real reason is in 421's State Management, which removes replay sandboxes on exit. The rebuild is sound, but the departure from the architecture's text should be recorded there, and D1 should cite 421.",
+   "location": "project-documents/user/slices/425-slice.grading-and-paired-report.md:161"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Grade records are separate from the replay record, against the architecture's one-record rule",
+   "description": "The architecture says \"One record per case run holds the producer outcome, the grade, usage, a reference to the diff and the identities that make it comparable,\" and that records stay coarse. The slice adds an `implementation_grade` per (replay, grader identity) and a `reference_grade` per case and grader. Re-grading under a new reviewer justifies the split, but the architecture does not record it. State Management also says one `reference_grade` per (case, grader identity), while D10's record id and `get_reference_grade` key it on environment digest too. Make the two consistent, and record the departure in the architecture.",
+   "location": "project-documents/user/slices/425-slice.grading-and-paired-report.md:145"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "The report does not check environment identity across configs",
+   "description": "The architecture says a report \"compares only results that match, and flags the rest.\" D1 checks that each grade matches its own replay's environment digest. Nothing checks that all configs on one case share a digest. Replays of different configs can run at different times, and the lock or the uv version can change between them, so the configs can be graded on different environments and still shown as comparable. The architecture also expects re-qualification when the environment identity changes. 422 defines `qualification_for` for that, but D1 drops every replay with `environment_changed` and never calls it. Add a digest check to case inclusion, and say which of the two outcomes applies.",
+   "location": "project-documents/user/slices/425-slice.grading-and-paired-report.md:263"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "Config identity is inconsistent, and the effort rule conflicts with the architecture",
+   "description": "Line 58 says report rows group by 420 D6's identity: model, profile, effort sent, `tool_use` and `max_output_tokens`. D13 (line 263) keys rows by (alias, model, profile, effort_sent), and drops `tool_use` and `max_output_tokens`. Pick one list and confirm it against 420 D6. Line 58 also says a replay \"with no effort stamp counts by its failure class, never as an effort `None` row.\" The architecture says every run \"records the effort actually sent, or records that none was sent,\" and that unsent effort is \"recorded as not sent.\" A config whose alias has no effort is a valid row. Separate a missing stamp, which is an absence, from a recorded none-sent, which is a row labelled as not sent.",
+   "location": "project-documents/user/slices/425-slice.grading-and-paired-report.md:58"
+  },
+  {
+   "i": 8,
+   "severity": "CONCERN",
+   "title": "Reinstall failures are all charged to the config, and a hang is unhandled",
+   "description": "D5 runs `uv sync --locked` for a producer-changed lock and maps any failure to `producer_env_unresolvable`, a config absence that counts as a fail. 421 D5 already has the reason set: `lock_stale_or_unresolvable` is a lock fault, while `install_timeout` and `installer_missing` are harness faults bounded by `benchmark.install_timeout_s`. A network outage or a hung index is therefore charged to the config. D5 also names no timeout, so a hang has no handling. Map reasons the way 421 does, bound the reinstall with `benchmark.install_timeout_s`, and add a test for each of the timeout and stale-lock cases.",
+   "location": "project-documents/user/slices/425-slice.grading-and-paired-report.md:197"
+  },
+  {
+   "i": 9,
+   "severity": "CONCERN",
+   "title": "GradingAdapter depends on FixCaseAdapter, despite the stated separation",
+   "description": "Line 322 says `GradingAdapter` is \"separate from ... 422's `FixCaseAdapter`,\" and that slice cases use it \"without fairness methods.\" But lines 56 and 471 have grade_one's node-id collection and `test_side_edits` using `FixCaseAdapter.collect` and `is_test_side`. 422 defines both on `FixCaseAdapter`, and 422 keeps that protocol separate \"so slice-case languages need no fairness methods.\" For 426's slice cases, the grader would need collect and `is_test_side` from a provider 426 does not implement. Move those two methods to a seam that both protocols can use, or have 426 implement them.",
+   "location": "project-documents/user/slices/425-slice.grading-and-paired-report.md:322"
+  },
+  {
+   "i": 10,
+   "severity": "CONCERN",
+   "title": "Replays scanned under older leak rules are counted, not excluded",
+   "description": "424 says `LEAK_RULES_VERSION` \"lets 425 exclude results scanned under older rules.\" D13 \u00a76 only counts replays scanned under an older version, and case inclusion (line 264) does not exclude them. A replay that the current rules would flag as leaked can therefore enter the comparison as clean. Make an older-version scan a harness absence in case inclusion, or record that 424's intent has changed.",
+   "location": "project-documents/user/slices/425-slice.grading-and-paired-report.md:271"
+  },
+  {
+   "i": 11,
+   "severity": "CONCERN",
+   "title": "Check and cost rows lack the paired intervals the architecture requires",
+   "description": "The architecture's Breakdown principle says pass rate, regressions, check deltas, review findings, cost, turns and time are \"reported side by side with n and paired intervals.\" D13 gives a paired bootstrap interval only for the pass pair (\u00a72). Checks (\u00a73) and cost (\u00a75) show means and totals with no interval. Review findings use floors, which the architecture allows for LLM signals. Add intervals to check deltas and cost, reusing `bootstrap_mean_interval`, which the slice already has. Or amend the architecture to say intervals apply to pass only.",
+   "location": "project-documents/user/slices/425-slice.grading-and-paired-report.md:268"
+  },
+  {
+   "i": 12,
+   "severity": "CONCERN",
+   "title": "A cap hit between floor runs discards paid reviews",
+   "description": "D8 writes no reference record when the cap hits between floor runs. The reviews already paid for are lost, and a rerun pays for them again. D9 keeps every record already written, but the spend is not kept. Check before starting a reference's floor that the cap covers all of its `review_floor_runs` at the per-review figure. A reference is then either fully graded or not started.",
+   "location": "project-documents/user/slices/425-slice.grading-and-paired-report.md:217"
+  },
+  {
+   "i": 13,
+   "severity": "CONCERN",
+   "title": "The reinstall runs producer-authored build code with the harness environment",
+   "description": "D5 runs `uv sync --locked --all-extras --dev` under the harness environment. That command builds and installs the project itself, so a build backend or build hook the producer wrote in `pyproject.toml` runs as code there, with the user's GitHub and SSH variables present. The architecture says the producer runs \"without GitHub credentials.\" 421 D5 treats install as \"harness work, not producer work,\" which stops holding once the producer edits the build config. Run the reinstall with the scrubbed environment (network allowed, credentials absent), or state why producer build code is acceptable at this trust level.",
+   "location": "project-documents/user/slices/425-slice.grading-and-paired-report.md:196"
+  },
+  {
+   "i": 14,
+   "severity": "CONCERN",
+   "title": "Two mechanisms nothing in the slice needs",
+   "description": "D3 renames a sibling file to `_2`, `_3` when `test_sqhidden_<stem>.py` already exists in the producer's tree, and records the rename. Nothing in the slice produces that collision, and the rename is an automatic resolution. Fail the injection with a harness absence instead, which is explicit and matches the `diff_apply_failed` class. Second, `--review-model` (line 207, and in the CLI at line 341) lets the reviewer change per invocation. The architecture requires a fixed grading config, and `benchmark.grading_review_model` already names it. Remove the flag, or keep it only with a stated need.",
+   "location": "project-documents/user/slices/425-slice.grading-and-paired-report.md:183"
+  },
+  {
+   "i": 15,
+   "severity": "NOTE",
+   "title": "Suppressions are counted, but they still shape the lint totals",
+   "description": "The architecture says suppressions are \"counted and reported, never silently honored.\" D6 counts them and shows them beside the totals, which meets that wording. The lint and type deltas still include the suppressed diagnostics, so a producer that adds `# noqa` shows a smaller lint delta. Label the check columns as \"with producer suppressions in place.\" The grade is not affected.",
+   "location": "project-documents/user/slices/425-slice.grading-and-paired-report.md:203"
+  }
+ ]
+}

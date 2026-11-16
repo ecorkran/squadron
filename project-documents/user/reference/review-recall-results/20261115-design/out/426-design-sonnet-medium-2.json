@@ -1,0 +1,207 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "\"No edits to 421/424/425\" claims contradict the edits the design requires",
+      "description": "The Excluded and Technical Scope lines say \"No edits to 424 or 425\", and D7 and Integration Points say 421 and 422 are \"used as specified\". The document then requires changes to each of those slices:\n- **424:** `CaseDrop.reason` is widened (Patterns and Conventions). D8 also relies on a `CaseKindRunner.requalify` method that 424 is said to \"provide\".\n- **425:** `bench_report` gains per-kind grouping and a pairwise section (D17). The Technical Requirements say `tests/benchmark/` passes unchanged \"except where \u2026 D17 extracts the interval\", yet D17 calls `bootstrap_mean_interval` as already existing.\n- **421:** `ScrubbedEnvironment.with_tools` is added, which Consumes calls \"the one addition\".\n- **422:** `yield_report.py` gains slice-case rows.\n\nThe ownership of `requalify` and `bootstrap_mean_interval` is ambiguous: either the earlier slices already define them or this slice adds them. The design needs one list of edits to other slices' code, split into \"provided by Nxx\" and \"added here\". This slice's integration contract depends on that list.",
+      "file_ref": null,
+      "category": "integration-contract",
+      "raw_category": null,
+      "location": "project-documents/user/slices/426-slice.slice-cases.md#Technical Scope"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Reference diff read at judge time has no failure handling",
+      "description": "The judge reads the reference diff with `git diff` in the user's checkout. It refuses up front only if `--repo` is missing or a case's `tip_sha` is absent. It does not say what happens if the `git diff` call itself fails or times out, or if sidecar writes for normalized diffs fail. D6 covers `git` failures in qualification as `harness_error`. D15 covers failed judge calls. The judge-time git path is a new I/O path with no stated handling, and the review rules require every new I/O path to have an explicit, observable failure mode. State whether such a failure drops the case (counted like harness-absent) or aborts with exit 1, and require an ERROR log plus a test.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/426-slice.slice-cases.md#Data Flow (Judging a benchmark)"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Reference is `tip_sha`, not the landing commit the architecture names",
+      "description": "The architecture says \"the landing commit is the reference\". D2 uses `tip_sha` instead, which is well justified: `fork..after` includes unrelated work that reached the target while the branch was open. D2 also rejects multiple-landing slices. Neither choice is recorded as a deviation from the architecture, and both reduce yield in a project where the architecture already expects low yield. The reasoning is sound, but the design should flag it as a refinement of the architecture text. The architecture or slice plan should be updated so other slices, such as 427 drawing planted defects from slice diffs, don't assume `after_sha`.",
+      "file_ref": null,
+      "category": "architectural-alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/426-slice.slice-cases.md#D2"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Design is heavy for a 3/5 slice; several items can be trimmed or shared",
+      "description": "The slice introduces about nine new modules, four new record types and seven store methods. It also does three cross-slice extractions or additions (`judge_pair`, `CfRegistration`, `with_tools`), a spike, a slash command and yield rows. That is more than the plan's 3/5 effort suggests. Things to cut or defer:\n- **D6:** The reuse and re-qualification rules (record key, `rule_version`, `harness_error` exemption) restate 422 D10. Reference 422's mechanism, or share its code, instead of adding a parallel `SliceQualification` store API.\n- **D16:** Two record-id schemes with differing hash lengths. Use one helper.\n- **`OverSizeCase`:** A separate persisted record type for a state the judge recomputes anyway on every run. Consider reporting it from the run summary and deferring persistence unless the report needs it across runs.\n- **Slash command:** The `/sq:benchmark` mirroring of `slice-cases build` and `judge` adds no capability. Defer it unless the slice plan assigns it.",
+      "file_ref": null,
+      "category": "proportionality",
+      "raw_category": null,
+      "location": "project-documents/user/slices/426-slice.slice-cases.md#Component Structure"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Pair sampling is unspecified when sample counts are uneven",
+      "description": "D13 pairs config A's sample s with config B's sample s. It does not say what happens when a config has fewer committed or recorded replays for a case. That can happen when the run cap was hit and the architecture marks the run partial, or when a replay hit a harness absence. A missing sample could be read either as a forfeit under D15's config-absence rule or as no pair. These produce different counts and different win shares in D17. State the rule explicitly: for example, a pair exists only where both samples have replay records, and a missing record is not a forfeit.",
+      "file_ref": null,
+      "category": "under-specification",
+      "raw_category": null,
+      "location": "project-documents/user/slices/426-slice.slice-cases.md#D13"
+    },
+    {
+      "severity": "PASS",
+      "title": "Cost-cap NFR restated with specific bound and overshoot",
+      "description": "The architecture's cost NFR requires a stated dollar bound before dispatch, a cap checked between dispatches, overshoot included in the bound, and kept records on stop. D16 restates this with a worked bound line, a one-call overshoot, a pre-call cap check, exit 2, and resume by record id.",
+      "file_ref": null,
+      "category": "nfr",
+      "raw_category": null,
+      "location": "project-documents/user/slices/426-slice.slice-cases.md#D16"
+    },
+    {
+      "severity": "PASS",
+      "title": "Objective-before-opinion and report separation preserved",
+      "description": "Slice cases get their own tables. The pairwise section never adjusts the objective grade, and the reference is a reference line and is never ranked. The ranking verdict comes from the paired bootstrap over cases. A \"no composite field\" test is extended to the new section. This matches the architecture's \"Breakdown, not a score\" and its rule to keep case kinds separate.",
+      "file_ref": null,
+      "category": "architectural-alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/426-slice.slice-cases.md#D17"
+    },
+    {
+      "severity": "PASS",
+      "title": "Containment, absence semantics and over-size rule match architecture",
+      "description": "The cf registration runs inside the scrubbed home. The leak-scan coverage is checked by a spike that ends in `BLOCKED:` on a no. Harness absences drop the case, and config absences forfeit pairs. The over-size rule excludes and counts whole cases, with no truncation, as the architecture's \"stated rule\" requires.",
+      "file_ref": null,
+      "category": "architectural-alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/426-slice.slice-cases.md#D9"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "integration-contract",
+      "raw_category": null,
+      "summary": "\"No edits to 421/424/425\" claims contradict the edits the design requires",
+      "location": "project-documents/user/slices/426-slice.slice-cases.md#Technical Scope",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "Reference diff read at judge time has no failure handling",
+      "location": "project-documents/user/slices/426-slice.slice-cases.md#Data Flow (Judging a benchmark)",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "architectural-alignment",
+      "raw_category": null,
+      "summary": "Reference is `tip_sha`, not the landing commit the architecture names",
+      "location": "project-documents/user/slices/426-slice.slice-cases.md#D2",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "proportionality",
+      "raw_category": null,
+      "summary": "Design is heavy for a 3/5 slice; several items can be trimmed or shared",
+      "location": "project-documents/user/slices/426-slice.slice-cases.md#Component Structure",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "under-specification",
+      "raw_category": null,
+      "summary": "Pair sampling is unspecified when sample counts are uneven",
+      "location": "project-documents/user/slices/426-slice.slice-cases.md#D13",
+      "location_verified": null
+    },
+    {
+      "id": "F006",
+      "severity": "pass",
+      "category": "nfr",
+      "raw_category": null,
+      "summary": "Cost-cap NFR restated with specific bound and overshoot",
+      "location": "project-documents/user/slices/426-slice.slice-cases.md#D16",
+      "location_verified": null
+    },
+    {
+      "id": "F007",
+      "severity": "pass",
+      "category": "architectural-alignment",
+      "raw_category": null,
+      "summary": "Objective-before-opinion and report separation preserved",
+      "location": "project-documents/user/slices/426-slice.slice-cases.md#D17",
+      "location_verified": null
+    },
+    {
+      "id": "F008",
+      "severity": "pass",
+      "category": "architectural-alignment",
+      "raw_category": null,
+      "summary": "Containment, absence semantics and over-size rule match architecture",
+      "location": "project-documents/user/slices/426-slice.slice-cases.md#D9",
+      "location_verified": null
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/426-slice.slice-cases.md",
+    "against": "project-documents/user/architecture/420-arch.model-benchmark.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261115-design/wt/426-design"
+  },
+  "timestamp": "2026-11-16T07:06:32.183732",
+  "model": "claude-sonnet-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 3,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-sonnet-5-5",
+  "answering_models": [
+    "claude-sonnet-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 8,
+    "in_fences": 0,
+    "in_section": 8,
+    "surviving": 8
+  },
+  "effort": "medium",
+  "profile": "sdk",
+  "turns": 4,
+  "prompt_tokens": 253066,
+  "cached_tokens": 143896,
+  "cache_write_tokens": 109164,
+  "completion_tokens": 5416,
+  "reasoning_tokens": null,
+  "duration_seconds": 47.85826187510975,
+  "cost_usd": 0.5059845000000001,
+  "cost_basis": "provider"
+}

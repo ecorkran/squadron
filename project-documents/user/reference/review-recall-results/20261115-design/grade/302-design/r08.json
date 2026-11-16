@@ -1,0 +1,47 @@
+{
+ "review": "r08",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Template-name-keyed rules loading is a missed dependency on the \"one required code change\" claim",
+   "description": "The design says `TEMPLATE_INPUTS` is \"the one required code change\" because the registry is keyed by exact template name. That is not the only name-keyed lookup on the review path. `ReviewAction._review()` calls `load_review_rules(template_name, ...)`, and `get_template_rules` in `review/rules.py` reads `review-{template_name}.md` and `review.md`. A judge named `judge.slice-vs-arch` will not pick up any project rules written for `review-slice.md` or `review-tasks.md`. It will only get the generic `review.md`.\n\nThe architecture lists \"the project rules\" as part of a judge's in-repo ground truth. The judge variants would silently get different rules from the templates whose criteria they claim to mirror. The design's own \"naming is not a dispatch signal\" decision is also contradicted: rules selection is a second name-keyed dispatch, and the design neither mentions nor handles it. Decide explicitly between:\n- documenting that judge templates take only `review.md`;\n- adding `review-judge.*.md` rules files; or\n- changing the lookup.\n\nAlso confirm that the persisted review filename and header, which embed the template name, are acceptable with a dotted name.",
+   "location": "project-documents/user/slices/302-slice.design-phase-judge-templates.md#what-changes"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Structured-output constraint and enforced score-with-rationale are dropped from plan scope",
+   "description": "The slice plan entry for 302 assigns two things to this slice:\n- \"Each template uses a structured-output constraint for the score field.\"\n- \"The score-with-rationale shape is enforced by the template's structured output.\"\n\nThe architecture's score-reliability mitigation (b) says the same. The design instead relies on prose instructions, and states that `## Rationale` is \"prose scaffolding... not a new parser target\". Nothing checks that a rationale is present, and nothing constrains the `score:` field beyond a prompt request. A missing rationale would pass silently, with no log line.\n\nEither:\n- state how the template constrains the score field (for example, an explicit output-format block plus the existing `score:` parse), and add an observable signal when `## Rationale` is absent; or\n- record explicitly that enforcement is deferred, and why. The plan entry needs updating if so.",
+   "location": "project-documents/user/slices/302-slice.design-phase-judge-templates.md#score-with-rationale-prompt-shape"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "\"Reuse existing criteria\" is implemented as copy-paste, which creates the drift the design says it avoids",
+   "description": "The design justifies reuse so that \"the two should agree on *what* good looks like\". The mechanism is \"copy the standard template's criteria\" into two new YAML files. The existing `slice.yaml` and `tasks.yaml` embed their criteria inside `system_prompt` text. After the copy there are two independent copies, and an edit to `slice.yaml`'s criteria will not reach `judge.slice-vs-arch`.\n\nThe design should either name a mechanism that keeps one source of truth, or state that drift is accepted and how it will be detected. For example, a test that asserts the judge criteria block equals the standard template's.",
+   "location": "project-documents/user/slices/302-slice.design-phase-judge-templates.md#reuse-existing-evaluation-criteria-dont-re-derive-them"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Failure-mode table omits ground-truth read failure, injection-cap overflow, and unparseable output",
+   "description": "The architecture enumerates these failure modes for judges:\n- an unparseable response;\n- a missing or unreadable ground-truth file;\n- injected ground truth exceeding the cap.\n\nThe slice plan assigns their `UNKNOWN` mapping to 301. This slice is the first to run real templates that inject two real documents, an artifact plus its architecture or slice design, through that path. The table covers timeout, absent score, rogue verdict, `TEMPLATE_INPUTS` failure and malformed criteria. It says nothing about:\n- a resolved path that does not exist on disk (the `TEMPLATE_INPUTS` check only verifies the key is present);\n- the cap being exceeded by a large architecture document;\n- a response with no parseable structure at all.\n\nAdd rows naming the handling and verdict for each, even if the answer is \"routes through 301 \u2192 `UNKNOWN`\". The slice also claims \"no silent pass\" for its paths, so it should cover all of them.",
+   "location": "project-documents/user/slices/302-slice.design-phase-judge-templates.md#failure-modes-on-the-judge-template-path"
+  },
+  {
+   "i": 6,
+   "severity": "NOTE",
+   "title": "Test scope partly duplicates slice 301",
+   "description": "The \"rogue verdict is discarded\" test exercises `enforce_judge`, which slice 301 already owns and tests. It can be dropped, or reduced to one parse-then-enforce check using a real raw output with a verdict line. The Risk section also calls the prompt shape \"two new I/O paths\". A prompt is not an I/O path, so the wording could be tightened.",
+   "location": "project-documents/user/slices/302-slice.design-phase-judge-templates.md#technical-requirements"
+  },
+  {
+   "i": 7,
+   "severity": "NOTE",
+   "title": "Findings-format contract and CLI invocation need pinning",
+   "description": "The design says not to copy the `slice.yaml` CRITICAL verdict-consistency block. It does not say to keep the `### [SEVERITY]` and `location:` finding format, which the parser needs. State that explicitly so the judge prompt does not drop it along with the verdict block.\n\nSuccess criterion 3 uses `sq review slice-vs-arch <artifact> <against>`, while the walkthrough uses `--template judge.slice-vs-arch`. The design already defers confirming the CLI shape to implementation, but the two forms should be made consistent.",
+   "location": "project-documents/user/slices/302-slice.design-phase-judge-templates.md#special-considerations"
+  }
+ ]
+}

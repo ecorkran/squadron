@@ -1,0 +1,243 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Unstamped and legacy runs read as \"not sent\", and the stamp condition is stated two ways",
+      "description": "- **Reader erases a distinction the design draws.** State Management (line 109) separates `null` (not sent) from an absent key (run predates the slice, or failed before resolution). `action_effort_sent` then returns `None` for \"neither key nor usage record\", so \"unknown\" and \"backend default\" become the same value.\n- **Old failed runs keep the defect D5 fixes.** A pre-slice run that failed with no telemetry still lands in the \"not sent\" config row, which D5 itself calls a stand-in.\n- **New unstamped runs have no stated config.** D5 says runs with no stamp are \"counted by that class, not by effort\", but D6 makes `effort_sent` part of the grouping key and drops the alias. The design never says which config row such a run belongs to.\n- **This leaves an architecture requirement unmet.** \"Absent is not zero\" requires a producer crash to count as a fail for that config. A `sq run` subprocess that dies with no run state is exactly that case, and 424 inherits the rule.\n- **The stamp condition is inconsistent.** Technical Scope (line 32) and Data Flow (line 103) say \"whenever an action reaches a provider\". D5 (line 136) says \"on every action result built after the model is resolved\". A dispatch that fails on connect or auth is stamped under one reading and not the other.\n\nFix: pick one stamp condition. Have the reader return a distinct \"unknown\" result for absent-with-no-usage. State that an unstamped run is attributed to the requested config for failure counting and kept out of effort rows.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/420-slice.effort-audit-across-dispatch-paths.md:133-140"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Config identity is not provided as a shared contract and already diverges",
+      "description": "- **The slice plan assigns this as an interface.** Its entry says the slice \"Provides effort-sent on usage records and in config identity. All later slices read it.\"\n- **The design ships it as a private function.** `config_identity` is private to `replay/report.py`, and Integration Points (line 162) says \"this slice ships no shared identity type\" and that later slices \"apply the rule to their own record types\".\n- **Two definitions already disagree.** Replay groups on `(model, profile, effort_sent, tool_use, max_output_tokens)`. `sq stats producers` keeps `ProducerKey(model, profile, effort, reviewer)`. Two aliases that differ only in `tool_use` are two rows in a replay report and one row in stats.\n- **Later slices would add more copies.** 424 and 425 would each write their own, against the project's DRY and one-definition rules.\n\nFix: put the identity in one shared place (a function or small value type beside `action_effort_sent`) that replay, stats and 424/425 all use. Otherwise state why stats is exempt.",
+      "file_ref": null,
+      "category": "integration",
+      "raw_category": null,
+      "location": "project-documents/user/slices/420-slice.effort-audit-across-dispatch-paths.md:142-147"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The enumeration guard would not catch the defect classes this audit found",
+      "description": "D7 classifies `AgentConfig(` constructions and `open_pipeline_session` calls. Value (line 25) claims \"A new dispatch path cannot ship without a decision about effort.\" Against the inventory's own four defects:\n\n| Path | Defect | Why the guard misses it |\n|---|---|---|\n| 3 | Record hard-codes `None` | A recording defect, not a construction site |\n| 7 | Caller uses `resolve` and drops effort | Caller of a shared helper, not a construction site |\n| 8 | Caller does not pass effort | Caller of a shared helper, not a construction site |\n| 11 | Renderer emits a command with no effort | Emits a command string, constructs nothing |\n\nThis assumes the shared helpers construct `AgentConfig`, as the inventory's entry points suggest. Paths 13\u201314, which pass a model to a CLI raw, are also invisible to the guard.\n\nFix, lighter and stronger: make `effort` a required keyword with no default on the shared helpers (`one_shot_dispatch_with_telemetry`, `run_review_with_profile`, `capture_summary_via_profile_with_telemetry`), so omission is a pyright error. Then narrow D7's claim to what it enforces, or have it enumerate helper call sites.",
+      "file_ref": null,
+      "category": "testing",
+      "raw_category": null,
+      "location": "project-documents/user/slices/420-slice.effort-audit-across-dispatch-paths.md:149-152"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`tool_use` and `max_output_tokens` in the identity are alias values, not wire values",
+      "description": "D6 is titled \"what went on the wire\", but `config_ref` copies these two fields from the alias. That is the stand-in pattern the slice removes for effort. Adding them is justified, because without them dropping the alias would merge configs that send different requests, and they are the only other alias fields that change the request. Say explicitly that these two are configured values, or record them as sent.",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/slices/420-slice.effort-audit-across-dispatch-paths.md:145"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Slice declares it supersedes the architecture's config tuple",
+      "description": "The architecture's goal is that a result \"names\" the config as \"(alias, model, profile, effort sent)\". The slice keeps the alias as stored provenance and display, so naming is preserved. The slice plan's fourth criterion requires alias-independent grouping, so the narrowing is correct. The architecture text should be updated to match, so that 421\u2013427 designs are not reviewed against the old tuple.",
+      "file_ref": null,
+      "category": "alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/420-slice.effort-audit-across-dispatch-paths.md:162"
+    },
+    {
+      "severity": "NOTE",
+      "title": "\"Sends and records\" guarantee is wider than the inventory",
+      "description": "Integration Points promises that \"every alias-resolving dispatch path, including the grading review and the judge, sends and records effort.\" Path 7 (findings-addressed judge) and paths 10\u201311 (prompt-only) write no record. None of these is on a benchmark path, since replays strip the review loop, and deferring path 7's missing `UsageRecord` to an issue is proportionate. Reword the guarantee to \"sends; records wherever a record is written\".",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/slices/420-slice.effort-audit-across-dispatch-paths.md:163"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Relative effort looks understated",
+      "description": "The design changes about fifteen modules, adds two model fields and a new metadata key with a reader, and adds an AST guard, at a stated 2/5. Nothing here is cuttable against the slice plan entry. The estimate is closer to 3/5.",
+      "file_ref": null,
+      "category": "proportionality",
+      "raw_category": null,
+      "location": "project-documents/user/slices/420-slice.effort-audit-across-dispatch-paths.md:229"
+    },
+    {
+      "severity": "PASS",
+      "title": "Slice plan success criteria are covered",
+      "description": "- Inventory: lines 60\u201378.\n- Per-path send tests: line 180.\n- \"Not sent\" recording with a capability-gate test: D1 and line 180.\n- Identity on effort sent, with the alias-merge case: D6 and line 177.\n\nThe out-of-scope paths (13\u201317) resolve no alias, so the architecture's \"sends effort when the alias carries it\" does not reach them.",
+      "file_ref": null,
+      "category": "alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/420-slice.effort-audit-across-dispatch-paths.md:168-186"
+    },
+    {
+      "severity": "PASS",
+      "title": "\"Not sent\" is never the alias's value",
+      "description": "D1, D2 and D5 keep to the architecture's \"Effort that was not sent is recorded as not sent, not as the alias's value.\" Compaction records the session's real effort, and the reader's `usage.effort` fallback only reads a field that already meant \"sent\".",
+      "file_ref": null,
+      "category": "alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/420-slice.effort-audit-across-dispatch-paths.md:113-122"
+    },
+    {
+      "severity": "PASS",
+      "title": "Boundaries, dependencies, failure modes and NFRs",
+      "description": "- **Boundaries.** No new store record type and no migration; optional fields default to `None`, matching \"Extend 320's store, don't fork it\".\n- **Dependencies.** They point only at completed work (931, 175, #216).\n- **Failure modes.** No new I/O path or message type is introduced. The one new parse (stored effort string) fails explicitly on an unrecognized value.\n- **NFRs.** The architecture states none for this path.",
+      "file_ref": null,
+      "category": "architecture",
+      "raw_category": null,
+      "location": "project-documents/user/slices/420-slice.effort-audit-across-dispatch-paths.md"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "Unstamped and legacy runs read as \"not sent\", and the stamp condition is stated two ways",
+      "location": "project-documents/user/slices/420-slice.effort-audit-across-dispatch-paths.md:133-140",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "integration",
+      "raw_category": null,
+      "summary": "Config identity is not provided as a shared contract and already diverges",
+      "location": "project-documents/user/slices/420-slice.effort-audit-across-dispatch-paths.md:142-147",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "testing",
+      "raw_category": null,
+      "summary": "The enumeration guard would not catch the defect classes this audit found",
+      "location": "project-documents/user/slices/420-slice.effort-audit-across-dispatch-paths.md:149-152",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "note",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "`tool_use` and `max_output_tokens` in the identity are alias values, not wire values",
+      "location": "project-documents/user/slices/420-slice.effort-audit-across-dispatch-paths.md:145",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "alignment",
+      "raw_category": null,
+      "summary": "Slice declares it supersedes the architecture's config tuple",
+      "location": "project-documents/user/slices/420-slice.effort-audit-across-dispatch-paths.md:162",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "\"Sends and records\" guarantee is wider than the inventory",
+      "location": "project-documents/user/slices/420-slice.effort-audit-across-dispatch-paths.md:163",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "note",
+      "category": "proportionality",
+      "raw_category": null,
+      "summary": "Relative effort looks understated",
+      "location": "project-documents/user/slices/420-slice.effort-audit-across-dispatch-paths.md:229",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "pass",
+      "category": "alignment",
+      "raw_category": null,
+      "summary": "Slice plan success criteria are covered",
+      "location": "project-documents/user/slices/420-slice.effort-audit-across-dispatch-paths.md:168-186",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "pass",
+      "category": "alignment",
+      "raw_category": null,
+      "summary": "\"Not sent\" is never the alias's value",
+      "location": "project-documents/user/slices/420-slice.effort-audit-across-dispatch-paths.md:113-122",
+      "location_verified": true
+    },
+    {
+      "id": "F010",
+      "severity": "pass",
+      "category": "architecture",
+      "raw_category": null,
+      "summary": "Boundaries, dependencies, failure modes and NFRs",
+      "location": "project-documents/user/slices/420-slice.effort-audit-across-dispatch-paths.md",
+      "location_verified": null
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/420-slice.effort-audit-across-dispatch-paths.md",
+    "against": "project-documents/user/architecture/420-arch.model-benchmark.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261115-design/wt/420-design"
+  },
+  "timestamp": "2026-11-16T06:56:24.786740",
+  "model": "claude-fable-5-2",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 5,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-fable-5-2",
+  "answering_models": [
+    "claude-fable-5-2"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 10,
+    "in_fences": 0,
+    "in_section": 10,
+    "surviving": 10
+  },
+  "effort": "medium",
+  "profile": "sdk",
+  "turns": 6,
+  "prompt_tokens": 359997,
+  "cached_tokens": 222967,
+  "cache_write_tokens": 137022,
+  "completion_tokens": 8672,
+  "reasoning_tokens": null,
+  "duration_seconds": 92.69417141610757,
+  "cost_usd": 2.5846573,
+  "cost_basis": "provider"
+}

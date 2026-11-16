@@ -1,0 +1,279 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Task 28: frontmatter on the diff-judge prompt will be sent to the judge",
+      "description": "Task 28 says to add `data/benchmark/pairwise-diff-judge.md` \"(frontmatter per `file-naming-conventions`)\" and to load it \"as `replay/judge.py` loads its own\". `judge_prompt()` at `src/squadron/replay/judge.py:25-27` returns `read_text()` unchanged. 177's `src/squadron/data/replay/pairwise-judge.md` has no frontmatter. So the YAML block would go into every judge prompt and into `JudgeRef.prompt_hash`. Pick one:\n- drop the frontmatter requirement for packaged prompt data, matching 177; or\n- load the file through `strip_frontmatter` (`judge.py:65`) and hash the stripped text.\n\nAdd a test in `test_diff_prompt.py` that the built prompt does not start with `---`.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/426-tasks.slice-cases.md:248"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Tasks 29\u201330: the over-size check may run on raw diffs",
+      "description": "D14 measures the prompts the judge would actually see, which hold normalized diffs. But:\n- Task 27's `Contestant` holds \"diff bytes\".\n- Task 29's `check_size` \"build[s] every pair's longer prompt\" and never mentions normalization.\n- Normalization is first introduced in Task 30's per-case loop.\n- Task 32's `plan_judge` calls `check_size` before that loop runs.\n\nA junior implementer will likely measure raw diffs. A large `uv.lock` or DEVLOG change would then mark a case `over_size` even though the judge would never see that text. The fix: normalize once, when contestants are built (Task 27 or 32), and pass `NormalizedDiff.text` to both `check_size` and the loop. Add a test in Task 29 where a raw diff is over the limit but its normalized form fits, and the case is judged.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/426-tasks.slice-cases.md:242-258"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`judge` with no `--max-cost`: Click exits 2, which collides with \"cap reached\"",
+      "description": "The contract sets exit 2 for \"run cap reached\" and exit 1 for a refusal. The success criteria say `judge` without `--max-cost` \"refuses and names what is missing\". Task 35 writes the option as `--max-cost USD` (not bracketed, so required), and Task 31 has a \"no run cap\" refusal. If Typer declares the option required, Click rejects a missing value with its own usage error and exit 2. That never reaches the Task 31 refusal and looks the same as a cap stop. Task 35 should declare `--max-cost` optional at the Typer level, so `plan_judge` gives the refusal and exit 1. Its test should assert exit 1 with the message naming `--max-cost`, not just \"each refusal of Task 31\".",
+      "file_ref": null,
+      "category": "api-contract",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/426-tasks.slice-cases.md:285-286"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Task 17 rebuilds 422's repeat-and-exclude step",
+      "description": "The design lists \"the repeat-and-exclude step\" as a 422 prerequisite (Dependencies \u2192 422; Consumes \u2192 \"the repeat step \u2026 unchanged\"). Task 17 instead describes the logic from scratch: run N times, classify `flaky` and `fails_at_reference`. Task 8's gate (line 122) checks `test_sets` and `QualificationOutcome` but not 422's repeat function. That invites a second copy of the classification that could drift from 422 D9. Add 422's repeat-and-exclude function to the Task 8 grep list, and have Task 17 call it and test only that its result is mapped onto `excluded_with_reasons`.",
+      "file_ref": null,
+      "category": "dry",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/426-tasks.slice-cases.md:179"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Yield rows are never wired into `slice-cases build`",
+      "description": "The API contract says the build prints one line per candidate, \"then the slice-case yield rows\". Task 21 says \"until then print the lines only\". Task 22's success line says \"Task 21's command prints the rows\", but Task 22 has no step that changes the command and no CLI test that checks for the rows. Either move Task 22 before Task 21, so Task 21 wires and tests the rows directly, or add a bullet to Task 22 that edits `benchmark_slice.py` and extends `test_benchmark_slice_build.py` to assert the rows follow the candidate lines.",
+      "file_ref": null,
+      "category": "sequencing",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/426-tasks.slice-cases.md:201-209"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The empty-regression fixture is built but never qualified",
+      "description": "The criterion \"Fixture slices produce each rejection: \u2026 an empty regression selection\" asks for a fixture-driven rejection. Task 6 builds \"a slice whose every test changed and one whose regression selection would be empty\". The only `no_regression_signal` test is in Task 18, and it uses adapter and sandbox doubles, so neither builder goes through qualification. The \"every test changed\" builder traces to no criterion at all: D5 says test-data changes are not rejected, and nothing asserts that. Choose one:\n- run one Task 18 test on the empty-regression builder through the real Python adapter; or\n- drop both builders and say the criterion is met by the double-based test.\n\nEither way, delete the \"every test changed\" builder.",
+      "file_ref": null,
+      "category": "coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/426-tasks.slice-cases.md:105,185"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Proportionality: the \"load tests\" are not needed, repeat other tests, and have no CI wiring",
+      "description": "The slice design states no NFR, so no load test is required. The Context Summary still adds two \"load tests\":\n- **Task 33's \"network-layer load test\" (200-pair plan, slow and hung dispatcher):** repeats Task 3 (a hung dispatcher is cut at `timeout_s`), Task 30 (a timed-out pair is unrecorded, logged at ERROR, counted, and later pairs still run), and Task 33's own cap test. Cut it.\n- **Task 24's eight-way concurrent `invoke`:** reasonable as an isolation unit test (each sandbox has its own home), but it should not be called a load test.\n\nCalling them load tests also raises the CI-gating rule, and no CI wiring task exists. Remove the label and line 53, and keep Task 24's test as an ordinary unit test. Two smaller cuts:\n- Task 3's separate \"hung dispatcher\" case duplicates its own \"first call times out\" case.\n- Task 21's `--help` / `option.hidden` check duplicates Task 40's comparison against `--help`.",
+      "file_ref": null,
+      "category": "proportionality",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/426-tasks.slice-cases.md:53,276"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Task 7 checks the normalization cases one at a time, not as one combined diff",
+      "description": "The criterion describes a single test diff that has DEVLOG, CHANGELOG, task, review, slice-document and `uv.lock` changes, plus a rename and a binary file, and normalizes to code changes, the kept rename and the marker line. Task 7 tests each element separately. Adding one combined synthetic case would match the criterion word for word and catch problems that only appear when the sections interact.",
+      "file_ref": null,
+      "category": "coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/426-tasks.slice-cases.md:114"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The spike comes after Tasks 2\u20139, not first as the design said",
+      "description": "The design's mitigation is \"The D9 spike runs first\". The task file puts the extractions, the precondition gate and `with_tools` first. That is justified: the spike needs `CfRegistration` (Task 4) and `with_tools` (Task 9), and Task 1 records the change in the design. If the spike fails, the branch keeps refactors that are useful anyway. No change needed.",
+      "file_ref": null,
+      "category": "sequencing",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/426-tasks.slice-cases.md:50,133"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The spike's DEVLOG entry lands in the records commit",
+      "description": "Task 10 has no commit marker, so its DEVLOG entry goes into Task 12's `feat: add slice qualification\u2026` commit. A `docs:` marker after Task 10 would keep the spike result in its own commit. This is optional.",
+      "file_ref": null,
+      "category": "commits",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/426-tasks.slice-cases.md:133-151"
+    },
+    {
+      "severity": "PASS",
+      "title": "Success criteria coverage",
+      "description": "Every criterion maps to at least one task:\n- build and qualification records: Tasks 13\u201321 and 23\n- case fields: Tasks 16\u201318\n- runner, scrubbed cf and unchanged project list: Tasks 24\u201326\n- grading and per-kind tables: Tasks 36, 39 and 41\n- normalization (synthetic and real): Task 7\n- reference line: Tasks 37\u201338\n- over-size: Tasks 29, 34, 38 and 41\n- forfeits and harness absence: Tasks 27 and 32\n- failure-path signals: Tasks 19, 24 and 31\n- refusals, bound, cap and resume: Tasks 31 and 33\u201335\n- `tests/replay/` unchanged: Tasks 3\u20134\n- hand-computed pairwise tests: Task 37\n- mixed-kind integration and yield rows: Tasks 22 and 39",
+      "file_ref": null,
+      "category": "coverage",
+      "raw_category": null,
+      "location": "project-documents/user/slices/426-slice.slice-cases.md:430-457"
+    },
+    {
+      "severity": "PASS",
+      "title": "Sequencing, test-with pattern and commit markers",
+      "description": "Tasks 2\u20137, which need nothing from 421\u2013425, are committed before the Task 8 `BLOCKED:` gate. Later tasks use only names created earlier: `is_dropped` (Task 7) in Task 13, `artifact_pattern` and `suffix_order` (Task 2) in Task 14, `judge_pair` (Task 3) in Task 30. Commit markers sit at tested points and are neither on every task nor only at the end. The live-run correction commits are skipped when nothing changed. No task merges or pushes.",
+      "file_ref": null,
+      "category": "sequencing",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/426-tasks.slice-cases.md"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Task 28: frontmatter on the diff-judge prompt will be sent to the judge",
+      "location": "project-documents/user/tasks/426-tasks.slice-cases.md:248",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Tasks 29\u201330: the over-size check may run on raw diffs",
+      "location": "project-documents/user/tasks/426-tasks.slice-cases.md:242-258",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "api-contract",
+      "raw_category": null,
+      "summary": "`judge` with no `--max-cost`: Click exits 2, which collides with \"cap reached\"",
+      "location": "project-documents/user/tasks/426-tasks.slice-cases.md:285-286",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "dry",
+      "raw_category": null,
+      "summary": "Task 17 rebuilds 422's repeat-and-exclude step",
+      "location": "project-documents/user/tasks/426-tasks.slice-cases.md:179",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "sequencing",
+      "raw_category": null,
+      "summary": "Yield rows are never wired into `slice-cases build`",
+      "location": "project-documents/user/tasks/426-tasks.slice-cases.md:201-209",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "coverage",
+      "raw_category": null,
+      "summary": "The empty-regression fixture is built but never qualified",
+      "location": "project-documents/user/tasks/426-tasks.slice-cases.md:105,185",
+      "location_verified": null
+    },
+    {
+      "id": "F007",
+      "severity": "concern",
+      "category": "proportionality",
+      "raw_category": null,
+      "summary": "Proportionality: the \"load tests\" are not needed, repeat other tests, and have no CI wiring",
+      "location": "project-documents/user/tasks/426-tasks.slice-cases.md:53,276",
+      "location_verified": null
+    },
+    {
+      "id": "F008",
+      "severity": "note",
+      "category": "coverage",
+      "raw_category": null,
+      "summary": "Task 7 checks the normalization cases one at a time, not as one combined diff",
+      "location": "project-documents/user/tasks/426-tasks.slice-cases.md:114",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "note",
+      "category": "sequencing",
+      "raw_category": null,
+      "summary": "The spike comes after Tasks 2\u20139, not first as the design said",
+      "location": "project-documents/user/tasks/426-tasks.slice-cases.md:50,133",
+      "location_verified": null
+    },
+    {
+      "id": "F010",
+      "severity": "note",
+      "category": "commits",
+      "raw_category": null,
+      "summary": "The spike's DEVLOG entry lands in the records commit",
+      "location": "project-documents/user/tasks/426-tasks.slice-cases.md:133-151",
+      "location_verified": true
+    },
+    {
+      "id": "F011",
+      "severity": "pass",
+      "category": "coverage",
+      "raw_category": null,
+      "summary": "Success criteria coverage",
+      "location": "project-documents/user/slices/426-slice.slice-cases.md:430-457",
+      "location_verified": true
+    },
+    {
+      "id": "F012",
+      "severity": "pass",
+      "category": "sequencing",
+      "raw_category": null,
+      "summary": "Sequencing, test-with pattern and commit markers",
+      "location": "project-documents/user/tasks/426-tasks.slice-cases.md",
+      "location_verified": null
+    }
+  ],
+  "template_name": "tasks",
+  "input_files": {
+    "input": "project-documents/user/tasks/426-tasks.slice-cases.md",
+    "against": "project-documents/user/slices/426-slice.slice-cases.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261115-design/wt/426-tasks"
+  },
+  "timestamp": "2026-11-16T07:18:32.916011",
+  "model": "claude-opus-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 5,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-opus-5-5",
+  "answering_models": [
+    "claude-opus-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 12,
+    "in_fences": 0,
+    "in_section": 12,
+    "surviving": 12
+  },
+  "effort": "high",
+  "profile": "sdk",
+  "turns": 6,
+  "prompt_tokens": 415650,
+  "cached_tokens": 311258,
+  "cache_write_tokens": 104384,
+  "completion_tokens": 11817,
+  "reasoning_tokens": null,
+  "duration_seconds": 119.6711995000951,
+  "cost_usd": 1.1344653,
+  "cost_basis": "provider"
+}

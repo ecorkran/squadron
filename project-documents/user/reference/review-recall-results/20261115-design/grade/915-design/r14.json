@@ -1,0 +1,47 @@
+{
+ "review": "r14",
+ "findings": [
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "D1's rationale says \"next round\", but the design resumes by re-running the paused round",
+   "description": "D1 point 2 argues that \"'proceed' for a loop with rounds remaining means the **next round**, not the next step\". But the \"Consequence for `max:`\" paragraph, D3 (`range(start_iteration, \u2026)` with `start_iteration` set to the recorded iteration) and Functional Requirements line 298-300 (\"continues from round 1\") all re-run the **paused** round from the beginning. So round N's dispatch and review run twice, and the review the human actually looked at is thrown away.\n\nThese are two different behaviours. They have different costs (an extra dispatch and review per resume) and different counting under `max:`. The design should choose one and make the rationale match it. If the paused round is re-run, it should also say what happens when the re-run review returns the same CONCERNS and the checkpoint fires again on the same round. Nothing in the design shows that this cycle ends, apart from the human choosing `Exit`.",
+   "location": "project-documents/user/slices/915-slice.loop-checkpoint-pause-resume-correctness.md:161-182"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "An empty `prior_iteration_step_outputs` on re-entry drops slice 910's findings feedback",
+   "description": "Slice 910 made loops converge by feeding each round's findings into the next round. Under D3, the resumed round N starts with an empty dict, even though round N-1's outputs are still saved in the paused run's `action_results`. So the resumed round dispatches without the findings that caused the pause. This is weaker than an uninterrupted run, and it erodes the convergence guarantee that the Value section says this slice protects (`until: review.pass`, the gate from slice 305).\n\nCalling the empty dict \"honest\" covers the data model, but it leaves the behaviour worse. The design should do one of two things:\n- rehydrate round N-1's outputs from saved state, which is a narrow read of data that already exists; or\n- list the degraded feedback as a Known Limitation, next to the `each:`/`fan_out:` one, with its effect on convergence.\n\nAt present it is only mentioned in passing in D3.",
+   "location": "project-documents/user/slices/915-slice.loop-checkpoint-pause-resume-correctness.md:258-264"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Including FAILED widens scope, and re-entering a failed loop breaks the stated `max:` rule",
+   "description": "Adding `FAILED` to `_RESUMABLE_STATUSES` changes resume for every failed step in every pipeline. The slice plan entry covers only checkpoint-paused loops. The design calls this \"the same bug wearing a different status\", but it does not trace what happens next for a failed **loop**.\n\nA loop that exhausts with `on_exhaust: fail` records `FAILED` at `iteration = max`. With Part B, resume would call `resume_iteration_for`, re-enter at round `max`, and run one more round. That contradicts the design's own rule at line 180-182: \"Resume does not grant extra rounds.\"\n\nThere are two ways to fix this:\n- **Narrow the change:** limit Part A to `PAUSED` and file the FAILED case as its own issue.\n- **Keep FAILED:** state that `start_from_iteration` applies only when the recorded status is `PAUSED`, and that a failed loop restarts from round 1, or else refuse to resume it with an explicit error. Add a test for the exhausted-loop case.",
+   "location": "project-documents/user/slices/915-slice.loop-checkpoint-pause-resume-correctness.md:204-208"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "`resume_iteration_for` does not say which entry it reads when a step has several, or what happens if the recorded round is past `max`",
+   "description": "`_append_step` appends without conditions, and D2 deliberately keeps it that way. So a loop that pauses, resumes and pauses again will have several `StepState` entries with the same `step_name`. The design does not say whether `resume_iteration_for` returns the latest entry, the first, or the highest iteration. The design needs this answer to resume at the correct round.\n\nSeparately, the pipeline YAML can be edited between the pause and the resume. If the recorded iteration is greater than the loop's current `max`, `range(start_iteration, max + 1)` is empty and the loop runs zero rounds. That is the same silent skip this slice exists to remove. The clamp at line 247-248 only guards the low end (`>= 1`). The design should name the selection rule (most recent entry) and fail explicitly when the recorded iteration is greater than `max`. This follows the project's no-silent-fallback rule, and the failure needs a test that checks its observable signal, as Technical Requirements line 321 already asks.",
+   "location": "project-documents/user/slices/915-slice.loop-checkpoint-pause-resume-correctness.md:240"
+  },
+  {
+   "i": 5,
+   "severity": "NOTE",
+   "title": "D2's prose describes an allowlist but the sketch uses a denylist",
+   "description": "The prose says \"present **and** in a terminal-complete status\", which is an allowlist. The code sketch excludes `{PAUSED, FAILED}`, which is a denylist. With the denylist, any `ExecutionStatus` member added later counts as complete by default. An allowlist (`{COMPLETED, SKIPPED, \u2026}`) fails closed. Either can work, but the prose and the sketch should match.",
+   "location": "project-documents/user/slices/915-slice.loop-checkpoint-pause-resume-correctness.md:191-201"
+  },
+  {
+   "i": 6,
+   "severity": "NOTE",
+   "title": "Restarting a paused `each:`/`fan_out:` step re-runs branches that already finished",
+   "description": "It is right to defer per-branch re-entry, and the Known Limitation section records it. When it becomes a follow-up issue, that issue should note that restarting the step repeats the dispatches of branches that had already finished, not just the paused branch.",
+   "location": "project-documents/user/slices/915-slice.loop-checkpoint-pause-resume-correctness.md#known-limitation"
+  }
+ ]
+}

@@ -1,0 +1,40 @@
+{
+ "review": "r12",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "MCP parity from the slice plan's success criteria is dropped",
+   "description": "The slice plan entry for 423 (`420-slices.model-benchmark.md:87`) says: \"CLI, slash command and MCP give identical results.\" The design removes MCP from scope (line 43, D9 at line 198) and narrows the parity criterion to the CLI and `/sq:run`. The reason is sound: squadron has no MCP server for any pipeline, so building one for `fix` would be a separate feature. But it still drops a success criterion the plan assigned to this slice. Fix one of the two documents so they agree: either amend the slice plan's 423 criterion to \"CLI and slash command\", or record MCP as deferred to a named follow-up. As things stand, the slice cannot meet its plan-level criterion as written.",
+   "location": "project-documents/user/slices/423-slice.fix-pipeline.md:43"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "The dependency on 422 contradicts the slice plan's \"no dependencies\" decision",
+   "description": "The frontmatter declares `dependencies: [422]`, and the Prerequisites section (line 49) needs 422's `CodeHost.get_issue` and `issue_freeze` renderer for fetch mode. The slice plan made the opposite call: \"The fix pipeline (423) has no dependencies in this initiative ... it can be built earlier.\" 422 is rated high risk and 4/5 effort, and the plan says its yield report may reorder later work.\n\nThe consequence: fetch mode is the production default and carries this slice's standalone user value, and it cannot ship until 422's codehost and renderer parts land. Development step 4 (line 340) partly handles this by building file mode first. The coupling is reasonable, since 422 already defines a renderer with an optional cutoff for 423 (`422-slice...md:139`). Either way, the plan should say so. Update the slice plan's 423 entry and the ordering note, or state that the `get_issue`/`issue_freeze` portion of 422 can be pulled ahead of the rest of 422 on its own.",
+   "location": "project-documents/user/slices/423-slice.fix-pipeline.md:6"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "\"Under the scrubbed environment\" does not say which `sq` runs the pipeline",
+   "description": "The integration requirement says 424 can run the pipeline \"in a 421 sandbox under the scrubbed environment with no extra flags or code paths beyond `issue-file`, `commit-to` and `--io-dir`\". The provides-to section (line 234) gives the command as `sq run fix <n> ...`. But 421's scrubbed `PATH` resolves `sq` to the start commit's `<tree>/.venv/bin/sq` (`421-slice...md:168`, `:309`). For any squadron fix case, the start commit predates this slice, so that `sq` has no `fix` pipeline, no `FixStepType` and no `fix.md` prompt.\n\nThis matters for the architecture's principle that replays run the production pipelines: the pipeline under test must be the harness's current version, not the case's historical one. The slice should state the contract: the harness runs its own `sq` by absolute path with the sandbox as working directory, and only the dispatched agent gets the scrubbed environment. Otherwise \"under the scrubbed environment\" will be read literally, and every squadron case will fail with \"unknown pipeline\". 424 implements the invocation, but this slice is making the integration promise and should state it precisely.",
+   "location": "project-documents/user/slices/423-slice.fix-pipeline.md:270"
+  },
+  {
+   "i": 3,
+   "severity": "NOTE",
+   "title": "Failure modes for the prompt-only report file are not listed",
+   "description": "D9 has the session write its final JSON report to `{tmp_path}`, and `sq _commit --report-file` reads it. D4 covers the \"no JSON object\" case. The design does not say:\n- who chooses `tmp_path`. The likely answer is `render_step_instructions`, but the doc doesn't say.\n- what happens if the file is missing, empty or unreadable when `sq _commit` runs. The session might skip the write or crash mid-session.\n\nThese are probably refusals with `fix_report` and exit 1, which fits the rest of the design. One line would settle it, and the parity test could cover the missing-file case.",
+   "location": "project-documents/user/slices/423-slice.fix-pipeline.md:197"
+  },
+  {
+   "i": 4,
+   "severity": "NOTE",
+   "title": "Report-shape refusals will be counted as config failures in replay",
+   "description": "A replay whose code fix is correct but whose report is malformed or missing a reproducing test commits nothing. Under the architecture's \"Absent is not zero\" rule, 424/425 will count that as a config-caused fail, which is consistent with \"replays measure the production pipeline's prompt.\" The distinct `failure_kind: fix_report` lets reports tell \"did not follow the fix contract\" apart from crashes and cost-cap stops. 424 and 425 should keep that distinction in their records, not fold it into a generic \"committed nothing\".",
+   "location": "project-documents/user/slices/423-slice.fix-pipeline.md:155"
+  }
+ ]
+}

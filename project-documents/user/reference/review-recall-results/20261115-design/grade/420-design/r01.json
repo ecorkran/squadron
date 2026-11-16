@@ -1,0 +1,47 @@
+{
+ "review": "r01",
+ "findings": [
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "The identity rule is not delivered as a shared interface, and two keys already disagree",
+   "description": "The slice plan says this slice \"Provides effort-sent on usage records and in config identity. All later slices read it.\" The design provides the identity only as a private `config_identity` in `replay/report.py`, and line 162 says \"this slice ships no shared identity type\".\n- **Two definitions inside this slice:** D6 keys replay on `(model, profile, effort_sent, tool_use, max_output_tokens)`, while `sq stats producers` keeps `ProducerKey(model, profile, effort, reviewer)` with no `tool_use` or `max_output_tokens`. Two aliases that differ only in `tool_use` are one config in stats and two in replay.\n- **More copies downstream:** 424 and 425 will each re-derive the tuple for their own records, so the rule can drift.\n- **Fix:** expose one public identity function or type beside `action_effort_sent` that replay, stats and later slices all call. That is a small addition, not new scope.",
+   "location": "project-documents/user/slices/420-slice.effort-audit-across-dispatch-paths.md:144-146"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Unstamped failures have no config attribution, and `None` means both \"not sent\" and \"unknown\"",
+   "description": "D5 lists failures that carry no stamp: the subprocess died with no run state, the action was cancelled, or resolution failed. `action_effort_sent` returns `None` for these, which D1 defines as \"not sent (backend default)\".\n- **Misattribution:** under D6 such a run gets identity `(model, profile, None, \u2026)` and can land in the row of a config that really sent no effort. The design says these are \"counted by that class, not by effort\" but gives no mechanism in `config_identity` or the report that keeps them out of that row.\n- **Conflict with the architecture:** \"Absent is not zero\" requires a config-caused failure (producer crashed, committed nothing) to count as a fail for that config. A wire-only identity cannot name the config when nothing reached the wire, and 424 inherits this.\n- **Fix:** state that a run with no stamp is attributed by its requested config (the alias stored for provenance) and excluded from sent-effort grouping. Make the reader's \"neither key nor usage\" result distinguishable from a recorded `null`.",
+   "location": "project-documents/user/slices/420-slice.effort-audit-across-dispatch-paths.md:137-138"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "The \"sends and records\" guarantee is wider than the inventory",
+   "description": "\"Provides to Other Slices\" promises \"every alias-resolving dispatch path, including the grading review and the judge, sends and records effort\". The inventory contradicts this for three alias-resolving paths:\n- **Path 7 (findings-addressed judge):** after D3 it sends effort but writes no record at all.\n- **Paths 10 and 11 (prompt-only `_summary-run` and `_dispatch-run`):** they send effort and write no record.\n\nThe architecture's capability is \"every run records the effort actually sent, or records that none was sent\". Either narrow the guarantee to the paths that write a record (1\u20136, 8, 9, 12) and name the three exceptions, or give path 7 an `effort_sent` stamp on its action result. The second option does not need the excluded `UsageRecord` work.",
+   "location": "project-documents/user/slices/420-slice.effort-audit-across-dispatch-paths.md:163"
+  },
+  {
+   "i": 5,
+   "severity": "NOTE",
+   "title": "D6 overrides architecture wording that stays unchanged",
+   "description": "The slice says its rule \"supersedes the architecture's '(alias, model, profile, effort sent)' for grouping\". The change is justified by the slice plan's fourth criterion and by the architecture's own Envisioned State. The architecture's Design Goal still lists the alias in the config, and 421\u2013427 will be reviewed against that text. Amend that line in the architecture so the two documents agree.",
+   "location": "project-documents/user/slices/420-slice.effort-audit-across-dispatch-paths.md:147"
+  },
+  {
+   "i": 6,
+   "severity": "NOTE",
+   "title": "Identity fields are hand-picked, and old records will split from new ones",
+   "description": "- **Field completeness:** D6 adds `tool_use` and `max_output_tokens` because they \"change what is sent\", but does not say these are the only wire-affecting alias fields. A later alias field would merge rows silently. State the completeness claim or derive the tuple from the alias definition.\n- **Old versus new records:** records written before this slice load with both fields as `None`. The same alias then appears as two rows across old and new records, and old records from aliases that differ only in these fields merge. Say whether the report flags pre-slice records.",
+   "location": "project-documents/user/slices/420-slice.effort-audit-across-dispatch-paths.md:145"
+  },
+  {
+   "i": 7,
+   "severity": "NOTE",
+   "title": "Effort estimate looks light for the listed surface",
+   "description": "The design changes about seventeen modules, two record models and the replay report's grouping key, and adds an AST enumeration test. Each item traces to a plan criterion, so nothing needs cutting, but 2/5 may understate it. The D7 classification table could list a reason per site and drop the \"with the test that proves it\" pointer, since line 180 already requires the per-path tests.",
+   "location": "project-documents/user/slices/420-slice.effort-audit-across-dispatch-paths.md:82-91"
+  }
+ ]
+}

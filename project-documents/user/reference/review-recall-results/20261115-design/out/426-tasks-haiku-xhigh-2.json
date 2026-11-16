@@ -1,0 +1,387 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "Load tests are outside `tests/load/` and no task gates them in CI",
+      "description": "The breakdown adds two load tests. Task 33 (line 276) runs a 200-pair plan with a slow dispatcher, and Task 24 (line 223) runs eight concurrent `invoke` calls. The design restates no NFR, so the breakdown adds these itself. The Python rules require a load test in `tests/load/` for concurrency, environment-layer and network paths, and say CI must gate it. Both tests sit in `tests/benchmark/` unit files, and no task wires CI. Both also assert only functional outcomes, while the rules require latency, throughput or resource bounds. Fix: move both to `tests/load/`, add bounds (for example, other coroutines keep ticking during a slow dispatch, and the run finishes within a stated wall-clock bound), and add a CI-wiring task that gates `tests/load/` for this slice.",
+      "file_ref": null,
+      "category": "ci-gating",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/426-tasks.slice-cases.md:276"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The Task 8 gate can false-block, and its rename rule contradicts its stop rule",
+      "description": "Task 8 greps the slice branch for the 421\u2013425 names. The branch forks before those slices merge, so the grep will report them missing even after they land on the target. The task never says to refresh the branch from the target first. Separately, line 39 says to use the real name when a name differs, but Task 8 writes `BLOCKED: <name> is not implemented` for any missing name, so a renamed symbol takes the stop path. Fix: add a refresh step before the grep, and say that a renamed equivalent proceeds (recorded in the DEVLOG) while a missing concept blocks.",
+      "file_ref": null,
+      "category": "sequencing",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/426-tasks.slice-cases.md:122"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Two modules grow across five tasks each with no size or function plan",
+      "description": "Tasks 15\u201319 each add a stage to `qualify_slice_candidate` in `slice_qualify.py` (lines 169, 173, 178, 183, 188). Tasks 31\u201335 add to `diff_judge_runner.py`, and Tasks 27, 29 and 30 add to `diff_judge.py`. As written, the function will pass the ~50-line guideline and the modules will pass ~300 lines. Task 42 (line 338) checks size only at the end. Fix: name the stage functions in the first task of each group (for example, pre-sandbox checks, sandbox and reuse, repeats, case write) and set a module split rule up front, such as moving plan and refusals out of `diff_judge_runner.py`.",
+      "file_ref": null,
+      "category": "sizing",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/426-tasks.slice-cases.md:169"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The breakdown is heavier than the slice's stated effort",
+      "description": "The file has 42 tasks and 343 lines against \"Effort 3/5\" (line 56; design line 521). Task 12 bundles three id functions, record payloads, seven store methods and eight tests. Task 30 bundles sidecars, prompts, `judge_pair`, forfeit writes, failure handling and the cap callable, with seven tests. Task 34 bundles the lock, resume and over-size writes. Cuts that keep every criterion: fold Task 39 (one mixed-kind test, same commit as Tasks 36\u201338) into Task 38; move Task 5 (config keys) to sit before Task 29, its first consumer, since 421, 422 and 425 edit the same file (line 98) and nothing earlier reads the keys; split Task 12 into ids-and-payloads and store methods.",
+      "file_ref": null,
+      "category": "proportionality",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/426-tasks.slice-cases.md:56"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Two new I/O paths have no failure-mode test",
+      "description": "The review rule requires each new I/O path to have a test that asserts its observable failure. Task 24 says a failed branch step is a harness absence (line 222), but its tests (line 223) cover only a failing `cf set arch`. Task 31 reads reference diffs through `ProcessRunner` (line 265), and its tests (line 266) cover only a missing `tip_sha`, not a failing or timed-out `git diff`. Task 30 writes normalized sidecars (line 258) with no failure test. Fix: add one test per path that asserts its ERROR or WARNING log and recorded outcome.",
+      "file_ref": null,
+      "category": "observability",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/426-tasks.slice-cases.md:223"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The judge loop normalizes diffs on the event loop",
+      "description": "Task 30 normalizes every contestant diff inside the async per-case loop. Diffs can be large (the design allows prompts up to 400 000 characters). The Python rules require CPU-bound work in async code to run under 1 ms in the worst case or move to `run_in_executor`, and reviewers must check this. Fix: normalize and hash in the planning step before the loop, or wrap `normalize` in `run_in_executor`, and state which in the task.",
+      "file_ref": null,
+      "category": "async-safety",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/426-tasks.slice-cases.md:258"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Forfeit pairs are not specified in the per-case win share",
+      "description": "Task 37 defines `w(c)` over sample-matched pairs, with a win as 1 and a tie as 0.5, and leaves out inconsistent and invalid pairs. It does not say whether forfeits count. Design D15 says an absent side is a loss, so a forfeit must count as a win for the other side in `w(c)`, and a double-absent forfeit as a tie. The task also does not say whether forfeits enter `bradley_terry.fit`. Only the tallies are tested (line 298). Fix: state both rules and add a hand-computed case that includes a forfeit.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/426-tasks.slice-cases.md:297"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`slice-cases build` has no default for `--repo`",
+      "description": "Task 21 lists `[--repo PATH]` with no default. Discovery and qualification run git \"in the user's checkout\" (design D2 and D4), so the build needs a checkout, and a junior implementer would have to guess one. Task 20's signature `build_slice_cases(..., keep)` (line 196) also leaves the parameters unnamed. Fix: name the default or require the flag, and list the full parameter set.",
+      "file_ref": null,
+      "category": "under-specified",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/426-tasks.slice-cases.md:201"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Task 7 creates directories 421 owns, and line 39 misstates it",
+      "description": "Line 39 says Tasks 2\u20137 touch only `replay/`, config code, git fixtures and `normalize`. A glob finds no `benchmark/` under `src/` or `tests/` in this tree. Task 6 writes `tests/benchmark/` and Task 7 writes `src/squadron/benchmark/`, which 421 is specified to create. If both add `benchmark/__init__.py`, the merge will conflict. Fix: say who creates the package init, and correct line 39.",
+      "file_ref": null,
+      "category": "sequencing",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/426-tasks.slice-cases.md:113"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`DOCS_ROOT` has a source that Task 7 does not name",
+      "description": "`DOCS_ROOT = \"project-documents\"` is defined here. Task 7 says the constants are \"defined once\" and uses `{DOCS_ROOT}` without saying where it comes from. Task 7 should import it from `squadron.integrations.context_forge` rather than redefine it.",
+      "file_ref": null,
+      "category": "clarity",
+      "raw_category": null,
+      "location": "src/squadron/integrations/context_forge.py:21"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Design frontmatter lists four dependencies; the body lists six",
+      "description": "The frontmatter omits 177 and 403, which the design's Dependencies section and the task file both list. Task 1 already edits this document and can correct it.",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/slices/426-slice.slice-cases.md:6"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Task 4's base may differ between checkouts",
+      "description": "In this worktree, `_register_with_cf` is at line 168, `_initiative` at 181, and `_registered` is set after `cf init` at line 177. All of this matches Task 4. My first read, however, was of the primary checkout (`/Users/manta/source/repos/manta/squadron/src/squadron/replay/sandbox.py`), which already has a `CfRegistration` extraction at lines 124\u2013140. I did not determine which version the target has. Task 1 should record the base commit and confirm `CfRegistration` is absent there before Task 4 starts.",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "src/squadron/replay/sandbox.py:168"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Task 14 leaves its rejection type unnamed",
+      "description": "`task_text_at(...) -> TaskText | rejection` does not name the rejection type. Name it, so that Task 15 can build a `SliceQualification` from it.",
+      "file_ref": null,
+      "category": "clarity",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/426-tasks.slice-cases.md:160"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Design rule D5 has no test",
+      "description": "D5 says data and support changes in the tests are not rejected. No task (Tasks 16\u201318) asserts that. A one-line test would pin it.",
+      "file_ref": null,
+      "category": "testing",
+      "raw_category": null,
+      "location": "project-documents/user/slices/426-slice.slice-cases.md:202"
+    },
+    {
+      "severity": "NOTE",
+      "title": "pyright scope differs from the Python rule the task accepts",
+      "description": "The task says pyright covers `src` only and holds tests to ruff. The Python rules require `include = [\"src\", \"tests\"]` in strict mode. The task accepts the local config without raising the gap. I did not open `pyproject.toml`, so this relies on the task file's description. Either fix the config or raise an issue.",
+      "file_ref": null,
+      "category": "tooling",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/426-tasks.slice-cases.md:54"
+    },
+    {
+      "severity": "PASS",
+      "title": "Every success criterion has a task",
+      "description": "Functional criteria map as follows. Build (FR1) maps to Tasks 13 and 15\u201321. Case fields (FR2) map to 14, 16\u201318. Fixture rejections (FR3) map to 6, 13\u201315 and 18. Replay (FR4) maps to 24\u201326. Grade and report (FR5) map to 36, 39 and 41. Normalization (FR6) maps to 7. Pairwise section (FR7) maps to 37\u201338. Over-size (FR8) maps to 29, 34 and 38. Forfeits (FR9) map to 15, 27 and 32. Failure signals (FR10) map to 4, 13, 19, 24 and 31. Judge refusals and caps (FR11) map to 31 and 33\u201335. Technical criteria map to 42, 7, 6, 3\u20134 and 37. Integration criteria map to 39 and 22. Walkthrough steps 1\u20138 map to 23, 26 and 41.",
+      "file_ref": null,
+      "category": "coverage",
+      "raw_category": null,
+      "location": "project-documents/user/slices/426-slice.slice-cases.md:434"
+    },
+    {
+      "severity": "PASS",
+      "title": "Sequencing and premises hold",
+      "description": "Tasks 2\u20137 run before the gate and need no 421\u2013425 code, so the gate stops at the right point. I checked the first-wave premises in this worktree: `_KINDS`, `_ArtifactKind` and `_suffix_order` (`src/squadron/replay/start_point.py:23,28,124`); `judge_replay_set`, `_call` and `_judge_pair` (`src/squadron/replay/judging.py:142,169,183`); `_register_with_cf` and `_initiative` (`src/squadron/replay/sandbox.py:168,181`); `get_positive_int_config` (`src/squadron/config/manager.py:145`); `metrology.judge_timeout_s` (`src/squadron/config/keys.py:350`); `tests/metrology/slice_range_repos.py`; and `plan_file_for` (`src/squadron/stats/planning_docs.py:255`). 403's `get_slice_ranges` and `SliceLanding` exist. No 421\u2013424 names exist yet, which matches the gate's premise. The order is otherwise sound: spike after `with_tools`, judging after qualification, and the cases in Tasks 15\u201319 split in dependency order.",
+      "file_ref": null,
+      "category": "sequencing",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/426-tasks.slice-cases.md:39"
+    },
+    {
+      "severity": "PASS",
+      "title": "Tests sit with their code, and commit markers sit at tested points",
+      "description": "Each implementation task carries its own tests. There are about 21 `**Commit**:` markers across 42 tasks, each after a tested group. The live tasks (23, 26, 41) carry conditional markers. No marker is placed after every task, and none sits on a checkbox-only or notes-only change.",
+      "file_ref": null,
+      "category": "process",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/426-tasks.slice-cases.md"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "ci-gating",
+      "raw_category": null,
+      "summary": "Load tests are outside `tests/load/` and no task gates them in CI",
+      "location": "project-documents/user/tasks/426-tasks.slice-cases.md:276",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "sequencing",
+      "raw_category": null,
+      "summary": "The Task 8 gate can false-block, and its rename rule contradicts its stop rule",
+      "location": "project-documents/user/tasks/426-tasks.slice-cases.md:122",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "sizing",
+      "raw_category": null,
+      "summary": "Two modules grow across five tasks each with no size or function plan",
+      "location": "project-documents/user/tasks/426-tasks.slice-cases.md:169",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "proportionality",
+      "raw_category": null,
+      "summary": "The breakdown is heavier than the slice's stated effort",
+      "location": "project-documents/user/tasks/426-tasks.slice-cases.md:56",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "observability",
+      "raw_category": null,
+      "summary": "Two new I/O paths have no failure-mode test",
+      "location": "project-documents/user/tasks/426-tasks.slice-cases.md:223",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "async-safety",
+      "raw_category": null,
+      "summary": "The judge loop normalizes diffs on the event loop",
+      "location": "project-documents/user/tasks/426-tasks.slice-cases.md:258",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Forfeit pairs are not specified in the per-case win share",
+      "location": "project-documents/user/tasks/426-tasks.slice-cases.md:297",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "concern",
+      "category": "under-specified",
+      "raw_category": null,
+      "summary": "`slice-cases build` has no default for `--repo`",
+      "location": "project-documents/user/tasks/426-tasks.slice-cases.md:201",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "note",
+      "category": "sequencing",
+      "raw_category": null,
+      "summary": "Task 7 creates directories 421 owns, and line 39 misstates it",
+      "location": "project-documents/user/tasks/426-tasks.slice-cases.md:113",
+      "location_verified": true
+    },
+    {
+      "id": "F010",
+      "severity": "note",
+      "category": "clarity",
+      "raw_category": null,
+      "summary": "`DOCS_ROOT` has a source that Task 7 does not name",
+      "location": "src/squadron/integrations/context_forge.py:21",
+      "location_verified": true
+    },
+    {
+      "id": "F011",
+      "severity": "note",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "Design frontmatter lists four dependencies; the body lists six",
+      "location": "project-documents/user/slices/426-slice.slice-cases.md:6",
+      "location_verified": true
+    },
+    {
+      "id": "F012",
+      "severity": "note",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "Task 4's base may differ between checkouts",
+      "location": "src/squadron/replay/sandbox.py:168",
+      "location_verified": true
+    },
+    {
+      "id": "F013",
+      "severity": "note",
+      "category": "clarity",
+      "raw_category": null,
+      "summary": "Task 14 leaves its rejection type unnamed",
+      "location": "project-documents/user/tasks/426-tasks.slice-cases.md:160",
+      "location_verified": true
+    },
+    {
+      "id": "F014",
+      "severity": "note",
+      "category": "testing",
+      "raw_category": null,
+      "summary": "Design rule D5 has no test",
+      "location": "project-documents/user/slices/426-slice.slice-cases.md:202",
+      "location_verified": true
+    },
+    {
+      "id": "F015",
+      "severity": "note",
+      "category": "tooling",
+      "raw_category": null,
+      "summary": "pyright scope differs from the Python rule the task accepts",
+      "location": "project-documents/user/tasks/426-tasks.slice-cases.md:54",
+      "location_verified": true
+    },
+    {
+      "id": "F016",
+      "severity": "pass",
+      "category": "coverage",
+      "raw_category": null,
+      "summary": "Every success criterion has a task",
+      "location": "project-documents/user/slices/426-slice.slice-cases.md:434",
+      "location_verified": true
+    },
+    {
+      "id": "F017",
+      "severity": "pass",
+      "category": "sequencing",
+      "raw_category": null,
+      "summary": "Sequencing and premises hold",
+      "location": "project-documents/user/tasks/426-tasks.slice-cases.md:39",
+      "location_verified": true
+    },
+    {
+      "id": "F018",
+      "severity": "pass",
+      "category": "process",
+      "raw_category": null,
+      "summary": "Tests sit with their code, and commit markers sit at tested points",
+      "location": "project-documents/user/tasks/426-tasks.slice-cases.md",
+      "location_verified": null
+    }
+  ],
+  "template_name": "tasks",
+  "input_files": {
+    "input": "project-documents/user/tasks/426-tasks.slice-cases.md",
+    "against": "project-documents/user/slices/426-slice.slice-cases.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261115-design/wt/426-tasks"
+  },
+  "timestamp": "2026-11-16T07:16:51.359952",
+  "model": "claude-haiku-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 11,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-haiku-5-5",
+  "answering_models": [
+    "claude-haiku-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 18,
+    "in_fences": 0,
+    "in_section": 18,
+    "surviving": 18
+  },
+  "effort": "xhigh",
+  "profile": "sdk",
+  "turns": 12,
+  "prompt_tokens": 681870,
+  "cached_tokens": 478448,
+  "cache_write_tokens": 203412,
+  "completion_tokens": 73366,
+  "reasoning_tokens": null,
+  "duration_seconds": 322.3819452498574,
+  "cost_usd": 0.38995201999999995,
+  "cost_basis": "provider"
+}

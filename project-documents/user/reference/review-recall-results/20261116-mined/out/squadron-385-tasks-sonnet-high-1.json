@@ -1,0 +1,207 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "PASS",
+      "title": "Success-criteria coverage and sequencing",
+      "description": "Every functional and technical criterion in the slice design maps to a task:\n- Slice-branch body: Tasks 7, 9 and 11.\n- Unplanned repository with three no-input lines: 11.2.\n- Merged-ancestor review excluded: 8.2.\n- Base refusal and base source: Task 5, with the printed source in 13.1.\n- Push preconditions: Task 6.\n- Presence check with zero writes: Task 12.\n- Title rules: Task 10a.\n- Dry-run equality: 13.2.\n- Timeout and transport matrix for five call sites: Task 14.\n- Provider failure: 10.2.\n- Import boundary: 15.1.\n- Docstring correction: 15.2.\n- Live creation: 16.2.\n\nTasks follow the design's implementation order, with no circular dependencies. Each test task directly follows its implementation task. I found no task without a criterion. Task 16.3 traces to the design's \"refined at Phase 6\" walkthrough note.",
+      "file_ref": null,
+      "category": "coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Release step in Task 16.4 breaks two project rules",
+      "description": "Task 16.4 has two problems:\n- **Merge as a task item.** It lists \"Merge `385-slice\u2026` into `squadron-pr`\". CLAUDE.md says never to write a merge or push as a task, sub-item or success criterion in a task file, and to merge only in Phase 7 after review passes. Remove the line.\n- **Wait on the Project Manager.** It tells the implementer to \"Ask the Project Manager how they want [code review] run\". CLAUDE.md treats a step that waits on PM confirmation as invalid unless a named rule requires it. Replace it with a plain \"code review required\" line, or a `BLOCKED:` line if it truly cannot proceed.",
+      "file_ref": null,
+      "category": "process-compliance",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:372-373"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Identity check and local sha have no implementing task",
+      "description": "Two inputs to the precondition stage are not built anywhere:\n- **Operator identity.** The success criterion \"adapter unable to identify the operator \u2192 exit non-zero, no write\" is only wired by the ordering line in 13.1 (\"identity, then pushed\"). Task 6's `check_head_pushed` does not call `identify_operator`, and no task writes that call. Put it in `preconditions.py` with its own test case in 6.2, or name it explicitly in 13.1.\n- **Local head sha.** `check_head_pushed` takes `local_sha`, but Task 3 adds only `current_branch` and `commits_in_range`, and nothing says where the sha comes from.\n  - A near match exists: `resolve_reviewed_sha` (`src/squadron/review/persistence.py:143`) runs `git rev-parse HEAD`. It returns `None` and logs a warning on failure, which is the wrong contract for a precondition.\n  - Add a helper that raises, or name the one to reuse and how its `None` is handled.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:133-150"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The \"model gets facts only\" constraint has no test",
+      "description": "The design's central rule is that the model receives `PrFacts` only, and is not asked for prose on no-input sections. Task 11.1 states the second half, but 11.2 only checks output text. It never asserts that:\n- the fake composer was not invoked for a no-input section; or\n- the prompt contains nothing beyond the facts.\n\nNo task states what the prompt contains either, although the design lists \"the prompt\" under body composition. Add one prompt-construction bullet to 11.1 and one assertion on the fake composer's received calls to 11.2.",
+      "file_ref": null,
+      "category": "test-coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:266-270"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Provider failure in the title path is ambiguous",
+      "description": "Two points are unclear:\n- **Title composer failure.** Task 10 makes a provider exception a non-zero exit. Task 10a degrades empty, multi-line or over-length responses to the first commit subject. It does not say what happens when the title composer raises. Under D8 it should refuse, and a 10a.2 case would pin that down.\n- **Where the exit lives.** 10.2 says the composer \"exits non-zero\", which implies `pr/body.py` raises `typer.Exit`. That couples the `pr/` package to Typer. Consider having the composer raise a typed error that the command in Task 13 maps to exit 1, and test it end to end in 13.2.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:221"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Task 8 does not say how \"newest in range\" is decided",
+      "description": "Task 8.1 says to take the survivor whose sha is newest, but not how that is determined. `commits_in_range` from Task 3 already returns newest-first shas. Reusing that order avoids a second `git rev-list` call. Reviewed shas are full shas (`persistence.py:143` uses `git rev-parse HEAD`), so exact membership is safe.",
+      "file_ref": null,
+      "category": "clarity",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:179-180"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Task 4.2 adds little beyond 4.1",
+      "description": "The real criterion for 4.2 is that the existing `show` tests pass unchanged, which 4.1 already states. The only new test is `resolve_locator` returning the locator for each target form. Consider merging 4.2 into 4.1. Otherwise the task count is proportionate to a seven-module package plus a CLI command.",
+      "file_ref": null,
+      "category": "proportionality",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:102-105"
+    },
+    {
+      "severity": "NOTE",
+      "title": "No commit markers and no load tests",
+      "description": "The file has no `**Commit**:` markers, which is acceptable, so CLAUDE.md's per-top-level-task commit cadence applies. The slice states no NFR, so no `tests/load/` task or CI gating task is required.",
+      "file_ref": null,
+      "category": "process",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "pass",
+      "category": "coverage",
+      "raw_category": null,
+      "summary": "Success-criteria coverage and sequencing",
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "process-compliance",
+      "raw_category": null,
+      "summary": "Release step in Task 16.4 breaks two project rules",
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:372-373",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "Identity check and local sha have no implementing task",
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:133-150",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "test-coverage",
+      "raw_category": null,
+      "summary": "The \"model gets facts only\" constraint has no test",
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:266-270",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "Provider failure in the title path is ambiguous",
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:221",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "clarity",
+      "raw_category": null,
+      "summary": "Task 8 does not say how \"newest in range\" is decided",
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:179-180",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "note",
+      "category": "proportionality",
+      "raw_category": null,
+      "summary": "Task 4.2 adds little beyond 4.1",
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:102-105",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "note",
+      "category": "process",
+      "raw_category": null,
+      "summary": "No commit markers and no load tests",
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md",
+      "location_verified": null
+    }
+  ],
+  "template_name": "tasks",
+  "input_files": {
+    "input": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md",
+    "against": "project-documents/user/slices/385-slice.create-a-pr-with-a-good-message.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/squadron-385-tasks"
+  },
+  "timestamp": "2026-11-16T10:17:35.380807",
+  "model": "claude-sonnet-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 6,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-sonnet-5-5",
+  "answering_models": [
+    "claude-sonnet-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 8,
+    "in_fences": 0,
+    "in_section": 8,
+    "surviving": 8
+  },
+  "effort": "high",
+  "profile": "sdk",
+  "turns": 7,
+  "prompt_tokens": 357493,
+  "cached_tokens": 244228,
+  "cache_write_tokens": 113255,
+  "completion_tokens": 7346,
+  "reasoning_tokens": null,
+  "duration_seconds": 61.264688667142764,
+  "cost_usd": 0.5516282,
+  "cost_basis": "provider"
+}

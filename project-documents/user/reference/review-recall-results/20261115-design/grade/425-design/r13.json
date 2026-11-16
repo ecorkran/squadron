@@ -1,0 +1,40 @@
+{
+ "review": "r13",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Grading is taken out of the run-level cap, which departs from the architecture's cost principle",
+   "description": "The architecture says a benchmark \"states its upper bound in dollars before any dispatch and stops at its own cap, which covers grading and judging as well as the replays.\" It also says the bound includes \"grading and judging estimated from observed costs.\" D9 instead makes `grade` a separate command with its own `--max-cost`. The `run` bound therefore leaves out grading entirely. The slice admits the departure (\"This departs from the architecture\") and says the architecture's cost section and 424's sentence about extending the bound \"should change.\" Nothing in the slice makes that happen, and the architecture stays unamended.\n\nThe result is that a benchmark has no single pre-dispatch dollar figure. Total spend is the run cap plus an open-ended number of grade invocations. Reviewer changes and `--retry-harness` can each trigger a new grade run.\n\nThe design-goal text cannot be reconciled with D9 as written. Either:\n- add an architecture amendment as a named task, or\n- have `run` print an advisory grading estimate beside its own bound, built from the same per-review figure D9 already defines.",
+   "location": "project-documents/user/slices/425-slice.grading-and-paired-report.md#D9 \u2014 Caps, bound and resume for grading"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "The report's row key contradicts the architecture's identity rule within the slice itself",
+   "description": "The Dependencies section says rows group by 420's D6 identity: model, profile, effort sent, `tool_use` and `max_output_tokens`. D13 keys rows on `(alias, model, profile, effort_sent)`. That key drops `tool_use` and `max_output_tokens` and adds `alias`. Two replays that differed on `tool_use` or output-token limit would be merged into one row, or kept apart only by the prompt-identity split. This breaks the architecture's \"results stay comparable\" goal. It would also let a config that changed the wire behavior pass for a different config's samples. Pick one key and state it once.",
+   "location": "project-documents/user/slices/425-slice.grading-and-paired-report.md:58 and #D13 \u2014 Report contents and order"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Spend and cap behavior for a partially completed reference floor is unspecified",
+   "description": "D8 says any failed floor run fails the reference. It also says a cap hit between floor runs \"writes no reference record, and a rerun grades it again.\" It does not say whether the discarded floor reviews' cost counts toward `spent`, toward the reported grading cost, or toward the stored max-observed per-review figure. Two requirements go unmet:\n- **Cap and bound accuracy.** A rerun repays for those reviews. Under a small cap, for example the walkthrough's step 6 value of `--max-cost 0.30` against 3 floor reviews, a case can never complete. The bound printed at plan time also assumes a clean run.\n- **Observable failures.** The failure-mode rule requires each failure to be observable. D8 gives no log level or signal for \"floor aborted at run i of R.\"\n\nState that the spend counts and what is logged. Consider holding floor-run outcomes until all R runs succeed, then writing the record once.",
+   "location": "project-documents/user/slices/425-slice.grading-and-paired-report.md#D8 \u2014 Reference grade, baseline and review noise floor"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "The design is heavier than the slice must deliver",
+   "description": "The slice has 16 decisions, 3 record types, 3 sidecar kinds, 13 new or changed modules and an effort rating of 4/5. Several pieces can be cut or deferred without losing the required fix-case path: grade, then a paired report, then a measured sample count.\n- **`ContentSidecars(kind)` generalization (D11).** Adding one `SnapshotSidecars` class, or storing the node list inline, meets the need. The node-id list is a sidecar only because grade records are meant to stay under 16 KB. That limit is itself self-imposed.\n- **Separate environment and grader digests (D10).** `refgrade-\u2026-<env digest[:8]>` and `implgrade-\u2026` ids, plus the D1 equality check, restate what the replay's environment digest already provides.\n- **`--keep` and `--case` flags.** Both exist for the walkthrough's step 7 inspection and are not needed for correctness. `--json` on `report` and the `PairVerdict` enum could be reduced to the report model's field.\n- **Report section 6.** The count of replays scanned under an older `LEAK_RULES_VERSION` restates 424's data.\n- **`GradeResult` baseline fields.** The baseline lint and type totals appear on both `ReferenceGrade` and the `SnapshotRef` it already carries.\n- **D15 variance decomposition with per-pair `PairEstimate`.** The architecture asks for a measured sample count. A simple \"cases needed at target difference\" from the observed variance of `d(c)`, without `\u03c3\u00b2_w` and `\u03c3\u00b2_b` bookkeeping, would meet it. At n=5 and k=3 the slice itself calls the estimate \"off by a large factor.\"\n\nCut or defer the sidecar generalization, the id and digest split, the extra flags and the decomposition. Keep the pieces the architecture names: hidden injection, section-wise tool-config restoration, the reference baseline and floor, the paired bootstrap, and the case-drop rules.",
+   "location": "project-documents/user/slices/425-slice.grading-and-paired-report.md#Technical Scope"
+  },
+  {
+   "i": 4,
+   "severity": "NOTE",
+   "title": "The grader rebuilds the tree in a fresh sandbox instead of grading in the replay's sandbox",
+   "description": "The architecture says the grade \"runs after the producer finishes, in the same sandbox.\" D1 rebuilds from `start_sha` plus the stored diff and compares environment digests. This is a reasonable resolution, since 424 already ends the replay sandbox and sidecars the diff. The `environment_changed` absence covers the reproducibility gap. No change is needed. Cite 424 as the source of this decision, not only \"as 424 states.\"",
+   "location": "project-documents/user/slices/425-slice.grading-and-paired-report.md#D1 \u2014 The grade order inside one sandbox"
+  }
+ ]
+}

@@ -1,0 +1,54 @@
+{
+ "review": "r17",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Contradictory statements about edits to upstream slices",
+   "description": "The design does not say consistently which upstream modules this slice edits, so the task breakdown cannot be derived from it.\n- Line 42 says \"No edits to 424 or 425\", but lines 321 and 426 widen 424's `CaseDrop.reason`, and line 87 / D17 change 425's `bench_report.py`.\n- Line 451 allows `tests/benchmark/` to change \"where D8 routes re-qualification and D17 extracts the interval\". D8 says 424's `replay_one` already calls `runner.requalify`, and D17 says \"No change to 425\". Line 451 reads like text from an earlier revision.\n- Line 424 adds `ScrubbedEnvironment.with_tools` to 421, and `yield_report.py` (422) gains rows, while D7 says \"no 422 code changes\".\n\nFix: replace line 42 with one explicit list of upstream touches (421 `with_tools`, 422 yield rows, 424 `CaseDrop.reason`, 425 `bench_report`, 177 extractions) and correct line 451 to match.",
+   "location": "project-documents/user/slices/426-slice.slice-cases.md:42"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Over-size record lifecycle can leave a case both judged and counted as over size",
+   "description": "D14 says raising the limit and rerunning `judge` judges the case, and D15 says the `OverSizeCase` \"is replaced when the limit changes\". Its id (D16) excludes the limit, and nothing replaces it once the case is no longer over size.\n- **Limit raised:** the stale `OverSizeCase` stays beside the new `DiffJudgment`s.\n- **Limit lowered, or a resumed run adds a larger replay:** existing judgments stay beside a new `OverSizeCase`.\n\nThe report (D17) has no rule for which record wins, so the \"over size N\" count the slice plan requires can be wrong. Walkthrough step 7 avoids the problem by using a fresh benchmark id. Fix: state one rule, such as deleting the record when the case is judged, or having the report ignore an `OverSizeCase` whose `max_prompt_chars` differs from the current limit or whose case has judgments.",
+   "location": "project-documents/user/slices/426-slice.slice-cases.md:279-285"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Judging of incomplete cases is unspecified",
+   "description": "D13 and D15 cover committed replays, config absences (forfeit) and harness absences (drop). They do not cover a (case, config, sample) with no replay record yet, which is the normal state after a run stopped at its cap.\n\nThe architecture says a partial run \"reports only cases that completed under every config\", and \"absent is not zero\" means a pending replay must not count as a forfeit. As written, `judge` could spend calls on a case the report then excludes as `incomplete` (425 D13), or record a pending side as a forfeit that resume never re-judges. Fix: state that a case is judged only when every config has all k samples recorded, and count the rest as pending in the bound and summary.",
+   "location": "project-documents/user/slices/426-slice.slice-cases.md#d15--absences-in-judging"
+  },
+  {
+   "i": 3,
+   "severity": "NOTE",
+   "title": "Separate judge cap departs from the architecture without saying so",
+   "description": "The architecture's run-level cap \"covers grading and judging as well as the replays\". D16 gives `judge` its own `--max-cost`, following 425 D9. 425 records this as a departure and asks for the architecture's cost section to be updated; 426 should carry the same sentence for judging. The per-call figure is the largest observed cost, so \"at most $3.88\" is an estimate when prompts can reach 400k characters; 425 D9 says this about its own figure and D16 should too.",
+   "location": "project-documents/user/slices/426-slice.slice-cases.md#d16--caps-bound-and-resume-for-judging"
+  },
+  {
+   "i": 4,
+   "severity": "NOTE",
+   "title": "Reference is the branch tip, not the landing commit",
+   "description": "The architecture and the slice plan both say \"the landing commit is the reference\". D2 uses `tip_sha` and gives the reason: on a merge landing, `fork..after` includes unrelated target work. This is a sound refinement, but the architecture wording should be updated to match.",
+   "location": "project-documents/user/slices/426-slice.slice-cases.md#d2--landing-and-reference-selection"
+  },
+  {
+   "i": 5,
+   "severity": "NOTE",
+   "title": "`cf` on the scrubbed PATH: the spike should cover cf's runtime",
+   "description": "D9 links only the `cf` executable into `<id>.home/bin`. If cf starts through an interpreter resolved from `PATH`, that interpreter is not on the scrubbed `PATH` (421: adapter entries, `home/bin`, system dirs).\n- The spike should check this explicitly, since the fix would widen `PATH` further against the principle that it \"leaves out the user's tool installs\".\n- The design should say what happens when `cf` is missing from the harness `PATH`: refuse at planning, not a harness absence per replay.\n\nThe deviation from the principle is otherwise bounded: slice runner only, and not part of `EnvironmentIdentity`.",
+   "location": "project-documents/user/slices/426-slice.slice-cases.md:234-235"
+  },
+  {
+   "i": 6,
+   "severity": "NOTE",
+   "title": "Minor unspecified items",
+   "description": "- `--keep` on `slice-cases build` is in the signature but not described. It presumably keeps sandboxes as in 422.\n- In the report example, the `pairs` value `18+` is unexplained, and D17 does not say whether the per-config W/L/T columns include vs-reference pairs. The example's numbers imply cross-config pairs only.",
+   "location": "project-documents/user/slices/426-slice.slice-cases.md:336"
+  }
+ ]
+}

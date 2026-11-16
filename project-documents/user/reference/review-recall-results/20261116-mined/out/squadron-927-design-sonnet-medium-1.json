@@ -1,0 +1,153 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "D9 defers the routed-variant decision the slice plan assigned to design",
+      "description": "The slice plan (Part C) says \"Design must decide what counts as 'differs' for providers that return a dated or routed variant of the requested id (OpenRouter), so an alias resolving to its own snapshot is not reported as a substitution.\" D9 decides only the dated-snapshot suffix. It says it will add OpenRouter and local forms after Phase 6 captures real ids. The Risk Assessment names the unhandled forms: a dropped `vendor/` prefix and a `:free` suffix. The consequence is that a profile can ship with every run reporting a false substitution. That means a WARNING and a `requestedModel` key on each run, which weakens the signal the slice exists to provide. \"When unsure, report substitution\" is a safe failure direction, but it does not meet the plan's requirement.\n\nFix: decide the routed forms now, or cut the scope explicitly:\n- Name the OpenRouter forms the rule accepts (prefix-stripped ids, `:variant` suffixes), each with a test.\n- Or state that routed ids are out of scope for this slice and record that in the slice plan entry.\n\nThe capture walkthrough in step 6 is still useful as verification.",
+      "file_ref": null,
+      "category": "under-specification",
+      "raw_category": null,
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md#D9 \u2014 What counts as \"the model that was requested\""
+    },
+    {
+      "severity": "NOTE",
+      "title": "Metrology judge identity changes for OpenAI-direct judges",
+      "description": "D10 acknowledges that `aiModel` for OpenAI-direct judges moves from `gpt-5` to a dated snapshot. This changes `metrology/identity.py` keys once. The doc argues this is the correct calibration identity, and I agree. Confirm that no metrology consumer pins or aggregates by the undated id. If one does, the first post-slice runs will split into a new bucket. The Integration Points section lists metrology as a consumer but does not say whether it was checked.",
+      "file_ref": null,
+      "category": "integration",
+      "raw_category": null,
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md#D10 \u2014 `aiModel` is the answering model; `requestedModel` appears only on substitution"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Proportionality is acceptable, with a few trim candidates",
+      "description": "The component list touches about nine modules plus two new ones. That is consistent with the plan's Effort 3/5 and Risk Low-Medium. The scope is bounded, and the design defers diff ordering, `--stat` and file-body truncation to #137 and #138. If effort has to be cut, these are the candidates:\n- D12's multi-model digest line and WARNING, which handles a case that is rare in practice.\n- `models/snapshot.py` as a separate module for one function, if D9 stays small.\n\nNeither is required for the plan's acceptance criteria. Neither blocks progress.",
+      "file_ref": null,
+      "category": "scope",
+      "raw_category": null,
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md#Component Structure"
+    },
+    {
+      "severity": "PASS",
+      "title": "Failure modes for the new provider-read paths are enumerated",
+      "description": "The new read paths cover these cases:\n- A provider that reports nothing keeps the requested id and says so in the Run Digest (D11).\n- `<synthetic>` and subagent messages are excluded.\n- Multiple models in one run produce a WARNING (D12).\n- A diff dropped by the total-injection limit is recorded as a truncation to zero (D3).\n- A failed tool call does not count as a read (D4).\n\nObservable signals exist for each case, in the artifact or in a WARNING log. Success criteria 9 and 11 assert them.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md#D8 \u2014 Where each provider reads the answering model"
+    },
+    {
+      "severity": "PASS",
+      "title": "Part B choice and verdict semantics are justified against prior precedent",
+      "description": "The plan left the choice between forcing CONCERNS and failing the run to design. D4 picks CONCERNS and gives its reasoning. The cap only moves PASS down, it is observable in the artifact through `verdictSource: imposed` (D5), and it reuses the existing `ON_CONCERNS` checkpoint. D6 handles the interaction with a degraded parse, which the plan did not anticipate.",
+      "file_ref": null,
+      "category": "alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md#D4 \u2014 Truncated and unread: cap PASS to CONCERNS, don't fail the run"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "under-specification",
+      "raw_category": null,
+      "summary": "D9 defers the routed-variant decision the slice plan assigned to design",
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md#D9 \u2014 What counts as \"the model that was requested\"",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "note",
+      "category": "integration",
+      "raw_category": null,
+      "summary": "Metrology judge identity changes for OpenAI-direct judges",
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md#D10 \u2014 `aiModel` is the answering model; `requestedModel` appears only on substitution",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "note",
+      "category": "scope",
+      "raw_category": null,
+      "summary": "Proportionality is acceptable, with a few trim candidates",
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md#Component Structure",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "pass",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "Failure modes for the new provider-read paths are enumerated",
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md#D8 \u2014 Where each provider reads the answering model",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "pass",
+      "category": "alignment",
+      "raw_category": null,
+      "summary": "Part B choice and verdict semantics are justified against prior precedent",
+      "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md#D4 \u2014 Truncated and unread: cap PASS to CONCERNS, don't fail the run",
+      "location_verified": null
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md",
+    "against": "project-documents/user/architecture/900-slices.maintenance-and-refactoring.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/squadron-927-design"
+  },
+  "timestamp": "2026-11-16T09:26:03.086532",
+  "model": "claude-sonnet-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 3,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-sonnet-5-5",
+  "answering_models": [
+    "claude-sonnet-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 5,
+    "in_fences": 0,
+    "in_section": 5,
+    "surviving": 5
+  },
+  "effort": "medium",
+  "profile": "sdk",
+  "turns": 4,
+  "prompt_tokens": 211848,
+  "cached_tokens": 104224,
+  "cache_write_tokens": 107618,
+  "completion_tokens": 3661,
+  "reasoning_tokens": null,
+  "duration_seconds": 33.31829999992624,
+  "cost_usd": 0.4781861,
+  "cost_basis": "provider"
+}

@@ -1,0 +1,96 @@
+{
+ "review": "r06",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Boundary rule admits calls into internal class methods",
+   "description": "Line 191 allows any crossing into a method, reasoning that \"an instance can only come from an allowed constructor or function.\" An allowed function can return an instance of an internal class. A test that calls `public_api()` and then `.internal_step()` on the result crosses into internal code with no static reference to the class, and the check passes it. The architecture says the boundary is \"only through what the project's packaging metadata already declares\" (`project-documents/user/architecture/420-arch.model-benchmark.md:54`), and that an undecidable check excludes the case, \"never admitted\" (`420-arch.model-benchmark.md:105`). The trace already records `(module, co_qualname)` for each crossing (line 188), so the owning class can be checked against the allowed set the same way functions and constructors are.",
+   "location": "project-documents/user/slices/422-slice.fix-case-qualification-and-yield-report-keystone.md:191"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "`patch.dict` is not intercepted",
+   "description": "Line 200 says hooks on `unittest.mock._patch.__enter__` and `start` cover `patch.dict`. They do not. In CPython, `patch.dict` is `_patch_dict`, a separate class (`patch.dict = _patch_dict`). I checked the local stdlib `unittest/mock.py` for CPython 3.12, 3.13 and 3.14. A test that does `patch.dict(<project dict>, {...})` would therefore pass the no-patching check. Hook `_patch_dict`'s entry points as well. Line 388 already requires a fixture per patch API, so add a `patch.dict` on a project dict to that set.",
+   "location": "project-documents/user/slices/422-slice.fix-case-qualification-and-yield-report-keystone.md:200"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "A reference that breaks parent-passing regression tests still qualifies",
+   "description": "Line 226 puts any non-hidden node that fails every reference run on `excluded_tests` with reason `fails_at_reference`, described as \"typically tests that read the developer's environment.\" A test that passes at the parent and fails at the reference is a regression the fix introduced. This rule removes it from the grade, and the case still enters. That conflicts with \"a case enters the set only if the original work passes its own grade in the sandbox environment\" (`420-arch.model-benchmark.md:50`). The plan limits exclusion to flaky tests (`project-documents/user/architecture/420-slices.model-benchmark.md:74`), so this extends it. Telling an environment failure from a regression needs the parent's outcome for those nodes, and no step runs it. Either run the parent suite and reject the candidate when a node passes at the parent and fails at the reference, or exclude only nodes that fail at both states and state the added run.",
+   "location": "project-documents/user/slices/422-slice.fix-case-qualification-and-yield-report-keystone.md:226"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Reference state uses the reference's `[tool.*]` config, but the grader uses the start commit's",
+   "description": "D4 rewrites every file the diff changed with the reference's version, which includes `pyproject.toml` and any `[tool.*]` tables in it. The architecture says the grader restores `[tool.*]` tables and standalone `ruff.toml` or `pyrightconfig.json` from the start commit (`420-arch.model-benchmark.md:48`). So a fix that changes `[tool.pytest.ini_options]` qualifies under config the grader will not use, and 425's grade of the same reference would differ. The `changes_lockfile` rule (line 166) covers only the lockfile. Either restore the parent's `[tool.*]` sections in the reference state, or reject diffs that change them, and say which.",
+   "location": "project-documents/user/slices/422-slice.fix-case-qualification-and-yield-report-keystone.md:162-167"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Layering inversion: a metrology record embeds a benchmark type",
+   "description": "Line 80 places `FixQualification` in `metrology/benchmark_models.py`, and line 341 types its `environment` field as `EnvironmentIdentity`. 421 defines that type in `benchmark/adapter.py` (`project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:82-83`). 421 also states that `benchmark/` depends on `metrology/`, and \"Neither of those depends on `benchmark/`\" (`421-slice...md:97`). As written, the store module imports from `benchmark/`. Move `EnvironmentIdentity` into `metrology/benchmark_models.py` with the other record models.",
+   "location": "project-documents/user/slices/422-slice.fix-case-qualification-and-yield-report-keystone.md:341"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "The fix-case adapter lookup is not part of 421's contract",
+   "description": "Line 98 says `PythonFixCaseAdapter` is \"registered by `SourceLanguage` in 421's `benchmark/registry.py`.\" 421 exposes one lookup, `adapter_for(language)`, which returns a `BenchmarkAdapter` (`421-slice...md:84`, `195-200`). It leaves the fairness methods to later slices (`421-slice...md:192`). 422 needs a second mapping to `FixCaseAdapter`. Either 421 adds that lookup to its contract, or 422 owns its own registry. Name the choice under \"Interfaces Required\" (lines 62\u201368), which does not list it.",
+   "location": "project-documents/user/slices/422-slice.fix-case-qualification-and-yield-report-keystone.md:98"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "Collection and trace duplicate 421's pytest launcher and bypass `run_suite`",
+   "description": "The collect-only run (line 147), the trace run (line 186) and the resolver (line 185) each need the launch sequence 421 specifies once: interpreter, `-p` plugin flag, `PYTHONPATH` outside the tree, an output file, the scrubbed environment, a `suite_timeout_s` bound, and `SuiteRunError` on missing output (`421-slice...md:206-209`). 421's `BenchmarkAdapter` exposes only `run_suite`. So 422 would write a second launcher and ship a second plugin package, `pytest_trace/` (line 89). Add a generic plugin-run method to 421's adapter, or merge the trace modes into 421's plugin. Otherwise the scrubbed-environment and timeout rules get written twice.",
+   "location": "project-documents/user/slices/422-slice.fix-case-qualification-and-yield-report-keystone.md:147"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "`FixCaseAdapter` mixes methods that slice cases need with fairness methods",
+   "description": "Line 284 justifies a separate protocol because \"slice-case languages need no fairness methods.\" But `is_test_side`, `collect`, `overlay` and `grader_commands` are not fairness methods, and slice cases need them. 426 reuses `test_sets` and the repeat-and-exclude step (line 360), which depend on `collect`. Only `boundary` and `trace` (lines 297\u2013298) are fairness-specific. Split the protocol into a test-set protocol (`is_test_side`, `collect`, `overlay`, `grader_commands`) and a fairness protocol (`boundary`, `trace`). Then the stated reason holds.",
+   "location": "project-documents/user/slices/422-slice.fix-case-qualification-and-yield-report-keystone.md:284"
+  },
+  {
+   "i": 8,
+   "severity": "CONCERN",
+   "title": "Failure handling and timeouts are missing, or conflict, on new I/O paths",
+   "description": "- **`gh` GraphQL call** (line 138): no timeout, and no stated behavior if it hangs.\n- **`git log`, `git show`, `git diff`** (lines 104, 106, 162): no failure handling. In a shallow or partial clone, `git log` returns only the fetched history with no error, so discovery can silently produce fewer candidates. The check \"records equal closing commits\" (line 373) would not catch it.\n- **Collect, trace and resolver subprocesses** (lines 108, 147, 186): no bound. The config keys (lines 261\u2013263) include no timeout, and 421 says every bounded call uses a declared key (`421-slice...md:225`).\n- **Trace and collect output**: no handling for a missing, truncated (after a timeout) or unparseable file. 421 handles this only for its reporter (`421-slice...md:209`).\n- **Resolver crash**: line 185 maps a resolver import failure to `boundary_undecidable`, while line 389 requires that a \"resolver crash\" yields `harness_error`. The slice does not say which one a crashed resolver process produces.\n\nEach path needs a named timeout key, or an explicit reuse of 421's. It needs one stated outcome (harness failures are logged at ERROR and never counted against the case, line 285), and a test.",
+   "location": "project-documents/user/slices/422-slice.fix-case-qualification-and-yield-report-keystone.md:185"
+  },
+  {
+   "i": 9,
+   "severity": "CONCERN",
+   "title": "Rebuilds re-fetch issues, and yield can count one commit more than once",
+   "description": "Line 142 says \"the case is never fetched again.\" But the rebuild order (lines 104\u2013105) fetches every candidate's issue in steps 1\u20132, before the reuse check (line 241) runs. An edit to a body after the fix therefore turns an already qualified candidate into `issue_edited_after_fix` (line 141) on rebuild, and the qualified record is left in place. The record id includes the environment digest or `pre` (line 240), and yield counts records (line 255). As written, a commit qualified under two interpreter versions counts twice, and a commit that is both qualified and later rejected counts once in each. Check for an existing non-harness record for the commit and current rule version before fetching. Have yield count the latest record per project and commit.",
+   "location": "project-documents/user/slices/422-slice.fix-case-qualification-and-yield-report-keystone.md:142"
+  },
+  {
+   "i": 10,
+   "severity": "CONCERN",
+   "title": "Proportionality: three parts can be cut or deferred",
+   "description": "The design is 4/5 effort with 13 decisions, and the plan entry (`420-slices.model-benchmark.md:60-75`) names discovery, freezing, qualification and the yield report. Three concrete cuts:\n- **Slash command** (lines 44 and 324, `commands/sq/benchmark.md`). The plan does not assign it to 422. 421 says it \"arrives with 422's first user-facing command\" (`421-slice...md:42`). Either defer it and update 421's sentence, or keep it as a stated decision.\n- **`fix-cases build --keep`** (line 302). 421's `sq benchmark sandbox --keep` already covers keeping a sandbox for inspection.\n- **`pytest_trace/` as a second plugin package** (line 89). Merging it into 421's plugin, as described above, removes a shipped package.\n\nNone of the three is referenced by a plan success criterion.",
+   "location": "project-documents/user/slices/422-slice.fix-case-qualification-and-yield-report-keystone.md:44"
+  },
+  {
+   "i": 11,
+   "severity": "NOTE",
+   "title": "Walkthrough step 6 expects output the yield contract does not produce",
+   "description": "Step 6 expects `sq benchmark yield --json` to show \"the case set name and version.\" The yield contract (lines 313\u2013322) lists project rows, the pooled row and the separability line. The case set is written by `build --set` (line 302). Add the case-set name and version to the JSON output, or change step 6 to check `build`'s output.",
+   "location": "project-documents/user/slices/422-slice.fix-case-qualification-and-yield-report-keystone.md:426"
+  },
+  {
+   "i": 12,
+   "severity": "NOTE",
+   "title": "The adapter contract refers to types that no section defines",
+   "description": "`CollectedTests`, `AllowedBoundary` and `TraceVerdict` appear in the `FixCaseAdapter` signatures (lines 295\u2013298), and no section defines them. `FairnessVerdict` is listed in Component Structure (line 87) without fields. Name the module and fields for each, since both adapter implementations and `qualify.py` depend on them.",
+   "location": "project-documents/user/slices/422-slice.fix-case-qualification-and-yield-report-keystone.md:292-300"
+  }
+ ]
+}

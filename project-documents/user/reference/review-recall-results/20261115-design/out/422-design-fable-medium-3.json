@@ -1,0 +1,297 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "`FixQualification` in `metrology/` embeds a `benchmark/` type, reversing 421's dependency direction",
+      "description": "- **What the design does:** `FixQualification` lives in `metrology/benchmark_models.py`, is a field on `MetrologyRecord`, and carries `environment: EnvironmentIdentity | None`.\n- **Why it conflicts:** 421 defines `EnvironmentIdentity` in `benchmark/adapter.py` and states that `benchmark/` depends on `metrology/` and that `metrology/` does not depend on `benchmark/`. This slice makes the store's envelope model import from `benchmark/`, which is a cycle.\n- **Contradiction inside the slice:** line 395 says 421 is \"used unchanged\", so moving the type is not available as written.\n- **Fix:** name the resolution in the design. Either `EnvironmentIdentity` moves to `metrology/` as a stated 421 change, or the record stores a metrology-side copy of the identity fields.",
+      "file_ref": null,
+      "category": "dependency-direction",
+      "raw_category": null,
+      "location": "project-documents/user/slices/422-slice.fix-case-qualification-and-yield-report-keystone.md:335-352"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Yield report and case set do not say which record per commit they read",
+      "description": "The record id is `(project, commit, env digest | \"pre\")`, so one commit can hold several records:\n\n- **Environment change:** a uv upgrade, platform change or `scrub_spec_version` bump leaves the old-digest record beside the new one.\n- **History growth:** a commit that qualified earlier can later be rejected pre-sandbox, for example as `multiple_closing_commits` when a second commit closes the same issue. That leaves a `pre` rejection beside a stale `qualified` record.\n\nThree things then become undefined:\n\n- **Yield counts:** D12 (line 255) and step 11 (line 114) say the report \"reads `FixQualification` records for the given projects\" with no selection rule. `yield` builds no sandbox, so it has no current digest to filter on, and counts can double.\n- **The records-equal-commits criterion:** line 373 holds only on a first run.\n- **Case-set membership:** `build --set` \"takes the current repository's qualified ids\" (line 271) without saying whether that is this run's results or all stored records.\n  - With `--commit SHA` (required alongside `--set`), or after a run with per-candidate `harness_error` that exits 0, a shrunken list is written as a new, never-rewritten set version.\n\nThis leaves the architecture's \"yield per project and per reason is a report, not a guess\" unmet. State one selection rule (for example latest `created_at` per commit, with `pre` superseding older environment records) and say whether partial or filtered builds write a set at all.",
+      "file_ref": null,
+      "category": "under-specification",
+      "raw_category": null,
+      "location": "project-documents/user/slices/422-slice.fix-case-qualification-and-yield-report-keystone.md:240-241"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Re-qualification contract for 424 ignores that the case id can change",
+      "description": "- **The gap:** `qualification_for(case, environment)` returns a record when key and rule version match; otherwise 424 calls `qualify_candidate`. But `excluded_tests` and the surviving hidden set are part of the case id (D9, line 227), and both come from three probabilistic repeats in a different environment.\n- **The undefined case:** a re-run can end `qualified` with a different `case_id` than the one in the loaded case-set version. D10 only defines \"no longer qualifies \u2192 rejected record \u2192 drop\".\n- **Why it matters:** the architecture requires every result to reference the case and set version it ran under, and immutable cases.\n- **Fix:** state that a re-qualification producing a different `case_id` is a drop with a named reason, and that `qualification_for` also checks `record.case_id == case.case_id`.",
+      "file_ref": null,
+      "category": "integration",
+      "raw_category": null,
+      "location": "project-documents/user/slices/422-slice.fix-case-qualification-and-yield-report-keystone.md:242"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "New subprocess and network paths lack enumerated hang and timeout handling",
+      "description": "The slice adds several I/O paths that do not go through 421's `run_suite`:\n\n- **Uncovered paths:** trace-plugin collect mode, the trace run, the boundary resolver (which imports every top-level package at the parent, with arbitrary import side effects), `git log`/`git show`/`git diff`, and the `gh` GraphQL call.\n- **Timeout:** only \"suite timeout\" and `SuiteRunError` are named. 421's `benchmark.suite_timeout_s` is defined for `run_suite`; nothing says what bounds `collect`, `trace`, `boundary` or `get_issue`.\n- **Resolver outcome is inconsistent:** D6 (line 185) and the enum (line 282) make resolver failure a `boundary_undecidable` rejection that blames the case, while line 389 requires \"resolver crash\" to assert `harness_error`. A resolver hang has no stated outcome.\n- **`not_run` mapping:** D5 maps `not_run` to `undecidable_failure_at_parent`, but in 421 `not_run` arises only from a timed-out run, which D5 separately says is `harness_error`. State the precedence.\n- **Comment truncation:** `get_issue` is \"one GraphQL query\" (line 138). An issue with more comments than one page returns would have its frozen `task_text` cut short without any signal. Paginate, or reject with a reason.\n- **Second pytest launcher:** `collect` and `trace` need their own pytest invocation with a different plugin, while `PythonFixCaseAdapter` \"does not import `PythonBenchmarkAdapter`\" and 421 is \"unchanged\". Say where the shared launch logic (venv python, scrubbed env, plugin path, `no:cacheprovider`, output directory) lives so it is not duplicated.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/422-slice.fix-case-qualification-and-yield-report-keystone.md:285"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The reference \"passes its own grade\" by construction",
+      "description": "- **What the architecture requires:** a case enters the set only if the original work passes its own grade in the sandbox environment, and a failing case is recorded with the reason and excluded.\n- **What the slice plan allows:** only tests that disagree across runs go on the exclusion list.\n- **What D9 adds:** any non-hidden node that fails every reference run is also moved to `excluded_tests`, so the reference suite can never fail qualification.\n- **Why that is weaker:** no parent full-suite run exists, so an environment-reading test that fails at both commits looks the same as a test the fix itself broke. There is also no bound, so a reference with a largely failing suite still qualifies with a huge exclusion list.\n\nEither reject the case with a named reason when always-failing exclusions cannot be attributed to the environment (one parent full-suite run would separate the two), or state the deviation and show per-case exclusion counts by reason in the yield report.",
+      "file_ref": null,
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/422-slice.fix-case-qualification-and-yield-report-keystone.md:224-226"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "No-cutoff issue renderer is scope for 423 that nothing here uses",
+      "description": "- **Unused mode:** D2 gives the renderer an optional cutoff so that \"423's live fix\" can render without it. Every caller in this slice passes a cutoff.\n- **Undeclared dependency:** 423 is not in `interfaces: [424, 425, 426]` or in \"Provides to Other Slices\", and the slice plan says 423 has no dependencies in this initiative.\n- **Fix:** cut the no-cutoff mode and make the cutoff required, leaving 423 to add what it needs. Otherwise declare the interface.",
+      "file_ref": null,
+      "category": "proportionality",
+      "raw_category": null,
+      "location": "project-documents/user/slices/422-slice.fix-case-qualification-and-yield-report-keystone.md:139"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Per-test verdicts depart from the slice plan's \"excludes the case\" wording",
+      "description": "- **Plan wording:** \"A check that cannot decide excludes the case.\"\n- **What D8 does:** it drops the undecidable or unfair test and keeps the case if one hidden test survives. This is reasoned and consistent with the architecture's per-test phrasing (\"a fix test qualifies only if\u2026\").\n- **Side effect:** the qualified count that feeds the separability answer includes cases graded on a subset of the fix's tests. The yield report could show how many qualified cases are partial.",
+      "file_ref": null,
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/422-slice.fix-case-qualification-and-yield-report-keystone.md:205-209"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Network issue fetch runs before the local diff classification",
+      "description": "- **Order today:** D9 claims cheapest-first, but step 1 calls `gh` for every closing commit before step 2's local `git diff --name-status` can reject `no_test_change`, `test_data_changed` and `changes_lockfile`.\n- **Effect of swapping:** fewer network calls and fewer `harness_error` records, and a missing `gh` no longer stops the build for candidates that never needed it.",
+      "file_ref": null,
+      "category": "proportionality",
+      "raw_category": null,
+      "location": "project-documents/user/slices/422-slice.fix-case-qualification-and-yield-report-keystone.md:213-215"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Frozen-text cutoff has two gaps",
+      "description": "- **Title edits:** `issue_edited_after_fix` checks `lastEditedAt` on the body and comments. I believe a GitHub title rename is a timeline event that does not set `lastEditedAt`, so a title rewritten after the fix would enter `task_text` unchecked. Confirm this against the API.\n- **Squash and rebase merges:** the committer date is the merge time, so issue comments that describe the fix before it merged pass the cutoff. Record both under known gaps, as D6 does for the trace.",
+      "file_ref": null,
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/422-slice.fix-case-qualification-and-yield-report-keystone.md:140-141"
+    },
+    {
+      "severity": "PASS",
+      "title": "Scope matches the slice plan entry",
+      "description": "- **Assigned items present:** discovery, frozen issue text, per-node hidden and superseded sets with conftest fixtures, the three Python fairness checks, repeated qualification with identity-bearing exclusions, environment-keyed records, versioned case sets, and the yield report on squadron plus one other project.\n- **Correctly excluded:** injection, the leak scan, replay and the paired bootstrap.\n- **Proportionate:** effort 4/5 matches the plan, and pooling (`fix-cases pool`) is deferred until the yield answer calls for it.",
+      "file_ref": null,
+      "category": "scope",
+      "raw_category": null,
+      "location": "project-documents/user/slices/422-slice.fix-case-qualification-and-yield-report-keystone.md#technical-scope"
+    },
+    {
+      "severity": "PASS",
+      "title": "Fairness rule mapping follows the architecture",
+      "description": "- **Test-first:** D5 maps 421's `FailureKind` to the architecture's rule, so missing symbol or collection error means the test uses names the fix added, and assertion or project exception qualifies.\n- **Boundary:** D6 reads the boundary from packaging metadata as it stood at the parent.\n- **Patching:** D7 separates project patches from dependency patches.\n- **Undecidable results:** every one excludes with a named reason, and perturbation stays rejected.\n- **Honest limits:** the top-level-only `__all__` reading is narrower than \"public exports\" but errs toward exclusion, and the known gaps are stated.",
+      "file_ref": null,
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/422-slice.fix-case-qualification-and-yield-report-keystone.md:169-203"
+    },
+    {
+      "severity": "PASS",
+      "title": "Separability answer is sound and candid about its limits",
+      "description": "- **Arithmetic:** the bound checks out. With k=3 and d=0.20 it gives n=33, matching the sample output.\n- **Stated assumptions:** the design prints its assumptions beside the answer and hands the measured statistic to 425, as the architecture's \"not known until measured\" requires.\n- **Config:** thresholds are config keys, and significance and power are named constants.",
+      "file_ref": null,
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/422-slice.fix-case-qualification-and-yield-report-keystone.md:253-265"
+    },
+    {
+      "severity": "PASS",
+      "title": "Containment and NFRs",
+      "description": "- **Containment:** `gh` runs only in the harness, and historical test code runs under the scrubbed environment with no credential grant. No producer is dispatched, so the leak scan and dollar cap do not apply.\n- **NFRs:** the architecture states no latency or throughput target for this path.",
+      "file_ref": null,
+      "category": "security",
+      "raw_category": null,
+      "location": "project-documents/user/slices/422-slice.fix-case-qualification-and-yield-report-keystone.md:456-460"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "dependency-direction",
+      "raw_category": null,
+      "summary": "`FixQualification` in `metrology/` embeds a `benchmark/` type, reversing 421's dependency direction",
+      "location": "project-documents/user/slices/422-slice.fix-case-qualification-and-yield-report-keystone.md:335-352",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "under-specification",
+      "raw_category": null,
+      "summary": "Yield report and case set do not say which record per commit they read",
+      "location": "project-documents/user/slices/422-slice.fix-case-qualification-and-yield-report-keystone.md:240-241",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "integration",
+      "raw_category": null,
+      "summary": "Re-qualification contract for 424 ignores that the case id can change",
+      "location": "project-documents/user/slices/422-slice.fix-case-qualification-and-yield-report-keystone.md:242",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "New subprocess and network paths lack enumerated hang and timeout handling",
+      "location": "project-documents/user/slices/422-slice.fix-case-qualification-and-yield-report-keystone.md:285",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "summary": "The reference \"passes its own grade\" by construction",
+      "location": "project-documents/user/slices/422-slice.fix-case-qualification-and-yield-report-keystone.md:224-226",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "proportionality",
+      "raw_category": null,
+      "summary": "No-cutoff issue renderer is scope for 423 that nothing here uses",
+      "location": "project-documents/user/slices/422-slice.fix-case-qualification-and-yield-report-keystone.md:139",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "note",
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "summary": "Per-test verdicts depart from the slice plan's \"excludes the case\" wording",
+      "location": "project-documents/user/slices/422-slice.fix-case-qualification-and-yield-report-keystone.md:205-209",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "note",
+      "category": "proportionality",
+      "raw_category": null,
+      "summary": "Network issue fetch runs before the local diff classification",
+      "location": "project-documents/user/slices/422-slice.fix-case-qualification-and-yield-report-keystone.md:213-215",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "note",
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "summary": "Frozen-text cutoff has two gaps",
+      "location": "project-documents/user/slices/422-slice.fix-case-qualification-and-yield-report-keystone.md:140-141",
+      "location_verified": true
+    },
+    {
+      "id": "F010",
+      "severity": "pass",
+      "category": "scope",
+      "raw_category": null,
+      "summary": "Scope matches the slice plan entry",
+      "location": "project-documents/user/slices/422-slice.fix-case-qualification-and-yield-report-keystone.md#technical-scope",
+      "location_verified": null
+    },
+    {
+      "id": "F011",
+      "severity": "pass",
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "summary": "Fairness rule mapping follows the architecture",
+      "location": "project-documents/user/slices/422-slice.fix-case-qualification-and-yield-report-keystone.md:169-203",
+      "location_verified": true
+    },
+    {
+      "id": "F012",
+      "severity": "pass",
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "summary": "Separability answer is sound and candid about its limits",
+      "location": "project-documents/user/slices/422-slice.fix-case-qualification-and-yield-report-keystone.md:253-265",
+      "location_verified": true
+    },
+    {
+      "id": "F013",
+      "severity": "pass",
+      "category": "security",
+      "raw_category": null,
+      "summary": "Containment and NFRs",
+      "location": "project-documents/user/slices/422-slice.fix-case-qualification-and-yield-report-keystone.md:456-460",
+      "location_verified": true
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/422-slice.fix-case-qualification-and-yield-report-keystone.md",
+    "against": "project-documents/user/architecture/420-arch.model-benchmark.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261115-design/wt/422-design"
+  },
+  "timestamp": "2026-11-16T07:22:39.210292",
+  "model": "claude-fable-5-2",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 5,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-fable-5-2",
+  "answering_models": [
+    "claude-fable-5-2"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 13,
+    "in_fences": 0,
+    "in_section": 13,
+    "surviving": 13
+  },
+  "effort": "medium",
+  "profile": "sdk",
+  "turns": 6,
+  "prompt_tokens": 269614,
+  "cached_tokens": 146006,
+  "cache_write_tokens": 123602,
+  "completion_tokens": 15725,
+  "reasoning_tokens": null,
+  "duration_seconds": 166.4258187909145,
+  "cost_usd": 2.63665,
+  "cost_basis": "provider"
+}

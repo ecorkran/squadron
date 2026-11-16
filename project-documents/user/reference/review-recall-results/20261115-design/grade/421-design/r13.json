@@ -1,0 +1,54 @@
+{
+ "review": "r13",
+ "findings": [
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "`EnvironmentIdentity` is placed where metrology records cannot import it without inverting the stated dependency direction",
+   "description": "The slice states that `benchmark/` depends on `metrology/` and not the reverse. `EnvironmentIdentity` is defined in `benchmark/adapter.py` (Component Structure). The document says 422's qualification records and 424's replay records carry it, and those are metrology record types. Those downstream models will therefore need to import from `benchmark/`, which creates a cycle or breaks the rule.\n\nD6 also calls it a grader identity that \"more fields\" than 400's model, so it is persisted data, not an adapter-internal type.\n\nMove the pure data model (`EnvironmentIdentity`, and probably `FailureKind` and `NodeOutcome` for the same reason) into `metrology/benchmark_models.py` or another lower module. The adapter protocol can then import it.",
+   "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:97, 157-161, 291"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "The auth check does not say how agent CLIs are reached under the scrubbed `PATH`, so a \"no\" may not mean an auth failure",
+   "description": "D7 puts only `git` and `uv` (`HARNESS_TOOL_ALLOWLIST`) on the scrubbed `PATH`. It deliberately omits `~/.local/bin`, Homebrew and similar locations. The `sdk` profile's probe goes through the Claude agent runtime, which may need a `claude` binary that normally lives in one of those omitted locations. The document does not say which of these holds:\n- the SDK bundles its own binary;\n- the binary is resolved some other way;\n- it is added to the allowlist.\n\nIf the binary is not found, the probe fails. It reports \"no\" with a stderr, and the success criterion (\"yes or no for `sdk` and `openai-oauth`\") would then blame auth for a `PATH` problem.\n\nTwo related gaps:\n- \"Run the installed `sq` by absolute path\" does not say how that path is found. It may differ when `sq` runs from a dev checkout or via `uv run`.\n- The result type has no way to separate \"binary not found\" or \"cannot start\" from \"authentication rejected\".\n\nState the resolution mechanism for each profile's runtime. Either add a `not_runnable` result distinct from `no`, or require the stderr classification to tell them apart.",
+   "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:111, 168, 182"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Dependency install runs historical build code under the full, unfiltered harness environment",
+   "description": "D5 runs `uv sync --locked --all-extras --dev` \"under the harness environment\". That environment includes `GH_TOKEN`, `GITHUB_TOKEN`, `SSH_AUTH_SOCK`, the real `HOME` and the user's git config. The install can execute sdist build backends and build scripts from historical lockfile dependencies. The architecture accepts producer code running at P6's trust level, but P6 runs current code. Here, old, possibly yanked or unmaintained packages run with the user's credentials. \"Installation is harness work, not producer work\" explains why the producer does not see the environment. It does not justify exposing credentials to the packages being built.\n\nThe same allowlist technique already used for the producer can be applied to the install. Pass `PATH`, the real `HOME` for the uv cache, `UV_*` and proxy/index variables, and omit credentials. This costs little and avoids a second environment-building rule.",
+   "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:151, 155"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Suite-timeout and other degraded paths are not required to produce a WARNING-level signal",
+   "description": "The error-handling convention logs raised errors at ERROR. Two new I/O paths end in values rather than exceptions:\n- `run_suite` returns `SuiteRun(timed_out=True)` on timeout.\n- The auth probe returns a \"no\" row on timeout.\n\nNo log level or counter is named for either. Success Criteria require tests that assert the error and reason. The timeout test is listed only as a fixture case, and it does not say that the observable signal is asserted. The orphan-sweep case, where a run is killed mid-install, is covered by a WARNING (Walkthrough step 7).\n\nSpecify a WARNING log for the `timed_out` suite and the timed-out probe. Add an assertion for each to the existing failure-path tests. The \"carryover replaced\" result in D8 should be logged the same way.",
+   "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:209, 237, 316"
+  },
+  {
+   "i": 5,
+   "severity": "NOTE",
+   "title": "Carried-over credential symlinks expose the real home path and give write access to the real token",
+   "description": "Symlinking `.codex/auth.json` and `.claude/.credentials.json` is justified (token refresh). `readlink` from inside the sandbox also reveals the user's real home directory, which holds the checkout containing the answer. A producer can also overwrite the real token file. The architecture already says the sandbox is a directory and not a jail, and 424's leak scan covers the user's checkout. Add this path to the list of inputs the scan must watch (the \"Special Considerations\" section already does this for the published-package case).",
+   "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:178"
+  },
+  {
+   "i": 6,
+   "severity": "NOTE",
+   "title": "Frontmatter dependencies and the 420 prerequisite",
+   "description": "- The slice consumes `SourceLanguage` from 400's snapshot models and aligns its registry with 400's, but its frontmatter `dependencies` omits 400. The architecture lists 400 as a dependency.\n- The slice says 420 (effort audit) \"must land first\" while also saying 421 reads nothing from it. If the ordering is only a convenience, say so, so it does not block 421 unnecessarily. The architecture ties the effort audit to later comparison slices.",
+   "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:6, 57"
+  },
+  {
+   "i": 7,
+   "severity": "NOTE",
+   "title": "Effort estimate looks low for the number of components",
+   "description": "The slice has roughly fifteen new modules, two refactors of existing code (the `HistoryFreeSandbox` extraction and the two store primitives), a real-pytest fixture suite, and an empirical auth spike. Effort 3/5 is probably optimistic. The design is otherwise proportionate. Each mechanism, including `SCRUB_SPEC_VERSION`, `CredentialGrant` and the reference-in-identity change, has a named consumer in 422 to 425. If the estimate proves wrong, the cleanest cut line is between records and store (steps 3) and the sandbox, scrub and runner work (steps 1, 2, 4 to 6).",
+   "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:383"
+  }
+ ]
+}

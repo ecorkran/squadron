@@ -1,0 +1,260 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "`sq pr create` cannot locate \"the latest saved review\" with the keys the design defines",
+      "description": "`sq pr create` gathers \"the latest saved review\". Persistence is keyed by slice index or, for PR reviews, by PR identity. No PR exists yet when `sq pr create` runs, so a PR-keyed lookup is impossible. For a non-slice branch (the stated unplanned-repo use case) there is no slice key either. Reviews saved by `sq review code --diff` have no defined key linking them to a branch or head sha.\n\nThe design never says how a review is matched to the branch, or how staleness is detected. A review of an older head would be cited as \"review provenance\" in the PR body. That contradicts the \"traceable to inputs\" goal.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#envisioned-state"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Adapter protocol operations are inconsistent and omit the hard ones",
+      "description": "Design Goals lists the protocol operations as resolve, fetch head, read threads, post comment, create PR and identify operator. Other sections need operations that are not on that list:\n- finding and updating squadron's prior comment (Posting idempotency)\n- detecting the PR's current head sha (stale-head warning)\n- determining the default or base branch\n- pushing the branch before creating the PR\n- checking whether a PR already exists for the branch\n- fetching the base ref\n\n\"Read its threads\" with resolved/unresolved state is not available from `gh pr view` JSON and needs a GraphQL call. That is the kind of `gh`-specific shape the document says must not leak. Whether `sq pr create` pushes the branch is not addressed at all. It is an outward-facing write that the \"reads before writes, explicit flags\" principle should cover.",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#design-goals"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Fetch and merge-base design covers only the same-repo, head-only case",
+      "description": "\"Fetching without checkout\" describes only fetching the head. The merge-base range also needs the base ref to be current locally, and the doc names no fetch for it. A stale local base gives a range that differs from what the host displays. The \"base moved since resolution\" failure mode is listed, but nothing says how it is detected.\n\n\"Hosts expose PR heads as fetchable refs\" is true of GitHub's `refs/pull/N/head`. The typed PR record has no head-repository field, so fork PRs and PRs from deleted branches are not represented. Shallow clones can make merge-base fail. The protocol is supposed to be host-neutral, but \"fetch head into a namespaced ref\" is GitHub-specific.",
+      "file_ref": null,
+      "category": "feasibility",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#technical-considerations"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "\"More than one host remote \u2192 fail\" breaks the common fork workflow",
+      "description": "Target grammar says resolution fails loudly if the repository has more than one host remote. A fork clone with `origin` and `upstream` is the standard contributor setup and would always fail. This needs an explicit selection rule, such as a `--remote` flag or `gh`'s default repo resolution. It also needs a rule for GHES and enterprise hosts, which the Motivation names as the target environment.",
+      "file_ref": null,
+      "category": "feasibility",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#technical-considerations"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Untrusted PR content reaches a tool-enabled reviewer and a write path under the operator's identity",
+      "description": "The prompt-injection mitigation covers only PR title, body, issues and threads. The larger exposure is the PR's file contents. They are untrusted, the tool-enabled reviewer reads them, and the output can be posted to the PR with the operator's credentials. The PR can also change rules files, `CLAUDE.md` or similar convention files.\n\nThe doc does not say whether rules load from the scratch worktree (PR-controlled) or the operator's checkout. This is the same \"which tree\" ambiguity that \"Rules outside a planned project\" leaves open. The doc also says nothing about neutralizing or escaping content in the rendered comment, such as mentions, links and markdown.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#technical-considerations"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Scratch worktree is heavier than the requirement and pushes its hard parts to slice level",
+      "description": "Principle \"Isolated checkout\" mandates a squadron-owned worktree. Concurrency with the operator's worktrees, disk use, and cleanup on failure are deferred as \"slice-level questions\". Those are the failure modes this design is supposed to enumerate. Crash or SIGINT leaves orphaned worktrees, and `git worktree add` locks branches and refs.\n\nA lighter option meets the requirement. Serve tool reads from the fetched object store (`git show <sha>:path`, or a temp `git archive` extract) behind the 916 tool jail. That avoids worktree lifecycle entirely. The doc should justify the worktree against this alternative or adopt it.",
+      "file_ref": null,
+      "category": "antipattern",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#architectural-principles"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Slice ordering contradicts the dependency direction and the \"landed\" status of 916/917",
+      "description": "Slice 2 (`sq review pr`) produces a `ReviewResult` that must be saved. Persistence is slice 3, and Posting (slice 4) consumes the saved review. Slice 2 therefore has no persistence path, and the design forbids the fabricated-`SliceInfo` workaround. The order should put persistence before, or inside, the review slice.\n\nCurrent State describes 916's merge-base semantics as existing behavior. The persistence slice says \"Sequenced after 916 and 917 land on `main`\". The doc cannot treat 916 as both landed and not landed. If 917 is not landed, the \"attaches to seams 917 changes\" claim rests on code that does not exist yet.",
+      "file_ref": null,
+      "category": "dependencies",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#anticipated-slices"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Persistence outside a planned project is asserted to be \"unchanged\" but its assumptions are not",
+      "description": "Envisioned State says archiving, digest and integrity checks from the 900-band \"apply unchanged\". Technical Considerations says the reviews directory, naming and frontmatter all assume `project-documents/user/reviews/` and an index. The \"configured squadron data directory\" has no config key, default or ownership defined. The CLAUDE.md rule against silent fallback values means the unset case must fail explicitly, and the doc does not say so.\n\nThe PR-keyed name is also unspecified. It must be unique across repositories and across multiple reviews of the same PR at different heads. The name and frontmatter contract are left to a later slice, yet two other components (`sq pr create` lookup, comment update) depend on them.",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#envisioned-state"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "\"Nothing asserted that no input supports\" is unenforceable for the LLM-composed body",
+      "description": "The \"what changed, why, how it was verified, known gaps\" sections are written by a one-shot model call. The design offers no mechanism to enforce the traceability goal, such as structured output, a citation requirement or a post-check. \"How it was verified\" and \"known gaps\" have no deterministic source unless the review or task files supply them. This is the hard part, and it is left unspecified.\n\nThe body is also to be parsed by `sq review pr` \"for intent and claimed verification\". An author-written, unverified claim then becomes reviewer input, so a self-asserted \"verified\" biases the review. The \"stable section structure other tooling can rely on\" contract is also at odds with the project's lenient-parsing rule.\n\nSlice design and task documents may be internal. Sending them to a model and publishing the output to a possibly public PR has no redaction or confirmation story beyond dry-run.",
+      "file_ref": null,
+      "category": "antipattern",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#technical-considerations"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Scope bundles two largely independent features under one \"shared boundary\"",
+      "description": "The Overview says the three capabilities \"share one new boundary and nothing else\". `sq pr create` adds an LLM composition pipeline, a body-section contract, slice detection and integration-branch targeting. It shares only the adapter's `create` call with the review work, and the Motivation (enterprise PR review) does not require it. It is also the slice with the most unresolved design (see the two findings above).\n\nCutting it to a follow-on initiative would leave a keystone-plus-review-plus-post scope that is much easier to validate. Other candidates to defer or trim:\n- unresolved-thread ingestion as prompt input (needs GraphQL)\n- slash-command and \"interface parity\" work, since the doc itself says pipeline input is a later decision\n- multi-host genericity beyond keeping the protocol clean",
+      "file_ref": null,
+      "category": "antipattern",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#overview"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Failure-mode list omits several states likely in practice",
+      "description": "The enumerated failure modes do not include:\n- PR closed, merged or draft\n- very large diffs or `gh` timeouts, since no timeout is specified for the subprocess boundary\n- API rate limits\n- comment too large for the host's body limit\n- concurrent `--post` runs racing on the marker-based update (a \"find then update\" is not atomic)\n- identity mismatch when `GH_TOKEN` is set to a bot or service token. This defeats \"attributed to the operator\" without any refusal condition.\n\nEach needs an observable signal under the project's failure-mode rule.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#architectural-principles"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "`sq pr create` cannot locate \"the latest saved review\" with the keys the design defines",
+      "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#envisioned-state",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "Adapter protocol operations are inconsistent and omit the hard ones",
+      "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#design-goals",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "feasibility",
+      "raw_category": null,
+      "summary": "Fetch and merge-base design covers only the same-repo, head-only case",
+      "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#technical-considerations",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "feasibility",
+      "raw_category": null,
+      "summary": "\"More than one host remote \u2192 fail\" breaks the common fork workflow",
+      "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#technical-considerations",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "Untrusted PR content reaches a tool-enabled reviewer and a write path under the operator's identity",
+      "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#technical-considerations",
+      "location_verified": null
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "antipattern",
+      "raw_category": null,
+      "summary": "Scratch worktree is heavier than the requirement and pushes its hard parts to slice level",
+      "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#architectural-principles",
+      "location_verified": null
+    },
+    {
+      "id": "F007",
+      "severity": "concern",
+      "category": "dependencies",
+      "raw_category": null,
+      "summary": "Slice ordering contradicts the dependency direction and the \"landed\" status of 916/917",
+      "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#anticipated-slices",
+      "location_verified": null
+    },
+    {
+      "id": "F008",
+      "severity": "concern",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "Persistence outside a planned project is asserted to be \"unchanged\" but its assumptions are not",
+      "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#envisioned-state",
+      "location_verified": null
+    },
+    {
+      "id": "F009",
+      "severity": "concern",
+      "category": "antipattern",
+      "raw_category": null,
+      "summary": "\"Nothing asserted that no input supports\" is unenforceable for the LLM-composed body",
+      "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#technical-considerations",
+      "location_verified": null
+    },
+    {
+      "id": "F010",
+      "severity": "concern",
+      "category": "antipattern",
+      "raw_category": null,
+      "summary": "Scope bundles two largely independent features under one \"shared boundary\"",
+      "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#overview",
+      "location_verified": null
+    },
+    {
+      "id": "F011",
+      "severity": "note",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "Failure-mode list omits several states likely in practice",
+      "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#architectural-principles",
+      "location_verified": null
+    }
+  ],
+  "template_name": "arch",
+  "input_files": {
+    "input": "project-documents/user/architecture/380-arch.pull-request-workflow.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/squadron-380-arch"
+  },
+  "timestamp": "2026-11-16T09:26:41.953818",
+  "model": "claude-sonnet-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 1,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-sonnet-5-5",
+  "answering_models": [
+    "claude-sonnet-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 11,
+    "in_fences": 0,
+    "in_section": 11,
+    "surviving": 11
+  },
+  "effort": "medium",
+  "profile": "sdk",
+  "turns": 2,
+  "prompt_tokens": 106979,
+  "cached_tokens": 12914,
+  "cache_write_tokens": 94061,
+  "completion_tokens": 5395,
+  "reasoning_tokens": null,
+  "duration_seconds": 46.17567729204893,
+  "cost_usd": 0.4321092,
+  "cost_basis": "provider"
+}

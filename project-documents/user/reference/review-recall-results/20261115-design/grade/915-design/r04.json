@@ -1,0 +1,47 @@
+{
+ "review": "r04",
+ "findings": [
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "\"Resume at the paused round\" re-executes the round instead of continuing after the checkpoint",
+   "description": "D1's rationale says that after `Continue`, \"proceed\" means \"the next round, not the next step\". The mechanism in D3 is different: `range(start_iteration, max + 1)` with `start_iteration` equal to the recorded paused round. That re-runs the whole body of round N from its first step.\n\nThe docs the design cites put the checkpoint at the end of the body. `PhaseStepType.expand` appends it unconditionally, and the gate emits `[gate, checkpoint]`. So on resume:\n- Round N's dispatch and review run a second time, and the human's checkpoint resolution is discarded.\n- The `until:` condition for round N is never evaluated on the already-completed work. With `checkpoint: always`, a review that PASSed in round N still gets re-run.\n- A round that still returns CONCERNS pauses again, so the loop can pause on the same round every time.\n\nThe doc never says whether resume means \"re-run round N\" or \"evaluate round N's `until:` and continue at N+1\". The Verification Walkthrough (\"rounds 2\u20133 execute\") only matches the first reading. The design should state which one it chooses and justify it against the \"next round\" wording in D1. It should also say how the checkpoint resolution is consumed on resume. If re-running is the intent, say so, and drop the \"next round\" language.",
+   "location": "project-documents/user/slices/915-slice.loop-checkpoint-pause-resume-correctness.md#D1 and #D3"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "The resume coordinate has unspecified edge cases, and the likely failures are silent",
+   "description": "The coordinate is one integer passed through two functions, and several failure cases are not covered:\n- **Iteration beyond `max`.** If the pipeline YAML changes between pause and resume and `max` is lowered, `range(start_iteration, max + 1)` is empty. The loop runs zero rounds with no signal, which is the same silent abandonment this slice is meant to remove. The doc clamps only to `>= 1`. It needs a loud failure or an explicit exhaustion path, plus a test for the signal.\n- **Clamp as a silent fallback.** Coercing a loop's recorded `0` up to `1` hides a state inconsistency. The project rule says to fail explicitly.\n- **Non-loop target.** The coordinate is ignored with a DEBUG log. If the step is no longer a loop (YAML edited), that is also a mismatch that should surface at WARNING.\n- **Which entry to read.** `resume_iteration_for` is specified as \"the recorded `iteration` for a named step\". But `_append_step` appends rather than replaces, so a step that paused, was resumed and paused again has several entries. The design must say it reads the latest entry. It must also say what happens when no entry exists.\n- **Two sentinels.** The executor uses `start_from_iteration=0` and the loop uses `start_iteration=1`, with a clamp between them. An optional (`int | None`) value would remove the magic sentinel and the clamp.\n\nThe design should add two things. First, add each of these cases to the failure-mode list with a handling strategy and an observable signal. Second, make `first_unfinished_step` and `resume_iteration_for` one query that returns a single resume point (step plus iteration). As written, both CLI resume paths must call two functions over the same state and keep them consistent.",
+   "location": "project-documents/user/slices/915-slice.loop-checkpoint-pause-resume-correctness.md#D3"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "The resumed round loses 910's findings feedback, and the doc defers that to slices that are already dependencies",
+   "description": "D3 says `prior_iteration_step_outputs` is empty on re-entry and that rehydrating it is \"911/305 territory, not this slice's\". 910 and 911 are declared dependencies of this slice. They are predecessors that have already landed, not future work this slice can hand off to.\n\nRound N \u2265 2 resumed from state is dispatched with no record of round N-1. Round N-1's findings feedback is exactly what 910 added to make loops converge, so resumed rounds regress to the pre-910 blind retry. The doc documents this (\"the round contract\") but treats it as acceptable. It should either:\n- rehydrate prior outputs from the persisted action results, or\n- state explicitly that findings feedback is unavailable on a resumed round, and why that is acceptable for the loops D1 targets (retry loops that pause on non-passing reviews).\n\nThe 911 interaction is also unaddressed. `revision_number:` is stamped as the file's previous value plus 1, so re-running round N on an artifact already stamped by the paused attempt gives revision N+1 for round N. The monotonic contract still holds, but \"round N has revision N\" no longer does. The doc should state whether that is accepted.",
+   "location": "project-documents/user/slices/915-slice.loop-checkpoint-pause-resume-correctness.md#D3"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "The pause-time WARNING calls a resumable pause an \"abandonment\"",
+   "description": "After D1, a checkpoint pause inside a loop is not abandonment. The loop is re-entered on resume. Part C still logs at WARNING, naming \"rounds not run\", on every legitimate pause. That is noise, and it conflicts with the doc's own framing. The WARNING is also not tied to the paths where rounds really are dropped:\n- the iteration-beyond-`max` case above;\n- a non-loop target ignoring the coordinate;\n- a run abandoned at a pause and never resumed.\n\nThe plan does require abandoned iterations to be observable \"regardless of which answer is chosen\", so Part C stays. Revise it so the pause-time message reads as a paused-with-pending-rounds notice, and put the WARNING on the actual drop paths. The resume-time INFO line is not a failure-mode signal. It is also absent from the Success Criteria, so it can be cut or listed there.",
+   "location": "project-documents/user/slices/915-slice.loop-checkpoint-pause-resume-correctness.md#D4"
+  },
+  {
+   "i": 5,
+   "severity": "NOTE",
+   "title": "FAILED inclusion extends Part A beyond the paused case the plan describes",
+   "description": "The slice plan and the issue describe the paused case. Treating `FAILED` as unfinished is justified in the doc (same unconditional-append mechanism) and listed in Success Criteria and Risk. It does change resume for every failing pipeline, not just loops. Part B also re-enters a failed loop at the failed round, but only the paused case is described and tested. Add one test or sentence covering a failed loop step so that behavior is intentional rather than incidental.",
+   "location": "project-documents/user/slices/915-slice.loop-checkpoint-pause-resume-correctness.md#D2"
+  },
+  {
+   "i": 6,
+   "severity": "NOTE",
+   "title": "The document is heavier than the 2/5 change needs",
+   "description": "The Overview, Value and Verified Current Behavior sections restate the issue and the slice plan entry at length. The code change is one predicate, one query function, one parameter threaded through and one log line. The line-number citations (many at `main` line ranges) will drift, as the doc itself notes for the issue. Trimming those sections and the repeated narrative of rejected alternatives would match the \"lighter-weight\" guidance in the 900 architecture. This does not block progress.",
+   "location": "project-documents/user/slices/915-slice.loop-checkpoint-pause-resume-correctness.md"
+  }
+ ]
+}

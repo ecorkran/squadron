@@ -1,0 +1,40 @@
+{
+ "review": "r14",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "\"No edits to 424 or 425\" contradicts the rest of the document",
+   "description": "Line 42 says this slice makes no edits to 424 or 425. Elsewhere the document says otherwise:\n- **424's model changes.** 424's `CaseDrop.reason` \"widens to accept `SliceCandidateRejection`\" (lines 321 and 426). `CaseDrop` is 424's model (424 slice, line 367).\n- **425's module changes.** `bench_report.py` is 425's module, and it gains per-kind grouping and the pairwise section (lines 87 and 427).\n- **The test criterion is stale.** Line 451 says `tests/benchmark/` passes unchanged \"except where D8 routes re-qualification and D17 extracts the interval\". But D8 routes through a seam 424 already provides. D17 (line 312) says the interval already exists in 425 and needs \"no change to 425\". So the exceptions name changes that no longer happen and leave out the ones that do.\n\nThe person writing the task breakdown can't tell which 424 and 425 files and tests are expected to change. Suggested fix:\n- Restate line 42 as: no changes to `bench_runner.py`, `grade_runner.py` or `paired_stats.py`; additive changes to `CaseDrop.reason` and `bench_report.py`.\n- Rewrite line 451 to name the tests those two changes touch.",
+   "location": "project-documents/user/slices/426-slice.slice-cases.md:42"
+  },
+  {
+   "i": 1,
+   "severity": "NOTE",
+   "title": "No timeout source is named for cf steps or for the judge's git reads",
+   "description": "D6 and D9 handle \"a failed or timed-out\" `git` call or cf step as `harness_error` or a harness absence, logged at ERROR. That is the right handling. But the document doesn't say where the timeout comes from: an existing `ProcessRunner` bound, the value carried over from `ReplaySandbox`, or a new constant. On the judge path, a missing `tip_sha` refuses (line 149). A `git diff` on `--repo` that fails or hangs for any other reason isn't covered. One line naming the bound and the judge-side handling would close this.",
+   "location": "project-documents/user/slices/426-slice.slice-cases.md#d9--cf-registration-inside-the-scrubbed-home"
+  },
+  {
+   "i": 2,
+   "severity": "NOTE",
+   "title": "`build` exit 1 versus harness errors recorded per candidate",
+   "description": "D6 records harness failures per candidate as `harness_error`, which implies the build continues. The CLI contract says \"a harness failure stops the build\" and exits 1. The document should say which failures stop the build (for example, the store can't be written, or the repo is unreadable) and which are recorded per candidate. `--keep` is also listed without a description.",
+   "location": "project-documents/user/slices/426-slice.slice-cases.md:338"
+  },
+  {
+   "i": 3,
+   "severity": "NOTE",
+   "title": "Using `tip_sha` instead of the landing commit is a justified departure",
+   "description": "The architecture calls the landing commit the reference. D2 uses the branch tip instead, because `fork..after` on a merge landing pulls in unrelated work that reached the target. That serves the architecture's \"compare configs on identical work\" goal and is reasoned in the document. The same goes for adding `uv.lock` to the drop list (D11) and for a diff-specific judge prompt that keeps 177's verdict format and core (D12).",
+   "location": "project-documents/user/slices/426-slice.slice-cases.md#d2--landing-and-reference-selection"
+  },
+  {
+   "i": 4,
+   "severity": "NOTE",
+   "title": "Judging can spend on cases that grading later drops",
+   "description": "Cases dropped at grading (`reference_failed_grade`, grade harness absences) are excluded from the pairwise section only at report time. When grades already exist, `judge` could skip those cases and leave them out of the bound. This is optional, and the cost stays within the stated cap either way.",
+   "location": "project-documents/user/slices/426-slice.slice-cases.md#d15--absences-in-judging"
+  }
+ ]
+}

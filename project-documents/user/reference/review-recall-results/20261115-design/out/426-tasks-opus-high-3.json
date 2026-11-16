@@ -1,0 +1,171 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "Discovery rejections and discovery harness errors are never saved as `SliceQualification` records",
+      "description": "The first Functional Requirement says `build` \"writes a `SliceQualification` for every slice index in it\u2026 Every rejected slice has a `SliceCandidateRejection` or `harness_error` with detail. None is silently dropped.\"\n\nNo task does this for discovery:\n- Task 13's `discover` only returns `multiple_landings`, `branch_contains_merges` and discovery `harness_error` entries in a `DiscoveryResult`.\n- Task 15 writes records only for candidates that `qualify_slice_candidate` sees.\n- Task 20 (line 196) prints one line per index but never writes a record for a discovery rejection.\n\nWhat breaks as a result:\n- Task 22 (line 207) builds the yield rows from stored `SliceQualification`s, so `multiple_landings` and `branch_contains_merges` can never show a count. The design's Mitigation Strategies names exactly these two as the rules to relax if they dominate the yield rows.\n- Task 22's test \"every rejection value is listed when nonzero\" cannot be met for those two values.\n- Task 20's test \"one line per index\" checks printed lines, not records, so it would not catch the gap.\n\nFix: add a bullet to Task 20, or to Task 13, that writes a `rejected` (or `harness_error`) `SliceQualification` with `start_environment=None` for each discovery outcome. The bullet must also say which `landing_after_sha` goes into the record id when a slice has more than one landing, because D6's id requires a single landing. Task 20's test should then assert that a stored record exists for each index in the record. Task 13 should also say whether a discovery `harness_error` stops the build, as Task 20 says a qualification harness error does.",
+      "file_ref": null,
+      "category": "coverage-gap",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/426-tasks.slice-cases.md:154-156"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Nothing brings 421\u2013425 onto the slice branch after the precondition gate",
+      "description": "Task 1 creates `426-slice.slice-cases` from the target while 421\u2013425 are unimplemented (frontmatter `projectState`). Tasks 2\u20137 are committed on that branch. Task 8 (line 122) then greps `src/squadron` on the same branch and writes `BLOCKED:` if anything is missing. When 421\u2013425 later land on the target, no step brings them onto the slice branch, so Task 8 will keep failing on resume unless the implementer improvises.\n\nConflicts are also likely on that refresh:\n- Task 7 creates `src/squadron/benchmark/` and Task 6 creates `tests/benchmark/` before 421 creates them.\n- Task 5 edits `config/keys.py`, which 421, 422 and 425 also edit (line 98 says so).\n\nFix: add a first bullet to Task 8: \"merge the target into the slice branch. If it conflicts, abort, write `BLOCKED:` with the conflicting paths, and stop.\" The project's git rules allow a clean refresh from the target.",
+      "file_ref": null,
+      "category": "sequencing",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/426-tasks.slice-cases.md:68-69"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Task 15 does not say how `slice_qualification_for` gets its lookup key from a case",
+      "description": "`slice_qualification_for(store, case, environment)` must look up the record by (project, index, landing, fork digest). Task 25 calls it with a `BenchmarkCase`. According to Task 18 and D6, the landing sha on a case exists only inside the provenance string `source_ref = \"slice:<index>@<landing_after_sha>\"`. The task does not say where the index and landing come from. A junior implementer will most likely parse `source_ref`, which uses a provenance label as logical structure and goes against the project's rule on fragile labels.\n\nFix: name the source of each key field. One option is to look up by `case_id` (stored on `SliceQualification`) through `list_slice_qualifications`. Another is to add explicit fields if 421's `BenchmarkCase` already has them.",
+      "file_ref": null,
+      "category": "ambiguity",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/426-tasks.slice-cases.md:168"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Too many tasks for the work: qualification and judge-runner are split finer than needed, and two load tests trace to no requirement",
+      "description": "The file has 42 tasks. Some of the splits add test files and tasks without adding coverage:\n- **Tasks 15\u201319:** five tasks and five test files for the stages of one function, `qualify_slice_candidate`, all committed together at line 193. Merge them into two tasks with one test file each: pre-sandbox checks plus reuse, and the sandbox stages (sets, repeats, the case, harness errors).\n- **Tasks 31\u201332** (lines 264\u2013272): both build `plan_judge`. Merge them into one task.\n- **Task 24's eight-concurrent-`invoke` test** (line 223) and **Task 33's 200-pair test** (line 276): the slice design states no NFR, and these trace to no success criterion. They also sit in `tests/benchmark/`, not `tests/load/`, and have no CI-gating task, so calling them load tests sets off that rule for no benefit.\n  - In Task 33, keep the hung-dispatcher case (it covers the failure-mode rule) and drop the 200-pair scale.\n  - Drop the concurrency test, or keep it as an ordinary test only if 424 actually runs `invoke` calls concurrently.",
+      "file_ref": null,
+      "category": "proportionality",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/426-tasks.slice-cases.md:167-191"
+    },
+    {
+      "severity": "PASS",
+      "title": "Most success criteria have a task",
+      "description": "| Criterion | Tasks |\n|---|---|\n| Case fields | 18 |\n| Fixture rejections | 6, 13\u201315, 18 |\n| P6 replay with cf in the scrubbed home, cf list unchanged | 24\u201326 |\n| Grade and separate report tables | 36, 39, 41 |\n| Normalization: synthetic tests and real fixture | 7 |\n| Reference line not ranked | 37\u201338 |\n| Over size, no truncation | 29, 34, 38 |\n| Forfeits and harness-absent cases | 27, 30, 32 |\n| Failure-path signals | 13, 19, 24, 31 |\n| Refusals, bound, cap exit 2, resume | 31, 33\u201335 |\n| Hand-computed pairwise tests | 37 |\n| `tests/replay/` unchanged after extractions | 2\u20134 |\n| Real-landing fixtures | 6 |\n| Mixed-kind integration and yield rows | 22, 39 |\n| Slash commands | 40 |\n\nThe only gap is the discovery-record issue above.",
+      "file_ref": null,
+      "category": "coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/426-tasks.slice-cases.md"
+    },
+    {
+      "severity": "PASS",
+      "title": "Order, test-with pattern and commit markers",
+      "description": "- The extractions and pure functions (Tasks 2\u20137) come before the gate.\n- The cf spike (Task 10) comes before anything is built on cf, which matches D9's intent.\n- Every implementation bullet is followed directly by its tests.\n- `**Commit**:` markers are plain lines at tested points, roughly one per finished part of the slice. Live-run fix-up commits are conditional and skipped when no files changed.\n- There are no circular dependencies.\n- The design corrections in Task 1 are committed to the target as planning work before the branch is created.",
+      "file_ref": null,
+      "category": "sequencing",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/426-tasks.slice-cases.md:60-343"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "coverage-gap",
+      "raw_category": null,
+      "summary": "Discovery rejections and discovery harness errors are never saved as `SliceQualification` records",
+      "location": "project-documents/user/tasks/426-tasks.slice-cases.md:154-156",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "sequencing",
+      "raw_category": null,
+      "summary": "Nothing brings 421\u2013425 onto the slice branch after the precondition gate",
+      "location": "project-documents/user/tasks/426-tasks.slice-cases.md:68-69",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "ambiguity",
+      "raw_category": null,
+      "summary": "Task 15 does not say how `slice_qualification_for` gets its lookup key from a case",
+      "location": "project-documents/user/tasks/426-tasks.slice-cases.md:168",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "proportionality",
+      "raw_category": null,
+      "summary": "Too many tasks for the work: qualification and judge-runner are split finer than needed, and two load tests trace to no requirement",
+      "location": "project-documents/user/tasks/426-tasks.slice-cases.md:167-191",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "pass",
+      "category": "coverage",
+      "raw_category": null,
+      "summary": "Most success criteria have a task",
+      "location": "project-documents/user/tasks/426-tasks.slice-cases.md",
+      "location_verified": null
+    },
+    {
+      "id": "F006",
+      "severity": "pass",
+      "category": "sequencing",
+      "raw_category": null,
+      "summary": "Order, test-with pattern and commit markers",
+      "location": "project-documents/user/tasks/426-tasks.slice-cases.md:60-343",
+      "location_verified": true
+    }
+  ],
+  "template_name": "tasks",
+  "input_files": {
+    "input": "project-documents/user/tasks/426-tasks.slice-cases.md",
+    "against": "project-documents/user/slices/426-slice.slice-cases.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261115-design/wt/426-tasks"
+  },
+  "timestamp": "2026-11-16T07:37:00.467491",
+  "model": "claude-opus-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 2,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-opus-5-5",
+  "answering_models": [
+    "claude-opus-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 6,
+    "in_fences": 0,
+    "in_section": 6,
+    "surviving": 6
+  },
+  "effort": "high",
+  "profile": "sdk",
+  "turns": 3,
+  "prompt_tokens": 152313,
+  "cached_tokens": 152309,
+  "cache_write_tokens": 0,
+  "completion_tokens": 10780,
+  "reasoning_tokens": null,
+  "duration_seconds": 107.78304862510413,
+  "cost_usd": 0.246848,
+  "cost_basis": "provider"
+}

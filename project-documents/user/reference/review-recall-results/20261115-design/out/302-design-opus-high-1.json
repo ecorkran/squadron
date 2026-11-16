@@ -1,0 +1,261 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Structured-output score shape assigned to this slice is silently dropped",
+      "description": "Three documents say this slice must deliver a structured-output score:\n- **Slice plan:** one of 302's success criteria reads \"The score-with-rationale shape is enforced by the template's structured output.\"\n- **Architecture:** Technical Considerations (b) commits to \"a structured-output constraint for the score field *and* a score-with-rationale prompt shape.\"\n- **Slice 300:** its section on what the parser recognizes says the richer structured-output shape (a JSON object with a `score` key) is \"deliberately not committed here \u2026 302 will extend the extraction and add its own parser test for that variant.\" The parser's own docstring repeats that this is slice 302's job.\n\nThis design does none of that. It keeps the plain `score:` line, makes `## Rationale` \"prose scaffolding \u2026 not a new parser target,\" and says \"no parser change needed\" (lines 93-95, 180-183, 263-265). It never mentions the handoff from 300. As written, nothing enforces the rationale. The model can skip it or write it after the number and the result still parses and gates the same way.\n\nFix: either (a) design the structured-output variant and its parser test, or (b) state openly that the line shape is enough, explain why, and update the slice plan's success criterion and slice 300's pointer. If you take (b), record it as a deliberate deferral (for example, a Future Work entry) so the gap doesn't fall between slices.",
+      "file_ref": null,
+      "category": "scope",
+      "raw_category": null,
+      "location": "project-documents/user/slices/302-slice.design-phase-judge-templates.md:152-183"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Failure-mode table is wrong about a missing `arch_file` and skips two failure modes the architecture names",
+      "description": "The row \"`SliceInfo` missing `arch_file`/`design_file`\" says the unresolved key \"stays absent from `inputs`\" and is then caught by the required-input check, giving `UNKNOWN`. That only holds if the source function returns `None`. The design file source does turn an empty value into `None`. The arch file source this slice reuses passes the value straight through, and `SliceInfo.arch_file` is a plain string, not an optional one. So a slice with no arch doc would set `against` to an empty string. The required-input check would pass, and the judge would score a slice against nothing instead of returning `UNKNOWN`. The planned failure-mode test (lines 303-305) would only catch this if it uses an empty `arch_file`.\n\nThe architecture's list of failure modes also includes \"missing/unreadable ground-truth file\" (the path resolves but the file isn't there) and \"injected ground truth exceeding the cap.\" The table has no row for either. Both are inherited behaviour, but the table claims to make the mapping explicit \"for these specific paths,\" so they should be listed with their inherited handling.\n\nFix: correct the row for the empty-`arch_file` case. Either handle the empty value explicitly or record the actual outcome. Add the two missing rows.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/302-slice.design-phase-judge-templates.md:394-400"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Concrete numbers in the prompt-shape example would anchor the judge's score",
+      "description": "The architecture names \"anchoring on the prompt\" as a known way LLM scores go wrong, and it adopts score-with-rationale specifically to reduce it. The output-shape example here uses real values (`score: 82`, `alignment: 85`, `scope: 80`). The design never says these must stay out of the system prompt. The project's CLAUDE.md warns about the same thing in its \"Hallucination traps\" rule: put a concrete example next to a value the model has to produce, and the model reaches for the example. An implementer copying this block into the YAML would plant an anchor around 80. That is also right next to both pass floors (78 and 82).\n\nFix: state that the system prompt must describe the output shape with placeholders such as `<0-100>` and `<criterion-name>`, never with sample numbers.",
+      "file_ref": null,
+      "category": "design",
+      "raw_category": null,
+      "location": "project-documents/user/slices/302-slice.design-phase-judge-templates.md:161-178"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Data-flow example uses the wrong pass floor for `judge.slice-vs-arch`",
+      "description": "The example shows `score=82 \u2265 pass_floor(78)` for `judge.slice-vs-arch`. The threshold table (line 226) and walkthrough step 1 (line 326) both set that template's `pass_floor` to 82. 78 belongs to `judge.tasks-vs-slice`. The outcome happens to match (82 \u2265 82 is still PASS), but the example misstates the value. Change it to 82.",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/slices/302-slice.design-phase-judge-templates.md:146"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Criterion names and how they roll up into the score are not defined",
+      "description": "The prompt asks for a justification per criterion, then for the criteria to be rolled up into the top-level `score:`. The design never names the criterion keys for either template, and never says how the roll-up works (the model's own judgment or a stated formula). If the keys aren't fixed, the model will make up different ones from run to run, and the `criteria` map won't be comparable across runs. The architecture reserves that map partly so the calibration initiative (320) can use it later. Either fix a small set of keys per template, or say plainly that criterion keys are free-form and advisory.",
+      "file_ref": null,
+      "category": "under-specification",
+      "raw_category": null,
+      "location": "project-documents/user/slices/302-slice.design-phase-judge-templates.md:154-159"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Step 3 CLI invocation is left unconfirmed",
+      "description": "Success criterion 3 and walkthrough step 3 rely on a `sq review slice-vs-arch \u2026 --template` command whose form is \"to be confirmed during implementation.\" The intent is clear, and the pipeline-step path in criterion 4 covers the same ground. Pinning the command now would make criterion 3 directly checkable.",
+      "file_ref": null,
+      "category": "verification",
+      "raw_category": null,
+      "location": "project-documents/user/slices/302-slice.design-phase-judge-templates.md:376-379"
+    },
+    {
+      "severity": "PASS",
+      "title": "No engine change; `is_judge` is the only switch",
+      "description": "The templates run on the existing `review` action through `run_review_with_profile`, the parser and `enforce_judge`. Nothing is added to the step schema or the action types. Code decides a template is a judge only from its `judge:` block, never from the `judge.` name prefix. This follows \"Reuse, don't rebuild\" and \"How a step selects a judge,\" and it respects the project rule against using user-visible labels as logic.",
+      "file_ref": null,
+      "category": "architecture",
+      "raw_category": null,
+      "location": "project-documents/user/slices/302-slice.design-phase-judge-templates.md#template-naming-judgecomparison--human-readable-not-a-dispatch-signal"
+    },
+    {
+      "severity": "PASS",
+      "title": "Explicit registry entries instead of falling back on the name prefix",
+      "description": "The design adds two explicit `TEMPLATE_INPUTS` entries and rejects stripping `judge.` to fall back to the standard template. That keeps behaviour driven by data. The cost is four lines, which fits the size of the problem.",
+      "file_ref": null,
+      "category": "design",
+      "raw_category": null,
+      "location": "project-documents/user/slices/302-slice.design-phase-judge-templates.md#template_inputs-registry-entries-duplicate-their-standard-counterparts-sources"
+    },
+    {
+      "severity": "PASS",
+      "title": "Threshold location and conservative defaults match the architecture",
+      "description": "Defaults live in the template's `judge:` block, and a step can override them through slice 301's mechanism. Nothing is hardcoded in Python. The weaker-ground-truth judge (slice vs. arch) gets the higher floor, consistent with \"Bubble up the hard calls.\"",
+      "file_ref": null,
+      "category": "architecture",
+      "raw_category": null,
+      "location": "project-documents/user/slices/302-slice.design-phase-judge-templates.md#conservative-default-thresholds-differentiated-by-ground-truth-strength"
+    },
+    {
+      "severity": "PASS",
+      "title": "Judge output is score plus findings, with no verdict",
+      "description": "The prompt forbids a `## Summary` verdict line, and the design warns against copying the verdict-consistency block from the standard templates. This matches \"The judge emits score + findings, not a verdict.\" The verdict is derived from the score in one direction only, by slice 301.",
+      "file_ref": null,
+      "category": "architecture",
+      "raw_category": null,
+      "location": "project-documents/user/slices/302-slice.design-phase-judge-templates.md#judge-system-prompt-forbids-a-verdict-summary"
+    },
+    {
+      "severity": "PASS",
+      "title": "Scope boundaries are clear",
+      "description": "Cycle conventions (303), gate composition (304), multi-sample judging (Future Work 1) and any further judge templates are all explicitly left out. The two templates match the slice plan's minimum (\"at least slice-vs-arch and tasks-vs-slice\").",
+      "file_ref": null,
+      "category": "scope",
+      "raw_category": null,
+      "location": "project-documents/user/slices/302-slice.design-phase-judge-templates.md#explicitly-out-of-scope"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "scope",
+      "raw_category": null,
+      "summary": "Structured-output score shape assigned to this slice is silently dropped",
+      "location": "project-documents/user/slices/302-slice.design-phase-judge-templates.md:152-183",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "Failure-mode table is wrong about a missing `arch_file` and skips two failure modes the architecture names",
+      "location": "project-documents/user/slices/302-slice.design-phase-judge-templates.md:394-400",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "design",
+      "raw_category": null,
+      "summary": "Concrete numbers in the prompt-shape example would anchor the judge's score",
+      "location": "project-documents/user/slices/302-slice.design-phase-judge-templates.md:161-178",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "note",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "Data-flow example uses the wrong pass floor for `judge.slice-vs-arch`",
+      "location": "project-documents/user/slices/302-slice.design-phase-judge-templates.md:146",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "under-specification",
+      "raw_category": null,
+      "summary": "Criterion names and how they roll up into the score are not defined",
+      "location": "project-documents/user/slices/302-slice.design-phase-judge-templates.md:154-159",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "verification",
+      "raw_category": null,
+      "summary": "Step 3 CLI invocation is left unconfirmed",
+      "location": "project-documents/user/slices/302-slice.design-phase-judge-templates.md:376-379",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "pass",
+      "category": "architecture",
+      "raw_category": null,
+      "summary": "No engine change; `is_judge` is the only switch",
+      "location": "project-documents/user/slices/302-slice.design-phase-judge-templates.md#template-naming-judgecomparison--human-readable-not-a-dispatch-signal",
+      "location_verified": null
+    },
+    {
+      "id": "F008",
+      "severity": "pass",
+      "category": "design",
+      "raw_category": null,
+      "summary": "Explicit registry entries instead of falling back on the name prefix",
+      "location": "project-documents/user/slices/302-slice.design-phase-judge-templates.md#template_inputs-registry-entries-duplicate-their-standard-counterparts-sources",
+      "location_verified": null
+    },
+    {
+      "id": "F009",
+      "severity": "pass",
+      "category": "architecture",
+      "raw_category": null,
+      "summary": "Threshold location and conservative defaults match the architecture",
+      "location": "project-documents/user/slices/302-slice.design-phase-judge-templates.md#conservative-default-thresholds-differentiated-by-ground-truth-strength",
+      "location_verified": null
+    },
+    {
+      "id": "F010",
+      "severity": "pass",
+      "category": "architecture",
+      "raw_category": null,
+      "summary": "Judge output is score plus findings, with no verdict",
+      "location": "project-documents/user/slices/302-slice.design-phase-judge-templates.md#judge-system-prompt-forbids-a-verdict-summary",
+      "location_verified": null
+    },
+    {
+      "id": "F011",
+      "severity": "pass",
+      "category": "scope",
+      "raw_category": null,
+      "summary": "Scope boundaries are clear",
+      "location": "project-documents/user/slices/302-slice.design-phase-judge-templates.md#explicitly-out-of-scope",
+      "location_verified": null
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/302-slice.design-phase-judge-templates.md",
+    "against": "project-documents/user/architecture/300-arch.eval-actions-llm-as-judge-scoring.md",
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/3e1bc1cd-e8c0-4d04-8eb6-68e1bced119f/scratchpad/design-recall/wt/302-design"
+  },
+  "timestamp": "2026-11-15T15:43:25.579364",
+  "model": "claude-opus-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 15,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-opus-5-5",
+  "answering_models": [
+    "claude-opus-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 11,
+    "in_fences": 0,
+    "in_section": 11,
+    "surviving": 11
+  },
+  "effort": "high",
+  "profile": "sdk",
+  "turns": 16,
+  "prompt_tokens": 694559,
+  "cached_tokens": 595321,
+  "cache_write_tokens": 99220,
+  "completion_tokens": 8195,
+  "reasoning_tokens": null,
+  "duration_seconds": 95.5632615829818,
+  "cost_usd": 1.0772504999999999,
+  "cost_basis": "provider"
+}

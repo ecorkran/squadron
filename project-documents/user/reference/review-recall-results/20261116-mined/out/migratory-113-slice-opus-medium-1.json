@@ -1,0 +1,261 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "PASS",
+      "title": "Wrapper keeps the spatial strategy swappable, as the architecture requires",
+      "description": "`AdaptiveSpatial` implements the existing `SpatialQuery` protocol without changing it. Force code and `BulkForce` are untouched. The design rejects putting backend branching inside `tick.py`. This matches 100-arch's \"neighbor query cost dominance\" consideration, which says the strategy must be replaceable without touching force computation. It also matches the plan entry's description of a wrapper that \"owns both backends and routes each `query_radius_batch` call\". Dependency direction is correct: server \u2192 spatial, and tick depends only on the protocol.",
+      "file_ref": null,
+      "category": "architecture",
+      "raw_category": null,
+      "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:258-266"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`initial_backend` is called operator-configurable but the config never exposes it",
+      "description": "Line 301 says \"Make it configurable (`initial_backend: \"brute\"` by default) so an operator running a scattered-start scenario can choose grid-first\". The risk at line 400 also assumes \"an operator sets `initial_backend: grid`\". But `SpatialConfig` has only `backend`, `grid_threshold_mean_neighbors` and `hysteresis_band`, and `_build_spatial` hard-codes `initial_backend=\"brute\"` (line 238). Line 305 even says threshold and band are \"the only dispatcher parameters the operator needs\". Pick one:\n- add `initial_backend` to `SpatialConfig`, with validation, or\n- drop the operator-configurable claim and the line-400 risk.\n\nThe second option is the lighter one, and the slice plan does not require the knob.",
+      "file_ref": null,
+      "category": "integration",
+      "raw_category": null,
+      "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:171-176"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Default threshold of 10 likely means the grid is never selected in the expansion phase the slice targets",
+      "description": "Line 210 calculates about 132 mean neighbours for N=3100 *uniformly* spread on a 300\u00d7300 world. Line 211 then says that in expansion, where agents are \"spread uniformly across the whole world\", the mean \"can drop below 10\". These two statements contradict each other: uniform spread is exactly the case line 210 computed. With a default of 10 and a hysteresis band of 2, the grid needs m < 8, which seems out of reach in the measured scenario. If so, the shipped default reproduces brute-only behaviour and gives up the Entry 4 addendum win that the Value section promises.\n\nFix: derive the default from the actual expansion-phase `mean_neighbors_per_agent` in the Entry 4/5 data, or state that the default will be set from walkthrough step 4's sweep before the slice is considered complete. Also reconcile the arithmetic in lines 210\u2013211.",
+      "file_ref": null,
+      "category": "design",
+      "raw_category": null,
+      "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:206-213"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Bit-exact parity contradicts set-based comparison and per-row ordering differences",
+      "description": "Step 5 requires \"bit-exact position equality against brute-force-only over N ticks\" with a density sequence that exercises both backends. But:\n- line 431 says grid row order \"may differ\u2026 so compare as sets\";\n- line 359 allows \"documented determinism caveats in the hash grid\";\n- CSR forces use `np.add.reduceat` and similar, so a different neighbour order changes floating-point summation order.\n\nPositions after grid ticks will not be bit-exact with brute-only. The Non-Risks claim at line 408 (\"cannot introduce a correctness bug\u2026 only pick the wrong one for performance\") hides the same issue. Architecture line 96 makes determinism and replay essential, so the design should state the actual contract:\n- **Determinism:** the same config and inputs give identical output across runs, and the dispatch decisions themselves are deterministic.\n- **Cross-backend parity:** neighbour sets are identical, and positions agree within a tolerance, not bit-for-bit.\n\nThe integration test should then assert exactly that.",
+      "file_ref": null,
+      "category": "testing",
+      "raw_category": null,
+      "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:421"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Design says both \"switch on `record_density`\" and \"switch on next `build()`\"; queries in between hit an unbuilt backend",
+      "description": "Line 110 says `record_density` \"changes the selected backend\". Line 138 says \"The switch takes effect on the **next** `build()`.\" If the switch happens in `record_density`, then any `query_radius` call between the end of one tick and the next `build()` goes to a backend that has never been built, or holds stale cell data from an earlier stint. Specify that `record_density` sets a pending selection and `build()` applies it. This is no extra work and removes the window.",
+      "file_ref": null,
+      "category": "design",
+      "raw_category": null,
+      "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:110"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Switch events and backend counts are used for verification but never specified as observable",
+      "description": "Walkthrough step 5 checks \"`grid_selected` count in the dispatcher's log output\" and \"`brute_selected` dominates\". The perf journal step also needs \"the ratio of ticks served by grid vs. brute\" (line 369). The Architecture section defines no logging or counters for `AdaptiveSpatial`, so these checks cannot be carried out as written. The project's failure-mode rule also requires state transitions to be observable, and flip-flop (line 398) is a named risk that can only be detected through switch logs.\n\nFix: specify one INFO log per switch, including old backend, new backend and `m`, plus per-backend tick counters readable by the harness. Add a unit test that asserts a switch emits the log.",
+      "file_ref": null,
+      "category": "observability",
+      "raw_category": null,
+      "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:377-379"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`record_density` with zero evaluated agents is undefined",
+      "description": "The signal is `counts.sum() / n_active`. With an empty population, or an empty active subset (100-arch's subset-evaluable tick allows this), that is a division by zero, giving `nan` or a `ZeroDivisionError`. The test list includes an \"empty\" distribution (line 366) but no expected behaviour. A `nan` silently fails both `m > t + h` and `m < t - h`, freezing the current backend. That is the silent behaviour CLAUDE.md prohibits. State explicitly what happens, for example skip the update and keep the current backend when `len(counts) == 0`, and add a test for it.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:116"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`hasattr` probing in `tick.py` is a hidden dependency on a concrete wrapper",
+      "description": "`if hasattr(spatial, \"record_density\")` makes `tick.py` behave differently based on an undeclared attribute name. Nothing type-checks the signature, so a typo or rename silently disables adaptation. It also conflicts with \"program to interfaces\". The design correctly rejects widening `SpatialQuery`. The lighter fix that stays within the contract is a small separate protocol, e.g. a `@runtime_checkable` `DensityObserver`, checked with `isinstance`. The alternative is to have the caller that owns `tick()` feed the density, which keeps `tick.py` untouched as the Excluded list intends (line 53). Either way, add a test that the hook fires for `AdaptiveSpatial`, not only that it is skipped for other backends.",
+      "file_ref": null,
+      "category": "architecture",
+      "raw_category": null,
+      "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:158-164"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Running the full test suite under three backends is heavier than needed and contradicts the testing strategy",
+      "description": "The success criterion says \"Full existing test suite (652 tests) passes under\" all three backends, and walkthrough step 2 introduces a `MIGRATORY_SPATIAL_BACKEND` env var for it. The Testing Strategy (line 432) correctly limits parametrisation to the end-to-end tests (`test_server_tick.py`, `test_integration.py`, `test_simulation.py`). Most unit tests construct backends directly and never read server config, so pinning them through an env var does nothing (this also undercuts the line 352 claim). Cut the full-suite \u00d73 criterion and the env var. Keep the parametrised fixture over the end-to-end tests.",
+      "file_ref": null,
+      "category": "proportionality",
+      "raw_category": null,
+      "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:335"
+    },
+    {
+      "severity": "NOTE",
+      "title": "\"Live\" tuning in the slice plan is delivered as tuning at load time",
+      "description": "The plan entry says operators can \"tweak the crossover live while experimenting\". The design delivers YAML read at server start, which still needs a restart, despite line 398 saying \"without redeploying code\". This meets the intent, since no code change is needed, but the wording should say \"without code changes (restart required)\" to avoid implying hot reload.",
+      "file_ref": null,
+      "category": "scope",
+      "raw_category": null,
+      "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:314"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Frontmatter dependencies omit slice 105, whose code this slice activates",
+      "description": "The body consumes `HashGridQuery` and its 35 tests from slice 105 (lines 71\u201373, 319), and 105 is marked `deferred` in the slice plan. The `dependencies:` list (and the plan entry) names only 100, 110 and 111. Adding 105 makes the activation dependency explicit for tooling that orders slices.",
+      "file_ref": null,
+      "category": "dependencies",
+      "raw_category": null,
+      "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:6"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "pass",
+      "category": "architecture",
+      "raw_category": null,
+      "summary": "Wrapper keeps the spatial strategy swappable, as the architecture requires",
+      "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:258-266",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "integration",
+      "raw_category": null,
+      "summary": "`initial_backend` is called operator-configurable but the config never exposes it",
+      "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:171-176",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "design",
+      "raw_category": null,
+      "summary": "Default threshold of 10 likely means the grid is never selected in the expansion phase the slice targets",
+      "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:206-213",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "testing",
+      "raw_category": null,
+      "summary": "Bit-exact parity contradicts set-based comparison and per-row ordering differences",
+      "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:421",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "design",
+      "raw_category": null,
+      "summary": "Design says both \"switch on `record_density`\" and \"switch on next `build()`\"; queries in between hit an unbuilt backend",
+      "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:110",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "observability",
+      "raw_category": null,
+      "summary": "Switch events and backend counts are used for verification but never specified as observable",
+      "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:377-379",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "`record_density` with zero evaluated agents is undefined",
+      "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:116",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "concern",
+      "category": "architecture",
+      "raw_category": null,
+      "summary": "`hasattr` probing in `tick.py` is a hidden dependency on a concrete wrapper",
+      "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:158-164",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "concern",
+      "category": "proportionality",
+      "raw_category": null,
+      "summary": "Running the full test suite under three backends is heavier than needed and contradicts the testing strategy",
+      "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:335",
+      "location_verified": true
+    },
+    {
+      "id": "F010",
+      "severity": "note",
+      "category": "scope",
+      "raw_category": null,
+      "summary": "\"Live\" tuning in the slice plan is delivered as tuning at load time",
+      "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:314",
+      "location_verified": true
+    },
+    {
+      "id": "F011",
+      "severity": "note",
+      "category": "dependencies",
+      "raw_category": null,
+      "summary": "Frontmatter dependencies omit slice 105, whose code this slice activates",
+      "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:6",
+      "location_verified": true
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md",
+    "against": "project-documents/user/architecture/100-slices.behavior-engine.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/migratory-113-slice"
+  },
+  "timestamp": "2026-11-16T09:24:27.545631",
+  "model": "claude-opus-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 4,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-opus-5-5",
+  "answering_models": [
+    "claude-opus-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 11,
+    "in_fences": 0,
+    "in_section": 11,
+    "surviving": 11
+  },
+  "effort": "medium",
+  "profile": "sdk",
+  "turns": 5,
+  "prompt_tokens": 206101,
+  "cached_tokens": 117081,
+  "cache_write_tokens": 89014,
+  "completion_tokens": 6172,
+  "reasoning_tokens": null,
+  "duration_seconds": 67.28744029207155,
+  "cost_usd": 0.8595356,
+  "cost_basis": "provider"
+}

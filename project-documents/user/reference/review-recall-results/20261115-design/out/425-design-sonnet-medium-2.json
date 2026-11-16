@@ -1,0 +1,189 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Grading cap departs from the architecture's run-level cap and leaves no single pre-dispatch bound",
+      "description": "The architecture sets the goal \"Spend is visible before it happens\u2026 stops at its own cap, which covers grading and judging as well as the replays.\" It repeats this in Technical Considerations (Cost): \"The run-level cap covers all of it.\"\n\nD9 splits this. Grading gets its own `--max-cost`, and the document says so itself: \"This departs from the architecture\u2026 total spend is bounded by the run's cap plus each grade invocation's cap.\"\n\nThe consequence is that no stated bound covers a whole benchmark before dispatch. `sq benchmark run` can only state the replay portion. The slice's own rationale is sound: separate lock scopes, and grading after a partial run or under a new reviewer. But the departure is only a to-do (\"the architecture's cost section should say so\"). Resolve it by one of:\n- amending the architecture's cost goal in the same planning commit, or\n- having `sq benchmark run` print an estimated grading line, using the same per-review figure logic, beside its replay bound, so the goal is still met in substance.",
+      "file_ref": null,
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/425-slice.grading-and-paired-report.md:220-236"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Report row identity omits fields the architecture requires, and its no-effort rule is ambiguous",
+      "description": "The Dependencies section says rows group by 420's D6 identity: model, profile, effort sent, `tool_use`, `max_output_tokens`. D13 then keys rows by `(alias, model, profile, effort_sent)`, which drops `tool_use` and `max_output_tokens`. Two configs that differ only in those fields would merge into one row. D13 forbids silent merging, but its split rule only covers prompt identity.\n\nLine 58 says a replay with no effort stamp \"counts by its failure class, never as an effort `None` row.\" The architecture says effort not sent is \"recorded as not sent.\" A committed replay from an alias that carries no effort is a legitimate \"not sent\" config. It should be its own row, not a failure class. State the full key once and say how a legitimately unsent effort is shown.",
+      "file_ref": null,
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/425-slice.grading-and-paired-report.md:58,263"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Failure modes for the reinstall step and the grade lock are not enumerated",
+      "description": "D16 covers most new I/O paths well: review timeout, suite timeout, apply failure, snapshot failure, reference unreadable. The gaps are:\n- **`uv sync --locked` hang or timeout (D5).** Only \"reinstall fails\" is handled. There is no timeout or class for a hang, so it could block the whole run, and no `GradeAbsence` row covers it.\n- **Grade lock already held.** The lock is \"the same process lock 424 uses\", but this slice does not say whether `grade` waits, refuses, or exits, or with what code.\n- **\"Harness stop\" exit code 1 (line 345).** D16 says harness absences are recorded and grading continues, so it is unclear what \"harness stop\" means.\n\nAdd a timeout and absence class for the reinstall, and state the lock-contention behavior and what triggers exit 1. Each should be logged at WARNING or above and have a test.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/425-slice.grading-and-paired-report.md:193-197,148,312"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Heavy reference review floor multiplies grading cost per case",
+      "description": "Every case's reference is reviewed `review_floor_runs` times (default 3). Any failed floor run fails the reference and drops the case from every config. In the walkthrough's bound, 30 of 84 reviews go to floors. For a first run sized to measure variance, the floor is the heaviest item, and a single transient review failure discards a whole case.\n\nThe architecture does ask for a noise floor on review counts. A lighter option still meets it: run the floor only when the report's review section is requested, or tolerate one failed floor run at a minimum of 2 successes. Alternatively, justify the all-or-nothing rule. Also consider whether `--case` and `--keep` plus the older-identity count line and `LEAK_RULES_VERSION` line are needed in this slice. They are small, but nothing in the architecture or the success criteria requires them.",
+      "file_ref": null,
+      "category": "proportionality",
+      "raw_category": null,
+      "location": "project-documents/user/slices/425-slice.grading-and-paired-report.md:213-218"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Hidden-test clash handling is a refinement of the architecture's wording",
+      "description": "The architecture says a clash is \"recorded and the hidden test is renamed, not overwritten.\" D3 injects a sibling module instead, so both tests run under different module names, and records clashes. This is consistent with the intent: nothing is overwritten and clashes are recorded. It is worth confirming that \"renamed\" in the architecture is meant loosely.",
+      "file_ref": null,
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/425-slice.grading-and-paired-report.md:172-184"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Cross-slice edits to 400, 320, 422 and 424 are declared",
+      "description": "The slice changes `take_snapshot_at` (400), `is_within_floor` (320), the yield report (422) and `DiffSidecars` (424). It also says 424's sentence about extending the bound with grading costs \"should change.\" The dependency directions are correct. 427 imports `review_tree_diff`, `bootstrap_mean_interval` and `review_flag` from this slice, and no cycles are introduced. The 424 and architecture text edits should land in the same commit as this slice so the documents don't contradict each other.",
+      "file_ref": null,
+      "category": "dependencies",
+      "raw_category": null,
+      "location": "project-documents/user/slices/425-slice.grading-and-paired-report.md:459-474"
+    },
+    {
+      "severity": "PASS",
+      "title": "Core principles and boundaries are preserved",
+      "description": "- **Grade order and producer isolation:** D1 is ordered. The review runs first, tool config is restored by section, producer-new tests run before test restoration, the regression run uses start-commit tests, and the hidden set runs last. Edits and suppressions are counted, never honored.\n- **Test sets:** hidden, superseded and excluded sets are selected by node id, never by deselect.\n- **Absence handling:** config versus harness absences, D16, and the case-inclusion rule in D13 match the architecture's \"absent is not zero.\"\n- **Statistics and report:** the paired bootstrap is taken over cases, `not_distinguishable` is shown rather than ranking, the floor applies only to review counts, and no composite field exists.\n- **Unmeasured reviewer:** the flag is isolated behind `review_flag`, so 427 can remove it by changing that one function.\n- **Sample count:** the measured estimate on a small run is delivered as the architecture requires.\n- **Observability:** every harness absence is logged at ERROR, and each D16 absence is covered by a test double.",
+      "file_ref": null,
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/425-slice.grading-and-paired-report.md:152-170,260-281"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "summary": "Grading cap departs from the architecture's run-level cap and leaves no single pre-dispatch bound",
+      "location": "project-documents/user/slices/425-slice.grading-and-paired-report.md:220-236",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "summary": "Report row identity omits fields the architecture requires, and its no-effort rule is ambiguous",
+      "location": "project-documents/user/slices/425-slice.grading-and-paired-report.md:58,263",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "Failure modes for the reinstall step and the grade lock are not enumerated",
+      "location": "project-documents/user/slices/425-slice.grading-and-paired-report.md:193-197,148,312",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "proportionality",
+      "raw_category": null,
+      "summary": "Heavy reference review floor multiplies grading cost per case",
+      "location": "project-documents/user/slices/425-slice.grading-and-paired-report.md:213-218",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "summary": "Hidden-test clash handling is a refinement of the architecture's wording",
+      "location": "project-documents/user/slices/425-slice.grading-and-paired-report.md:172-184",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "dependencies",
+      "raw_category": null,
+      "summary": "Cross-slice edits to 400, 320, 422 and 424 are declared",
+      "location": "project-documents/user/slices/425-slice.grading-and-paired-report.md:459-474",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "pass",
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "summary": "Core principles and boundaries are preserved",
+      "location": "project-documents/user/slices/425-slice.grading-and-paired-report.md:152-170,260-281",
+      "location_verified": null
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/425-slice.grading-and-paired-report.md",
+    "against": "project-documents/user/architecture/420-arch.model-benchmark.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261115-design/wt/425-design"
+  },
+  "timestamp": "2026-11-16T07:06:20.740927",
+  "model": "claude-sonnet-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 2,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-sonnet-5-5",
+  "answering_models": [
+    "claude-sonnet-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 7,
+    "in_fences": 0,
+    "in_section": 7,
+    "surviving": 7
+  },
+  "effort": "medium",
+  "profile": "sdk",
+  "turns": 3,
+  "prompt_tokens": 139008,
+  "cached_tokens": 33828,
+  "cache_write_tokens": 105176,
+  "completion_tokens": 5381,
+  "reasoning_tokens": null,
+  "duration_seconds": 44.85674533387646,
+  "cost_usd": 0.4786726,
+  "cost_basis": "provider"
+}

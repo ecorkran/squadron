@@ -1,0 +1,171 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Commit markers are checkbox tasks, and 15C is a notes-only commit",
+      "description": "The task file records commits as checkbox items (`- [ ] **Task 2C: Commit** \u2014 ...`, and likewise 3C, 5C, 6C, 8C, 9C, 11C, 13C, 14C, 15C). Implementation commits happen only at the task file's `**Commit**:` markers, and those must be plain lines, never checkboxes. As written, a tool or agent looking for `**Commit**:` markers would find none. The marker placement itself is sound. Most sit at working, tested points, and 11C covers the whole 10/10T/11 group, which only passes `pnpm -r test` once Task 11 is done.\n\n- **Notes-only commit:** Task 15C (line 269, `docs: record slice 261 verification walkthrough`) would commit only recorded walkthrough notes. The project rule forbids a commit that only adds notes. Fold the walkthrough record into the commit of any defect fix it produces. Otherwise drop 15C and let the notes ride on the final real commit.\n- **Optional merge:** 14C (README, a single table row) could join 13C instead of being its own commit.",
+      "file_ref": null,
+      "category": "process",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:78"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "No test or walkthrough covers `context_build` returning `AdoptionError` as an error result",
+      "description": "The slice's success criterion says that with a guide missing the profile or prompt, \"`cf build` exits non-zero with the `AdoptionError` message; `context_build` returns it as an error.\" The task file covers this only in part:\n\n- Task 10T checks that the integrator rejects.\n- Task 12 case 12 checks that the pipeline rejects.\n- The Task 15 walkthrough (step 4) exercises `cf build` only.\n- Task 11's `contextTools.test.ts` assertions cover only the `persist` and `read-only` arguments.\n\nNo task checks the MCP tool's error result or the CLI's non-zero exit for `AdoptionError`. Add one case to Task 11's `contextTools.test.ts` work: a mocked pipeline that rejects with `AdoptionError` produces an error result carrying the message. Optionally add a matching `build.test.ts` case.",
+      "file_ref": null,
+      "category": "test-coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:217-223"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`measureSourceVolume` is exported from `detection/index.ts` in Task 5, not Task 3",
+      "description": "Task 5 (the history fact) adds the `detection/index.ts` exports for `measureSourceVolume` and `SourceVolume`, which Task 3 created. Nothing breaks, because the tests import the files directly and the resolver comes much later. The export would sit more naturally in Task 3, so 3C leaves a barrel that omits a finished module.",
+      "file_ref": null,
+      "category": "sequencing",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:119"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Task 15 bundles automated verification with live walkthrough steps",
+      "description": "Task 15 combines:\n\n- the full format, lint, typecheck, build and test run;\n- file-size checks;\n- the before/after diff against `main` in a temporary worktree;\n- a clone of a real repository;\n- a live `claude -p` run;\n- an MCP-client run, which may end up `BLOCKED:`.\n\nIt is cohesive as a final gate. Splitting the automated checks from the walkthrough would let the automated half finish and be committed even if the MCP-client step blocks. This is optional.",
+      "file_ref": null,
+      "category": "task-sizing",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:259-267"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The sub-second detection target has no timing or load test, and the task file says why",
+      "description": "The slice restates a performance target (detection adds under one second), but its own D2 says \"tests assert the caps, not timings.\" The task file records that decision. It verifies the bound through Task 3T's early-exit and `MAX_WALK_ENTRIES` cap tests, and it states that the `tests/load/` tier is a Python rule that doesn't apply here. I could not verify that last claim, because I did not open `rules/python.md`. Given the slice's explicit decision, adding a load test and a CI-gating task would go beyond the slice, so I raised no finding. The Task 15 live run against a real repository would be a natural place to note the observed duration, if wanted.",
+      "file_ref": null,
+      "category": "nfr-coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:38"
+    },
+    {
+      "severity": "PASS",
+      "title": "Success criteria trace to tasks, and there is no scope creep",
+      "description": "Every functional requirement and technical requirement from the slice maps to a task:\n\n- **Source walk:** `measureSourceVolume` (D2) is covered by Task 3/3T.\n- **Facts:** history (D5), present paths and planning artifacts (D6) are covered by Tasks 4\u20136 with tests.\n- **Decision and rendering:** the outcome order (D1) and the renderer (D8) are covered by Tasks 7\u20138.\n- **Resolver, selection and guide check:** D4, D7 and D9 are covered by Task 9/9T. That includes the guide-check-before-write ordering and the write-failure case.\n- **Build wiring:** the integrator, the template engine at order 3.4, the `createContextPipeline` option and its callers are covered by Tasks 10\u201311. `template_preview` is `read-only`.\n- **Integration fixtures:** Task 12 covers all 13 scenarios: empty, scaffold, brownfield, shallow, monorepo, concept-only, planned, resume, overrides, `--phase 2`, explicit instruction, missing profile, and `template_preview`.\n- **CLI/MCP parity:** Task 13.\n- **README line:** Task 14.\n- **Planned-project byte-identical build:** the Task 15 diff.\n- **Invalid-value rejection:** Task 1T.\n\nEvery task traces back to the slice. Each test task follows its implementation task. Dependencies run one way, with no cycles, and the early `adoptionOutcome.ts` constant in Task 3 is explained. The task file is a single file of proportionate size.",
+      "file_ref": null,
+      "category": "coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "process",
+      "raw_category": null,
+      "summary": "Commit markers are checkbox tasks, and 15C is a notes-only commit",
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:78",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "test-coverage",
+      "raw_category": null,
+      "summary": "No test or walkthrough covers `context_build` returning `AdoptionError` as an error result",
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:217-223",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "note",
+      "category": "sequencing",
+      "raw_category": null,
+      "summary": "`measureSourceVolume` is exported from `detection/index.ts` in Task 5, not Task 3",
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:119",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "note",
+      "category": "task-sizing",
+      "raw_category": null,
+      "summary": "Task 15 bundles automated verification with live walkthrough steps",
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:259-267",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "nfr-coverage",
+      "raw_category": null,
+      "summary": "The sub-second detection target has no timing or load test, and the task file says why",
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:38",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "pass",
+      "category": "coverage",
+      "raw_category": null,
+      "summary": "Success criteria trace to tasks, and there is no scope creep",
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md",
+      "location_verified": null
+    }
+  ],
+  "template_name": "tasks",
+  "input_files": {
+    "input": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md",
+    "against": "project-documents/user/slices/261-slice.detection-and-adoption-state.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/context-forge-261-tasks"
+  },
+  "timestamp": "2026-11-16T09:28:14.628869",
+  "model": "claude-sonnet-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 2,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-sonnet-5-5",
+  "answering_models": [
+    "claude-sonnet-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 6,
+    "in_fences": 0,
+    "in_section": 6,
+    "surviving": 6
+  },
+  "effort": "medium",
+  "profile": "sdk",
+  "turns": 3,
+  "prompt_tokens": 135193,
+  "cached_tokens": 11436,
+  "cache_write_tokens": 123753,
+  "completion_tokens": 7694,
+  "reasoning_tokens": null,
+  "duration_seconds": 60.69787699985318,
+  "cost_usd": 0.5738354999999999,
+  "cost_basis": "provider"
+}

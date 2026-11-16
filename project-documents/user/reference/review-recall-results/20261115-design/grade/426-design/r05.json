@@ -1,0 +1,47 @@
+{
+ "review": "r05",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Judge cost bound is not an upper bound, contrary to the architecture's \"spend is visible before it happens\"",
+   "description": "D16 prices every call at the largest observed per-call judge cost, or at a user-supplied `--judge-cost`. It then prints \"at most $3.88\". Call cost scales with prompt size, and prompts can reach `benchmark.judge_max_prompt_chars` (400k chars). They also repeat tens of KB of `task_text` (line 527). A figure observed on a small case understates a large case's calls. A `--judge-cost` the user picks has no tie to the real prompts. The design already builds every pair prompt before dispatch (D14), so it knows each prompt's length. The architecture asks for a stated dollar bound \"estimated from observed costs\", and the printed \"at most\" is the weak point. Derive the per-call figure from observed cost per character times each pair's actual prompt length, or label the line an estimate. Do not call it a maximum.",
+   "location": "project-documents/user/slices/426-slice.slice-cases.md:287-296"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Contradictory statements about edits to 421, 424 and 425",
+   "description": "- Line 42 says \"No edits to 424 or 425\".\n- Lines 426-427 say the slice widens 424's `CaseDrop.reason` and adds the per-kind grouping and pairwise section to 425's `bench_report`.\n- Line 312 says \"No change to 425\" for `bootstrap_mean_interval`, but line 451 says \"D17 extracts the interval\".\n- Line 424 adds `ScrubbedEnvironment.with_tools` to 421.\n- D8 assumes 424 already provides `CaseKindRunner.requalify` and that `replay_one` calls it.\n\nThese statements need one consistent position. Each touched file (`CaseDrop`, `bench_report`, `ScrubbedEnvironment`, the bootstrap helper) should be listed as an edit to the owning slice's module. The slice should also state whether `requalify` is a 424 deliverable or an assumption. Otherwise the integration surface with providing slices is under-specified. Extracting the interval is the likeliest place for the hidden dependency to surface.",
+   "location": "project-documents/user/slices/426-slice.slice-cases.md:42, 312, 424-427, 451"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Design is heavier than the slice requires; several mechanisms can be cut",
+   "description": "The slice adds nine new modules, three new record types, extractions in 177, and per-kind report restructuring. Scope that can be cut or simplified:\n- **Forfeit judgments as persisted records.** D15 writes a `DiffJudgment` with `forfeit=True` and no calls. Forfeits are fully determined by replay absence records. Compute them at report time and drop the `forfeit` and `first_call: None` branches from the record.\n- **`OverSizeCase` as a separate record type.** It duplicates `DiffJudgment.max_prompt_chars` plus the pair-prompt build. A single per-case marker, or recomputation at report time from the sidecars and the limit, avoids a third store payload and its replace-on-limit-change logic.\n- **`--keep` on `slice-cases build`.** It appears in the contract at line 336 and has no stated purpose anywhere else in the document.\n- **Sections restating other documents.** The \"Consumes from Other Slices\" block and the long Prerequisites list repeat what Dependencies already says.",
+   "location": "project-documents/user/slices/426-slice.slice-cases.md:282, 336, 364-408"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Reference-diff and sidecar reads in `judge` have no stated failure handling",
+   "description": "Failure handling is explicit for `git` calls in qualification (D6) and for a missing `tip_sha` (refusal). The `judge` runner also shells out to `git diff` against the user's checkout for every case's reference. It writes normalized diffs to sidecars, and it takes a process lock that may already be held. The design does not say what happens on a timed-out or failed reference-diff call, on a sidecar write failure, or on a lock already held (for example by a crashed prior run). Each needs a stated outcome that is observable, such as a harness stop with an ERROR log, or a case counted as harness-absent. Without that, the walkthrough's \"exit 1 on harness stop\" is not tied to concrete paths.",
+   "location": "project-documents/user/slices/426-slice.slice-cases.md:150-160"
+  },
+  {
+   "i": 4,
+   "severity": "NOTE",
+   "title": "Reference is `tip_sha`, not the landing commit named in the architecture",
+   "description": "The architecture says the landing commit is the reference. D2 uses `fork..tip` because `fork..after` includes unrelated work on merge landings. The rationale is sound and the deviation is disclosed. The architecture's wording could be updated to match.",
+   "location": "project-documents/user/slices/426-slice.slice-cases.md:176-181"
+  },
+  {
+   "i": 5,
+   "severity": "NOTE",
+   "title": "Reference grade failures are dropped at grading, not at qualification",
+   "description": "The architecture says a case enters the set only if the original work passes its own grade. Here a tip that fails its grade is caught later as `reference_failed_grade` in 425, and tip-failing tests go on the exclusion list during qualification. This matches 422's pattern for fix cases and is acceptable. Reports must count these drops so they are not read as silent exclusions.",
+   "location": "project-documents/user/slices/426-slice.slice-cases.md:237-241"
+  }
+ ]
+}

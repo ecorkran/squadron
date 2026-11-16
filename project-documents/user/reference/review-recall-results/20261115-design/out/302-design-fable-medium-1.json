@@ -1,0 +1,243 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "`sq review` CLI is claimed as a judge path, but enforcement exists only in the pipeline action",
+      "description": "- **Claim:** the Value section (lines 31-33) and Functional Requirement 3 say the `sq review` CLI can run a judge template and get a threshold-derived verdict with `provenance == \"judge\"` on an `ActionResult`.\n- **Conflict:** slice 301 wires `enforce_judge()` into the pipeline `ReviewAction` only (\"What changes\" items 3-4). It adds nothing to the CLI path, and the CLI produces no `ActionResult`.\n- **Consequence:** a CLI judge run would return the raw parsed result, which is verdict `UNKNOWN` because the prompt forbids a Summary. No thresholding or provenance is applied.\n- **Invented invocation:** `sq review slice-vs-arch <artifact> <against>` is not an existing subcommand. The note at lines 376-379 concedes the shape is unconfirmed, which conflicts with the project's \"do not guess\" rule.\n- **Fix:** either scope judge execution to the pipeline `review` step and make walkthrough step 3 a pipeline run, or name CLI enforcement as an explicit engine change. The second option contradicts \"What does NOT change\" and the slice plan's \"no engine changes\" criterion.",
+      "file_ref": null,
+      "category": "integration",
+      "raw_category": null,
+      "location": "project-documents/user/slices/302-slice.design-phase-judge-templates.md:277-282"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Persisted review file will not carry the derived verdict",
+      "description": "- **Claim:** walkthrough step 3 expects a persisted review file containing \"a derived verdict\". The slice plan requires \"a score, derived verdict, and findings, persisted like any review output\".\n- **Conflict:** per the 301 design, enforcement only replaces `verdict`/`provenance` on the returned `ActionResult`. The `ReviewResult` that gets persisted is untouched, and this design states its verdict is `UNKNOWN` by construction (lines 139-141).\n- **Consequence:** every persisted judge review will read `UNKNOWN`, whatever the score. The \"Judge system prompt forbids a verdict summary\" decision (lines 208-216) exists to stop a human misreading the persisted file, and this defeats it.\n- **Architecture principle unmet:** \"a result declares its own provenance\", for a human reading the stored record.\n- **Fix:** state how the derived verdict and provenance reach the persisted record and acknowledge the small engine touch, or drop the claim and record the gap against the slice-plan criterion.",
+      "file_ref": null,
+      "category": "integration",
+      "raw_category": null,
+      "location": "project-documents/user/slices/302-slice.design-phase-judge-templates.md:366-368"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Structured-output constraint for the score is dropped",
+      "description": "- **Requirement:** architecture Technical Considerations (b) commits the judge template to \"a structured-output constraint for the score field\". The slice plan's criterion is \"the score-with-rationale shape is enforced by the template's structured output\".\n- **What the design does:** it uses prompt instruction only. `## Rationale` is \"prose scaffolding \u2026 not a new parser target\" (lines 180-183), so nothing enforces that a rationale exists or that the score is constrained.\n- **Not addressed:** the design does not mention the structured-output requirement, either to satisfy it or to defer it with a reason.\n- **Internal inconsistency:** the text requires the justification \"immediately before its numeric value\", but the example puts the number first (`alignment (85): \u2026`). That ordering is the one the anti-anchoring rationale argues against.\n- **Fix:** specify the constraint mechanism, or record the deviation explicitly against the slice plan.",
+      "file_ref": null,
+      "category": "scope",
+      "raw_category": null,
+      "location": "project-documents/user/slices/302-slice.design-phase-judge-templates.md#score-with-rationale-prompt-shape"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The slice's actual deliverable, the rubric and prompt contract, is under-specified",
+      "description": "The slice is prompt authoring, yet the design leaves the following undefined:\n\n- **Criterion names:** `alignment` and `scope` appear only in an example. Slice 303 and initiative 320 would consume these keys.\n- **Roll-up rule:** \"roll the criteria into the top-level `score:`\" does not say whether that is a mean, a weighted sum, or the model's discretion.\n- **Scale anchors:** nothing says what an 82 means versus a 60. The 82/60 and 78/55 floors are therefore set against an undefined scale, which weakens the \"conservative default\" claim the architecture requires.\n- **Finding severities:** the design does not say whether findings keep the PASS/CONCERN/FAIL tags, or how those relate to the score.\n\nFix: add a short per-template rubric covering criteria keys, the roll-up rule and band anchors.",
+      "file_ref": null,
+      "category": "under-specification",
+      "raw_category": null,
+      "location": "project-documents/user/slices/302-slice.design-phase-judge-templates.md:152-183"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Design is overweight relative to a 2/5, data-only slice",
+      "description": "The document is about 450 lines for two YAML files and two registry entries. Much of it restates slice 301. Suggested cuts:\n\n- **Data Flow diagram (lines 110-150):** duplicates 301's flow. Reduce it to a one-line pointer plus the 302-specific delta.\n- **Failure-mode table:** three of five rows are self-labelled \"Not new\". Keep only the two new rows.\n- **Rogue-verdict test (lines 300-303):** this re-tests 301's Functional Requirement 7. Drop it.\n- **\"What does NOT change\" / \"Consumes from Other Slices\":** these overlap each other.\n\nSpend the freed space on the rubric from the previous finding.",
+      "file_ref": null,
+      "category": "proportionality",
+      "raw_category": null,
+      "location": "project-documents/user/slices/302-slice.design-phase-judge-templates.md"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Two architecture-enumerated failure modes are not mapped for the new templates",
+      "description": "The table covers an unresolved input key. It omits two cases the architecture lists: a ground-truth path that resolves but is unreadable, and injected ground truth that exceeds the cap. Both presumably fall under 301's exception \u2192 `UNKNOWN` row. One sentence saying so would complete the mapping, with no new handling needed.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/302-slice.design-phase-judge-templates.md:394-400"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Example output with literal scores may become an anchoring trap",
+      "description": "If the illustrative block (`score: 82`, `alignment: 85`) is copied into the system prompt, it anchors the model on those values. That runs against the architecture's anti-anchoring goal and the project's hallucination-trap rule. State that the template describes the shape with placeholders, not concrete numbers.",
+      "file_ref": null,
+      "category": "prompt-design",
+      "raw_category": null,
+      "location": "project-documents/user/slices/302-slice.design-phase-judge-templates.md:161-178"
+    },
+    {
+      "severity": "PASS",
+      "title": "Architectural boundaries and dispatch signal respected",
+      "description": "- No new action, step type or selector is introduced.\n- The parser stays judging-unaware.\n- `judge.` is a human-readable prefix only; `is_judge` is the sole dispatch signal.\n- Explicit `TEMPLATE_INPUTS` entries are chosen over prefix-stripping, which matches the rule against using labels as logic.\n- Dependency direction (302 \u2192 301 \u2192 300) and the interfaces provided to 303 and 304 match the slice plan.",
+      "file_ref": null,
+      "category": "architecture",
+      "raw_category": null,
+      "location": "project-documents/user/slices/302-slice.design-phase-judge-templates.md#technical-decisions"
+    },
+    {
+      "severity": "PASS",
+      "title": "Threshold locus and differentiation match the architecture",
+      "description": "- Defaults live in the template `judge:` block and are overridable per step.\n- Both floors sit above 301's module defaults.\n- The weaker-ground-truth judge (slice-vs-arch) gets the higher floor, consistent with \"bubble up the hard calls\" and \"default conservative\".",
+      "file_ref": null,
+      "category": "architecture",
+      "raw_category": null,
+      "location": "project-documents/user/slices/302-slice.design-phase-judge-templates.md:218-234"
+    },
+    {
+      "severity": "PASS",
+      "title": "Scope matches the slice plan entry",
+      "description": "- Exactly the two prioritized design-phase judges are authored.\n- Cycle conventions, gate composition and multi-sample judging are correctly deferred to 303, 304 and Future Work.\n- No NFR with a numeric target applies to this path. The no-silent-pass commitment is restated.",
+      "file_ref": null,
+      "category": "scope",
+      "raw_category": null,
+      "location": "project-documents/user/slices/302-slice.design-phase-judge-templates.md#technical-scope"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "integration",
+      "raw_category": null,
+      "summary": "`sq review` CLI is claimed as a judge path, but enforcement exists only in the pipeline action",
+      "location": "project-documents/user/slices/302-slice.design-phase-judge-templates.md:277-282",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "integration",
+      "raw_category": null,
+      "summary": "Persisted review file will not carry the derived verdict",
+      "location": "project-documents/user/slices/302-slice.design-phase-judge-templates.md:366-368",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "scope",
+      "raw_category": null,
+      "summary": "Structured-output constraint for the score is dropped",
+      "location": "project-documents/user/slices/302-slice.design-phase-judge-templates.md#score-with-rationale-prompt-shape",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "under-specification",
+      "raw_category": null,
+      "summary": "The slice's actual deliverable, the rubric and prompt contract, is under-specified",
+      "location": "project-documents/user/slices/302-slice.design-phase-judge-templates.md:152-183",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "proportionality",
+      "raw_category": null,
+      "summary": "Design is overweight relative to a 2/5, data-only slice",
+      "location": "project-documents/user/slices/302-slice.design-phase-judge-templates.md",
+      "location_verified": null
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "Two architecture-enumerated failure modes are not mapped for the new templates",
+      "location": "project-documents/user/slices/302-slice.design-phase-judge-templates.md:394-400",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "note",
+      "category": "prompt-design",
+      "raw_category": null,
+      "summary": "Example output with literal scores may become an anchoring trap",
+      "location": "project-documents/user/slices/302-slice.design-phase-judge-templates.md:161-178",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "pass",
+      "category": "architecture",
+      "raw_category": null,
+      "summary": "Architectural boundaries and dispatch signal respected",
+      "location": "project-documents/user/slices/302-slice.design-phase-judge-templates.md#technical-decisions",
+      "location_verified": null
+    },
+    {
+      "id": "F009",
+      "severity": "pass",
+      "category": "architecture",
+      "raw_category": null,
+      "summary": "Threshold locus and differentiation match the architecture",
+      "location": "project-documents/user/slices/302-slice.design-phase-judge-templates.md:218-234",
+      "location_verified": true
+    },
+    {
+      "id": "F010",
+      "severity": "pass",
+      "category": "scope",
+      "raw_category": null,
+      "summary": "Scope matches the slice plan entry",
+      "location": "project-documents/user/slices/302-slice.design-phase-judge-templates.md#technical-scope",
+      "location_verified": null
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/302-slice.design-phase-judge-templates.md",
+    "against": "project-documents/user/architecture/300-arch.eval-actions-llm-as-judge-scoring.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261115-design/wt/302-design"
+  },
+  "timestamp": "2026-11-16T06:57:43.016193",
+  "model": "claude-fable-5-2",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 13,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-fable-5-2",
+  "answering_models": [
+    "claude-fable-5-2"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 10,
+    "in_fences": 0,
+    "in_section": 10,
+    "surviving": 10
+  },
+  "effort": "medium",
+  "profile": "sdk",
+  "turns": 14,
+  "prompt_tokens": 478301,
+  "cached_tokens": 340827,
+  "cache_write_tokens": 137462,
+  "completion_tokens": 7375,
+  "reasoning_tokens": null,
+  "duration_seconds": 72.4035177079495,
+  "cost_usd": 2.5632567,
+  "cost_basis": "provider"
+}

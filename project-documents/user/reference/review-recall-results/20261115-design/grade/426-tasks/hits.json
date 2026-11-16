@@ -1,0 +1,4 @@
+{"case":"426-tasks","flaws":[
+{"id":"F1","text":"Task 23 live build on squadron: suite run/qualification repeats cannot finish within the 600s session command limit, uncompletable as written","hits":{}},
+{"id":"F2","text":"Task 26 live replay: needs Task 23's case plus two whole-slice P6 producer-only runs the session cannot hold open, uncompletable as written","hits":{}}
+],"note":"No review flagged run-time or session-limit infeasibility of the live tasks. Borderline, scored as non-hits (adjacent like saved F011): r03#3, r11#5, r18#3 say Task 26 has no BLOCKED/stop when Task 23 qualifies zero cases."}

@@ -1,0 +1,33 @@
+{
+ "review": "r18",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "The enumeration guard would not have caught three of the four defects this audit found",
+   "description": "D7 lists the `AgentConfig(` construction sites and `open_pipeline_session` calls and classifies each one. Value (line 25) says this means \"a new dispatch path cannot ship without a decision about effort.\" But three of the four defects in the inventory are not at construction sites. They are in callers of shared helpers:\n- Path 7: the judge calls `resolve` instead of `resolve_full` and then calls `run_review_with_profile`.\n- Path 8: `judge_dispatch.py` calls `one_shot_dispatch_with_telemetry` without passing `effort`.\n- Path 11: a renderer emits a command line. No `AgentConfig` is built at all.\n\nThe `AgentConfig(...)` inside each shared helper would correctly be classified `SENDS_ALIAS_EFFORT`, and the test would pass while every caller dropped effort. Every one of these helpers has `effort: Effort | None = None` as a default parameter: `dispatch.py:127,162`, `summary.py:250`, `summary_oneshot.py:36,68`, `review_client.py:134`, `sdk_session.py:178,662`, `executor.py:915`. A new caller that leaves out the argument quietly sends nothing. That is exactly the defect class here.\n\nRecommendation: the lighter and stronger fix is to make `effort` a required keyword (no default) on the shared dispatch helpers (`one_shot_dispatch*`, `capture_summary_via_profile*`, `run_review_with_profile`, `open_pipeline_session`). Pyright then forces an explicit decision at every call site, including future ones, and passing `effort=None` becomes a visible choice. Keep the AST test only for direct `AgentConfig(` sites. Alternatively, extend D7 to list callers of those helpers and of `ModelResolver.resolve`. At minimum, change the Value claim to say what the test actually guarantees.",
+   "location": "project-documents/user/slices/420-slice.effort-audit-across-dispatch-paths.md:149-152"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "The new `tool_use` / `max_output_tokens` identity fields treat \"not recorded\" and \"alias does not set it\" as the same value",
+   "description": "D6 adds `ProducerConfigRef.tool_use` and `max_output_tokens` as optional fields defaulting to `None` (lines 109 and 145), and puts both in the grouping key `config_identity`. That gives `None` two meanings:\n- On a record written before this slice, it means \"unknown\".\n- On a new record, it means \"the alias does not set this\".\n\nTake an old replay whose alias set `max_output_tokens = 8000`. It loads as `None` and joins the same report row as new replays of an alias that sets nothing. That is a different config on the wire. The architecture's principle \"Absent is not zero\" (arch line 67) is the rule this breaks. D5 avoids the same problem for effort by keeping \"key absent\" separate from `null` (line 109, line 138). D6 needs the same care.\n\nRecommendation: use the D5 pattern. Record an explicit value on every new record and keep \"absent\" separate from it, for example with a sentinel, or by having `config_ref` always write the field. Then `config_identity` either puts pre-slice records in their own group or marks them in the label. One sentence in D6 and one in State Management covers it.",
+   "location": "project-documents/user/slices/420-slice.effort-audit-across-dispatch-paths.md:142-147"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "The slice replaces the architecture's config identity, but the architecture is not updated",
+   "description": "D6 (line 147) and Provides to Other Slices (line 162) say the identity rule \"supersedes the architecture's '(alias, model, profile, effort sent)' for grouping.\" It also adds `tool_use` and `max_output_tokens`, which the architecture never mentions. The change is reasonable. The architecture's own line 99 implies dropping the alias, and if the alias is dropped those two fields are needed to avoid merging configs that differ on the wire.\n\nThe problem is that 421\u2013427 will be designed from `420-arch.model-benchmark.md`, and its Design Goals (arch line 40) still give the old tuple. Line 162 also says \"later slices apply the rule to their own record types; this slice ships no shared identity type.\" So the rule lives only in a private `config_identity` in `replay/report.py` and in this slice's prose. That is a hidden dependency: 424 and 425 each have to rediscover it and reimplement it the same way.\n\nRecommendation: as part of this slice, change the one line in the architecture's \"Results stay comparable over time\" goal to the wire-level identity (model, profile, effort sent, tool_use, max_output_tokens; alias kept for display and provenance). Shipping a shared type is not needed.",
+   "location": "project-documents/user/slices/420-slice.effort-audit-across-dispatch-paths.md:160-163"
+  },
+  {
+   "i": 3,
+   "severity": "NOTE",
+   "title": "The findings-addressed judge will now send effort, but its spend is still not recorded",
+   "description": "Path 7 now sends the judge alias's effort (D3). That can raise its cost (the CHANGELOG bullet on line 183 says so). It still writes no `UsageRecord`, so 947's `pipeline.max_cost_usd` doesn't see that spend. Deferring this to an issue is consistent with the project's fixes rule, and benchmark replays strip the review loop, so 424/425 are not affected. File the issue when this slice lands, not later, because the slice makes the unmetered amount larger.",
+   "location": "project-documents/user/slices/420-slice.effort-audit-across-dispatch-paths.md:232"
+  }
+ ]
+}

@@ -1,0 +1,333 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "The scrubbed environment is merged over the harness environment, so inherited credentials survive",
+      "description": "Interfaces Required says the process runner's `env` parameter \"already lets every child process get the scrubbed environment,\" and D7 (line 174) depends on that. The production runner merges `env` over the harness process's environment rather than replacing it. Every variable D7 deliberately leaves out would reach pytest, the auth probe and the producer: `GH_TOKEN`, `GITHUB_TOKEN`, `SSH_AUTH_SOCK`, `CLAUDE_CONFIG_DIR`, `CODEX_HOME`, `VIRTUAL_ENV`, and any `ANTHROPIC_API_KEY` or `ORCH_*` setting in the user's shell. The allowlist claim at line 165, the no-credentials guarantee in the architecture, and the success criterion at line 309 are therefore not met by the design as written. The existing merge is deliberate for current callers (the runner's own comment says `gh` needs its config), so the change belongs in the runner contract: a replace mode for scrubbed children, with merge kept as the default. The integration test at line 317 would catch this, but the document should name the runner change as a prerequisite of 421.",
+      "file_ref": null,
+      "category": "containment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:64"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The benchmark sweep would treat live sibling directories as orphans",
+      "description": "D4 says the benchmark sweep \"handles directories only and also removes the `.home` and `.out` siblings.\" The existing directory sweep decides each directory's fate from its own `<name>.lock`, and a missing lock counts as an orphan. `<id>.home/` and `<id>.out/` have no lock of their own, so applying the replay rule to them would delete them while their owning benchmark run is still active. The document does not say that siblings are judged by the base id's lock, and it does not say where the benchmark sweep lives. If it lives in the replay module, replay learns benchmark naming, which conflicts with the one-way dependency stated at line 97. Specify that the owner lock is keyed by base id, and place the benchmark sweep under `benchmark/`, sharing only a generic helper with replay.",
+      "file_ref": null,
+      "category": "failure-mode",
+      "raw_category": null,
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:145-146"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Install failures have no reason for non-lock causes, and the classification rule is unstated",
+      "description": "`EnvironmentFailureReason` covers `no_lockfile`, `lockfile_unsupported`, `lock_stale_or_unresolvable`, `install_timeout` and `installer_missing`. A build failure in a source distribution, a Python download failure, a network outage, or any other non-zero `uv sync` exit has no reason. The document also does not say how uv's failure becomes a reason. Matching uv's stderr text would be the brittle parsing the project rules warn against, and the document does not establish that uv's exit codes separate these causes. A network outage would then be reported as a stale or unresolvable lock, and 422's per-reason yield report would count harness failures as lock failures. Check lock staleness in a separate step rather than inferring it from sync's output, and add an explicit reason for every other install failure, with a test for each.",
+      "file_ref": null,
+      "category": "failure-mode",
+      "raw_category": null,
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:150-153"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "An unrunnable probe is reported as a provider \"no\"",
+      "description": "D8 says \"anything else\" is a no. A missing `sq` binary, an import failure, or a crash caused by a harness bug is therefore reported as the provider refusing, and the remedy at line 186 targets the provider. Stderr is attached, but the classification is still wrong. Have the probe write a result the harness can parse, and report \"could not run the probe\" as a harness error with its own reason. A timeout can stay a no. Separately, the carryover row at line 179 says nothing about a missing `.codex/auth.json`, unlike the `sdk` row's \"when it exists.\" A dangling symlink should have a stated outcome.",
+      "file_ref": null,
+      "category": "failure-mode",
+      "raw_category": null,
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:183-185"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "CaseSet is keyed by name, contrary to the parent plan's ProjectId keying",
+      "description": "The slice plan's entry for 421 (line 40 of the plan) says case and case-set records are \"keyed on `ProjectId`.\" D2 keys `CaseSet` by name \"because 422 may pool cases from several projects.\" The architecture treats pooling as a fallback that \"is made on measured yield,\" and 422's yield report is where that measurement happens. Writing name-keying into the record id now fixes that choice before the measurement exists. Also, two projects that pick the same set name would share one version history. Either key by `ProjectId`, since each case already carries its own, or mark name-keying as provisional and state what a pooled set changes.",
+      "file_ref": null,
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:134"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Environment identity omits inputs the architecture requires",
+      "description": "The architecture's environment section names \"tool versions,\" and its \"results stay comparable\" goal requires results to name the identities that make them comparable. D6 records uv and the interpreter but not git, which is on the scrubbed `PATH` (line 168) and affects test behavior. Separately, the seeded `config.toml`, `models.toml` and `providers.toml` (line 171) change pipeline behavior, such as the cost cap and alias definitions. 424 records only which seed files were present (line 389), not their content, so runs under different seed contents would share an identity. Add git's version to D6, and add a content digest for each seed file, or state why either is excluded.",
+      "file_ref": null,
+      "category": "reproducibility",
+      "raw_category": null,
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:159"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "A missing credential variable has no stated outcome",
+      "description": "`CredentialGrant` \"adds each profile's `api_key_env` variable,\" but the document does not say what happens when that variable is unset in the harness environment. If the grant passes nothing silently, the producer fails inside the agent and 424 records a config failure, which the architecture's \"absent is not zero\" rule forbids. The value comes from the harness environment, which the CLI fills from a `.env` file in the working directory at startup. The document should say that the grant reads that same value, and that a missing value is an explicit error raised before any child process starts.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:173"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The install step's environment is ambiguous in the adapter contract",
+      "description": "`resolve_environment(ctx)` receives a `SandboxContext` that carries `env: ScrubbedEnvironment`, and Data Flow step 4 passes it the same context. D5 says install runs under the harness environment (the user's uv cache and network). The protocol does not say which environment `resolve_environment` must use. If an implementer uses `ctx.env`, the allowlist drops the redirected uv cache location and any proxy variables, which would break the install. State that `resolve_environment` runs under the harness environment, and that `ctx.env` is used only by `run_suite` and the producer. The protocol also has a temporal coupling that should be stated: `path_entries` is valid only after `resolve_environment` has run.",
+      "file_ref": null,
+      "category": "integration",
+      "raw_category": null,
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:195-202"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Python bytecode written into the tree is not kept out of diffs",
+      "description": "D5 keeps `.venv/` out of diffs \"even in a project that does not ignore it.\" The suite run writes `__pycache__/` bytecode into the tree, and D10 (line 206) prevents `.pytest_cache` only. Nothing prevents `.pyc` writes, so in projects that do not ignore them, the grader's and snapshot's view of the tree, and any diff taken after a run, includes harness output. Apply the same exclusion to `__pycache__`, or set `PYTHONDONTWRITEBYTECODE=1` in the scrubbed variables.",
+      "file_ref": null,
+      "category": "containment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:154"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Mock-target detection depends on private `unittest.mock` state",
+      "description": "The classifier reads the `_patch` object and its target from the innermost frame (line 207), and D11 pins the behavior to Python 3.13 (line 215). If mock internals change, such failures fall to `other_exception`, which 422 excludes, so the failure direction is safe. The document does not state that fallback, and the fixture test covers only the Python version in use. Name the fallback, and run the mock fixture test on every Python version the project supports.",
+      "file_ref": null,
+      "category": "dependency",
+      "raw_category": null,
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:207"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The rejected-alternatives list omits pytest's built-in report log",
+      "description": "D10 rejects `--junitxml` but not pytest's `--report-log`. The need for exception objects, mock targets and innermost frames probably justifies a plugin, but the rejection should say which fields the built-in log cannot carry.",
+      "file_ref": null,
+      "category": "proportionality",
+      "raw_category": null,
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:208"
+    },
+    {
+      "severity": "PASS",
+      "title": "The auth check sits where the architecture places it",
+      "description": "The architecture assigns the redirected-config auth question to the fix-case sandbox slice, so that a \"no\" surfaces before replay depends on it. D8 and the success criteria answer it in this slice.",
+      "file_ref": null,
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:30"
+    },
+    {
+      "severity": "PASS",
+      "title": "Store extension follows the sibling-payload rule",
+      "description": "Optional sibling payloads on the existing record, no migration, two new public store primitives, and existing record methods left alone. This matches the architecture's \"extend 320's store, don't fork it.\"",
+      "file_ref": null,
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:136-139"
+    },
+    {
+      "severity": "PASS",
+      "title": "Case identity matches the architecture, with one justified addition",
+      "description": "The identity fields cover the architecture's list plus `excluded_tests`, which the architecture's anticipated-slices section requires. `reference_sha` is added with a stated reason, since the hidden tests' source is read from the reference at grading time.",
+      "file_ref": null,
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:125-127"
+    },
+    {
+      "severity": "PASS",
+      "title": "I/O failure paths have explicit outcomes",
+      "description": "Timeouts return a partial result with unrun nodes marked, and a missing or unparseable results file with a non-zero exit raises an error. Neither becomes an empty pass. Killing a run mid-install is covered by the sweep check in the walkthrough.",
+      "file_ref": null,
+      "category": "failure-mode",
+      "raw_category": null,
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:209"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "containment",
+      "raw_category": null,
+      "summary": "The scrubbed environment is merged over the harness environment, so inherited credentials survive",
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:64",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "failure-mode",
+      "raw_category": null,
+      "summary": "The benchmark sweep would treat live sibling directories as orphans",
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:145-146",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "failure-mode",
+      "raw_category": null,
+      "summary": "Install failures have no reason for non-lock causes, and the classification rule is unstated",
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:150-153",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "failure-mode",
+      "raw_category": null,
+      "summary": "An unrunnable probe is reported as a provider \"no\"",
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:183-185",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "summary": "CaseSet is keyed by name, contrary to the parent plan's ProjectId keying",
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:134",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "reproducibility",
+      "raw_category": null,
+      "summary": "Environment identity omits inputs the architecture requires",
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:159",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "A missing credential variable has no stated outcome",
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:173",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "concern",
+      "category": "integration",
+      "raw_category": null,
+      "summary": "The install step's environment is ambiguous in the adapter contract",
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:195-202",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "concern",
+      "category": "containment",
+      "raw_category": null,
+      "summary": "Python bytecode written into the tree is not kept out of diffs",
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:154",
+      "location_verified": true
+    },
+    {
+      "id": "F010",
+      "severity": "note",
+      "category": "dependency",
+      "raw_category": null,
+      "summary": "Mock-target detection depends on private `unittest.mock` state",
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:207",
+      "location_verified": true
+    },
+    {
+      "id": "F011",
+      "severity": "note",
+      "category": "proportionality",
+      "raw_category": null,
+      "summary": "The rejected-alternatives list omits pytest's built-in report log",
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:208",
+      "location_verified": true
+    },
+    {
+      "id": "F012",
+      "severity": "pass",
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "summary": "The auth check sits where the architecture places it",
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:30",
+      "location_verified": true
+    },
+    {
+      "id": "F013",
+      "severity": "pass",
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "summary": "Store extension follows the sibling-payload rule",
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:136-139",
+      "location_verified": true
+    },
+    {
+      "id": "F014",
+      "severity": "pass",
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "summary": "Case identity matches the architecture, with one justified addition",
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:125-127",
+      "location_verified": true
+    },
+    {
+      "id": "F015",
+      "severity": "pass",
+      "category": "failure-mode",
+      "raw_category": null,
+      "summary": "I/O failure paths have explicit outcomes",
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:209",
+      "location_verified": true
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md",
+    "against": "project-documents/user/architecture/420-arch.model-benchmark.md",
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/3e1bc1cd-e8c0-4d04-8eb6-68e1bced119f/scratchpad/design-recall/wt/421-design"
+  },
+  "timestamp": "2026-11-15T15:35:35.138146",
+  "model": "claude-haiku-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 13,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-haiku-5-5",
+  "answering_models": [
+    "claude-haiku-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 15,
+    "in_fences": 0,
+    "in_section": 15,
+    "surviving": 15
+  },
+  "effort": "xhigh",
+  "profile": "sdk",
+  "turns": 14,
+  "prompt_tokens": 952397,
+  "cached_tokens": 800095,
+  "cache_write_tokens": 152286,
+  "completion_tokens": 54385,
+  "reasoning_tokens": null,
+  "duration_seconds": 256.4820719589479,
+  "cost_usd": 0.3162628300000001,
+  "cost_basis": "provider"
+}

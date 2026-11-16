@@ -1,0 +1,207 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "PASS",
+      "title": "Success criteria trace to tasks, with no scope creep",
+      "description": "- SC1 maps to Tasks 1 and 8.5.\n- SC2 maps to Tasks 5.1 to 5.3 and 8.1.\n- SC3 maps to Tasks 3.1 to 3.3, 4.1 and 8.1.\n- SC4 maps to Task 4.1.\n- SC5 maps to Tasks 5.1 and 8.2.\n- SC6 maps to Tasks 6.1, 6.2, 8.1 and 8.4.\n- SC7 maps to Tasks 2.1, 6.1 and 8.3.\n- SC8 maps to Tasks 6.2 and 8.4.\n- SC9 maps to Tasks 7.2 and 8.1.\n- SC10 maps to Tasks 7.1 and 7.3.\n- SC11 maps to Task 8.6.\n- SC12 is the only criterion with no task or check (see the walkthrough-coverage finding below).\n\nThe tasks that don't map to a criterion each trace to the design's Implementation Notes or Verification Walkthrough:\n- 0.x: walkthrough step 1.\n- 7.4: Implementation Notes.\n- 9.x: process close-out.\n\nThere is no scope creep. Dependencies run forward only: selector shell, preconditions, sources, mapping, interview, contract, conventions, walkthrough, close. There are no cycles.",
+      "file_ref": null,
+      "category": "coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/363-tasks.concept-generation.md"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Commit markers are checkboxes, not `**Commit**:` plain lines",
+      "description": "The file marks commits as nested checkbox items, `- [ ] Commit: ...`. The same pattern appears at lines 125, 164, 185, 221, 254, 296 and 351. The convention is a plain `**Commit**:` line, never a checkbox. Convert each marker to a plain line so it isn't checked off as if it were work.",
+      "file_ref": null,
+      "category": "task-format",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/363-tasks.concept-generation.md:99"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Commit markers sit at non-working points, after nearly every task",
+      "description": "Tasks 1 to 7 each end in a commit, so there are seven commits before the walkthrough. None of the first six is a working, tested point. After the Task 1 commit (line 99), `concept` is a recognized argument that routes to an empty section shell. The flow cannot run until Task 7 completes the preconditions, sources, mapping, interview, contract, conventions and provenance. Keep markers only where the flow works:\n- One after Task 7 (flow fully authored and statically verified).\n- One after Task 8 (walkthrough passes, generated concept included).\n\nIf you want an earlier checkpoint, one after Task 4 (extraction and mapping complete) is the most defensible.",
+      "file_ref": null,
+      "category": "task-format",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/363-tasks.concept-generation.md:99-296"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Task 8.4's `git diff` byte-identity check cannot work as written",
+      "description": "8.1 writes `000-concept.squadron.md` as a new, untracked file, and the first commit that includes it is at 8.6. Until the file is staged or committed, `git diff` shows nothing for it. The \"populated sections stay byte-identical (`git diff`)\" check in 8.4 would pass vacuously. Two further problems:\n- 8.4 augments the real deliverable. The augmented dated subheading would then ship in the committed concept unless it is reverted. The task doesn't say whether to keep or discard it.\n- 8.2 and 8.3 say \"scratch copy\" without saying how to make one. A junior AI needs the copy method, for example a copy of the tree outside the repo.\n\nFix: add a step to stage or commit the 8.1 output before 8.4, or run 8.4 against a scratch copy. State explicitly that the augment result is discarded and the 8.1 document is what ships.",
+      "file_ref": null,
+      "category": "sequencing",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/363-tasks.concept-generation.md:332-336"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Walkthrough does not check several success criteria",
+      "description": "Four criteria have no verifying step:\n- **SC4** (dropped topics appear nowhere): 4.1 authors the rule, but no step checks the written document for why-now, audience-evolution or methodology-preference content, either as prose or as gap markers.\n- **SC10** (every `[INFERRED]` sentence satisfies the checkable rule): 8.1 checks that the provenance lines exist, but not that the marked sentences obey the rule.\n- **SC12** (a concept a PM would edit rather than discard): the PM is live in 8.1, but the Success line has no PM-judgment item.\n- **SC7** (never writes to a substitute or remembered layout): 8.3 exercises only the renamed-heading case. The absent-guide, unreadable-guide and tree-absent stops are never run. Task 6.1 also never states the \"no substitute or remembered layout\" rule.\n\nAdd the missing checks to 8.1 and 8.3: a grep for the dropped topics, an `[INFERRED]` audit, a PM judgment line, and the guide-missing variants. Add the substitute-layout rule to 6.1.",
+      "file_ref": null,
+      "category": "coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/363-tasks.concept-generation.md:304-352"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Verify tasks are overweight, and some checks repeat across tasks",
+      "description": "Six separate verify tasks (1.2, 2.2, 3.4, 4.2, 5.3, 6.3) double the sub-task count for a markdown-only slice.\n- **1.2 and 4.2** are pure re-reads of text the previous task just wrote. Fold them into the success lines of 1.1 and 4.1. 5.3 (byte-identical questions) guards a defect-class rule and is worth keeping. 2.2, 3.4 and 6.3 run commands against the repo, so they are also worth keeping.\n- **Premise checks repeat.** 0.2, 2.2, 3.4 and 6.3 all re-check the guide path, the `project.name` divergence or the graph fields.\n- **Stop behavior is duplicated.** The \"guide tree absent \u2192 stop naming `cf init` / `/cf:onboard`\" behavior is authored in 2.1 (precondition 2) and again in 6.1 (check 1). This risks duplicated or inconsistent text in the skill, and the design says shared conventions are referenced, not duplicated. State it once and reference it from the other task.\n- **Task 9** splits into three 1/5 sub-tasks (9.1 to 9.3). They merge cleanly into one close-out task.",
+      "file_ref": null,
+      "category": "proportionality",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/363-tasks.concept-generation.md:94-99"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Task 9.1 status instruction is vague",
+      "description": "\"Set the slice design's `status` per its frontmatter contract\" doesn't name a value. The slice design is currently `not_started`. Name the target value, or the document that defines the contract, so a junior AI doesn't have to guess.",
+      "file_ref": null,
+      "category": "clarity",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/363-tasks.concept-generation.md:359-361"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Task 8.1 needs the PM and has no `BLOCKED:` line",
+      "description": "8.1 cannot proceed without the PM's two live answers and one correction. Under project convention, a task that truly cannot proceed without the PM carries a `BLOCKED:` line and stays unchecked. The framing notice already covers the interaction, so this is only a marker.",
+      "file_ref": null,
+      "category": "process",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/363-tasks.concept-generation.md:304"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "pass",
+      "category": "coverage",
+      "raw_category": null,
+      "summary": "Success criteria trace to tasks, with no scope creep",
+      "location": "project-documents/user/tasks/363-tasks.concept-generation.md",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "task-format",
+      "raw_category": null,
+      "summary": "Commit markers are checkboxes, not `**Commit**:` plain lines",
+      "location": "project-documents/user/tasks/363-tasks.concept-generation.md:99",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "task-format",
+      "raw_category": null,
+      "summary": "Commit markers sit at non-working points, after nearly every task",
+      "location": "project-documents/user/tasks/363-tasks.concept-generation.md:99-296",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "sequencing",
+      "raw_category": null,
+      "summary": "Task 8.4's `git diff` byte-identity check cannot work as written",
+      "location": "project-documents/user/tasks/363-tasks.concept-generation.md:332-336",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "coverage",
+      "raw_category": null,
+      "summary": "Walkthrough does not check several success criteria",
+      "location": "project-documents/user/tasks/363-tasks.concept-generation.md:304-352",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "proportionality",
+      "raw_category": null,
+      "summary": "Verify tasks are overweight, and some checks repeat across tasks",
+      "location": "project-documents/user/tasks/363-tasks.concept-generation.md:94-99",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "note",
+      "category": "clarity",
+      "raw_category": null,
+      "summary": "Task 9.1 status instruction is vague",
+      "location": "project-documents/user/tasks/363-tasks.concept-generation.md:359-361",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "note",
+      "category": "process",
+      "raw_category": null,
+      "summary": "Task 8.1 needs the PM and has no `BLOCKED:` line",
+      "location": "project-documents/user/tasks/363-tasks.concept-generation.md:304",
+      "location_verified": true
+    }
+  ],
+  "template_name": "tasks",
+  "input_files": {
+    "input": "project-documents/user/tasks/363-tasks.concept-generation.md",
+    "against": "project-documents/user/slices/363-slice.concept-generation.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/squadron-363-tasks"
+  },
+  "timestamp": "2026-11-16T10:17:23.942906",
+  "model": "claude-sonnet-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 2,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-sonnet-5-5",
+  "answering_models": [
+    "claude-sonnet-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 8,
+    "in_fences": 0,
+    "in_section": 8,
+    "surviving": 8
+  },
+  "effort": "high",
+  "profile": "sdk",
+  "turns": 3,
+  "prompt_tokens": 119052,
+  "cached_tokens": 27545,
+  "cache_write_tokens": 91503,
+  "completion_tokens": 7483,
+  "reasoning_tokens": null,
+  "duration_seconds": 58.8682627081871,
+  "cost_usd": 0.4442131,
+  "cost_basis": "provider"
+}

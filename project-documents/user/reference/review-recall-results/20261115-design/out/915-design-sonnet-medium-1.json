@@ -1,0 +1,207 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "PASS",
+      "title": "Slice fits the 900 maintenance initiative",
+      "description": "Arch 900 lists non-trivial bug fixes and operational logging/error handling as in scope. This slice fixes a resume-correctness defect (issue #48) and adds an observability signal, and it excludes `on_exhaust: skip` and fan-out re-entry. It is independently deliverable and small, as the architecture's guidelines ask. Dependencies on 910 and 911 point to earlier slices, so the dependency direction is correct.",
+      "file_ref": null,
+      "category": "scope",
+      "raw_category": null,
+      "location": "project-documents/user/slices/915-slice.loop-checkpoint-pause-resume-correctness.md#Technical Scope"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Re-entry semantics are ambiguous: the paused round is re-run, which can re-pause or discard the human's answer",
+      "description": "- D1 rationale 2 says `Continue` at an in-loop checkpoint means \"the next round, not the next step.\"\n- D3 and the success criteria resume **at the recorded paused round**, using `range(start_iteration, max+1)` with the paused iteration. That re-executes round N's whole body: dispatch, review, then the checkpoint again.\n- Whether that is what the design intends is never stated. Two problems follow:\n  - The review can return CONCERNS again and re-pause, so the loop never advances. The round also counts against `max:`, so a resumed `Continue` still spends a round.\n  - The checkpoint sits at the end of the body, so the paused round's own work was already done. The doc does not say whether resume skips the completed inner steps and starts after the checkpoint, or re-runs the round.\n- The design should state which behavior it intends and make D1 point 2, D3 and the success criteria consistent with it. The Verification Walkthrough step 3 should assert that behavior.",
+      "file_ref": null,
+      "category": "design-correctness",
+      "raw_category": null,
+      "location": "project-documents/user/slices/915-slice.loop-checkpoint-pause-resume-correctness.md#D1 and #D3"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "\"Non-loop paused step behaves exactly as today\" contradicts Part A",
+      "description": "Today a paused non-loop step is recorded as complete and skipped on resume. That is the same bug. After Part A, `first_unfinished_step` returns the paused step itself, so resume re-executes it.\n- The criterion \"Resuming a paused non-loop step behaves exactly as today\" is therefore false.\n- The doc does not say what re-executing a paused top-level checkpoint step does, for example whether it re-prompts. That is a user-visible behavior change for every pipeline with a top-level checkpoint.\n- The Risk Assessment mentions only FAILED steps and loops. The criterion should be corrected, and the top-level checkpoint resume behavior specified and tested.",
+      "file_ref": null,
+      "category": "design-correctness",
+      "raw_category": null,
+      "location": "project-documents/user/slices/915-slice.loop-checkpoint-pause-resume-correctness.md#Success Criteria"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Failure modes for the new resume coordinate are not enumerated",
+      "description": "`start_from_iteration` is a new input path read from persisted state. The doc covers two edge cases: clamping to `>= 1`, and a DEBUG log when the target is not a loop. Several cases are unspecified:\n- A recorded iteration greater than `max` (for example after the pipeline YAML was edited between pause and resume). `range(start, max+1)` would be empty, so the loop runs zero rounds with no signal. It is unclear whether `on_exhaust:` fires.\n- A paused step with no recorded iteration (0) that is a loop. Clamping to 1 silently restarts the loop.\n- A missing step name in `resume_iteration_for`.\n\nPer the project's fail-fast and no-silent-fallback rules, each case needs an explicit error or WARNING and a test. The ignore-with-DEBUG path for non-loop targets is below the WARNING threshold the project requires for observable failure modes.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/915-slice.loop-checkpoint-pause-resume-correctness.md#D3"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Part A also changes FAILED-step resume, and the doc does not say whether that is intended",
+      "description": "Treating `FAILED` as resumable goes beyond issue #48. The rationale is sound: it is the same mechanism.\n- The doc does not check how implicit paused-run detection (`find_matching_run` with `status=\"paused\"`) treats a run that ended `FAILED`. A failed run may never reach the resume path, so the change may not do what is claimed.\n- If a failed step is now re-run on `--resume`, that should appear in the CHANGELOG-visible behavior and in the Verification Walkthrough. The walkthrough currently verifies only the paused case.",
+      "file_ref": null,
+      "category": "scope",
+      "raw_category": null,
+      "location": "project-documents/user/slices/915-slice.loop-checkpoint-pause-resume-correctness.md#D2"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Design is heavier than the slice needs in places",
+      "description": "- D1 runs four numbered rationale points plus a rejected-configurability option for a one-line range change.\n- D2 and D3 carry several \"Rejected:\" paragraphs.\n- The resume-time INFO log in D4 duplicates what the new `start_iteration` already makes visible. It can be dropped or folded into the existing step-start logging.\n- The Verification Walkthrough restates the success criteria almost point for point.\n\nCondensing these would cut length without losing a requirement. Part C's pause-time WARNING is justified and should stay.",
+      "file_ref": null,
+      "category": "proportionality",
+      "raw_category": null,
+      "location": "project-documents/user/slices/915-slice.loop-checkpoint-pause-resume-correctness.md#D1, #D4"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Empty `prior_iteration_step_outputs` on resume is a documented limitation",
+      "description": "The doc says a resumed round gets an empty prior-outputs dict and defers rehydration to 911/305. That is honest, but it matters for 911's `revision_number:` and any 305 gate that reads prior-round output. The implementation should include a test that those consumers behave sensibly, or fail loudly, on a resumed round.",
+      "file_ref": null,
+      "category": "integration",
+      "raw_category": null,
+      "location": "project-documents/user/slices/915-slice.loop-checkpoint-pause-resume-correctness.md#D3"
+    },
+    {
+      "severity": "PASS",
+      "title": "Layering and dependency direction",
+      "description": "State is read in the CLI and passed as an integer into the executor. The executor stays a pure function of its arguments and does not take on run-state access, which respects the existing layer boundaries. Staging the work as A, then C, then B with separate commits keeps it bisectable.",
+      "file_ref": null,
+      "category": "architecture",
+      "raw_category": null,
+      "location": "project-documents/user/slices/915-slice.loop-checkpoint-pause-resume-correctness.md#D3"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "pass",
+      "category": "scope",
+      "raw_category": null,
+      "summary": "Slice fits the 900 maintenance initiative",
+      "location": "project-documents/user/slices/915-slice.loop-checkpoint-pause-resume-correctness.md#Technical Scope",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "design-correctness",
+      "raw_category": null,
+      "summary": "Re-entry semantics are ambiguous: the paused round is re-run, which can re-pause or discard the human's answer",
+      "location": "project-documents/user/slices/915-slice.loop-checkpoint-pause-resume-correctness.md#D1 and #D3",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "design-correctness",
+      "raw_category": null,
+      "summary": "\"Non-loop paused step behaves exactly as today\" contradicts Part A",
+      "location": "project-documents/user/slices/915-slice.loop-checkpoint-pause-resume-correctness.md#Success Criteria",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "Failure modes for the new resume coordinate are not enumerated",
+      "location": "project-documents/user/slices/915-slice.loop-checkpoint-pause-resume-correctness.md#D3",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "scope",
+      "raw_category": null,
+      "summary": "Part A also changes FAILED-step resume, and the doc does not say whether that is intended",
+      "location": "project-documents/user/slices/915-slice.loop-checkpoint-pause-resume-correctness.md#D2",
+      "location_verified": null
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "proportionality",
+      "raw_category": null,
+      "summary": "Design is heavier than the slice needs in places",
+      "location": "project-documents/user/slices/915-slice.loop-checkpoint-pause-resume-correctness.md#D1, #D4",
+      "location_verified": null
+    },
+    {
+      "id": "F007",
+      "severity": "note",
+      "category": "integration",
+      "raw_category": null,
+      "summary": "Empty `prior_iteration_step_outputs` on resume is a documented limitation",
+      "location": "project-documents/user/slices/915-slice.loop-checkpoint-pause-resume-correctness.md#D3",
+      "location_verified": null
+    },
+    {
+      "id": "F008",
+      "severity": "pass",
+      "category": "architecture",
+      "raw_category": null,
+      "summary": "Layering and dependency direction",
+      "location": "project-documents/user/slices/915-slice.loop-checkpoint-pause-resume-correctness.md#D3",
+      "location_verified": null
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/915-slice.loop-checkpoint-pause-resume-correctness.md",
+    "against": "project-documents/user/architecture/900-arch.maintenance-and-refactoring.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261115-design/wt/915-design"
+  },
+  "timestamp": "2026-11-16T07:00:54.302843",
+  "model": "claude-sonnet-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 2,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-sonnet-5-5",
+  "answering_models": [
+    "claude-sonnet-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 8,
+    "in_fences": 0,
+    "in_section": 8,
+    "surviving": 8
+  },
+  "effort": "medium",
+  "profile": "sdk",
+  "turns": 3,
+  "prompt_tokens": 108577,
+  "cached_tokens": 11400,
+  "cache_write_tokens": 97173,
+  "completion_tokens": 3562,
+  "reasoning_tokens": null,
+  "duration_seconds": 33.23214408289641,
+  "cost_usd": 0.42613510000000004,
+  "cost_basis": "provider"
+}

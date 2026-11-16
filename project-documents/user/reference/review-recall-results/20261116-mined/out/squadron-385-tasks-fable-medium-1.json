@@ -1,0 +1,243 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "PASS",
+      "title": "Success criteria are fully covered",
+      "description": "All eleven functional and seven technical criteria map to tasks:\n\n| Criterion | Tasks |\n|---|---|\n| Slice-branch body content | 7, 9, 11 |\n| Unplanned repository, three no-input lines | 11.2 |\n| Merged-ancestor review excluded | 8.2 |\n| Base refusal and base selection | 5 |\n| Push preconditions | 6 |\n| Presence check | 12 |\n| Title rules | 10a |\n| Dry-run equality | 13.2 |\n| Identity refusal | 13.2 |\n| Live creation | 16.2 |\n| Timeout matrix | 14 |\n| Provider failure | 10 |\n| Single write | 13.2 |\n| Import boundary | 15.1 |\n| Checkbox parser | 2 |\n| Lint and type gate | 16.1 |\n| `summary_oneshot` docstring | 15.2 |\n\nNo task is scope creep; Task 4 traces to D6. No NFR is restated, so no load-test task is needed.",
+      "file_ref": null,
+      "category": "coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md"
+    },
+    {
+      "severity": "PASS",
+      "title": "Sequencing, sizing and proportionality",
+      "description": "Dependencies are respected (parsers \u2192 git helpers \u2192 locator \u2192 refusals \u2192 inputs \u2192 assembly \u2192 body \u2192 command \u2192 failure matrix \u2192 close), with no cycles. Each implementation task is followed directly by its test task; Task 14 is test-only and directly follows 13. Task count and effort fit a slice that adds a seven-module package. The file has no `**Commit**:` markers, which is acceptable.",
+      "file_ref": null,
+      "category": "sequencing",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Task 2.2's real-file assertion fails on the file it names",
+      "description": "Task 2.2 says to read `384-tasks.post-findings-to-the-pr.md` \"until then\" and assert both groups are non-empty. That file has 166 checked items and 0 unchecked, so the assertion fails as written. Switching to the 385 task file only defers the failure: Task 16.4 marks every item `[x]` at close, emptying the unchecked group.\n\nFix: copy a mixed-state snapshot of a real task file into `tests/pr/fixtures/` and assert against that. This still satisfies the \"actual production format\" rule. Alternatively, drop the \"both non-empty\" assertion and keep only the count-sum check.",
+      "file_ref": null,
+      "category": "testing",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:67"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Refusal exception types are never named, and the detached-HEAD instruction conflicts with the import boundary",
+      "description": "Tasks 3.1, 5.1, 6.1 and 12.1 each say \"raise\" without naming a type. Task 13.1 never says how the command turns these into exit 1; the only catch pattern named anywhere is `except CodeHostError` (Task 14). An implementer must invent the contract across five tasks, and the project's rule requiring specific exception types makes that choice matter.\n\nThe detached-HEAD case is the sharpest instance:\n- **What the task says:** Task 3.1 puts `current_branch` in `src/squadron/review/git_utils.py` and says to match `github_cli._branch_for`.\n- **What that code does:** `_branch_for` raises `TargetUnresolvableError`, a `codehost` error (`src/squadron/codehost/github_cli.py:188`).\n- **Why it cannot be copied:** `tests/codehost/test_import_boundaries.py:74-87` forbids `review/` importing `squadron.codehost.errors`. Following the instruction literally breaks the guard that Task 15.1 extends.\n\nThree smaller gaps of the same kind:\n- Task 13.2 has no command-level detached-HEAD case.\n- Task 6.2's \"`ls-remote` timing out \u2192 refusal\" does not say which exception surfaces.\n- Task 6.2 lists \"`ls-remote` returning no matching ref\" with no expected outcome.\n\nFix: name the exception type each refusal raises (a `CodeHostError` subclass in `pr/`, or a local type) and add the catch-and-exit step plus a detached-HEAD test to Task 13.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:79"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Model prompt shape and design-content input are unspecified in Tasks 9\u201311",
+      "description": "Three things an implementer cannot determine from the tasks:\n\n- **Call shape.** D4 says the body is \"not one model response parsed into sections\" and that squadron \"requests prose per section\". Task 11.1 never says whether `compose_body` makes one call per section or a single call that is split. Its \"the model's own headings\u2026 are discarded\" line and Task 11.2's `##`-heading test read like single-response parsing. The choice sets the command's token cost and how Task 12's \"missing section\" can arise.\n- **What the model sees for \"Why\".** `PrFacts` (Task 9.1) carries only the design *path*, and Task 10.1 gives the model no tools. Task 7.1 reads the task file but not the design file. No task reads the design text or passes it to the prompt, yet \"Why\" is sourced from the design, and Task 10a.1 needs the design's H1.\n- **Undefined types and truncation.** `PrInputs` is used by Tasks 7\u20139 and never given fields. Task 7.1 reads only \"the first task file\", which silently drops checked and unchecked items from any further task files `resolve_slice_info` returns.\n\nFix: add sub-items stating the per-section call contract, where the design text is read and how it reaches the prompt, the `PrInputs` fields, and all-task-files handling (or an explicit reason for first-only).",
+      "file_ref": null,
+      "category": "task-clarity",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:257-264"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Local git reads bypass the fake-runner seam the command tests rely on, and `local_sha` has no source",
+      "description": "Task 3.1 builds `current_branch` and `commits_in_range` on `git_utils.run_git`, which is a direct subprocess call. Tasks 13.2 and 14.1 test the command \"against the fake runner\". The fake runner will not intercept these calls, nor Task 8's `git rev-list`. This is the \"half a seam\" that `src/squadron/codehost/github_cli.py:144-154` warns about.\n\nSeparately, `check_head_pushed(..., local_sha=...)` in Task 6.1 takes a local head sha that no task produces. `git_utils` has only the private `_resolve_rev`.\n\nFix: state in Task 13.2 how local git is supplied (a real fixture repository, or injected helpers), and add the local-sha read to Task 3 or Task 6.",
+      "file_ref": null,
+      "category": "testability",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:75-83"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Task 5.1's `cf`-unavailable bullet contradicts itself",
+      "description": "The bullet opens \"**Do not degrade an unreachable `cf` to a default base**\" and then specifies that an unavailable `cf` proceeds to the host default. Task 5.2 pins the actual behaviour (host default, no raise), so the outcome is determinable. Reword the lead so it does not state the opposite. The wording is inherited from D1.",
+      "file_ref": null,
+      "category": "task-clarity",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:122"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Slice success criterion and D2 disagree on the push command; tasks follow D2",
+      "description": "The functional criterion says a sha mismatch \"fails the same way with the same command\". D2 and Task 6.2 require different commands (`git push -u` versus `git push`). The tasks take the more specific reading; the criterion's wording should be corrected in the slice design.",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/slices/385-slice.create-a-pr-with-a-good-message.md:545-546"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Task 4.1's return shape drops the parsed target",
+      "description": "`resolve_and_fetch_pull_request` passes `parsed` to `host.resolve_pull_request` (`src/squadron/cli/commands/pr.py:53-56`). The specified `resolve_locator(...) -> tuple[CodeHost, RepositoryLocator]` does not return it, so `show`'s helper would have to parse the target a second time. Either return the parsed target as well or state that re-parsing is intended.",
+      "file_ref": null,
+      "category": "task-clarity",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:97"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Task 16.4 mixes close-out ordering and a Project Manager wait",
+      "description": "`status: complete` and the plan-entry check-off are listed before the required code review. The review item is \"Ask the Project Manager how they want it run\", which leaves the final task uncompletable by the implementer alone. Reorder so the review precedes the status flip, and name a review command.",
+      "file_ref": null,
+      "category": "process",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:369-373"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "pass",
+      "category": "coverage",
+      "raw_category": null,
+      "summary": "Success criteria are fully covered",
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "pass",
+      "category": "sequencing",
+      "raw_category": null,
+      "summary": "Sequencing, sizing and proportionality",
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "testing",
+      "raw_category": null,
+      "summary": "Task 2.2's real-file assertion fails on the file it names",
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:67",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "Refusal exception types are never named, and the detached-HEAD instruction conflicts with the import boundary",
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:79",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "task-clarity",
+      "raw_category": null,
+      "summary": "Model prompt shape and design-content input are unspecified in Tasks 9\u201311",
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:257-264",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "testability",
+      "raw_category": null,
+      "summary": "Local git reads bypass the fake-runner seam the command tests rely on, and `local_sha` has no source",
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:75-83",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "note",
+      "category": "task-clarity",
+      "raw_category": null,
+      "summary": "Task 5.1's `cf`-unavailable bullet contradicts itself",
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:122",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "note",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "Slice success criterion and D2 disagree on the push command; tasks follow D2",
+      "location": "project-documents/user/slices/385-slice.create-a-pr-with-a-good-message.md:545-546",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "note",
+      "category": "task-clarity",
+      "raw_category": null,
+      "summary": "Task 4.1's return shape drops the parsed target",
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:97",
+      "location_verified": true
+    },
+    {
+      "id": "F010",
+      "severity": "note",
+      "category": "process",
+      "raw_category": null,
+      "summary": "Task 16.4 mixes close-out ordering and a Project Manager wait",
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:369-373",
+      "location_verified": true
+    }
+  ],
+  "template_name": "tasks",
+  "input_files": {
+    "input": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md",
+    "against": "project-documents/user/slices/385-slice.create-a-pr-with-a-good-message.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/squadron-385-tasks"
+  },
+  "timestamp": "2026-11-16T09:12:07.611011",
+  "model": "claude-fable-5-2",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 11,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-fable-5-2",
+  "answering_models": [
+    "claude-fable-5-2"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 10,
+    "in_fences": 0,
+    "in_section": 10,
+    "surviving": 10
+  },
+  "effort": "medium",
+  "profile": "sdk",
+  "turns": 12,
+  "prompt_tokens": 405190,
+  "cached_tokens": 255940,
+  "cache_write_tokens": 149240,
+  "completion_tokens": 9606,
+  "reasoning_tokens": null,
+  "duration_seconds": 90.22501537506469,
+  "cost_usd": 2.8240319,
+  "cost_basis": "provider"
+}

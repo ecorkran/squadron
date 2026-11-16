@@ -1,0 +1,75 @@
+{
+ "review": "r14",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "MCP parity criterion dropped without a plan change",
+   "description": "The plan's 423 criteria include \"CLI, slash command and MCP give identical results\" (`420-slices.model-benchmark.md:87`). This design's Excluded list drops MCP and narrows parity to the CLI and `/sq:run` (D9). The reason given, that no pipeline has an MCP `run` tool and adding one is a separate feature, is sound. But the plan assigns the criterion to this slice, and the two documents now disagree. Either the plan entry is amended with the PM's decision, or the design keeps the criterion.",
+   "location": "project-documents/user/slices/423-slice.fix-pipeline.md:43"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "422 dependency contradicts the slice plan",
+   "description": "The design lists `dependencies: [422]`, and fetched-issue mode needs `CodeHost.get_issue` and the renderer from 422. The plan says 423 has \"Dependencies: none in this initiative\" (`420-slices.model-benchmark.md:88`) and that it \"can be built earlier\" (line 166). Only file mode can be built earlier. The plan should record that fetched mode is blocked by 422, so that the 421\u2192422\u2192423 order is a hard constraint. 422's frontmatter also omits 423 from `interfaces` (`422-slice.fix-case-qualification-and-yield-report-keystone.md:7`), even though 422 provides the renderer and `get_issue` that 423 consumes.",
+   "location": "project-documents/user/slices/423-slice.fix-pipeline.md:49"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Production pipeline depends on a benchmark module",
+   "description": "Prerequisites name the renderer as `issue_freeze`, and the component list puts fetch-or-read in the pipeline package (line 71). 422 places `issue_freeze` under `benchmark/` (422 slice line 85). The production `sq run fix` path would therefore import from the benchmark package, while the architecture has benchmark depend on production (`420-arch.model-benchmark.md:61`). The renderer should move to a shared module that both 422 and 423 import. 422 keeps only the cutoff filter in `benchmark/`. Both documents should name the module.",
+   "location": "project-documents/user/slices/423-slice.fix-pipeline.md:49"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Fix output reuses the build_context contract with side effects",
+   "description": "D2 has `fix-context` emit `operation: build_context` and `context`, so that the dispatch's existing prompt fallback picks it up. I checked the readers. The fallback does key on that operation value, and so do three others: prompt identity, which copies `cf_version` and `guide_version` from a build_context output; the replay outcome reader, which takes build_context text as the task prompt; and the summary context. The fix output has neither version field, so the fix dispatch would likely be recorded as a build_context prompt with both versions null. 424 and 425 rely on prompt identity to separate prompt versions. The design should give the fix prompt its own output key, with a shared constant that the fallback reads. If it keeps the impersonation, it should say what identity looks like for this step. Either way, this is a hidden coupling that should be named as an interface.",
+   "location": "project-documents/user/slices/423-slice.fix-pipeline.md:139"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Refusals carry no failure kind, so 424 cannot separate harness causes from config causes",
+   "description": "The architecture says a config-caused failure is a fail for that config, and a harness-caused failure drops the case. \"The reason decides how it counts\" (`420-arch.model-benchmark.md:67`). This design adds one failure kind, `FIX_REPORT`, and reuses `cost_cap`. Every `fix-context` refusal is only \"an ActionResult(success=False) with a message.\" That covers a dirty tree, a wrong branch, a detached HEAD, a missing or empty issue file, a bad ref, and a `get_issue` failure. The existing failure-kind enum's own description says an action that fails for any other reason carries no kind. So a sandbox run that fails because its issue file is missing looks to 424 the same as an agent that committed nothing. Each refusal needs a kind, or the design needs a harness-refusal kind, with the mapping stated.\n\nThe design also does not say whether the existing agent-question post-condition applies to a fix dispatch. That post-condition assigns the kind when a dispatch with an expected artifact ends on a question. If it applies, a fix run that ends on a question pauses, which is neither a pass nor a fail in a benchmark. The `blocked` path is explicitly a fail (line 156), so the question case needs the same decision.",
+   "location": "project-documents/user/slices/423-slice.fix-pipeline.md:203"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "FIX_REPORT is missing from the replay classifier, and the enum name is taken",
+   "description": "`FailureKind.FIX_REPORT` joins the pipeline's failure-kind enum. The replay outcome reader maps each pipeline kind to its own failure class through an explicit table, and `FIX_REPORT` has no entry. The reader's failure-class enum has no value for it either. The design does not say how 424's reader should class a fix report failure, which is the most common config-caused failure a fix replay will hit. The design should add the mapping and list the replay reader among the touched files. Separately, 421 plans its own `FailureKind` for suite outcomes (`421-slice.benchmark-sandbox-and-case-record.md:213`). Two enums with one name, one for pipeline failures and one for test outcomes, will confuse 422's use of 421's kind and this slice's kind. One of them should be renamed before either is built.",
+   "location": "project-documents/user/slices/423-slice.fix-pipeline.md:77"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "Failure modes not enumerated for the prompt-only report file and commit inputs",
+   "description": "D9 adds an I/O path the design does not cover. `sq _commit ... --report-file PATH` reads a temp file that the session is meant to write. The design does not say what happens if the file is missing (for example, the session crashed or ended on a question before writing it), empty, not UTF-8, or not JSON. It also does not say what `--start-head SHA` does when the SHA is not a commit. A missing report file is the likeliest case. Each case needs a stated handling, an observable signal, and a test. The `sq _fix-prompt` exits are described only as \"exits 1 with the refusal\" (line 227). The git-failure sentence on line 203 is general, and the case where staging succeeds but the commit fails (for example, a pre-commit hook) leaves changes staged. The design should say what the action does then.",
+   "location": "project-documents/user/slices/423-slice.fix-pipeline.md:197"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "Overweight for a 2/5 entry; name the cuts",
+   "description": "The design sizes itself at 3/5 against the plan's 2/5 and gives the reason, prompt-only parity. The slash-command criterion is in the plan, so that work stays. Three other pieces go beyond the plan or the architecture and can be cut or deferred:\n\n- **The `blocked` report exit** (lines 154-156, the `sq _commit` blocked case at line 228, and the criterion at line 250). Neither the plan nor the architecture asks for it. A fix that cannot proceed already fails the report's required fields (`failing_tests` or `gates` empty). Cut it, or defer it until a fix run needs an honest \"cannot proceed\" exit.\n- **The \"Patterns and Conventions\" section** (lines 200-203) restates the project rules for StrEnums, single-definition values, and refusals as ActionResults. Cut it to the list of new enum members.\n- **The effort estimate.** Once the MCP and dependency decisions above are taken, the plan and design should be amended together, so the 3/5 figure is recorded in the plan and not left to the design alone.\n\nThe `fix_prompt_run.py` module and the `--report-file` handshake are the largest additions. Both are needed for the slash-command criterion as the plan now reads.",
+   "location": "project-documents/user/slices/423-slice.fix-pipeline.md:344"
+  },
+  {
+   "i": 8,
+   "severity": "NOTE",
+   "title": "Effort rides on the alias; say so",
+   "description": "The fix step takes a `model` alias. Effort therefore travels with the alias through the existing dispatch, and 420's audit covers that path. This meets the architecture's requirement that every run record the effort it sent (`420-arch.model-benchmark.md:22` and `:77`). The design should say so, because 424 compares configs by effort sent. The hard-coded `sonnet` default in the pipeline file should be checked against how the other built-in pipelines set their defaults.",
+   "location": "project-documents/user/slices/423-slice.fix-pipeline.md:118"
+  },
+  {
+   "i": 9,
+   "severity": "NOTE",
+   "title": "Clean-tree precondition depends on sandbox install order",
+   "description": "`fix-context` refuses any changed or untracked, non-ignored path before dispatch. In a 424 sandbox, the environment install from 421 runs first. If that install re-resolves a tracked lockfile or leaves an untracked file, every replay would be refused as dirty, and the first benchmark run would show a 100% refusal rate. The design should say that the install finishes before `fix-context` runs, and what the install may leave behind.",
+   "location": "project-documents/user/slices/423-slice.fix-pipeline.md:165"
+  }
+ ]
+}

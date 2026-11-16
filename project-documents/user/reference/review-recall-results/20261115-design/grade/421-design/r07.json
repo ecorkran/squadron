@@ -1,0 +1,40 @@
+{
+ "review": "r07",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "`EnvironmentIdentity` placement will reverse the stated metrology \u2192 benchmark dependency direction",
+   "description": "`EnvironmentIdentity` is defined in `benchmark/adapter.py` (line 83). Line 97 states that `metrology/` never depends on `benchmark/`. But line 119 and the Integration Points section (lines 290, 292) say 422's qualification records and 424's replay records, both payloads on `MetrologyRecord`, will carry this identity. As soon as 422 adds its record, `metrology/models.py` has to import from `benchmark/`, which is the reverse of the stated direction. 421 creates the problem, so 421 should fix it: put `EnvironmentIdentity` (and `EnvironmentFailureReason`, which 422's qualification records will store as a reason) in `metrology/benchmark_models.py`, next to `BenchmarkCase`. `benchmark/adapter.py` then imports it from there. That move also lets D6's `scrub_spec_version` field come from a constant that both sides can import, without the adapter reaching into `scrubbed_env.py`.",
+   "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:82-83"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "A temporary install failure is recorded as a permanently unresolvable lock",
+   "description": "`EnvironmentFailureReason` covers `no_lockfile`, `lockfile_unsupported`, `lock_stale_or_unresolvable`, `install_timeout` and `installer_missing`. A network outage, DNS failure or index 5xx during `uv sync --locked` has no reason of its own, so it falls into `lock_stale_or_unresolvable`. The architecture says \"a lockfile that no longer resolves disqualifies the case\", and its \"Absent is not zero\" principle requires that a harness-caused failure is never confused with a property of the case. 422 will drop cases and count yield per reason using this enum, so a flaky network during qualification would quietly shrink the case set and distort the yield report. Add a reason such as `install_network_error`, set when uv's stderr shows a fetch or connection failure. Callers then know it is retryable and it is never counted against the case. Add one test for it alongside the existing failure-path tests (line 316).",
+   "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:152"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "No handling defined for a pytest crash or a truncated JSONL file without a timeout",
+   "description": "D10 covers two cases: a timeout (partial lines, the rest `not_run`) and a missing or unparseable JSONL file with a non-zero exit (`SuiteRunError`). It does not cover:\n- pytest dying before the timeout (segfault in a C extension, `os._exit` in a test, OOM kill), leaving a valid but incomplete JSONL file and a non-zero exit;\n- a last line cut off mid-write, which can happen on a timeout kill too.\n\nWhether that run becomes a `SuiteRun` with `not_run` gaps or a `SuiteRunError` is left unstated. It matters because 422 reads `FailureKind` and `not_run` for the test-first check, and 425 counts regressions. State the rule:\n- Discard a truncated final line with a WARNING.\n- If the process exits abnormally before writing its session-finish line, return a `SuiteRun` with a crash flag and every missing node marked `not_run`, never `passed`.\n\nThat needs the plugin to write a session-finish line, so add it to D10. Add a fixture test (for example, a test that calls `os._exit(1)`).",
+   "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:209"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Case sets are not keyed on `ProjectId`, and the doc doesn't flag this as a departure from the architecture",
+   "description": "The architecture principle \"Extend 320's store\" and the 421 slice-plan entry both say the new records are \"keyed on `ProjectId`\". D2 keys `CaseSet` by name only, so it can pool cases from several projects. That is a reasonable call: the architecture itself expects cross-project pooling if yield is low. But unlike D1's `reference_sha` deviation (line 126), D2 doesn't say it goes against the architecture. As a result `list_case_sets()` is global, and two projects using the same set name share one version history. State the deviation explicitly in D2, and say whether set names are meant to be unique across all projects.",
+   "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:130-134"
+  },
+  {
+   "i": 8,
+   "severity": "NOTE",
+   "title": "The classification goes beyond the slice plan's three kinds, but in a way that is compatible",
+   "description": "The slice plan asks for three groups: assertion failure, project-code exception, and collection/import/missing-symbol error. D11 splits the last group into `collection_error` and `missing_symbol`, and adds `other_exception`. Every one of the plan's kinds still maps to one or more of these, and `other_exception` gives 422 an explicit way to exclude a case as undecidable, which the architecture requires (\"where a check cannot decide, the case is excluded\"). No action needed.",
+   "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md#D11 \u2014 Failure classification"
+  }
+ ]
+}

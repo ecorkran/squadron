@@ -1,0 +1,333 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Unreadable file and unreadable template have no test",
+      "description": "The success criteria (design line 171) require exit 2 for \"a missing, non-regular or unreadable file\" and for \"a missing or unreadable template.\" Task 3's preflight (line 77) checks readability, but Task 3T (line 91) tests only a missing template, a template with no markers, valid-then-missing, and a directory. No task tests an unreadable file or template. Task 4T (line 113) also omits the directory and no-marker cases at command level. Add a permission-denied case for a file and for the template. Guard the root user case explicitly, and state the guard in the test rather than skipping silently.",
+      "file_ref": null,
+      "category": "coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md:77"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Multi-missing output is never tested",
+      "description": "The criterion (design line 168) requires one `  missing: <heading>` line per missing section. Every test uses one missing heading (`## Value`, lines 88 and 109). A bug that prints only the first missing heading would pass the whole suite. Add a copy missing two sections, such as `## Value` and `### Verification Walkthrough`, to Task 3T and assert both lines in template order.",
+      "file_ref": null,
+      "category": "coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md:88"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The docType check inherits a parser that swallows read errors",
+      "description": "`parseFrontmatter` catches every error and returns `{ found: false, data: {} }` (lines 63\u201364; the doc comment at line 7 says \"Never throws\"). Task 3 (line 78) routes the docType check through it. An fs error on that read therefore reports `reason: 'doctype'` with exit 1, not a `SliceDesignValidationError` with exit 2. Task 3's wrap (line 79) never sees that error, so the design's guarantee that every I/O failure exits 2 (design line 78) does not hold on this path. It is also a silent fallback, which the project rules forbid. Fix: read the file once in the file layer, where errors can surface, and pass the text to the parse. Also have the wrap keep the original error as `cause`.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "packages/core/src/introspection/parsers/frontmatterParser.ts:63"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Commit points are checkbox items, not `**Commit**:` lines",
+      "description": "The commit points (lines 71, 94, 117, 126, 134) are written as `- [ ] **Task 2C: Commit** \u2014 ...`. The project format requires plain `**Commit**:` lines, never checkboxes. A checkbox commit item gets checked off by task-checker around the commit, which is the box-only commit the rules forbid. The placements are good: each commit follows its passing test task (2C after 2T, 3C after 3T, 4C after 4T). Only the format needs changing, to `**Commit**: feat(core): add slice design heading validator`.",
+      "file_ref": null,
+      "category": "process",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md:71"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Task 5C's `docs:` message covers code fixes",
+      "description": "Task 5 (lines 122\u2013123) says any unexplained DIFF is a bug to fix, with a test added in the matching test file. Those are code and test changes. But 5C (line 126) is fixed to `docs: record slice 214 parity sweep results`, and no step names a commit for code fixes. Split it. Code fixes get their own commit under the slice's real type (`fix:` or `feat(core)`/`feat(cli)`). The notes-only change keeps the `docs:` message.",
+      "file_ref": null,
+      "category": "process",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md:126"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Real-template and real-design inputs may be absent in CI",
+      "description": "CI checks out with a plain `actions/checkout@v4` (line 12) and runs `pnpm test` (line 22). Task 3T (line 86) reads `project-documents/ai-project-guide/project-guides/templates/slice-design.md`, and Task 4T (line 108) reads `project-documents/user/slices/`. `.gitmodules` is empty and the guide directory has no nested `.git`, so the guide is not a submodule here. I could not run git, so I cannot confirm the template is committed. If it is untracked, these tests fail in CI. Add a step that runs `git ls-files project-documents/ai-project-guide/project-guides/templates/slice-design.md` and states the expected result.",
+      "file_ref": null,
+      "category": "testing",
+      "raw_category": null,
+      "location": ".github/workflows/ci.yml:12"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Parity leniency list is incomplete, and the CRLF rationale is off",
+      "description": "The design says the script kept `\\r`, \"which made CRLF files fail.\" In the script, `heading_key` already strips trailing whitespace including `\\r` (validate-slice-design:42), so CRLF documents pass there. Only a CRLF template fails, because the marker compare is exact (line 58). Task 5 (line 122) lists four leniency reasons, but the script also differs in two ways the list omits. Its docType check is an exact line match (lines 81\u201386), so `docType:  slice-design` fails there and passes in cf. And `##<tab>Value` is a heading in cf (`\\s+`) but not in the script. Extend the list and correct the CRLF rationale, or a legitimate DIFF will read as a bug.",
+      "file_ref": null,
+      "category": "docs",
+      "raw_category": null,
+      "location": "project-documents/user/slices/214-slice.native-slice-design-validation.md:101"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The parity sweep compares only the PASS/FAIL token",
+      "description": "The sweep (design lines 211\u2013218) compares only the first output token and never the missing-heading lines. Most real designs pass, so the failure path gets little coverage from it. The missing-line text is covered by Task 4T's unit assertions, so this is acceptable. Consider also diffing the full output for the step 2 broken copy in Task 5. The script is present (`validate-slice-design`, 168 lines), so Task 5 can run today.",
+      "file_ref": null,
+      "category": "testing",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md:121"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Task 3's effort rating is low",
+      "description": "Task 3 is rated effort 2, the same as the pure validator. It covers template loading and validation, preflight over all files, per-file ordering, error wrapping, the entry function and exports. That is more than Task 4's command work, which is rated 3. Rate it 3, or move preflight into its own step.",
+      "file_ref": null,
+      "category": "sizing",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md:73"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Task 1's barrel step is left conditional",
+      "description": "`packages/core/src/guides/index.ts:24` lists `GUIDE_RELATIVE_PATH` by name, so the barrel does list names explicitly and the \"if\" resolves to \"add.\" Make the step unconditional. The success check \"No other file hard-codes the template path\" has no step that verifies it. A grep for `slice-design.md` under `packages/` would do.",
+      "file_ref": null,
+      "category": "sequencing",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md:43"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`--json` error output uses code `UNKNOWN`",
+      "description": "`handleError` assigns structured codes only to `UserError`. A `SliceDesignValidationError` that extends `Error` writes `code: \"UNKNOWN\"` to stderr under `--json`. Stdout stays empty and the exit code stays 2, so the criteria hold. The design's JSON contract covers stdout only, so decide whether usage errors need their own code and record that.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "packages/cli/src/utils/errors.ts:46"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Task 6C will likely be a no-op",
+      "description": "README.md lists `cf validate` with no subcommands, and no other Markdown file in the repo lists `cf validate frontmatter` in a command reference. The design's claim holds. Task 6's check traces to design Development Approach step 5. Keep the check and expect 6C to be skipped.",
+      "file_ref": null,
+      "category": "scope",
+      "raw_category": null,
+      "location": "README.md:355"
+    },
+    {
+      "severity": "PASS",
+      "title": "Success criteria map to tasks",
+      "description": "Each functional and technical criterion (design lines 167\u2013183) has a task. PASS/FAIL and exit codes are covered by 4T and 5. Missing lines are covered by 3T and 4T. docType, multi-file ordering, `--json` and the worktree template are covered by 3T and 4T. Normalization unit tests are in 2T. The real-template assertions are in 3T, and build, lint and test are in 6. The one gap is unreadable input, above.",
+      "file_ref": null,
+      "category": "coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md:36"
+    },
+    {
+      "severity": "PASS",
+      "title": "Sequencing and test-with pattern",
+      "description": "The dependency chain is linear: constant (1), validator (2), file layer (3), command (4), sweep (5), docs (6). Each implementation task is followed by its test task. There are no cycles. Task 3 imports Task 1 and Task 2, and Task 4 imports Task 3's exports.",
+      "file_ref": null,
+      "category": "sequencing",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md:59"
+    },
+    {
+      "severity": "PASS",
+      "title": "Codebase references and template markers resolve",
+      "description": "These resolve as the task file assumes: `registerValidateCommand` (validate.ts:234), the `handleError(err, 2)` pattern (validate.ts:255), `resolveProjectWorktree` (utils/project.ts:88), `resolveOperationPath` (utils/worktree-overlay.ts:16), `withJsonOption` and `withProjectOption` (options.ts:4, 9), `parseFrontmatter` (introspection/parsers/frontmatterParser.ts:9), `GUIDE_RELATIVE_PATH` (guides/types.ts:313), the core index and node exports, `validate-worktree-scope.test.ts`, and the package names. `validate.ts` is 258 lines, as stated. In the real template, `## Overview` (lines 33\u201334), `## Value` (37\u201338) and `### Verification Walkthrough` (140\u2013141) are all required, so the 3T assertions and the broken-copy test will hold.",
+      "file_ref": null,
+      "category": "coverage",
+      "raw_category": null,
+      "location": "packages/cli/src/commands/validate.ts:234"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "coverage",
+      "raw_category": null,
+      "summary": "Unreadable file and unreadable template have no test",
+      "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md:77",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "coverage",
+      "raw_category": null,
+      "summary": "Multi-missing output is never tested",
+      "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md:88",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "The docType check inherits a parser that swallows read errors",
+      "location": "packages/core/src/introspection/parsers/frontmatterParser.ts:63",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "process",
+      "raw_category": null,
+      "summary": "Commit points are checkbox items, not `**Commit**:` lines",
+      "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md:71",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "process",
+      "raw_category": null,
+      "summary": "Task 5C's `docs:` message covers code fixes",
+      "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md:126",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "testing",
+      "raw_category": null,
+      "summary": "Real-template and real-design inputs may be absent in CI",
+      "location": ".github/workflows/ci.yml:12",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "note",
+      "category": "docs",
+      "raw_category": null,
+      "summary": "Parity leniency list is incomplete, and the CRLF rationale is off",
+      "location": "project-documents/user/slices/214-slice.native-slice-design-validation.md:101",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "note",
+      "category": "testing",
+      "raw_category": null,
+      "summary": "The parity sweep compares only the PASS/FAIL token",
+      "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md:121",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "note",
+      "category": "sizing",
+      "raw_category": null,
+      "summary": "Task 3's effort rating is low",
+      "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md:73",
+      "location_verified": true
+    },
+    {
+      "id": "F010",
+      "severity": "note",
+      "category": "sequencing",
+      "raw_category": null,
+      "summary": "Task 1's barrel step is left conditional",
+      "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md:43",
+      "location_verified": true
+    },
+    {
+      "id": "F011",
+      "severity": "note",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "`--json` error output uses code `UNKNOWN`",
+      "location": "packages/cli/src/utils/errors.ts:46",
+      "location_verified": true
+    },
+    {
+      "id": "F012",
+      "severity": "note",
+      "category": "scope",
+      "raw_category": null,
+      "summary": "Task 6C will likely be a no-op",
+      "location": "README.md:355",
+      "location_verified": true
+    },
+    {
+      "id": "F013",
+      "severity": "pass",
+      "category": "coverage",
+      "raw_category": null,
+      "summary": "Success criteria map to tasks",
+      "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md:36",
+      "location_verified": true
+    },
+    {
+      "id": "F014",
+      "severity": "pass",
+      "category": "sequencing",
+      "raw_category": null,
+      "summary": "Sequencing and test-with pattern",
+      "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md:59",
+      "location_verified": true
+    },
+    {
+      "id": "F015",
+      "severity": "pass",
+      "category": "coverage",
+      "raw_category": null,
+      "summary": "Codebase references and template markers resolve",
+      "location": "packages/cli/src/commands/validate.ts:234",
+      "location_verified": true
+    }
+  ],
+  "template_name": "tasks",
+  "input_files": {
+    "input": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md",
+    "against": "project-documents/user/slices/214-slice.native-slice-design-validation.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/context-forge-214-tasks"
+  },
+  "timestamp": "2026-11-16T09:48:04.540667",
+  "model": "claude-haiku-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 21,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-haiku-5-5",
+  "answering_models": [
+    "claude-haiku-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 15,
+    "in_fences": 0,
+    "in_section": 15,
+    "surviving": 15
+  },
+  "effort": "xhigh",
+  "profile": "sdk",
+  "turns": 22,
+  "prompt_tokens": 988426,
+  "cached_tokens": 820338,
+  "cache_write_tokens": 168072,
+  "completion_tokens": 53451,
+  "reasoning_tokens": null,
+  "duration_seconds": 242.16370874992572,
+  "cost_usd": 0.23510902,
+  "cost_basis": "provider"
+}

@@ -1,0 +1,225 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "The slice says it doesn't edit 424 or 425, but it does in several places",
+      "description": "Line 42 says \"No edits to 424 or 425\", and D17 (line 312) says \"No change to 425\". Other parts of the same doc change both:\n- **424's `CaseDrop` model:** line 321 and line 426 widen `CaseDrop.reason` to accept `SliceCandidateRejection`. The model is defined in 424 as `CandidateRejection | str` (424-slice:369).\n- **424's runner behavior:** D8 (line 226) changes it, because a set with slice cases now plans instead of refusing.\n- **425's `bench_report.py`:** it gets per-kind grouping, a renamed pass column, a dropped hidden column and a new pairwise section (lines 87, 306\u2013313).\n- **Contradiction with line 451:** it expects `tests/benchmark/` to change \"where \u2026 D17 extracts the interval\". D17 says the interval already exists in 425 (425-slice:278) and nothing is extracted.\n\n**Fix:** change the line-42 claim to list the actual edits: the `CaseDrop.reason` type, the per-kind grouping in `bench_report`, and the 424 planning change. Then fix line 451 so it doesn't mention an extraction that doesn't happen. Readers of 424 and 425 need to know which of those slices' contracts change.",
+      "file_ref": null,
+      "category": "integration",
+      "raw_category": null,
+      "location": "project-documents/user/slices/426-slice.slice-cases.md:42"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The leak-scan rules for slice replays are not specified",
+      "description": "424's `LeakRules` (424 D7) needs two inputs that slice cases don't obviously have:\n- **The code-host repository:** 424 takes it from \"the case's issue ref\". A slice case has no issue ref. `CaseProvenance.source_ref` is `slice:<index>@<sha>` (D6).\n- **The distribution name:** 424 reads it from the start commit's `pyproject.toml`. That probably works unchanged, but the doc doesn't say.\n\nThe doc only covers leak paths for the cf install location (D9 spike). It never says how the git and code-host rule is built for a slice case. If the rule is built with no repository, `gh`/URL fetches of the project's own repo are not detected. A fetch of the reference branch is the most direct leak a slice case has.\n\nThe architecture principle \"The answer stays out of reach\" makes leak detection a responsibility of this component. Slice cases also add a new route to the answer: the branch tip still exists on the remote.\n\n**Fix:** state where `SliceCaseRunner` gets the code-host repository (for example from the checkout's `origin` remote at build time, stored on the case). If it can't be found, the case should get `scan_unavailable` or be refused at planning. A rule that silently matches nothing is not acceptable.",
+      "file_ref": null,
+      "category": "integration",
+      "raw_category": null,
+      "location": "project-documents/user/slices/426-slice.slice-cases.md#d9--cf-registration-inside-the-scrubbed-home"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "cf registration has no stated timeout or `ProducerOutcome`",
+      "description": "D9 says \"A failed or timed-out cf step is a harness absence (424 D10)\", but leaves two things open:\n- **No timeout:** it names no bound, config key or constant for the three `cf` subprocess calls.\n- **No outcome row:** 424's `ProducerOutcome` table has no row for \"cf registration failed\". It is unclear whether the failure maps to `environment_failed` or to a new value.\n\nThat leaves the hang case implicit and the recorded outcome open. The review-code rule requires each failure mode on a new I/O path to be explicit and observable.\n\n**Fix:** name the bound. Reusing whatever `ReplaySandbox._register_with_cf` already uses is fine, as long as it is stated. Then name the outcome (for example `environment_failed`, with the cf step in `failure_detail`).",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/426-slice.slice-cases.md:232"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The reference is the branch tip, not the landing commit",
+      "description": "The architecture's Envisioned State says \"the landing commit is the reference\". D2 uses `tip_sha` instead, because `fork..after` on a merge landing pulls in unrelated target work. That keeps the intent of \"Compare configs on identical work\", and the design states its reasoning. The architecture text should be updated to match.",
+      "file_ref": null,
+      "category": "alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/426-slice.slice-cases.md:176-181"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Normalized diffs share the `diffs` sidecar kind with raw replay diffs",
+      "description": "Normalized judge input is stored with `ContentSidecars(\"diffs\")`, so it sits in `<store>/sidecars/diffs/` next to 424's raw replay diffs, with the same `.diff` extension. Content addressing makes this safe. However, a separate kind (for example `judge_inputs`) would cost one constant. It would also stop anyone reading the sidecar directory from taking a normalized diff for a real one.",
+      "file_ref": null,
+      "category": "state-management",
+      "raw_category": null,
+      "location": "project-documents/user/slices/426-slice.slice-cases.md:165"
+    },
+    {
+      "severity": "PASS",
+      "title": "The slice matches the architecture's slice-case rules",
+      "description": "- **No hidden set:** slice cases have none, and the slice's own tests are ignored (D5). This matches \"No slice tests as hidden tests\".\n- **Normalization:** it drops the paths the architecture lists (D11). `uv.lock` is added on top, with the reason given.\n- **Reference line:** the reference is shown as a reference line and is never ranked (D17).\n- **Over-size rule:** the rule is stated, oversized cases are counted, and nothing is truncated (D14). This answers the architecture's \"Diffs for the judge\" item.\n- **No composite:** none is computed.\n- **Separate tables:** fix and slice cases are reported in separate tables.\n- **Absence handling:** harness absences drop the case and config absences forfeit (D15). This follows \"Absent is not zero\".\n- **Fix cases not judged pairwise:** fix cases are excluded from pairwise judging.\n\nAll four success criteria in the slice-plan entry are covered.",
+      "file_ref": null,
+      "category": "alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/426-slice.slice-cases.md#technical-decisions"
+    },
+    {
+      "severity": "PASS",
+      "title": "Dependencies point the right way and the seams are reused",
+      "description": "- **424 seam:** `SliceCaseRunner` plugs into 424's `CaseKindRunner` seam. 424 D5 says it was built for exactly this, without editing `bench_runner.py`.\n- **177 extractions:** `CfRegistration` and `judge_pair` are pulled out of 177 code that already exists, and 177's tests are required to pass unchanged.\n- **Shared code:** language access goes only through 422's adapter registry, and the interval comes from 425's `bootstrap_mean_interval`.\n- **Read-only inputs:** 403's record is read only.\n\nNothing lower in the stack depends on 426.",
+      "file_ref": null,
+      "category": "dependencies",
+      "raw_category": null,
+      "location": "project-documents/user/slices/426-slice.slice-cases.md#consumes-from-other-slices"
+    },
+    {
+      "severity": "PASS",
+      "title": "Spend is bounded before dispatch and judging can resume",
+      "description": "`judge` follows 425 D9:\n- `--max-cost` is required.\n- The dollar bound prints before any dispatch and includes one call of overshoot.\n- Exit code 2 at the cap keeps every record.\n- Resume works by looking up the record id.\n\nThis meets the architecture goal \"Spend is visible before it happens\". Judge calls are bounded by `metrology.judge_timeout_s`, and a failed call is left unrecorded so a rerun retries it.",
+      "file_ref": null,
+      "category": "nfr",
+      "raw_category": null,
+      "location": "project-documents/user/slices/426-slice.slice-cases.md#d16--caps-bound-and-resume-for-judging"
+    },
+    {
+      "severity": "PASS",
+      "title": "The size fits what the slice must deliver",
+      "description": "Each mechanism maps to something the slice plan or architecture requires: case building, the runner, normalization, the judge with an over-size rule, and the per-kind report. Deferrals are explicit and justified: splicing of multi-landing slices, a bounded view of oversized diffs, a narrower adapter protocol, and languages other than Python. The pairing rule (D13) picks the cheaper option over judging every pair. I found nothing worth cutting.",
+      "file_ref": null,
+      "category": "proportionality",
+      "raw_category": null,
+      "location": "project-documents/user/slices/426-slice.slice-cases.md#technical-scope"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "integration",
+      "raw_category": null,
+      "summary": "The slice says it doesn't edit 424 or 425, but it does in several places",
+      "location": "project-documents/user/slices/426-slice.slice-cases.md:42",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "integration",
+      "raw_category": null,
+      "summary": "The leak-scan rules for slice replays are not specified",
+      "location": "project-documents/user/slices/426-slice.slice-cases.md#d9--cf-registration-inside-the-scrubbed-home",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "cf registration has no stated timeout or `ProducerOutcome`",
+      "location": "project-documents/user/slices/426-slice.slice-cases.md:232",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "note",
+      "category": "alignment",
+      "raw_category": null,
+      "summary": "The reference is the branch tip, not the landing commit",
+      "location": "project-documents/user/slices/426-slice.slice-cases.md:176-181",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "state-management",
+      "raw_category": null,
+      "summary": "Normalized diffs share the `diffs` sidecar kind with raw replay diffs",
+      "location": "project-documents/user/slices/426-slice.slice-cases.md:165",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "pass",
+      "category": "alignment",
+      "raw_category": null,
+      "summary": "The slice matches the architecture's slice-case rules",
+      "location": "project-documents/user/slices/426-slice.slice-cases.md#technical-decisions",
+      "location_verified": null
+    },
+    {
+      "id": "F007",
+      "severity": "pass",
+      "category": "dependencies",
+      "raw_category": null,
+      "summary": "Dependencies point the right way and the seams are reused",
+      "location": "project-documents/user/slices/426-slice.slice-cases.md#consumes-from-other-slices",
+      "location_verified": null
+    },
+    {
+      "id": "F008",
+      "severity": "pass",
+      "category": "nfr",
+      "raw_category": null,
+      "summary": "Spend is bounded before dispatch and judging can resume",
+      "location": "project-documents/user/slices/426-slice.slice-cases.md#d16--caps-bound-and-resume-for-judging",
+      "location_verified": null
+    },
+    {
+      "id": "F009",
+      "severity": "pass",
+      "category": "proportionality",
+      "raw_category": null,
+      "summary": "The size fits what the slice must deliver",
+      "location": "project-documents/user/slices/426-slice.slice-cases.md#technical-scope",
+      "location_verified": null
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/426-slice.slice-cases.md",
+    "against": "project-documents/user/architecture/420-arch.model-benchmark.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261115-design/wt/426-design"
+  },
+  "timestamp": "2026-11-16T07:05:06.274793",
+  "model": "claude-opus-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 7,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-opus-5-5",
+  "answering_models": [
+    "claude-opus-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 9,
+    "in_fences": 0,
+    "in_section": 9,
+    "surviving": 9
+  },
+  "effort": "medium",
+  "profile": "sdk",
+  "turns": 8,
+  "prompt_tokens": 614993,
+  "cached_tokens": 516539,
+  "cache_write_tokens": 98442,
+  "completion_tokens": 6672,
+  "reasoning_tokens": null,
+  "duration_seconds": 73.44080762495287,
+  "cost_usd": 1.0250987,
+  "cost_basis": "provider"
+}

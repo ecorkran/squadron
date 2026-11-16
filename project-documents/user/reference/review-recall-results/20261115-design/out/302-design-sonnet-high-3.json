@@ -1,0 +1,189 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Slice-plan criterion \"enforced by structured output\" is silently downgraded to prose scaffolding",
+      "description": "The slice plan entry for 302 lists the success criterion \"The score-with-rationale shape is enforced by the template's structured output.\" The architecture says the same: \"the judge template uses a structured-output constraint for the score field and a score-with-rationale prompt shape.\"\n\nThe design makes the `## Rationale` section \"prose scaffolding for the model, not a new parser target.\" Nothing in it is enforced. It names no structured-output constraint on the score field. Success Criterion 2 only requires that the prompt \"instructs\" the model to emit the fields.\n\nThis drops or defers scope the slice plan assigns to 302, and the design doesn't say it is doing so. Either of two fixes works:\n- Specify what enforces the shape. This could be the template's existing output contract, or a provider structured-output option if the review engine has one. If the engine has none, say so.\n- Explicitly rescope the criterion, and record that the shape relies on prompt compliance plus 301's absent-score \u2192 `UNKNOWN` handling.\n\nThe design's own example puts the rationale in a separate `## Rationale` block. The prose says each justification sits \"immediately before its numeric value\" in the `criteria:` block. Those two descriptions disagree.",
+      "file_ref": null,
+      "category": "scope-deferral",
+      "raw_category": null,
+      "location": "project-documents/user/slices/302-slice.design-phase-judge-templates.md#score-with-rationale-prompt-shape"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Failure-mode table omits the ground-truth and parse failures the architecture enumerates for judges",
+      "description": "The architecture lists these judge failure modes: unparseable response; score absent or out of range; missing or unreadable ground-truth file; provider unavailable; injected ground truth exceeding the cap.\n\nThe slice table covers timeout/provider, absent or out-of-range score, a rogue verdict, `TEMPLATE_INPUTS` resolution, and a malformed criteria block. It leaves out three cases:\n- A ground-truth file that resolves to a path but is missing or unreadable. This differs from `SliceInfo` lacking the field.\n- Injected `input` plus `against` exceeding the cap on non-file-reading providers.\n- A wholly unparseable response.\n\nThese two templates are the first real consumers of the two-document `input`/`against` pair. They are where the cap and unreadable-file cases first matter. The doc should map each case to a verdict and a WARNING+ log, or point to the inherited behavior explicitly.\n\nThe section also says the slice \"introduces two new I/O paths (the score-with-rationale prompt shape)\". A prompt shape is not an I/O path, and the slice adds no new I/O. The wording should be corrected.\n\nThe \"**No silent pass**\" claim rests on 301's handling. It needs to cover these omitted cases before it can be asserted for the slice.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/302-slice.design-phase-judge-templates.md#failure-modes-on-the-judge-template-path"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "\"Reuse criteria, avoid drift\" claim contradicts the copy-based mechanism",
+      "description": "In the existing `slice.yaml`, the evaluation criteria are embedded in `system_prompt` text. The design says the judge templates reuse \"the same list\" to \"avoid drift between what a human-reviewed `slice` template checks and what its judge counterpart checks.\" The mechanism it describes is copying that text into two new YAML files, as the \"recipe\" in Provides to Other Slices confirms. A copy creates the drift risk it claims to avoid. Any later edit to `slice.yaml` or `tasks.yaml` criteria will not reach the judge variants.\n\nEither state this as an accepted duplication (a known drift risk, with a test or a documented sync point), or design a shared source for the criteria. The existing template loader may not support one, so a shared source could cost more than it saves, which is a reason to accept and document the duplication.",
+      "file_ref": null,
+      "category": "design-consistency",
+      "raw_category": null,
+      "location": "project-documents/user/slices/302-slice.design-phase-judge-templates.md#reuse-existing-evaluation-criteria-dont-re-derive-them"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Default-threshold example contradicts the stated threshold table",
+      "description": "The data-flow walkthrough for `judge.slice-vs-arch` shows `score=82 \u2265 pass_floor(78)`. The Technical Decisions table and the verification script both give `judge.slice-vs-arch` a `pass_floor` of 82. 78 is the `judge.tasks-vs-slice` floor. The example happens to land on the boundary (82 \u2265 82), so it passes either way, but it misstates the floor the slice is deliberately differentiating. Fix the number.\n\nThe design also gives no basis for choosing 78/55 and 82/60. Under the architecture's \"default conservative, advisory until 320 calibrates\" commitment, a short statement that these are uncalibrated starting values would help. This part is only a NOTE.",
+      "file_ref": null,
+      "category": "design-consistency",
+      "raw_category": null,
+      "location": "project-documents/user/slices/302-slice.design-phase-judge-templates.md:146"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Design restates other slices and documents more than this slice needs",
+      "description": "The slice is two YAML files plus two registry entries, rated Low risk and 2/5 effort. Several parts restate other documents or cover cases the slice does not have:\n- Three of the five failure-mode rows are labeled \"Not new\" (timeout, absent score, malformed criteria). They restate 300 and 301 behavior. Keep only the rows this slice introduces, plus the omitted cases from the earlier finding.\n- The \"Template naming \u2026 not a dispatch signal\" decision restates the slice 301 and project rule.\n- The \"Provides to Other Slices\" recipe for future judges (`judge.code`, `judge.arch`) describes templates nothing in this slice uses.\n- Success Criterion 1 and the technical requirements repeat each other.\n\nNone of these block the work, but cutting them would shorten the document and remove places where it could drift from 301.",
+      "file_ref": null,
+      "category": "proportionality",
+      "raw_category": null,
+      "location": "project-documents/user/slices/302-slice.design-phase-judge-templates.md#failure-modes-on-the-judge-template-path"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Verification walkthrough CLI invocation is internally inconsistent",
+      "description": "Success Criterion 3 and walkthrough step 3 mix a positional `slice-vs-arch` argument with `--template judge.slice-vs-arch`. The doc admits the invocation shape is unconfirmed. This can wait until implementation, but Criterion 3 should say which form is authoritative.",
+      "file_ref": null,
+      "category": "specification",
+      "raw_category": null,
+      "location": "project-documents/user/slices/302-slice.design-phase-judge-templates.md:362-365"
+    },
+    {
+      "severity": "PASS",
+      "title": "Alignment with architectural commitments and layer boundaries",
+      "description": "- **No engine change.** The templates are data and are identified only by the `judge:` block. The architecture's \"no new action, no new selector\" commitment is met.\n- **No verdict from the model.** The prompt forbids a verdict, and `enforce_judge` ignores `result.verdict` anyway. This matches \"the judge emits score + findings, not a verdict.\"\n- **Thresholds.** They sit at template level, override at step level, and are differentiated by ground-truth strength. This matches the thresholds commitment and \"bubble up the hard calls.\"\n- **Dependency direction.** It runs 302 \u2192 301 \u2192 300, and no change is requested back.\n- **Registry.** Rejecting prefix-stripping in `TEMPLATE_INPUTS` keeps dispatch out of naming conventions, which fits the project rule against labels as logical structure. The two registry entries match the existing `slice`/`tasks` entries in `template_inputs.py`.\n- **Scope.** The two templates match the slice plan, and multi-sample judging, gate composition, and cycle conventions are correctly deferred.\n- **NFR.** The architecture's no-silent-pass guarantee is restated for this slice's paths. The architecture sets no latency or throughput NFR on this path, so no numeric target is missing.",
+      "file_ref": null,
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/302-slice.design-phase-judge-templates.md#technical-scope"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "scope-deferral",
+      "raw_category": null,
+      "summary": "Slice-plan criterion \"enforced by structured output\" is silently downgraded to prose scaffolding",
+      "location": "project-documents/user/slices/302-slice.design-phase-judge-templates.md#score-with-rationale-prompt-shape",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "Failure-mode table omits the ground-truth and parse failures the architecture enumerates for judges",
+      "location": "project-documents/user/slices/302-slice.design-phase-judge-templates.md#failure-modes-on-the-judge-template-path",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "design-consistency",
+      "raw_category": null,
+      "summary": "\"Reuse criteria, avoid drift\" claim contradicts the copy-based mechanism",
+      "location": "project-documents/user/slices/302-slice.design-phase-judge-templates.md#reuse-existing-evaluation-criteria-dont-re-derive-them",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "design-consistency",
+      "raw_category": null,
+      "summary": "Default-threshold example contradicts the stated threshold table",
+      "location": "project-documents/user/slices/302-slice.design-phase-judge-templates.md:146",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "proportionality",
+      "raw_category": null,
+      "summary": "Design restates other slices and documents more than this slice needs",
+      "location": "project-documents/user/slices/302-slice.design-phase-judge-templates.md#failure-modes-on-the-judge-template-path",
+      "location_verified": null
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "specification",
+      "raw_category": null,
+      "summary": "Verification walkthrough CLI invocation is internally inconsistent",
+      "location": "project-documents/user/slices/302-slice.design-phase-judge-templates.md:362-365",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "pass",
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "summary": "Alignment with architectural commitments and layer boundaries",
+      "location": "project-documents/user/slices/302-slice.design-phase-judge-templates.md#technical-scope",
+      "location_verified": null
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/302-slice.design-phase-judge-templates.md",
+    "against": "project-documents/user/architecture/300-arch.eval-actions-llm-as-judge-scoring.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261115-design/wt/302-design"
+  },
+  "timestamp": "2026-11-16T07:39:25.271413",
+  "model": "claude-sonnet-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 9,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-sonnet-5-5",
+  "answering_models": [
+    "claude-sonnet-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 7,
+    "in_fences": 0,
+    "in_section": 7,
+    "surviving": 7
+  },
+  "effort": "high",
+  "profile": "sdk",
+  "turns": 10,
+  "prompt_tokens": 423583,
+  "cached_tokens": 410124,
+  "cache_write_tokens": 13447,
+  "completion_tokens": 5810,
+  "reasoning_tokens": null,
+  "duration_seconds": 49.700704166898504,
+  "cost_usd": 0.1533782,
+  "cost_basis": "provider"
+}

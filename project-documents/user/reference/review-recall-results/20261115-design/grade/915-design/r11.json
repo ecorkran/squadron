@@ -1,0 +1,47 @@
+{
+ "review": "r11",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "FAIL",
+   "title": "Part A/B re-enters loops that paused or failed on exhaustion, giving them an extra round and possibly trapping them",
+   "description": "`_loop_exhaust_result` returns `PAUSED` for `on_exhaust: checkpoint` and `FAILED` for `on_exhaust: fail`, with `iteration=max_iter` (executor.py:1061-1074). Under D2, both statuses become \"unfinished\". Under D3, `resume_iteration_for` returns `max`, so resuming an exhausted loop runs round `max` again:\n- That contradicts the design's own rule that \"Resume does not grant extra rounds\" (lines 180\u2013182).\n- For `on_exhaust: checkpoint`, today's behaviour is: pause for a human, then resume past the loop. After this change, resume runs one more round. If that round also fails `until:`, the loop exhausts and pauses again, so the human can't get past the loop by resuming.\n\nThe design never tells an exhaustion pause apart from an inner-checkpoint pause, and the Success Criteria (lines 298\u2013311) have no test for either `on_exhaust` mode. The fix needs to say how resume handles each `on_exhaust` mode. For example: only re-enter when the paused round is below `max` and the pause came from an inner step, or record where the pause came from. It also needs a test for each mode.",
+   "location": "project-documents/user/slices/915-slice.loop-checkpoint-pause-resume-correctness.md:189-213"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "D1's reasoning misreads how a checkpoint resolves",
+   "description": "An inner checkpoint only returns `PAUSED` when the human picks **Exit** at the interactive prompt (executor.py:1017-1025). Accept and Override continue inline, in the same round, without pausing (line 1026). That undercuts two of D1's reasons:\n- **Reason 2** says resume carries out a human's choice to \"Continue\". A Continue choice never reaches resume at all.\n- **Reason 3** says Exit stays available as the \"human is taking over\" option. Exit is the only path that leads to the re-entry this slice adds, so after the change, Exit followed by resume re-enters the loop. The \"human takes over\" reading is left with no way to express it.\n\nReasons 1 and 4 might still justify re-entry on their own. But D1 needs rewriting around what actually happens (Exit \u2192 PAUSED \u2192 resume), and it should say plainly that resuming after Exit now means \"continue the loop\".",
+   "location": "project-documents/user/slices/915-slice.loop-checkpoint-pause-resume-correctness.md:161-171"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Resuming re-runs the paused round in full, which contradicts D1's \"next round\" reasoning and the round-counting rule",
+   "description": "Lines 164\u2013165 say that for a loop with rounds left, \"proceed\" means \"the next round\". Lines 180\u2013182 and the flow at line 243 (`range(start_iteration, \u2026)` with `start_iteration` = the paused round) resume **at** the paused round. That means round N's dispatch and review, which already ran before the checkpoint, run a second time. So round N executes twice, and a loop paused at round 2 of 3 can run 4 body executions, despite \"Resume does not grant extra rounds\". Choose N or N+1, give the reason, and adjust the Success Criteria at lines 298\u2013302 to match.",
+   "location": "project-documents/user/slices/915-slice.loop-checkpoint-pause-resume-correctness.md:164-182"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Part C's WARNING leaves out the single-step loop path, which also stops silently",
+   "description": "D4 and the component table (line 290) put the WARNING in `_execute_loop_body` only. But `_execute_loop_step` stops on `PAUSED` silently too (executor.py:1135-1137), and D3 / line 289 already bring it into scope for `start_iteration`. Under the failure-mode rule in `.claude/rules/review-code.md`, the same abandonment on that path stays silent. Add the WARNING and its test for `_execute_loop_step`, ideally as one shared helper so the logic isn't duplicated.",
+   "location": "project-documents/user/slices/915-slice.loop-checkpoint-pause-resume-correctness.md:271-276"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Duplicate `StepState` entries after resume are not specified",
+   "description": "`_append_step` adds an entry every time a step finishes (state.py:304). After a resume, `completed_steps` holds both the old paused entry and the new one for the same `step_name`. A loop that pauses twice (round 1, resume, then round 2) leaves two paused entries.\n- The design doesn't say which entry `resume_iteration_for` reads. It has to be the latest, or resume goes back to a stale round.\n- It doesn't confirm that `first_unfinished_step`'s set-based check gives the right answer when entries for one name have mixed statuses.\n- It doesn't say whether `load_prior_outputs` (state.py:417-436) should include the abandoned partial round's action results in `prior_outputs` for the re-entered round.\n\nState \"latest entry per step name wins\" for both queries, and add a test that pauses twice.",
+   "location": "project-documents/user/slices/915-slice.loop-checkpoint-pause-resume-correctness.md:284-287"
+  },
+  {
+   "i": 5,
+   "severity": "NOTE",
+   "title": "The flow diagram skips the CLI helpers that resume goes through",
+   "description": "Both resume paths call `_run_pipeline_sdk(..., from_step=...)` or `_run_pipeline(..., from_step=...)` per execution mode (run.py:1111-1131 and 1162-1180), not `execute_pipeline` directly. That's four call sites, plus the two helper signatures, that need the new iteration parameter. The component-table row \"Both resume paths \u2026 pass it through\" covers this, but the diagram makes the change look smaller than it is. The design should also say whether prompt-only mode can produce a paused loop at all.",
+   "location": "project-documents/user/slices/915-slice.loop-checkpoint-pause-resume-correctness.md:237-244"
+  }
+ ]
+}

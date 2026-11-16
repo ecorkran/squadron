@@ -1,0 +1,225 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "Python Success Criterion 3 fixture scores 7 under Task 3's rules, not 6",
+      "description": "Task 3 (following D2) counts a comprehension as 1 per `for` plus 1 per `if`. A comprehension `if` cannot exist without its `for`, so the Task 4 fixture (`if`, `elif`, `and`, a comprehension `if`, an `except`) scores 1 + 1 + 1 + 1 + 2 + 1 = 7. Task 4 line 65 expects 6, copying Success Criterion 3 from the slice design (`401-slice\u2026md:266`), which contradicts D2 (`401-slice\u2026md:139`).\n\nThe same slip is in Task 4 line 63: \"one test per decision point \u2026 each scoring 2\" gives 3 for the comprehension-`if` case.\n\nAn implementer will either drop the comprehension `for` from the constant (violating D2) or change the expected value (violating Success Criterion 3). Decide which is right, fix the slice design, and restate the expected values in Task 4. The TypeScript fixture is correct at 6.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:54-65"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`MemoryError` is both a per-file token error and a whole-pass failure",
+      "description": "Task 10 puts any of `token_errors` into `unparsed_files` and separately treats a `MemoryError` during the pass as `tool_failed`. Task 11 line 139 expects a tokenizer that raises `MemoryError` to give `tool_failed`. Task 14 line 160 then lists `MemoryError` among the TypeScript token errors, mirroring `src/squadron/metrology/snapshot/typescript_length.py:151`.\n\nFor TypeScript the outcome therefore depends on `except` ordering, and the two languages can diverge. The failure-mode table says `MemoryError` gives `tool_failed`. Remove `MemoryError` from Task 14's token errors, or state the precedence in Task 10.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:121-123"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Task 2's \"suite passes unchanged\" cannot hold",
+      "description": "That test asserts `adapter.metrics == set(SnapshotMetric)`. Once Task 2 adds four enum members and narrows `PythonAdapter.metrics` to the four slice-400 metrics, the assertion fails. It stays red until Task 25.\n\nTask 2 should name this test and say how to edit it (assert the explicit set). Its success line should read \"passes with that one edit\". `ALL_METRICS = frozenset(SnapshotMetric)` in `tests/metrology/snapshot/test_take.py:25` deserves the same check; I did not trace how its fake adapters use it.",
+      "file_ref": null,
+      "category": "task-clarity",
+      "raw_category": null,
+      "location": "tests/metrology/snapshot/test_python_length.py:60"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "\"Marks every line under both windows\" does not define which lines count",
+      "description": "The `Tokenizer` type yields one line number per token. Task 10 does not say whether a confirmed window marks only the lines that carry its tokens, or the whole span from first to last token line.\n\n- **Span marking** counts the blank and comment-only lines inside a clone. That breaks D3's \"duplicated lines are always non-blank lines\" and the file-length denominator.\n- **Token-line marking** misses continuation lines of multi-line tokens (triple-quoted strings, template strings).\n\nTask 13's test (\"different comments and blank lines report the function's lines\") passes loosely under either reading. State the rule in Task 10 and add an exact-count assertion to Task 11.",
+      "file_ref": null,
+      "category": "task-clarity",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:125-126"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Commit steps are checkboxes, not plain `**Commit**:` markers",
+      "description": "All sixteen commit steps are written as `- [ ] Commit: \u2026` checklist items (Tasks 2, 4, 6, 7, 9, 11, 13, 15, 17, 18, 20, 22, 24, 26, 27, 28, 29). Checking the box after committing leaves an uncommitted check-off, which invites a box-only commit.\n\nPlacement is sound: every marker follows a passing test task, and Tasks 3, 5, 8, 10 and the other implementation-only tasks correctly have none. Convert them to plain `**Commit**: \\`\u2026\\`` lines. Task 30's \"Commit any remaining changes\" (line 290) should be dropped or converted the same way.",
+      "file_ref": null,
+      "category": "process",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:46"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Two success-criterion clauses have no asserting test",
+      "description": "- **Success Criterion 10, \"its other metrics are unchanged\":** Task 11 tests the ceiling only at module level with a test tokenizer. Add one adapter-level case to Task 13 or 15: lower the constant and assert the other metrics are still present.\n- **Success Criterion 1, duplication `counting` text:** Task 10 builds it from the constants, but no test asserts it names the window size and the ceiling. Task 9 does this for complexity only. One assertion in Task 11 closes it.",
+      "file_ref": null,
+      "category": "coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:138"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`tool_support.tool_failed` requires a `command` argument and logs on its own",
+      "description": "Tasks 10 and 23 route failures through `tool_failed`, which takes a required `command=` keyword. Neither task says what to pass for an in-process pass or a report read.\n\nIt also logs a WARNING per call. With Task 21's own WARNING per failure, a bad report yields three WARNINGs per language (one from `read_coverage`, one per metric). Task 24's \"with a WARNING\" still passes, but stating the intended count would avoid a noisy result.",
+      "file_ref": null,
+      "category": "task-clarity",
+      "raw_category": null,
+      "location": "src/squadron/metrology/snapshot/tool_support.py:42-54"
+    },
+    {
+      "severity": "PASS",
+      "title": "Success-criteria coverage and traceability",
+      "description": "Apart from the two clauses above, every criterion maps to a task:\n\n| Criterion | Tasks |\n|---|---|\n| Functional 1\u20133 | 3\u20139 |\n| Functional 4 | 11, 15 |\n| Functional 5 | 22, 26 |\n| Functional 6\u20138 | 18, 20, 24 |\n| Functional 9 | 17 |\n| Functional 10 | 11 |\n| Functional 11 | 26 |\n| Functional 12 | 7, 29 |\n| Technical: real-report fixtures | 18 |\n| Technical: failure-mode rows | 9, 11, 13, 15, 20, 22, 24 |\n| Integration: frozen-contract diff | 30 |\n| Integration: docs and CHANGELOG | 28 |\n\nThere is no scope creep; the hash-collision test and the grammar node-name check each trace to D3 and D2. The slice restates no NFR, so no load test or CI gating task is needed.",
+      "file_ref": null,
+      "category": "coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md"
+    },
+    {
+      "severity": "PASS",
+      "title": "Sequencing, test-with pattern and proportionality",
+      "description": "Dependencies are respected and there are no cycles: enums, then counters, then `MeasuredFunction`, then the measurement; the Task 7 helper precedes Task 10; fixtures (18) precede the reader (19). Each implementation task is followed directly by its tests.\n\nThirty tasks at effort 1\u20134 fit a slice touching twelve modules. The prerequisites the tasks name exist in the code (`_is_counted`, `_collect_functions`, `_measure_source`, `FIXTURE_ROOT_TOKEN`, `read_fixture`, `snapshot_git_repo`, `FakeToolRunner`, the fixtures `README.md`). `render.py` falls through to a generic line for unknown metrics, so deferring render to Task 27 breaks nothing in between.",
+      "file_ref": null,
+      "category": "sequencing",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Python Success Criterion 3 fixture scores 7 under Task 3's rules, not 6",
+      "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:54-65",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "`MemoryError` is both a per-file token error and a whole-pass failure",
+      "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:121-123",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "task-clarity",
+      "raw_category": null,
+      "summary": "Task 2's \"suite passes unchanged\" cannot hold",
+      "location": "tests/metrology/snapshot/test_python_length.py:60",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "task-clarity",
+      "raw_category": null,
+      "summary": "\"Marks every line under both windows\" does not define which lines count",
+      "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:125-126",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "process",
+      "raw_category": null,
+      "summary": "Commit steps are checkboxes, not plain `**Commit**:` markers",
+      "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:46",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "coverage",
+      "raw_category": null,
+      "summary": "Two success-criterion clauses have no asserting test",
+      "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:138",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "note",
+      "category": "task-clarity",
+      "raw_category": null,
+      "summary": "`tool_support.tool_failed` requires a `command` argument and logs on its own",
+      "location": "src/squadron/metrology/snapshot/tool_support.py:42-54",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "pass",
+      "category": "coverage",
+      "raw_category": null,
+      "summary": "Success-criteria coverage and traceability",
+      "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md",
+      "location_verified": null
+    },
+    {
+      "id": "F009",
+      "severity": "pass",
+      "category": "sequencing",
+      "raw_category": null,
+      "summary": "Sequencing, test-with pattern and proportionality",
+      "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md",
+      "location_verified": null
+    }
+  ],
+  "template_name": "tasks",
+  "input_files": {
+    "input": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md",
+    "against": "project-documents/user/slices/401-slice.complexity-duplication-and-coverage.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/squadron-401-tasks"
+  },
+  "timestamp": "2026-11-16T09:08:54.806901",
+  "model": "claude-fable-5-2",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 12,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-fable-5-2",
+  "answering_models": [
+    "claude-fable-5-2"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 9,
+    "in_fences": 0,
+    "in_section": 9,
+    "surviving": 9
+  },
+  "effort": "medium",
+  "profile": "sdk",
+  "turns": 13,
+  "prompt_tokens": 382861,
+  "cached_tokens": 232828,
+  "cache_write_tokens": 150023,
+  "completion_tokens": 11228,
+  "reasoning_tokens": null,
+  "duration_seconds": 111.2193480420392,
+  "cost_usd": 2.8968670000000003,
+  "cost_basis": "provider"
+}

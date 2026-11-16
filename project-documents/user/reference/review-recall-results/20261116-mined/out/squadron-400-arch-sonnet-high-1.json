@@ -1,0 +1,260 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Review-to-audit category mapping assumes a vocabulary fit that is unlikely and that the document forbids fixing",
+      "description": "The headline outcome is \"error-handling findings: 4 from review, 2 from audit\" with no translation step. The vocabulary is `AuditCategory` (`src/squadron/metrology/models.py:119`), which has ten values: nine tech-debt dimensions plus `other`. Review categories describe a different thing: the model's own free-form tags such as `error-handling`, `consistency`, `completeness`, `technology`, `abstraction` and `antipattern`. Several of the audit values have no review counterpart, and the reverse is also true.\n\n- **Synthetic categories.** The review module emits its own categories, `review-coverage` (`coverage.py:7`) and `merge-step` (`task_gate.py:25`), plus `tooling`. These are not code-quality findings, and the document never says whether ingest drops them or counts them as `other`. Unhandled, they inflate `other`.\n- **Missing categories.** `models.py:401` already substitutes `\"uncategorized\"` for `None`.\n- **No decision on misfit.** The Non-Goals say a poor fit is \"a finding to report, not a reason to edit the skill from here\". But the capability depends on the fit, and the document has no fallback, such as a review-side vocabulary or a mapping layer. If `other` dominates review output, the capability is dead.\n- **Unit mismatch.** Audit counts are codebase-wide at one point in time. Review counts are diff-scoped opinions on one change. Putting both in one \"bucket\" invites a misleading sum even with the source labelled.\n- **Severity filtering.** Review findings include `PASS` and `NOTE`, and the document never says which severities count toward a category tally.",
+      "file_ref": null,
+      "category": "feasibility",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#Design Goals"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Write-time categorization changes the shared review prompt and parser, not just code review",
+      "description": "Technical Considerations says \"write-time categorization\" is a \"write-path change to review templates and output parsing\". The code-review prompt in `review_client.py:77-85` and the category regex in `parsers.py:116` serve every review type (arch, slice, tasks and code). Changing them to a closed vocabulary affects architecture and slice reviews too, whose useful categories (`feasibility`, `extension-points`, `dependencies`) are not audit dimensions. The document never says whether the closed vocabulary is scoped to code-review templates only, or how the parser knows which vocabulary applies. This also contradicts the Current State line that only `sq review code` matters.",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#Technical Considerations"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Noise floor is promised for review findings, but only the audit has a method",
+      "description": "The Design Goals say LLM-derived signals \"carry their own noise floor\". The Envisioned State says \"LLM-sourced numbers are shown against their noise floor\". 320's noise floor is three repeated audit runs, per `AuditNoiseFloor`. Review findings come from single runs of different diffs, and nothing in 320 measures their variance. Re-running a code review on the same diff three times is a different protocol with its own cost. The document does not define it, assign it to a slice, or drop the claim. As written, the report either shows review counts with no floor (contradicting the doc) or silently omits it.",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#Envisioned State"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "\"Measures a commit without modifying the repo\" is not reconciled with running tools at arbitrary commits",
+      "description": "The principles say a snapshot keys on commit SHA and the snapshot command \"doesn't modify the measured repository\". Slice before/after needs snapshots at fork-point and merge commits that are not HEAD. That needs a detached `git worktree` or an archive export per snapshot. The document names neither. It also leaves unresolved the question of whether a dirty tree is \"refused or recorded with a dirty marker\", and that choice changes the record schema.\n\nThe hard parts are underspecified:\n- **Type errors and coverage.** Pyright needs the project's resolved environment, and coverage needs the tests to run. A fresh worktree of a historical commit has no venv. The environment is the project's current one, not the commit's, so \"same value on same commit with same tool versions\" is false for type-error counts unless environment identity is recorded. The document defers installing or running dependencies to a slice decision, but that decision decides whether two of the five headline metrics are measurable at all.\n- **Async context.** `python.md` forbids blocking the event loop. Pipeline actions run async, so tool execution must be subprocess-based, and the document does not say so.",
+      "file_ref": null,
+      "category": "feasibility",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#Architectural Principles"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Per-slice before/after depends on a merge commit that the project's own git workflow does not guarantee",
+      "description": "The attribution rule is \"fork point to merge commit\". The project's Git rules say `git merge {branch-name}` into the target. That fast-forwards when possible, leaving no merge commit and no recoverable fork point from topology alone. The integration-branch and worktree hierarchy (`main` \u2190 integration \u2190 worktree \u2190 slice) means the \"fork point\" depends on which target applies. The document defers the mapping source to a slice but treats git topology as a candidate. Given the merge procedure, the slice branch name `{index}-slice.{name}` or a cf slice record would be the only reliable source. The document should rule topology out, or require the pipeline action to record SHAs at fork and merge time. That would turn the \"optional\" automatic capture into a requirement for the headline feature.",
+      "file_ref": null,
+      "category": "feasibility",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#Technical Considerations"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Project-declared limits have no declared home, and squadron's own limits conflict",
+      "description": "\"Limits come from the project\" means limits the project \"declares in its own config\". The document names no file, key or schema. The Current State says squadron's limits live only in prose (CLAUDE.md and review rules), and \"No tool reads\" them. So the keystone slice, \"proven on Python against squadron itself\", has no declared limits to read and would report \"no limits were set\". Declaring them means adding config. That conflicts with \"without editing the project's config files or code\" if the baseline command is meant to cover them.\n\nSquadron's own prose limits also disagree: CLAUDE.md says functions ~50 lines, while `python.md` says \"max 20 lines preferred\". The document does not say which one the project-declared limit would be.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#Architectural Principles"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Rule set and tool identity are named by label rather than content hash",
+      "description": "The document requires that a count \"name the rule set each count came from\" and compares by tool and version. A name is a user-accessible label, and project conventions forbid using labels as logical structure. A project's `ruff.toml` can change under the same name, and the effective exclusion set can change as well. 320 avoided this for judges with `template_content_hash`. The comparability check (\"refuse to diff across a tool change\") needs a content fingerprint of the effective rule configuration and exclusion set. Without one, the comparability guarantee is unenforceable.",
+      "file_ref": null,
+      "category": "technology",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#Technical Considerations"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Record identity, idempotence and volume are unspecified for two new high-cardinality record types",
+      "description": "The store is one JSON file per record (`store.py:3`), and readers filter by `record_type` while iterating records (`store.py:237,296,316`). Several things are missing:\n\n- **Snapshot identity.** The document keys a snapshot on project and commit SHA, but a snapshot also carries tool, rule set and exclusions. Re-snapshotting the same commit under a different config could overwrite, duplicate or be rejected, and the document does not say which.\n- **Finding granularity.** It never says whether a \"normalized review finding\" is one record per finding or one per review file. Per-finding records mean tens of files per review.\n- **Ingest idempotence.** Nothing defines the dedupe key for re-ingesting a review file. Counts double on re-run.\n- **Commit and slice linkage.** Review files stamp `reviewedSha` only on a best-effort basis, and `persistence.py:172-205` omits it on failure. \"Tied to commit and slice where known\" needs the unknown case defined.\n- **Reporting cost.** Over-time and per-slice reports over all three sources are full scans of a user-level directory shared across projects. No index is mentioned.\n- **Snapshot payload shape.** Per-file and per-function distributions versus aggregates is undecided, as is whether exclusions are stored as patterns or expanded paths. Those choices drive record size.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#Architectural Principles"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Consumer 420 needs comparable scores while this component bans composites, including internally",
+      "description": "The Motivation says 420 needs \"objective, comparable scores for implementation output\". The principles and Non-Goals ban a composite \"anywhere, including as an intermediate value\" and \"as an internal ranking signal\". Comparing replays across models requires ranking or aggregating, so 420 will build the composite this document forbids. The consequence is that this document's core design principle is bypassed downstream. Either define what 420 may consume (for example, per-metric deltas against fixed thresholds), or admit that aggregation lives in 420 and state the contract it must follow. The Envisioned State also speaks of 440's capability probe and CF handoff as existing, though 440 is not built.",
+      "file_ref": null,
+      "category": "extension-points",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#Motivation"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Architecture is sized for hypothetical breadth rather than the proven need",
+      "description": "The demonstrated need is Python metrics on squadron, a baseline, and a before/after per slice. The document adds the following on top:\n\n- a language-agnostic adapter contract that must make adapters \"agree on what they report\" before a second adapter exists\n- cross-language comparison labelling\n- dual rule sets (project and fixed reference) recorded \"either or both\"\n- optional coverage, with a separate run-or-read-report decision\n- read-side mapping of historical reviews\n- dirty-tree handling in two modes\n- pipeline-action auto-capture\n- over-time trends across three sources\n\nCut or defer these:\n- **Reference rule set.** Drop it and record only the project's own rules. Comparison across projects can come later.\n- **Coverage.** Defer it until a project already produces a report.\n- **Historical read-side mapping.** Skip it. Count only post-change reviews.\n- **Adapter contract.** Derive it from the Python adapter plus the first real non-Python adapter, instead of designing it up front.\n- **Dirty tree.** Refuse it. Do not support a dirty marker.\n- **Trend reports.** Keep these to per-slice before/after until someone needs more.\n\nFive slices with the keystone first is reasonable, but the keystone as described already contains most of these decisions.",
+      "file_ref": null,
+      "category": "antipattern",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#Anticipated Slices"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Tool selection for complexity and duplication is deferred but constrains the metric definitions",
+      "description": "Ruff, which the stack already runs, does not emit a numeric cyclomatic complexity. Its C901 rule only flags functions over a configured threshold. A numeric complexity distribution therefore needs a separate analyzer, and so does duplication. That adds a new runtime dependency or a required external binary, and the document's \"tool not installed\" absent-with-reason path means a default install may produce mostly absent metrics. Naming the Python tools for the keystone slice, even provisionally, is needed to make the \"absent is not zero\" and tool-identity principles testable.",
+      "file_ref": null,
+      "category": "technology",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#Technical Considerations"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "feasibility",
+      "raw_category": null,
+      "summary": "Review-to-audit category mapping assumes a vocabulary fit that is unlikely and that the document forbids fixing",
+      "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#Design Goals",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "Write-time categorization changes the shared review prompt and parser, not just code review",
+      "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#Technical Considerations",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "Noise floor is promised for review findings, but only the audit has a method",
+      "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#Envisioned State",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "feasibility",
+      "raw_category": null,
+      "summary": "\"Measures a commit without modifying the repo\" is not reconciled with running tools at arbitrary commits",
+      "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#Architectural Principles",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "feasibility",
+      "raw_category": null,
+      "summary": "Per-slice before/after depends on a merge commit that the project's own git workflow does not guarantee",
+      "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#Technical Considerations",
+      "location_verified": null
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "Project-declared limits have no declared home, and squadron's own limits conflict",
+      "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#Architectural Principles",
+      "location_verified": null
+    },
+    {
+      "id": "F007",
+      "severity": "concern",
+      "category": "technology",
+      "raw_category": null,
+      "summary": "Rule set and tool identity are named by label rather than content hash",
+      "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#Technical Considerations",
+      "location_verified": null
+    },
+    {
+      "id": "F008",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "Record identity, idempotence and volume are unspecified for two new high-cardinality record types",
+      "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#Architectural Principles",
+      "location_verified": null
+    },
+    {
+      "id": "F009",
+      "severity": "concern",
+      "category": "extension-points",
+      "raw_category": null,
+      "summary": "Consumer 420 needs comparable scores while this component bans composites, including internally",
+      "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#Motivation",
+      "location_verified": null
+    },
+    {
+      "id": "F010",
+      "severity": "concern",
+      "category": "antipattern",
+      "raw_category": null,
+      "summary": "Architecture is sized for hypothetical breadth rather than the proven need",
+      "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#Anticipated Slices",
+      "location_verified": null
+    },
+    {
+      "id": "F011",
+      "severity": "note",
+      "category": "technology",
+      "raw_category": null,
+      "summary": "Tool selection for complexity and duplication is deferred but constrains the metric definitions",
+      "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#Technical Considerations",
+      "location_verified": null
+    }
+  ],
+  "template_name": "arch",
+  "input_files": {
+    "input": "project-documents/user/architecture/400-arch.code-quality-measurement.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/squadron-400-arch"
+  },
+  "timestamp": "2026-11-16T10:17:00.128502",
+  "model": "claude-sonnet-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 11,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-sonnet-5-5",
+  "answering_models": [
+    "claude-sonnet-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 11,
+    "in_fences": 0,
+    "in_section": 11,
+    "surviving": 11
+  },
+  "effort": "high",
+  "profile": "sdk",
+  "turns": 12,
+  "prompt_tokens": 501882,
+  "cached_tokens": 403492,
+  "cache_write_tokens": 98376,
+  "completion_tokens": 9340,
+  "reasoning_tokens": null,
+  "duration_seconds": 78.877438708907,
+  "cost_usd": 0.5280132000000001,
+  "cost_basis": "provider"
+}

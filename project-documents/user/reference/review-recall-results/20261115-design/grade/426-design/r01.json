@@ -1,0 +1,89 @@
+{
+ "review": "r01",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "FAIL",
+   "title": "Cases with failing reference tests enter the set via exclusion",
+   "description": "Architecture line 50 says \"A case enters the set only if the original work passes its own grade in the sandbox environment,\" and line 111 says reference qualification \"catches\" environment-dependent tests. D5 instead moves every existing node that fails in all reference runs onto `excluded_tests` as `fails_at_reference` (line 200). Regression selection then drops it (line 201), so the reference passes its own grade by construction and the case is admitted. D10 (line 240) drops a failing tip at grading time, but D5 has already removed the failures that would trigger that drop. The architecture allows exclusion only for nodes that disagree across runs (line 136). 422 D9 does the same for fix cases. Decide before implementation: reject candidates whose reference fails consistently and record the reason, or amend the architecture to allow it and align 422 D9. Either way, record the decision in both documents.",
+   "location": "project-documents/user/slices/426-slice.slice-cases.md:200"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Per-pair judgment records conflict with the coarse-record rule",
+   "description": "State management writes one `diff_judgment` per (benchmark, case, pair, judge), and the schema (lines 383\u2013398) matches. The architecture says \"Records stay coarse, one per case run\" (line 65) and that 400's coarse-record rule still holds (line 129). Per-pair records do follow 177's `pairwise_judgment` precedent (177 slice, line 40). The slice does not acknowledge the conflict. The mock-up's \"pairs 54\" for six judged cases (line 294) means 54 records per benchmark, growing with cases \u00d7 configs\u00b2 \u00d7 k. Either write one record per (benchmark, case, judge) holding its pairs, which revisits the 4 KB limit on line 410, or record that the 177 precedent overrides the coarse rule and amend the architecture.",
+   "location": "project-documents/user/slices/426-slice.slice-cases.md:164"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "The reference enters the Bradley-Terry fit and shows a strength",
+   "description": "Architecture line 93 requires the reference \"reported as a reference line, not ranked as a config.\" 425 D13 says the same: \"never ranked.\" D17 puts `reference` in the fit (line 308), and the mock-up prints its strength (1.18, line 355). Those strengths are then anchored on reference pairs. The mock-up's pair count for opus (18) equals the cross-config pairs alone (3 per case \u00d7 6), so the W/L/T columns seem to exclude reference pairs. D17 does not say which pairs the columns count. A lighter option is to fit configs on cross-config pairs only, and show the reference as its own line with its win share against each config.",
+   "location": "project-documents/user/slices/426-slice.slice-cases.md:308"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Judgment identity omits the normalization rules, so resume keeps stale judgments",
+   "description": "The pair id hashes the sorted refs, the judge prompt hash and the judge alias (line 300). `JudgeRef` carries only the prompt hash. The normalization rules (DROP constants, lines 246\u2013249) are not in the identity. Changing a dropped path changes what the judge sees, but resume skips every recorded pair (line 302), so old judgments survive under new diffs. Each judgment stores its diff sha256, but resume never checks it. Add a `NORMALIZE_RULES_VERSION` to the hash input, as `SLICE_RULE_VERSION` and 424's `LEAK_RULES_VERSION` do elsewhere, or have resume compare the stored diff hashes.",
+   "location": "project-documents/user/slices/426-slice.slice-cases.md:300"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "The over-size record has no lifecycle, so a case can be counted twice",
+   "description": "D15 says the over-size record \"is replaced when the limit changes\" (line 285). Its id (line 301) has no limit in it, so a rerun overwrites the record only while the case stays over size. Once the limit is raised, the case is judged (line 276), but the stale `OverSizeCase` remains, and the report can count it under both \"judged\" and \"over size\". The value is derivable: the longest prompt is a pure function of the stored diff sidecars, the task text and the current limit. Compute it at judge and report time, and drop `OverSizeCase` and its two store methods (line 410). That removes the record type and the stale state together.",
+   "location": "project-documents/user/slices/426-slice.slice-cases.md:285"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "An unresolvable fork environment is a harness error here but a rejection in 422",
+   "description": "Architecture line 111 says \"A lockfile that no longer resolves disqualifies the case.\" Line 67 lists non-resolving environments among harness failures, so the architecture is ambiguous. This slice takes the harness path: sandbox errors become `harness_error` (line 209). D6 reuse re-runs those on every build, and they are not counted as case rejections. 422 resolves the ambiguity the other way: `environment_unresolved` is a `CandidateRejection` (422 line 282). Forks without `uv.lock`, which the risk section expects (line 501), would therefore appear as unexplained `harness_error`s here. Adopt 422's rule. Keep `harness_error` only for failures that are not about the fork, such as a missing `uv` (`installer_missing`), and name which `EnvironmentFailureReason` values stay harness-side.",
+   "location": "project-documents/user/slices/426-slice.slice-cases.md:209"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "\"No edits to 424 or 425\" contradicts the slice and its siblings",
+   "description": "Line 42 says there are no edits to 424 or 425. The slice elsewhere widens `CaseDrop.reason` in 424 (line 321, and line 426) and adds per-kind tables and the pairwise section to `bench_report` (lines 306, 427). 425 expects this: its Integration Points say 426 adds a slice-case table, and that 426 can add its report table without editing `grade_runner.py` (425, lines 464\u2013465 and 501). 424 already types `CaseDrop.reason` as `CandidateRejection | str` (424 line 369), so the \"widening\" is either a no-op or an annotation change. Reword line 42 to say that 425's grading and statistics are unchanged and that the table is added through `bench_report`. State whether the 424 annotation changes at all.",
+   "location": "project-documents/user/slices/426-slice.slice-cases.md:42"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "cf is added to the producer PATH, and the leak-scan coverage it relies on is not in 424",
+   "description": "421 D7 keeps the user's tool installs off the producer PATH, and the architecture names that as the containment rule (line 46). 426 links the user's `cf` into `<id>.home/bin`. The slice may be right that this is safe, because `sq` stays out and `cf` is a separate tool. But it should be recorded as an exception. The spike (line 235) also assumes 424's leak-scan path list covers \"the cf install location.\" 424 D7 (line 228) covers only paths under the real HOME, the harness install location and the uv cache. A `cf` installed through Homebrew or `/usr/local/bin` falls outside all three, so the spike would fail for it. Either name `cf`'s install directory as a leak root (an edit to 424, see the finding above), or state that an install outside HOME is an uncovered path.",
+   "location": "project-documents/user/slices/426-slice.slice-cases.md:234"
+  },
+  {
+   "i": 8,
+   "severity": "CONCERN",
+   "title": "Proportionality: four deliverables are rated as a 3/5 effort",
+   "description": "The slice has four deliverables that share code only through the case set: (1) discovery, qualification and case build; (2) the runner and cf registration; (3) normalization and the judge (pairing, forfeits, over-size, bound, cap, resume); (4) the report with Bradley-Terry and paired intervals. 425 spans grading, a review step, a snapshot and a report, and is rated 4/5. Either split at the judge boundary, so (1)\u2013(2) ship first and (3)\u2013(4) follow once a case set and replays exist, or re-rate the effort. Named cuts: the `OverSizeCase` record (derive instead, above) and the reference contestant in the fit (above).",
+   "location": "project-documents/user/slices/426-slice.slice-cases.md:521"
+  },
+  {
+   "i": 9,
+   "severity": "NOTE",
+   "title": "`uv.lock` is dropped beyond the architecture's list",
+   "description": "Architecture line 93 lists DEVLOG, CHANGELOG, task files, review files and slice documents as the dropped set. Line 249 adds `uv.lock`, and the slice says so. The change is reasonable, since a lockfile diff is large and carries no judgment signal. Update the architecture list so the two agree.",
+   "location": "project-documents/user/slices/426-slice.slice-cases.md:249"
+  },
+  {
+   "i": 10,
+   "severity": "NOTE",
+   "title": "The reference diff is read from the user's checkout at judge time",
+   "description": "Judging reads `start..tip` from `--repo` on every run (lines 152 and 261), and refuses when `tip_sha` is missing (line 149). Git SHAs are content-addressed, so the diff is stable while the commit exists. A force-push or garbage collection makes a judged benchmark impossible to judge, and the architecture does not say where the original diff is stored (line 46). Consider a reference-diff sidecar written at build time, as 425 does for the start-node list (425 D11).",
+   "location": "project-documents/user/slices/426-slice.slice-cases.md:152"
+  },
+  {
+   "i": 11,
+   "severity": "NOTE",
+   "title": "Turns and wall time are missing from the slice's report summary",
+   "description": "Architecture lines 69 and 95 require cost, turns and time beside the objective grade. D17 renders 425's sections per kind, and 425's section 5 covers cost, turns and time, so the requirement is met by inheritance. The Overview (line 22) and the table in the API section (lines 347\u2013350) list only grade, checks, review and cost. Add turns and wall time there so the report contract is complete.",
+   "location": "project-documents/user/slices/426-slice.slice-cases.md:22"
+  }
+ ]
+}

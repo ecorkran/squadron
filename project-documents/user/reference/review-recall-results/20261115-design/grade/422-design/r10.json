@@ -1,0 +1,47 @@
+{
+ "review": "r10",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "FixQualification in `metrology/` depends on `benchmark/`, reversing 421's layering",
+   "description": "The component tree puts `FixQualification` in `metrology/benchmark_models.py`, with `environment: EnvironmentIdentity | None` (lines 335-352). 421 defines `EnvironmentIdentity` in `benchmark/adapter.py` and states that `benchmark/` depends on `metrology/` and that neither `metrology/` nor `replay/` depends on `benchmark/`. As written, `metrology` would import from `benchmark`, which inverts that. Resolve it one of these ways:\n- Have 421 place `EnvironmentIdentity` in `metrology/benchmark_models.py`.\n- Define a metrology-level identity payload that `benchmark/` populates.\n- Put `FixQualification` under `benchmark/`.\n\nTwo other changes sit awkwardly with \"421's sandbox, records and suite runner are used unchanged\" (line 395). `registry.py` gains a fix-adapter mapping, which 421 describes as `adapter_for(language)` returning a `BenchmarkAdapter`. `store.py` or `benchmark_store.py` also gains fix-qualification methods. The slice should say these are additive extension points, or push them back to 421.",
+   "location": "project-documents/user/slices/422-slice.fix-case-qualification-and-yield-report-keystone.md:79-98"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "The dynamic boundary check can admit a coupled test through a constructor",
+   "description": "The verdict says a crossing into a \"class constructor\" must be in the allowed set. It also says a crossing into a method (`co_qualname` with a class prefix) is allowed. A constructor's profile frame is `Cls.__init__`, which has a class prefix, so the dynamic hook will treat it as an allowed method. A class with no Python `__init__` produces no frame at all. Static references catch only names resolvable in `__globals__`. A function-local import inside a test or helper (`from pkg.internal import Internal; Internal()`) lands in `co_names` but not in globals, so the static pass cannot resolve it. That test would pass the boundary check even though it constructs a non-exported class.\n\nThe architecture says a check that cannot decide excludes the case (\"never admitted\"). The \"Known gaps\" list does not name this hole. Do one of these:\n- Resolve function-local `IMPORT_NAME`/`IMPORT_FROM` targets in the static pass.\n- Make a constructor crossing a distinct class of event.\n- Add it to the known gaps and mark such tests `boundary_undecidable`.\n\nAlso add a fixture test for this case. The listed fixture coverage (line 388) does not include it.",
+   "location": "project-documents/user/slices/422-slice.fix-case-qualification-and-yield-report-keystone.md:186-196"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "The separability bound is not the paired statistic and is optimistic where it matters",
+   "description": "The architecture says the yield answer is stated \"under the paired statistic\", a bootstrap over cases of per-case differences, and that this answer decides the initiative order. D12 uses Var(D) \u2264 0.5/k and calls it a \"worst case\". It covers only within-case sampling noise. The paired interval is taken over cases, so its variance also includes the spread of true per-case differences. Case-to-case spread can exceed 0.5/k by a wide margin. For example, one config may solve a case every time and the other never. So \"enough cases\" is not a conservative answer. The slice admits this in a disclaimer, but the report still prints a binary verdict that drives whether 423\u2192424\u2192425 stands. The normal-approximation z-values are also applied to small n. Squadron alone is expected to yield few cases (lines 432-433).\n\nCheapest fix: add a declared config key for the assumed SD of per-case differences, and use a t quantile at small n. The alternative is to report only the \"not enough\" direction as a conclusion and label \"enough\" as unverified until 425.",
+   "location": "project-documents/user/slices/422-slice.fix-case-qualification-and-yield-report-keystone.md:253-265"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Failure modes are not enumerated for several new I/O paths, and one failure path destroys valid records",
+   "description": "The new I/O paths are `gh` GraphQL, `git log` and `git show`, the boundary resolver, the collect run, and the trace run. Only `run_suite` has an inherited timeout (421's `benchmark.suite_timeout_s`). The gaps against the project's hang/timeout/disconnect standard are:\n- **Unbounded calls.** No timeout is stated for `get_issue`. A hung `gh` call blocks the build. No timeout is stated for the resolver, which imports project code and so can hang at import time. No timeout is stated for the collect or trace pytest runs, which are not routed through `run_suite`. D13 says `PythonFixCaseAdapter` does not use `PythonBenchmarkAdapter`, so they may duplicate that machinery or run unbounded.\n- **Rate limits.** There is one GraphQL call per candidate, issued before the cheap local diff classification (D9 step 1 versus 2). Rate limiting or auth expiry mid-build has no stated handling.\n- **Ambiguous exit semantics.** Line 285 says harness failures are recorded per candidate as `harness_error`. Line 304 says some harness failures stop the build with exit 1. The line between them is not defined. For example, is a `gh` timeout on candidate 20 of 53 a skip or a stop?\n- **Record overwrite.** D10 says a newer result under the same key overwrites. A transient `harness_error` during re-qualification, after a rule-version bump or an environment change, can overwrite a valid `qualified` record that 424 depends on through `qualification_for`. `harness_error` should never replace a verdict record.\n- **Interruption.** Nothing says what happens to the sandbox of an interrupted build, or whether it is cleaned up on the next run. \"Removed after each candidate\" assumes normal completion.\n\nLine 389 requires tests only for issue fetch failure, suite timeout and resolver crash. Add the hang cases above, and assert a WARNING+ log or counter for each.",
+   "location": "project-documents/user/slices/422-slice.fix-case-qualification-and-yield-report-keystone.md:211-227, 285, 302-304, 389"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "The 424 re-qualification contract is under-specified",
+   "description": "424 is told to call `qualification_for(case, environment)` and, on a miss, `qualify_candidate` again. The slice does not give `qualify_candidate`'s inputs (a `FixCandidate` or a case), nor whether it needs the user's checkout, `git show` and `gh`. D9 says a different flaky set makes a different case id, and the architecture says cases are immutable. A re-qualification in 424's environment can therefore yield a qualified result with a different `case_id`. Nothing says what 424 does then, since its case set pins ids. D10 only covers \"no longer qualifies\".\n\nState the signature and its external dependencies. State the outcome when the new case id differs from the pinned one. The options are to treat it as dropped with a \"case id changed\" reason, or to return the new id for 424 to report.",
+   "location": "project-documents/user/slices/422-slice.fix-case-qualification-and-yield-report-keystone.md:229-243, 356-359"
+  },
+  {
+   "i": 5,
+   "severity": "NOTE",
+   "title": "Proportionality: the design is heavy but mostly tied to assigned scope",
+   "description": "The slice plan assigns candidate discovery, frozen text, test sets, the three checks, repeats, records and the yield report. It rates the slice 4/5 and high risk. The mechanisms mostly trace to those items. Cheap places to trim if effort needs to drop:\n- Cut the `--keep` and `--commit` debug flags and `yield --json` case-set name and version output from the first pass (Verification step 6 depends on them).\n- Limit closure-digest recursion (D3) to the test function plus the fixtures it resolves, and defer recursive module-level helper and constant tracking. Do this only if the change-attribution loss is acceptable.\n\nNeither cut is required.",
+   "location": "project-documents/user/slices/422-slice.fix-case-qualification-and-yield-report-keystone.md:32-52"
+  }
+ ]
+}

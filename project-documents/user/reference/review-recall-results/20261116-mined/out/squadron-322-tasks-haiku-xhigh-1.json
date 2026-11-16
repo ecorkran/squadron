@@ -1,0 +1,387 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "T13 offer selection cannot meet the non-empty-offers guarantee",
+      "description": "T13 says to find judge results that are not yet sampled, reusing 320's discovery surface. If no such surface exists, it says to \"scope this task to the store-recorded samples only.\" Store-recorded samples carry a `result_ref`, so every one of them is already sampled. That fallback can never return an offer, and it fails T14's guarantee (task line 215; design line 269).\n\n320 has no such surface. The only review-file enumeration is `resolve_target` (`src/squadron/metrology/capture.py:68-95`), which resolves one review by slice index or path. The only other glob (`src/squadron/metrology/store.py:174`) reads metrology records. No function lists judge results by `JudgeConfigId`. The task therefore leaves two options: a new file-walk, which T13 forbids, or the store-only fallback, which yields nothing.\n\nFix: make the enumerator an explicit deliverable with a named location and signature, and delete the store-only fallback. If the enumerator belongs in 320, the task should carry a `BLOCKED:` line instead of an open fallback.",
+      "file_ref": null,
+      "category": "coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:200-205"
+    },
+    {
+      "severity": "FAIL",
+      "title": "T7 precedence makes TIGHTEN unreachable below the floor",
+      "description": "The numbered precedence puts `n < floor \u2192 INSUFFICIENT_EVIDENCE` at step 1 and `match_rate <= tighten_rate \u2192 TIGHTEN` at step 4. Followed in order, a below-floor cell with a low match rate returns INSUFFICIENT_EVIDENCE. Line 123 and T8's regression test (line 134) require TIGHTEN. The design table has the same ordering problem (design lines 185 and 189), since row 1 has no rate condition. The prose resolves the asymmetry, but the ordered list is what an implementer follows.\n\nFix: state the precedence explicitly. (1) `match_rate <= tighten_rate` \u2192 TIGHTEN, regardless of n or versioning. (2) Not versioned \u2192 INSUFFICIENT_EVIDENCE. (3) `n < floor` \u2192 INSUFFICIENT_EVIDENCE. (4) `match_rate >= graduate_rate` \u2192 GRADUATE. (5) Otherwise HOLD. The design is silent on an unversioned cell with a low match rate, so the PM should confirm that case.",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:115-121"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The runtime-drawn-model limitation has no task",
+      "description": "The design's success criterion (design line 270) requires the runtime-drawn-model limitation to appear in output, including `--json`. Design line 201 says it applies where a step draws its model from a 180 pool. T9 writes a note for the template-plus-model pairing only, and T10 does not test for the limitation.\n\n`recommend_thresholds` has no step context, so the limitation has to be fixed text in every `model_dimension_note`. For example: \"steps that draw their model at runtime cannot vary threshold by drawn model; this recommendation does not apply to them.\" Add a T10 assertion that this text survives a `--json` round-trip.",
+      "file_ref": null,
+      "category": "coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:145-151"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The malformed-judge-block row is untested, and its mechanism is misdescribed",
+      "description": "The Coverage Check says the malformed-judge row is \"exercised in T8.\" T8 (lines 131-137) has no such test, and T7 defines no handling for it.\n\nThe design's mechanism is also wrong. Design line 242 says to \"fall back to `resolve_thresholds`' documented merge,\" but `resolve_thresholds` (`src/squadron/pipeline/actions/judge.py:54-57`) does not fall back on a non-numeric value. `float()` raises `ValueError`, so the error escapes `read_current_thresholds` and aborts the report. The merge fallback only applies to absent keys. For a template with no `judge:` block, the module constants would also be shown as if they were configured.\n\nFix: in T7, catch `ValueError`/`TypeError` narrowly around the `resolve_thresholds` call, log a WARNING naming the template, and flag the target. That needs a flag on `ThresholdTarget`, which the design does not have. Add a T8 test with a non-numeric `pass_floor`.",
+      "file_ref": null,
+      "category": "coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:287"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Lapse signal and selection rule are left open",
+      "description": "T13 says `select_residual_offers` should \"return enough information (or have the CLI re-derive it).\" T14 says to \"assert on whatever signal T13 produces.\" Those are open choices that T14, T15 and T16 would each resolve differently. The `rate` selection is also unspecified: rounding (for example, 3 \u00d7 0.5) and which unsampled results are chosen. T14 only asserts 4 \u00d7 0.5 \u2192 2.\n\nFix: pin the return type (for example, `OfferSelection` with `offers`, `lapsed: list[JudgeConfigId]`, and a count of skipped missing files). Also pin the rounding rule and the ordering, for example sort by review path and take `ceil(rate \u00d7 unsampled)`.",
+      "file_ref": null,
+      "category": "specification",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:203-205"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Commit markers follow every task, and eight land before their tests",
+      "description": "Each of the 17 tasks has a marker (lines 39, 52, 69, 82, 97, 108, 125, 139, 153, 167, 181, 194, 208, 222, 236, 252, 272). The implementation tasks T1, T3, T5, T7, T9, T11, T13 and T15 commit before their test tasks run. That creates eight commits of untested code, against the rule that markers sit at working, tested points.\n\nFix: move each implementation marker onto its test task (T2, T4, T6, T8, T10, T12, T14, T16). The markers also use `**Commit:**` rather than `**Commit**:`, so pick one form.",
+      "file_ref": null,
+      "category": "commit-cadence",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:39"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "T1 is committed as `fix:` inside a slice task file",
+      "description": "Work committed as `fix:` follows the fix path, which uses the standing-fixes file for multi-step fixes. T1\u2013T2 are a planned slice component (design lines 40 and 143-163), not a bug found during implementation. The design's \"correctness fix\" wording makes the classification ambiguous.\n\nFix: either use a non-fix type such as `refactor(metrology)`, or move the hash narrowing to the standing-fixes file. CLAUDE.md requires the commit type to be decided before starting, so the PM should choose.",
+      "file_ref": null,
+      "category": "process",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:39"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Config keys have no default values, yet T6 asserts them",
+      "description": "T5 lists three float keys with descriptions but no defaults. T6 (line 104) asserts \"correct ... defaults,\" and T5's success check needs `sq config list` to show them. Neither the task nor the design gives values, so an implementer would invent magic numbers, which CLAUDE.md forbids. State the three defaults in T5. If the PM has not chosen them, T5 needs a `BLOCKED:` line for those values.",
+      "file_ref": null,
+      "category": "specification",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:90-95"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The \"existing records load unchanged\" integration requirement has no test",
+      "description": "The design requires the `graduated_config` record type to extend 320's envelope without a migration, and existing records to load unchanged. T11 adds an optional field and a record type. T12 does not check that a record written before this slice still loads, or that `list_samples` skips a `graduated_config` record. `store.py:181` already filters on record type, so the second check should pass, but it should still be pinned by a test. Add both checks to T12.",
+      "file_ref": null,
+      "category": "coverage",
+      "raw_category": null,
+      "location": "project-documents/user/slices/322-slice.calibration-to-threshold-feedback.md:283"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "T11 is overweight and edits the 320 store path",
+      "description": "T11 adds a constant, a model field, three store functions, and a shared helper extracted from `MetrologyStore.list_samples` (`store.py:160-181`). The design says the capture path stays unchanged except for the hash narrowing (design line 276). Splitting the helper extraction is an edit to 320 that the design does not allow.\n\nFix: split T11 into (a) the record type, model field, and `write_graduation`, and (b) `find_graduation` and `list_graduations`. State whether the `list_samples` extraction is an allowed 320 edit. If it is, amend design line 276.",
+      "file_ref": null,
+      "category": "sizing",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:171-181"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "T15 bundles three CLI commands with separate behavior",
+      "description": "T15 covers `recommend` (read path, table, `--json`), `graduate` (re-derive the pairing, refuse, write, idempotent update), and `offers` (select, lapse line). Its success line lists four separate behaviors. Split it by command, with the matching T16 tests following each.",
+      "file_ref": null,
+      "category": "sizing",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:226-236"
+    },
+    {
+      "severity": "NOTE",
+      "title": "T4 and T6 are thin and partly duplicate their implementation tasks",
+      "description": "T3's success line already requires the round-trip that T4 tests in detail. T6's project-override check exercises existing config plumbing, which the design does not require for this slice. Folding T4 into T3 and T6 into T5 would remove two tasks.",
+      "file_ref": null,
+      "category": "proportionality",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:67, 76-80, 104-105"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Design signatures and models diverge from the tasks without the design being updated",
+      "description": "The design gives `recommend_thresholds(..., current: ThresholdSnapshot)`, but `ThresholdSnapshot` is not defined anywhere, and T9 uses `(floor, graduate_rate, tighten_rate)`. The design gives `classify_direction(match_rate, n, floor)`, and T7 adds `versioned` and both rates. Design line 98 types `current` as non-optional, while T3 makes it `| None`, which matches the design's own failure row. The task's choices are sound, but the design should record them so the contracts agree.",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/slices/322-slice.calibration-to-threshold-feedback.md:83-85"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The AgreementCell-to-classify mapping is not stated",
+      "description": "T9 says \"classify its direction (T7)\" without saying where each argument comes from. `n`, `match_rate` and `below_floor` are on `AgreementCell` (`src/squadron/metrology/report_models.py:23-29`). `versioned` has to come from `group.judge_config.template_content_hash is not None`. Spell this out so the implementer does not invent it.",
+      "file_ref": null,
+      "category": "specification",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:146"
+    },
+    {
+      "severity": "NOTE",
+      "title": "T17's final step goes beyond the success criteria",
+      "description": "T17 edits the 320 slice plan's `(322)` entry and marks the design `status: complete` before the Phase 7 merge. Neither action is in the design's success criteria. Keep them only if the PM wants that bookkeeping in this slice.",
+      "file_ref": null,
+      "category": "scope",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:270"
+    },
+    {
+      "severity": "PASS",
+      "title": "Scripted human verdicts are possible for the walkthrough",
+      "description": "`sq metrology sample` accepts `--verdict` for non-interactive use, and a non-TTY call without it errors (line 185). The human-verdict steps in the walkthrough (design steps 1 and 6) can therefore run unattended. T17 should say to pass `--verdict`.",
+      "file_ref": null,
+      "category": "feasibility",
+      "raw_category": null,
+      "location": "src/squadron/cli/commands/metrology.py:103-104"
+    },
+    {
+      "severity": "PASS",
+      "title": "Dependencies on 320 and 321 exist as the task describes",
+      "description": "Verified: `_template_content_hash` at `identity.py:298` and `derive_judge_config_id` at `:326`. `AgreementReport`, `AgreementCell`, `GroupKey` and `ExclusionSummary` are in `report_models.py`. `RECORD_TYPE_SAMPLE` and `RECORD_TYPE_AUDIT_FINDING` are in `models.py:25-26`. `write_sample` is at `store.py:131`. `get_template` is at `review/templates/__init__.py:163`. `JudgeThresholds` and `resolve_thresholds` are at `judge.py:26` and `:41`. `metrology.min_evidence_n` is at `config/keys.py:144`. The T1 line references are correct, and the test files that T2, T6 and T16 extend exist.",
+      "file_ref": null,
+      "category": "dependencies",
+      "raw_category": null,
+      "location": "src/squadron/metrology/identity.py:298"
+    },
+    {
+      "severity": "PASS",
+      "title": "Most success criteria have a covering task",
+      "description": "Covered: the direction bands and floor refusal (T7/T8), the unversioned refusal (T8), the hash narrowing in both directions (T2), the no-mutation invariant (T10, T16), surface-agnostic core (T16), graduate refusal and idempotence (T16), the judging path left unmodified (T17), and pyright and ruff (T17). Gaps are listed in the findings above.",
+      "file_ref": null,
+      "category": "coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:276-288"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "coverage",
+      "raw_category": null,
+      "summary": "T13 offer selection cannot meet the non-empty-offers guarantee",
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:200-205",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "fail",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "T7 precedence makes TIGHTEN unreachable below the floor",
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:115-121",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "coverage",
+      "raw_category": null,
+      "summary": "The runtime-drawn-model limitation has no task",
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:145-151",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "coverage",
+      "raw_category": null,
+      "summary": "The malformed-judge-block row is untested, and its mechanism is misdescribed",
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:287",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "specification",
+      "raw_category": null,
+      "summary": "Lapse signal and selection rule are left open",
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:203-205",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "commit-cadence",
+      "raw_category": null,
+      "summary": "Commit markers follow every task, and eight land before their tests",
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:39",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "concern",
+      "category": "process",
+      "raw_category": null,
+      "summary": "T1 is committed as `fix:` inside a slice task file",
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:39",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "concern",
+      "category": "specification",
+      "raw_category": null,
+      "summary": "Config keys have no default values, yet T6 asserts them",
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:90-95",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "concern",
+      "category": "coverage",
+      "raw_category": null,
+      "summary": "The \"existing records load unchanged\" integration requirement has no test",
+      "location": "project-documents/user/slices/322-slice.calibration-to-threshold-feedback.md:283",
+      "location_verified": true
+    },
+    {
+      "id": "F010",
+      "severity": "concern",
+      "category": "sizing",
+      "raw_category": null,
+      "summary": "T11 is overweight and edits the 320 store path",
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:171-181",
+      "location_verified": true
+    },
+    {
+      "id": "F011",
+      "severity": "concern",
+      "category": "sizing",
+      "raw_category": null,
+      "summary": "T15 bundles three CLI commands with separate behavior",
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:226-236",
+      "location_verified": true
+    },
+    {
+      "id": "F012",
+      "severity": "note",
+      "category": "proportionality",
+      "raw_category": null,
+      "summary": "T4 and T6 are thin and partly duplicate their implementation tasks",
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:67, 76-80, 104-105",
+      "location_verified": null
+    },
+    {
+      "id": "F013",
+      "severity": "note",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "Design signatures and models diverge from the tasks without the design being updated",
+      "location": "project-documents/user/slices/322-slice.calibration-to-threshold-feedback.md:83-85",
+      "location_verified": true
+    },
+    {
+      "id": "F014",
+      "severity": "note",
+      "category": "specification",
+      "raw_category": null,
+      "summary": "The AgreementCell-to-classify mapping is not stated",
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:146",
+      "location_verified": true
+    },
+    {
+      "id": "F015",
+      "severity": "note",
+      "category": "scope",
+      "raw_category": null,
+      "summary": "T17's final step goes beyond the success criteria",
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:270",
+      "location_verified": true
+    },
+    {
+      "id": "F016",
+      "severity": "pass",
+      "category": "feasibility",
+      "raw_category": null,
+      "summary": "Scripted human verdicts are possible for the walkthrough",
+      "location": "src/squadron/cli/commands/metrology.py:103-104",
+      "location_verified": true
+    },
+    {
+      "id": "F017",
+      "severity": "pass",
+      "category": "dependencies",
+      "raw_category": null,
+      "summary": "Dependencies on 320 and 321 exist as the task describes",
+      "location": "src/squadron/metrology/identity.py:298",
+      "location_verified": true
+    },
+    {
+      "id": "F018",
+      "severity": "pass",
+      "category": "coverage",
+      "raw_category": null,
+      "summary": "Most success criteria have a covering task",
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:276-288",
+      "location_verified": true
+    }
+  ],
+  "template_name": "tasks",
+  "input_files": {
+    "input": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md",
+    "against": "project-documents/user/slices/322-slice.calibration-to-threshold-feedback.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/squadron-322-tasks"
+  },
+  "timestamp": "2026-11-16T09:42:56.987552",
+  "model": "claude-haiku-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 11,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-haiku-5-5",
+  "answering_models": [
+    "claude-haiku-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 18,
+    "in_fences": 0,
+    "in_section": 18,
+    "surviving": 18
+  },
+  "effort": "xhigh",
+  "profile": "sdk",
+  "turns": 12,
+  "prompt_tokens": 654673,
+  "cached_tokens": 502816,
+  "cache_write_tokens": 151845,
+  "completion_tokens": 46676,
+  "reasoning_tokens": null,
+  "duration_seconds": 213.5217685829848,
+  "cost_usd": 0.27972596,
+  "cost_basis": "provider"
+}

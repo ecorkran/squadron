@@ -1,0 +1,47 @@
+{
+ "review": "r13",
+ "findings": [
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "The config-identity rule other slices depend on is private, and the two readers in this slice already disagree",
+   "description": "The slice plan says this slice \"Provides effort-sent ... in config identity. All later slices read it.\" The Integration Requirements (line 186) promise that 421\u2013427 can \"group by the D6 rule, with no further effort work\". But D6 puts the rule in a private `config_identity` in `replay/report.py`, and lines 161-162 say \"this slice ships no shared identity type. Later slices apply the rule to their own record types.\"\n\nThe rule already differs inside this slice:\n- Replay groups on `(model, profile, effort_sent, tool_use, max_output_tokens)`.\n- `sq stats producers` keeps `ProducerKey(model, profile, effort, reviewer)`, without `tool_use` or `max_output_tokens` (line 144).\n\nTwo aliases that differ only in `max_output_tokens` would be one row in stats and two rows in replay. Slices 424, 425 and 427 would each write a third, fourth and fifth copy of the rule. That breaks the architecture's goal that \"a report compares only results that match\", and it breaks the project's DRY rule.\n\n**Fix:** make `config_identity` (or a small `ConfigIdentity` value) public next to `action_effort_sent`, use it from both replay and stats, and list it under \"Provides to Other Slices\". Otherwise, state why stats intentionally leaves out `tool_use` and `max_output_tokens`.",
+   "location": "project-documents/user/slices/420-slice.effort-audit-across-dispatch-paths.md:142-147"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "D6 overrides the architecture's identity definition, but only inside the slice doc",
+   "description": "The architecture's design goal (line 40 of `420-arch.model-benchmark.md`) defines a config as \"(alias, model, profile, effort sent)\". D6 drops the alias and adds `tool_use` and `max_output_tokens`. Line 162 says this \"supersedes the architecture's ... for grouping.\"\n\nThe change itself is well argued. The slice plan's criterion (\"two runs that differ only in the alias's effort label but sent the same effort count as one config\") requires dropping the alias. Once the alias is gone, the two extra fields are needed so that genuinely different configs are not merged.\n\nThe problem is where the change is recorded. Slices 421\u2013427 will be designed from the architecture document, and it still names the alias as part of identity. The new rule should be written into the parent architecture's design goal, with a reference back to D6, so later slice designs do not reintroduce the alias as a grouping key.",
+   "location": "project-documents/user/slices/420-slice.effort-audit-across-dispatch-paths.md:147"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Cancelled or timed-out actions are assumed to have sent nothing",
+   "description": "D5 says runs where \"the action was cancelled\" carry no stamp, and that \"Nothing was sent in those runs\". That is not guaranteed. An action cancelled mid-turn has already reached the provider. Examples are a hung provider call ended by a timeout, a subprocess the replay runner kills, or a cost-cap stop that works by cancellation.\n\nThese are the hang, timeout and disconnect-mid-send cases. With no stamp and usually no `UsageRecord`, `action_effort_sent` returns `None`. D6 then groups the run into an `effort_sent=None` row instead of the config that ran it. The architecture's \"Absent is not zero\" principle says a config-caused failure (crash, hit its cost cap) \"is a fail for that config\". Putting those failures in a different row inflates that config's pass rate, which is exactly the problem D5 is meant to fix.\n\nThe design names failure classes only for `NO_RUN_STATE` and \"no phase step ran\". It does not name one for a mid-step cancellation.\n\n**Fix:** pick one explicit handling and log it at WARNING:\n- stamp `effort_sent` once the request is issued (for example, in the cancellation handler, before re-raising), or\n- classify a cancelled-after-resolution action under a named failure class that replay and stats count separately, rather than as \"not sent\".",
+   "location": "project-documents/user/slices/420-slice.effort-audit-across-dispatch-paths.md:137"
+  },
+  {
+   "i": 4,
+   "severity": "NOTE",
+   "title": "Failure scope of the strict `effort_sent` parse is unstated",
+   "description": "Raising on an unrecognized stored value is the right fail-fast choice. But the design does not say whether one bad run-state file aborts the whole `sq replay report` or `sq stats producers` run, or whether the record is reported and excluded. One line saying which, and that the error names the run id, would make the behavior testable.",
+   "location": "project-documents/user/slices/420-slice.effort-audit-across-dispatch-paths.md:139"
+  },
+  {
+   "i": 5,
+   "severity": "NOTE",
+   "title": "Old producer replays will split from new ones for the same alias",
+   "description": "Pre-slice `ProducerConfigRef` records load with `tool_use=None` and `max_output_tokens=None`. Post-slice records for the same alias will carry real values. Under D6 these become separate rows. Keeping them apart is safe, since they are not proven to match. But D3 states the equivalent outcome for judgments (line 126), while D6 says nothing for producer replays. Saying so, or having the report label the pre-slice rows, keeps the architecture's \"flags the rest\" behavior visible.",
+   "location": "project-documents/user/slices/420-slice.effort-audit-across-dispatch-paths.md:145-146"
+  },
+  {
+   "i": 6,
+   "severity": "NOTE",
+   "title": "Findings-addressed judge spend gap is deferred appropriately",
+   "description": "Path 7 writes no `UsageRecord`. Filing that as a 175 coverage issue rather than fixing it here is correct scoping. Benchmark replays run in producer-only mode with the review stripped, so this gap does not affect the architecture's per-pipeline cap accounting for replays. It does affect production `pipeline.max_cost_usd`, which is a reason to file the issue promptly.",
+   "location": "project-documents/user/slices/420-slice.effort-audit-across-dispatch-paths.md:232"
+  }
+ ]
+}

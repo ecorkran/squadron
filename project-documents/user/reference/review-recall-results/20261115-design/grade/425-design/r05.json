@@ -1,0 +1,75 @@
+{
+ "review": "r05",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "The grading reviewer's rules come from the producer's tree, and `rules_hash` breaks the \"one identity per benchmark\" claim",
+   "description": "D7 says the review uses \"rules from the sandbox tree's own rules directory (the start commit's)\". But D1 (lines 155, 130) runs the review first, on HEAD, which is the producer's commit. At that point the tree's rules directory holds whatever the producer wrote. A producer that edits `.claude/rules/*` changes the reviewer's prompt. That breaks the architecture principle \"the producer cannot change the grade\". Either read the rules with `TreeReader` at `start_sha`, or restore the rules directory before the review.\n\nThere is a second problem. `ReviewerRef.rules_hash` (line 384) is part of `GraderIdentity`, but D10 (line 240) says the digest \"is one value for the whole benchmark\". Cases have different start commits, so their rules can differ, and the digest would then differ from case to case. Choose one: drop `rules_hash` from the identity and store it on each grade record (as `environment_digest` is), or accept a grader identity per case and change D10 and D13's \"latest grader identity\" scope to match.",
+   "location": "project-documents/user/slices/425-slice.grading-and-paired-report.md:208"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "The snapshot config is read from the producer's tree and is not in the restored config set",
+   "description": "D12 calls `measure_snapshot` with \"the snapshot config read from the tree\". 400's snapshot settings (`metrology.snapshot_exclude`, `metrology.snapshot_tool_timeout_s`) come from the project's `.squadron.toml`. That file is not in D4's `TOOL_CONFIG_FILES` (line 189), and it is not a `[tool.*]` table. A producer could therefore exclude its own files from measurement and lower `lint_total` and `type_total`. The architecture requires checks to run \"under the start commit's tool config\". Either add the snapshot config source to the restored set, or read the snapshot config at `start_sha`.",
+   "location": "project-documents/user/slices/425-slice.grading-and-paired-report.md:254"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "The run-level cap no longer covers grading, and the architecture has not been updated",
+   "description": "The architecture's design goal says a benchmark's cap \"covers grading and judging as well as the replays\". Its Cost section also requires one bound, stated before dispatch, covering all of it. D9 gives grading its own command with its own cap. The slice admits this departure and says \"the architecture's cost section should say so\", but the architecture still says the opposite.\n\nThe reasoning is sound: two lock scopes, regrading under a new reviewer, grading after a partial run. Still, the architecture's Cost section and design goal should be amended in step with this slice, so later slices (426's judging spend) don't follow the old rule.\n\nThere is also stale text in 424. Its Integration section still says \"`bench_plan` arithmetic, which 425 extends with grading terms\" (424 line 398), even though 424 line 258 already defers to 425 D9. Line 472 here describes only part of that inconsistency.",
+   "location": "project-documents/user/slices/425-slice.grading-and-paired-report.md:235-236"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "427 depends on 425, but the slice plan says 427 depends only on 421",
+   "description": "The design says 427 imports `ReviewerRef`, `review_tree_diff` (D7) and `bootstrap_mean_interval` (D14) from 425 \"and defines no copies\". The slice plan says 427 \"does not depend on 424\u2013426 and can be built any time after 421\", and lists the move-up option explicitly (\"It can move up if code-review model choice becomes the more pressing question\").\n\nAs designed, 427 cannot be built before 425 without breaking the no-copies rule. The planned dependency is now hidden. Do one of the following:\n- Move the shared pieces (reviewer call, `ReviewerRef`, bootstrap) into a module owned by 421 or a neutral module that either slice can create first.\n- Update the slice plan to show 427 depends on 425.",
+   "location": "project-documents/user/slices/425-slice.grading-and-paired-report.md:465"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Report row identity is defined two different ways",
+   "description": "The Dependencies section (line 58) says rows \"group by 420's D6 identity rule (model, profile, effort sent, `tool_use`, `max_output_tokens`)\". D13 keys rows by `(alias, model, profile, effort_sent)`, which drops `tool_use` and `max_output_tokens` and adds `alias`. The architecture's identity is (alias, model, profile, effort sent), and the 420 effort-audit slice adds the other two fields.\n\nTwo replays that differ only in `max_output_tokens` would be merged under D13 and split under line 58. That is the kind of silent merge D13 says it forbids. Pick one key, define it once (for example, a `ConfigRowKey` in `benchmark_models.py`), and reference it from both places.",
+   "location": "project-documents/user/slices/425-slice.grading-and-paired-report.md:263"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "The cross-benchmark status view that 424 handed to this slice is not addressed",
+   "description": "424's Technical Scope says: \"A cross-benchmark `status` view is left to 425, whose report is the first consumer of one.\" 425's Included and Excluded lists never mention it. If 425 is not taking that work, it should list it under Excluded with a destination, and 424's line should be corrected. Otherwise the work has no owner.",
+   "location": "project-documents/user/slices/425-slice.grading-and-paired-report.md#technical-scope"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "The reference grade's environment digest is undefined when a case's replays disagree or none exist yet",
+   "description": "Planning grades a reference against \"the environment digest on the case's replays\", and D1 (line 162) requires the reference's digest to equal it. Two cases are not covered:\n- **Replays with different digests.** A long run can span a uv or lockfile resolution change, and those replays should be harness `environment_changed` only relative to something.\n- **No replays recorded yet.** The separate grade lock explicitly allows grading during a partial run, so a case can have no replays when grading starts.\n\nThe record id includes the environment digest, so several reference grades per case are structurally possible, but the plan says one. State the rule: one reference grade per distinct replay digest, or grade the reference against the sandbox's current digest and mark mismatched replays `environment_changed`. Also say what happens to a case with zero committed replays.",
+   "location": "project-documents/user/slices/425-slice.grading-and-paired-report.md:108-113"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "No timeout or hang handling for the reinstall and the git I/O paths",
+   "description": "The design bounds the review (`benchmark.review_timeout_s`), the suites (`benchmark.suite_timeout_s`) and the snapshot (`tool_timeout_s`). It does not bound `uv sync --locked` on dependency change, which is a network install of code the producer wrote. It also does not bound `git apply`, `git show` or `git diff`.\n\nA reinstall that hangs blocks the whole grade invocation, and no absence is recorded because a killed grade writes nothing. Either state that 421's install timeout applies, and name the key, or add one. Then map its expiry to an absence. A timeout is arguably harness, which differs from a resolve failure, which is `producer_env_unresolvable`, a config absence. D16's table should show which.",
+   "location": "project-documents/user/slices/425-slice.grading-and-paired-report.md:196-197"
+  },
+  {
+   "i": 8,
+   "severity": "NOTE",
+   "title": "Grading rebuilds the tree in a fresh sandbox instead of the \"same sandbox\"",
+   "description": "The architecture and slice plan say the grader runs \"in the same sandbox\". D1 rebuilds from `start_sha` plus the stored diff, following 424's decision, and enforces environment-digest equality to keep the equivalence. That is a reasonable and safer reading. The architecture wording could be updated to \"an equivalent sandbox rebuilt from the stored diff\".",
+   "location": "project-documents/user/slices/425-slice.grading-and-paired-report.md:161-162"
+  },
+  {
+   "i": 9,
+   "severity": "NOTE",
+   "title": "Showing the estimate in `sq benchmark yield` goes beyond the slice plan",
+   "description": "The slice plan asks for the sample-count measurement to be \"recorded and shown in the report\". D15 also changes 422's `yield` rendering and adds `latest_estimate(case_set)` as a cross-slice interface. The change is small, but it can be deferred. The report's section 7 already meets the requirement.",
+   "location": "project-documents/user/slices/425-slice.grading-and-paired-report.md:290"
+  }
+ ]
+}

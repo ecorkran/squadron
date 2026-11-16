@@ -1,0 +1,225 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "`EnvironmentIdentity` placement will reverse the stated metrology \u2192 benchmark dependency direction",
+      "description": "`EnvironmentIdentity` is defined in `benchmark/adapter.py` (line 83). Line 97 states that `metrology/` never depends on `benchmark/`. But line 119 and the Integration Points section (lines 290, 292) say 422's qualification records and 424's replay records, both payloads on `MetrologyRecord`, will carry this identity. As soon as 422 adds its record, `metrology/models.py` has to import from `benchmark/`, which is the reverse of the stated direction. 421 creates the problem, so 421 should fix it: put `EnvironmentIdentity` (and `EnvironmentFailureReason`, which 422's qualification records will store as a reason) in `metrology/benchmark_models.py`, next to `BenchmarkCase`. `benchmark/adapter.py` then imports it from there. That move also lets D6's `scrub_spec_version` field come from a constant that both sides can import, without the adapter reaching into `scrubbed_env.py`.",
+      "file_ref": null,
+      "category": "dependency-direction",
+      "raw_category": null,
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:82-83"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "A temporary install failure is recorded as a permanently unresolvable lock",
+      "description": "`EnvironmentFailureReason` covers `no_lockfile`, `lockfile_unsupported`, `lock_stale_or_unresolvable`, `install_timeout` and `installer_missing`. A network outage, DNS failure or index 5xx during `uv sync --locked` has no reason of its own, so it falls into `lock_stale_or_unresolvable`. The architecture says \"a lockfile that no longer resolves disqualifies the case\", and its \"Absent is not zero\" principle requires that a harness-caused failure is never confused with a property of the case. 422 will drop cases and count yield per reason using this enum, so a flaky network during qualification would quietly shrink the case set and distort the yield report. Add a reason such as `install_network_error`, set when uv's stderr shows a fetch or connection failure. Callers then know it is retryable and it is never counted against the case. Add one test for it alongside the existing failure-path tests (line 316).",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:152"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "No handling defined for a pytest crash or a truncated JSONL file without a timeout",
+      "description": "D10 covers two cases: a timeout (partial lines, the rest `not_run`) and a missing or unparseable JSONL file with a non-zero exit (`SuiteRunError`). It does not cover:\n- pytest dying before the timeout (segfault in a C extension, `os._exit` in a test, OOM kill), leaving a valid but incomplete JSONL file and a non-zero exit;\n- a last line cut off mid-write, which can happen on a timeout kill too.\n\nWhether that run becomes a `SuiteRun` with `not_run` gaps or a `SuiteRunError` is left unstated. It matters because 422 reads `FailureKind` and `not_run` for the test-first check, and 425 counts regressions. State the rule:\n- Discard a truncated final line with a WARNING.\n- If the process exits abnormally before writing its session-finish line, return a `SuiteRun` with a crash flag and every missing node marked `not_run`, never `passed`.\n\nThat needs the plugin to write a session-finish line, so add it to D10. Add a fixture test (for example, a test that calls `os._exit(1)`).",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:209"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Case sets are not keyed on `ProjectId`, and the doc doesn't flag this as a departure from the architecture",
+      "description": "The architecture principle \"Extend 320's store\" and the 421 slice-plan entry both say the new records are \"keyed on `ProjectId`\". D2 keys `CaseSet` by name only, so it can pool cases from several projects. That is a reasonable call: the architecture itself expects cross-project pooling if yield is low. But unlike D1's `reference_sha` deviation (line 126), D2 doesn't say it goes against the architecture. As a result `list_case_sets()` is global, and two projects using the same set name share one version history. State the deviation explicitly in D2, and say whether set names are meant to be unique across all projects.",
+      "file_ref": null,
+      "category": "architectural-alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:130-134"
+    },
+    {
+      "severity": "PASS",
+      "title": "Case identity matches the architecture and slice plan, with one deviation that is explained",
+      "description": "The identity fields include everything the architecture and slice plan list: start commit, task text, hidden and superseded sets, the exclusion list, and grader commands. `reference_sha` is added with a stated reason. Provenance is kept out of the identity. A tampered record raises on `get_case` and is skipped with a WARNING on list reads, so it never becomes a second case under the old id. Case sets are versioned by content and are append-only, as the architecture requires.",
+      "file_ref": null,
+      "category": "architectural-alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md#D1 \u2014 Case content identity and id"
+    },
+    {
+      "severity": "PASS",
+      "title": "The scrubbed environment meets the architecture's leak-containment principle",
+      "description": "The environment is built from an allowlist, `HOME` is redirected, the system git config is turned off, and `PATH` leaves out user tool installs. Together these deliver \"no GitHub credentials, config directories pointed away, sandbox environment first\". The success criteria verify this inside a real child process. Two known limits are recorded as inputs to 424's leak scan rather than claimed as solved: open network access, and the absolute path to the real store.",
+      "file_ref": null,
+      "category": "architectural-alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md#D7 \u2014 Scrubbed producer environment: allowlist, redirected HOME"
+    },
+    {
+      "severity": "PASS",
+      "title": "The auth check gives a definite answer and never works around a failure",
+      "description": "Every probe outcome is defined:\n- A timeout is a \"no\" with reason `timed out`.\n- A non-zero exit or an empty response is a \"no\", reported with stderr.\n- A carried symlink replaced by a regular file is reported explicitly.\n\nThere is no fallback to the unscrubbed environment. This meets the slice plan's \"a no is reported, not worked around\" criterion, and the timeout is a config key (D12).",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md#D8 \u2014 Auth carryover and the auth check"
+    },
+    {
+      "severity": "PASS",
+      "title": "Extracting `HistoryFreeSandbox` is the smallest change that keeps 177's behavior",
+      "description": "Composition is chosen over a flag on `ReplaySandbox`, and the doc says why. `ReplaySandbox`'s public surface and tests stay unchanged. Separate sandbox roots keep the two orphan sweeps apart.",
+      "file_ref": null,
+      "category": "proportionality",
+      "raw_category": null,
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md#D4 \u2014 Extract `HistoryFreeSandbox` from `ReplaySandbox`"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The classification goes beyond the slice plan's three kinds, but in a way that is compatible",
+      "description": "The slice plan asks for three groups: assertion failure, project-code exception, and collection/import/missing-symbol error. D11 splits the last group into `collection_error` and `missing_symbol`, and adds `other_exception`. Every one of the plan's kinds still maps to one or more of these, and `other_exception` gives 422 an explicit way to exclude a case as undecidable, which the architecture requires (\"where a check cannot decide, the case is excluded\"). No action needed.",
+      "file_ref": null,
+      "category": "scope",
+      "raw_category": null,
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md#D11 \u2014 Failure classification"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "dependency-direction",
+      "raw_category": null,
+      "summary": "`EnvironmentIdentity` placement will reverse the stated metrology \u2192 benchmark dependency direction",
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:82-83",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "A temporary install failure is recorded as a permanently unresolvable lock",
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:152",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "No handling defined for a pytest crash or a truncated JSONL file without a timeout",
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:209",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "architectural-alignment",
+      "raw_category": null,
+      "summary": "Case sets are not keyed on `ProjectId`, and the doc doesn't flag this as a departure from the architecture",
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:130-134",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "pass",
+      "category": "architectural-alignment",
+      "raw_category": null,
+      "summary": "Case identity matches the architecture and slice plan, with one deviation that is explained",
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md#D1 \u2014 Case content identity and id",
+      "location_verified": null
+    },
+    {
+      "id": "F006",
+      "severity": "pass",
+      "category": "architectural-alignment",
+      "raw_category": null,
+      "summary": "The scrubbed environment meets the architecture's leak-containment principle",
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md#D7 \u2014 Scrubbed producer environment: allowlist, redirected HOME",
+      "location_verified": null
+    },
+    {
+      "id": "F007",
+      "severity": "pass",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "The auth check gives a definite answer and never works around a failure",
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md#D8 \u2014 Auth carryover and the auth check",
+      "location_verified": null
+    },
+    {
+      "id": "F008",
+      "severity": "pass",
+      "category": "proportionality",
+      "raw_category": null,
+      "summary": "Extracting `HistoryFreeSandbox` is the smallest change that keeps 177's behavior",
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md#D4 \u2014 Extract `HistoryFreeSandbox` from `ReplaySandbox`",
+      "location_verified": null
+    },
+    {
+      "id": "F009",
+      "severity": "note",
+      "category": "scope",
+      "raw_category": null,
+      "summary": "The classification goes beyond the slice plan's three kinds, but in a way that is compatible",
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md#D11 \u2014 Failure classification",
+      "location_verified": null
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md",
+    "against": "project-documents/user/architecture/420-arch.model-benchmark.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261115-design/wt/421-design"
+  },
+  "timestamp": "2026-11-16T07:04:28.967106",
+  "model": "claude-opus-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 4,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-opus-5-5",
+  "answering_models": [
+    "claude-opus-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 9,
+    "in_fences": 0,
+    "in_section": 9,
+    "surviving": 9
+  },
+  "effort": "medium",
+  "profile": "sdk",
+  "turns": 5,
+  "prompt_tokens": 355045,
+  "cached_tokens": 351846,
+  "cache_write_tokens": 3191,
+  "completion_tokens": 6911,
+  "reasoning_tokens": null,
+  "duration_seconds": 71.43253241688944,
+  "cost_usd": 0.2349196,
+  "cost_basis": "provider"
+}

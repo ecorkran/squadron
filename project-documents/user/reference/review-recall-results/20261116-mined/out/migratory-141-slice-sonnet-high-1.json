@@ -1,0 +1,225 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Per-force timing breakdown deferred although the slice plan assigns it to 141",
+      "description": "The slice plan entry (140-slices, item 2) lists the phases as \"spatial build, spatial query, CSR assembly, **force totals per force**, integration.\" The slice reports a single `force_total_ns` and defers per-force timing to slice 142 via a future optional `force_breakdown` field. That drops scope the plan assigns here. It also pushes a schema change (a `schema_version` bump, per the Provides section) onto 142, the first consumer, which is meant to be a single-file backend addition. The five forces are already enumerated in the workload spec. Per-force bracketing in the NumPy `tick_instrumented` is a small addition. Either implement it now, or have the slice plan explicitly re-scope it to 142.",
+      "file_ref": null,
+      "category": "scope-deferral",
+      "raw_category": null,
+      "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:292-296"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "SHA-256 parity hash cannot support the tolerance-based parity the architecture requires",
+      "description": "The slice plan states that GPU reductions are non-deterministic and that slice 145 needs \"a documented numeric tolerance\" for tick-level parity. This slice says a downstream consumer will \"interpret [the hash] within the documented tolerance band.\" A cryptographic hash only supports bit-equality, so it can't be interpreted within a tolerance. It is therefore useless as the reference for 142/144/145 against any GPU backend. The hash is also taken after the full measure phase (about 660 ticks of a chaotic flocking system), where small FP differences diverge, so even a tolerance comparison against it would be uninformative. The design also contradicts itself on when the hash is taken: Scope (line 81) says \"post-warmup,\" while the Parity hash section says \"after the measure phase.\" Persist a reference state that supports tolerance comparison. Options are an `.npz` of positions and velocities next to the JSON, or a short fixed-length trajectory checkpoint. Keep the hash only as a NumPy bit-exactness check, and fix the contradiction on when it is taken.",
+      "file_ref": null,
+      "category": "integration-mismatch",
+      "raw_category": null,
+      "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:458-473"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "\"One file, zero changes elsewhere\" is not supported by the registry design",
+      "description": "Integration Requirements (lines 586-591) require that 142 and 144 can register a backend by adding one file and making zero changes elsewhere. A `@register_backend` decorator only runs when its module is imported. The design never says how `numba_backend.py` or `quadrants_backend.py` get imported. If `backends/__init__.py` imports them explicitly, that is a change elsewhere. It would also be a circular-import hazard, since the decorator lives in the same `__init__`. It would also make the CLI import Quadrants unconditionally, and that import has an install cost the slice explicitly wants to avoid. Scope line 85 also says \"single-row registration plus a config flag,\" which contradicts \"single file.\" Specify the discovery mechanism, for example `pkgutil` scan with tolerant handling of optional-dependency `ImportError`. Alternatively, relax the success criterion to name the one-line import.",
+      "file_ref": null,
+      "category": "under-specification",
+      "raw_category": null,
+      "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:298-345"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`tick_instrumented` duplicates engine internals; the dependency on `tick()` is inconsistent and undeclared",
+      "description": "Interfaces Required (line 131) and Consumes (line 541) both say the NumPy runner \"calls `tick()` directly.\" The Technical Decision (lines 244-272) says the runner instead calls a parallel `tick_instrumented()` that re-implements the tick body. To re-implement it, the harness must call the engine's private phase helpers (spatial build, CSR assembly, density-record dispatch, integrate), and none of those are listed as required interfaces. The \"~5 lines per phase\" estimate also understates the cost, because the tick body includes the profile fancy-indexing and the density-record dispatch the Risk section mentions. The proposed bit-equality test catches algorithm drift but not phase-boundary drift. The slice acknowledges that gap and leaves it to convention. Reconcile the two statements. List the engine functions `tick_instrumented` imports, and say whether the design assumes they are public. Consider whether a lightweight, optional timer-callback parameter on `tick()` would be lower-risk than a forked tick body. The slice defers that option citing \"one call site,\" but the fork already creates a maintenance coupling. If the engine-untouched constraint stays, the design should at least state what it costs.",
+      "file_ref": null,
+      "category": "hidden-dependency",
+      "raw_category": null,
+      "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:131-132"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Failure modes incomplete for the measurement loop and report I/O",
+      "description": "Only setup errors and low TPS are covered. These paths are not covered:\n- `tick_once` raising during warmup or measure. The try/finally covers `setup` only, so it is unclear whether `finalize` runs and whether a partial result is written or discarded.\n- `finalize` itself raising.\n- A backend hanging mid-tick. A GPU or device stall never reaches the \"TPS < 1 warns\" branch. No per-tick or per-run timeout or observable signal is defined.\n- `git rev-parse HEAD` failing (git absent, or not a repo). The design requires `git_sha` in every report but doesn't say whether this raises or writes an obviously-placeholder value.\n- NaN/Inf in final positions or velocities (simulation blow-up). The design doesn't say whether this is detected or merely hashed.\n- A failed write to `bench/results/`, or a missing directory.\n\nThe project rules require each failure mode to be explicit and observable (WARNING+ log). State a handling strategy for each, and add at least one test that asserts the signal for the mid-loop failure.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:508-519"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Markdown report aggregation rule is unspecified and conflicts with the data-flow diagram",
+      "description": "The Markdown section says \"one table per workload across all backends in `bench/results/`,\" but the data-flow diagram shows `markdown_report.write()` as the tail of a single run. `bench/results/` accumulates files across timestamps, git SHAs, and platforms (the schema captures all three). The design doesn't say which files feed a table. It doesn't say whether stale or other-platform results are mixed in, or whether the newest per backend wins. Without that rule, a \"one row per backend\" table could silently compare numbers from different machines or commits, which defeats the stated purpose of cross-slice comparability. Either render only the current run's results, or define selection (latest per backend, filtered to the same platform).",
+      "file_ref": null,
+      "category": "under-specification",
+      "raw_category": null,
+      "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:440-450"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Workload design doesn't capture the formation-regime metric the plan requires",
+      "description": "The slice plan says reports \"include the formation-dependent breakdown noted in the architecture's Profile Principle\" and that workloads carry \"density.\" The schema has no density field. Density is only implied by `world_size` and `cluster_radius`, and only `mid-flock` is specified. `dispersed` and `packed-herd` have no N or parameters, and no acceptance criterion says they reach their regime. The reports also don't record neighbor or edge counts per tick. Spatial-query and force cost are driven by neighbor count, so the output can't show that the three workloads differ in the way the architecture cares about. Record mean edge count (or mean neighbors per agent) in the JSON. Pin the `dispersed` and `packed-herd` parameters, or at least a target neighbor-count band.",
+      "file_ref": null,
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:70-74"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Scope is otherwise proportionate",
+      "description": "The slice defers CI gating, charts, regression detection, memory measurement, subprocess isolation, and adaptive warmup, all with reasoning. The Open Questions section is kept short. Small candidates to trim: `--workload-dir`, `--list-workloads`, and `--all-backends` are convenience CLI surface with a single registered backend today. `--all-backends` is meaningless until a second backend exists. Consider cutting them until 142.",
+      "file_ref": null,
+      "category": "proportionality",
+      "raw_category": null,
+      "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md#Out-of-scope"
+    },
+    {
+      "severity": "PASS",
+      "title": "Layering and dependency direction",
+      "description": "Dependencies match the plan (141 depends on 140 only). The harness consumes `TickResult` as its only engine-boundary contact and deliberately avoids `migratory_server`, `SimulationManager`, and the websocket layer. That is consistent with the architecture's \"wire is a separable problem\" decision. All new code stays in `bench/`, and `engine/` is left untouched, which is verifiable via the walkthrough's `git diff` check. The slice meets the plan's \"standalone against NumPy at first; Numba and Quadrants slot in\" intent.",
+      "file_ref": null,
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md#Dependencies"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "scope-deferral",
+      "raw_category": null,
+      "summary": "Per-force timing breakdown deferred although the slice plan assigns it to 141",
+      "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:292-296",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "integration-mismatch",
+      "raw_category": null,
+      "summary": "SHA-256 parity hash cannot support the tolerance-based parity the architecture requires",
+      "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:458-473",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "under-specification",
+      "raw_category": null,
+      "summary": "\"One file, zero changes elsewhere\" is not supported by the registry design",
+      "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:298-345",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "hidden-dependency",
+      "raw_category": null,
+      "summary": "`tick_instrumented` duplicates engine internals; the dependency on `tick()` is inconsistent and undeclared",
+      "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:131-132",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "Failure modes incomplete for the measurement loop and report I/O",
+      "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:508-519",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "under-specification",
+      "raw_category": null,
+      "summary": "Markdown report aggregation rule is unspecified and conflicts with the data-flow diagram",
+      "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:440-450",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "concern",
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "summary": "Workload design doesn't capture the formation-regime metric the plan requires",
+      "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md:70-74",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "note",
+      "category": "proportionality",
+      "raw_category": null,
+      "summary": "Scope is otherwise proportionate",
+      "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md#Out-of-scope",
+      "location_verified": null
+    },
+    {
+      "id": "F009",
+      "severity": "pass",
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "summary": "Layering and dependency direction",
+      "location": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md#Dependencies",
+      "location_verified": null
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/141-slice.cross-platform-benchmark-harness.md",
+    "against": "project-documents/user/architecture/140-slices.simulation-scaling.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/migratory-141-slice"
+  },
+  "timestamp": "2026-11-16T10:21:15.791679",
+  "model": "claude-sonnet-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 2,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-sonnet-5-5",
+  "answering_models": [
+    "claude-sonnet-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 9,
+    "in_fences": 0,
+    "in_section": 9,
+    "surviving": 9
+  },
+  "effort": "high",
+  "profile": "sdk",
+  "turns": 3,
+  "prompt_tokens": 112388,
+  "cached_tokens": 24590,
+  "cache_write_tokens": 87794,
+  "completion_tokens": 6445,
+  "reasoning_tokens": null,
+  "duration_seconds": 54.15941079100594,
+  "cost_usd": 0.4184774,
+  "cost_basis": "provider"
+}

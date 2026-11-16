@@ -1,0 +1,40 @@
+{
+ "review": "r12",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "\"No edits to 421/424/425\" claims contradict the edits the design requires",
+   "description": "The Excluded and Technical Scope lines say \"No edits to 424 or 425\", and D7 and Integration Points say 421 and 422 are \"used as specified\". The document then requires changes to each of those slices:\n- **424:** `CaseDrop.reason` is widened (Patterns and Conventions). D8 also relies on a `CaseKindRunner.requalify` method that 424 is said to \"provide\".\n- **425:** `bench_report` gains per-kind grouping and a pairwise section (D17). The Technical Requirements say `tests/benchmark/` passes unchanged \"except where \u2026 D17 extracts the interval\", yet D17 calls `bootstrap_mean_interval` as already existing.\n- **421:** `ScrubbedEnvironment.with_tools` is added, which Consumes calls \"the one addition\".\n- **422:** `yield_report.py` gains slice-case rows.\n\nThe ownership of `requalify` and `bootstrap_mean_interval` is ambiguous: either the earlier slices already define them or this slice adds them. The design needs one list of edits to other slices' code, split into \"provided by Nxx\" and \"added here\". This slice's integration contract depends on that list.",
+   "location": "project-documents/user/slices/426-slice.slice-cases.md#Technical Scope"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Reference diff read at judge time has no failure handling",
+   "description": "The judge reads the reference diff with `git diff` in the user's checkout. It refuses up front only if `--repo` is missing or a case's `tip_sha` is absent. It does not say what happens if the `git diff` call itself fails or times out, or if sidecar writes for normalized diffs fail. D6 covers `git` failures in qualification as `harness_error`. D15 covers failed judge calls. The judge-time git path is a new I/O path with no stated handling, and the review rules require every new I/O path to have an explicit, observable failure mode. State whether such a failure drops the case (counted like harness-absent) or aborts with exit 1, and require an ERROR log plus a test.",
+   "location": "project-documents/user/slices/426-slice.slice-cases.md#Data Flow (Judging a benchmark)"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Reference is `tip_sha`, not the landing commit the architecture names",
+   "description": "The architecture says \"the landing commit is the reference\". D2 uses `tip_sha` instead, which is well justified: `fork..after` includes unrelated work that reached the target while the branch was open. D2 also rejects multiple-landing slices. Neither choice is recorded as a deviation from the architecture, and both reduce yield in a project where the architecture already expects low yield. The reasoning is sound, but the design should flag it as a refinement of the architecture text. The architecture or slice plan should be updated so other slices, such as 427 drawing planted defects from slice diffs, don't assume `after_sha`.",
+   "location": "project-documents/user/slices/426-slice.slice-cases.md#D2"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Design is heavy for a 3/5 slice; several items can be trimmed or shared",
+   "description": "The slice introduces about nine new modules, four new record types and seven store methods. It also does three cross-slice extractions or additions (`judge_pair`, `CfRegistration`, `with_tools`), a spike, a slash command and yield rows. That is more than the plan's 3/5 effort suggests. Things to cut or defer:\n- **D6:** The reuse and re-qualification rules (record key, `rule_version`, `harness_error` exemption) restate 422 D10. Reference 422's mechanism, or share its code, instead of adding a parallel `SliceQualification` store API.\n- **D16:** Two record-id schemes with differing hash lengths. Use one helper.\n- **`OverSizeCase`:** A separate persisted record type for a state the judge recomputes anyway on every run. Consider reporting it from the run summary and deferring persistence unless the report needs it across runs.\n- **Slash command:** The `/sq:benchmark` mirroring of `slice-cases build` and `judge` adds no capability. Defer it unless the slice plan assigns it.",
+   "location": "project-documents/user/slices/426-slice.slice-cases.md#Component Structure"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Pair sampling is unspecified when sample counts are uneven",
+   "description": "D13 pairs config A's sample s with config B's sample s. It does not say what happens when a config has fewer committed or recorded replays for a case. That can happen when the run cap was hit and the architecture marks the run partial, or when a replay hit a harness absence. A missing sample could be read either as a forfeit under D15's config-absence rule or as no pair. These produce different counts and different win shares in D17. State the rule explicitly: for example, a pair exists only where both samples have replay records, and a missing record is not a forfeit.",
+   "location": "project-documents/user/slices/426-slice.slice-cases.md#D13"
+  }
+ ]
+}

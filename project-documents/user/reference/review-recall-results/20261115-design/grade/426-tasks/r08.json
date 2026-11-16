@@ -1,0 +1,47 @@
+{
+ "review": "r08",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "FAIL",
+   "title": "Slices rejected at discovery never get a `SliceQualification` record",
+   "description": "The first Functional Requirement says `build` \"writes a `SliceQualification` for every slice index in it\" and \"Every rejected slice has a `SliceCandidateRejection` or `harness_error` with detail.\"\n\nTask 13 returns `multiple_landings`, `branch_contains_merges` and discovery `harness_error` entries in `DiscoveryResult`. Task 20 then calls `qualify_slice_candidate` only for the candidates, and its tests only check that every index gets a *line*. No task writes a record for a discovery-stage rejection.\n\nThis has two effects:\n- The success criterion is not met.\n- Task 22's yield rows are built \"from stored `SliceQualification`s\", so `multiple_landings` and `branch_contains_merges` will always show zero. The design's Mitigation relies on those two counts to decide whether to relax the rules.\n\nThe schema also leaves open which landing a `multiple_landings` record uses for `landing_after_sha`, `fork_sha` and `tip_sha`.\n\nFix: add a step to Task 20 (or Task 13) that writes a `rejected` or `harness_error` `SliceQualification` for each discovery entry, and say which landing keys a `multiple_landings` record (for example the first). Add a test that a two-landing slice leaves a stored record that the yield rows count.",
+   "location": "project-documents/user/tasks/426-tasks.slice-cases.md:195-197"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "The build-stop correction contradicts a success criterion that Task 1 does not update",
+   "description": "The \"Build stop\" gap bullet (applied in Tasks 1 and 20) says that after a harness error, later indices print `not attempted` with **no record**. The design's first Functional Requirement says every index gets a `SliceQualification` and \"None is silently dropped.\"\n\nTask 1's edit list (line 63) covers D3, D9, D12, D14, D15, API Contracts, Scope and Implementation Notes, but not Success Criteria. After Task 1, the design would contradict itself, and Task 23's live-build check would fail the criterion as written.\n\nFix: either add Success Criteria to Task 1's edit list, or record the unattempted indices instead (for example as `harness_error` with detail `not attempted`).",
+   "location": "project-documents/user/tasks/426-tasks.slice-cases.md:48"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Load tests that no success criterion or NFR calls for",
+   "description": "The slice design states no NFR and no concurrency or throughput requirement. Two tests trace to no success criterion:\n- Task 24's \"eight concurrent `invoke` calls\" (line 223).\n- Task 33's \"200-pair plan with a slow dispatcher double\" (line 276). Task 33 already tests sequential dispatch and stopping at the cap with a small plan.\n\nTask 33's hung-dispatcher case is already covered by Task 3's `judge_pair` timeout test. Cut both load tests and the Context Summary bullet on line 53. If they stay, they belong in `tests/load/` and need a CI wiring task.",
+   "location": "project-documents/user/tasks/426-tasks.slice-cases.md:53"
+  },
+  {
+   "i": 3,
+   "severity": "NOTE",
+   "title": "Granularity: some task runs could be merged",
+   "description": "42 tasks is heavy for a slice rated effort 3/5. These runs each build one function stage by stage and share one commit:\n- Qualification, Tasks 15\u201319 (one commit).\n- Judge runner, Tasks 31\u201334 (one commit at Task 35).\n\nEach could become two tasks (for example 15\u201316 and 17\u201319; 31\u201332 and 33\u201334) without losing test-with ordering. This is optional, since each current task is small and checkable.",
+   "location": "project-documents/user/tasks/426-tasks.slice-cases.md:167-193"
+  },
+  {
+   "i": 4,
+   "severity": "NOTE",
+   "title": "\"425 is not edited\" conflicts with Task 36",
+   "description": "The gap bullet says \"425 is not edited\", but Task 36 changes 425's `bench_report.py`, as the design's component list and D17 say it should. Task 22 also edits 422's `yield_report.py`. These are intended edits, but Task 1 should word the Scope line as \"no changes to 425's grading behavior\" so the design does not contradict its own component list.",
+   "location": "project-documents/user/tasks/426-tasks.slice-cases.md:49"
+  },
+  {
+   "i": 5,
+   "severity": "NOTE",
+   "title": "The precondition gate may block on names the design does not require",
+   "description": "Task 8 stops the whole slice if any listed name is missing. Several of those names do not appear in the 426 design: \"425's case-kind table registry\", `PairVerdict`, `GradeAbsence`, and \"the grade command's `--keep`\". If 425 is built differently, Task 8 blocks on something that Task 36 could adapt to; Task 36 already says \"read \u2026 first\".\n\nFix: limit the hard gate to names the design lists under Prerequisites, and let later tasks adapt to the others.",
+   "location": "project-documents/user/tasks/426-tasks.slice-cases.md:122"
+  }
+ ]
+}

@@ -1,0 +1,207 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "PASS",
+      "title": "Success-criteria coverage is complete",
+      "description": "Each Functional and Technical requirement in the slice design has a task, and the Context Summary traceability line matches the tasks.\n- Owner, claim and heartbeat: Tasks 11\u201314.\n- The `init_run(owner=)` first-write test: Tasks 12 and 14.\n- Orphaned and stale in listing and wait, including exit 8: Tasks 19\u201322.\n- Unowned v4 behaviour: Tasks 20 and 22.\n- Foreground stall, interrupt and drain, and the dispatch mapping: Tasks 15\u201318.\n- Prune protection rules and `--yes` semantics: Tasks 33\u201339.\n- Summary line and `-v`: Tasks 25\u201326.\n- Width fitting: Tasks 23\u201326.\n- `pipelines list` and `show`: Tasks 27\u201331.\n- The 20-running-runs I/O-bounds test: Task 22.\n\nNo task lacks a design anchor. Tasks 1, 3 and 41 are process or housekeeping steps that the design's Development Approach covers.",
+      "file_ref": null,
+      "category": "coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md"
+    },
+    {
+      "severity": "PASS",
+      "title": "NFR load test and CI gating are present and explicit",
+      "description": "The slice restates the listing-time NFR (`sq runs list --all` under 1 s). Task 22a adds `tests/load/test_run_listing_scale.py`, modelled on the existing `tests/load/test_usage_reader_loop.py`, with a named constant `MAX_LISTING_S`.\nIt also states why no separate CI wiring task is needed. `pyproject.toml` sets `testpaths = [\"tests\"]`, and `.github/workflows/ci.yml` runs `uv run pytest`, so `tests/load/` is collected and gated. I checked both files, so the gating is explicit and correct.",
+      "file_ref": null,
+      "category": "nfr-coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md (Task 22a)"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Slice design still says \"no assertion on time in tests\", which contradicts Task 22a",
+      "description": "Special Considerations ends with \"There is still no assertion on time in tests.\" Task 22a adds a hard wall-clock assertion, `MAX_LISTING_S = 1.0`. The breakdown is right to add the load test, but the design sentence now misleads an implementer. Update that sentence, or note the superseding task, so the two agree.\n\nThe 1.0 s bound is also tight. 199 measured 0.67 s for 188 runs, and Task 22a seeds \"a few hundred\" files with `include_all=True`. Pick a bound with clear headroom, or state in the task how the bound was calibrated.",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/slices/174-slice.run-liveness-stall-bounds-pruning-and-readable-listings.md:648"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Foreground timeout value has no stated source or plumbing",
+      "description": "Task 8 adds \"a typed reader\" for each key but does not say where it lives. Task 15 says to pass `idle_s=foreground_idle_timeout_s` without saying how `_collect_turns` obtains it. The existing 932 pattern in `src/squadron/pipeline/sdk_session.py:327-331` is a private `_background_idle_timeout_s()` method that calls `get_typed_config(..., cwd=...)`. Task 17 also needs a way to make the timeout small in tests, and that is unspecified. Name the reader's home and have Task 15 mirror the 932 pattern, so the value is not hard-coded or read from the wrong cwd.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md (Tasks 8, 15, 17)"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Task 11 attaches `finalize` to `RunStateRecorder`, but the design puts it on `StateManager`",
+      "description": "The Task 11 `RunStateRecorder` bullet says \"`finalize` clears `active_step` and `active_item`\". The `RunObserver` protocol (Task 4, D12) has no `finalize`. The design describes `StateManager.finalize` writing the terminal status and clearing the active fields. A junior implementer could add a method to the recorder or the protocol that the design does not call for. Say explicitly that this is the `StateManager.finalize` change.\n\nTask 11 also makes `init_run`'s `owner` a required parameter, as the design signature does. It does not list updating the existing `init_run` callers and tests, other than the prompt-only path in Task 13. Add that to the task.",
+      "file_ref": null,
+      "category": "clarity",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md (Task 11, Task 12)"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Task 42 mixes validation, new code and a status update",
+      "description": "Task 42 is the final validation, but it also asks the implementer to write a seed helper under `tests/pipeline/` that creates the orphan, stale, unowned, gone and junk runs. It then runs six walkthrough steps and edits the slice design status and slice plan, all under one `docs:` commit. The helper is new test code and does not belong in a `docs:` commit or hidden inside a verification task. Split out a short \"seed helper\" task before the walkthrough, and have Task 42 only run the checks and update status.",
+      "file_ref": null,
+      "category": "task-scope",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md (Task 42)"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Task file is overweight for a 3/5 slice",
+      "description": "There are 43 tasks and about 15 commit markers. Several tasks restate design decisions nearly verbatim instead of referencing them, even though the Context Summary says \"the design is the contract\". Examples are the `process_alive` error mapping in Task 9, the D6 failure classes in Task 11 and the interrupt and drain logic in Task 16. This duplication invites drift, as the Task 11 `finalize` issue shows.\n\nCut or merge as follows:\n- Merge Tasks 33 and 34 (one `plan_prune` implementation) and Tasks 36 and 37 (`apply_prune` is a single small function). Drop the separate commit at Task 37.\n- Fold Task 29 (`resolve_pipeline`) into the Task 30/31 `show` group, so that `resolve_pipeline` is tested straight after it is written. Today its unit tests sit two tasks later in Task 31, which breaks the test-with pattern.\n- Fold Task 22a's separate commit into the Task 22 commit.\n- Trim the extras in Task 24 beyond the slice's `fit_widths` list (wide-character width, `render_rows` ANSI checks), unless the criterion \"when piped, never truncates\" needs them. The ANSI check does serve that criterion, so keep it and consider dropping the wide-character test.\n- Replace restated design detail with section references (D3, D6, D7).",
+      "file_ref": null,
+      "category": "proportionality",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Task ordering is sound",
+      "description": "There are no circular dependencies.\n- Task 4 defines `ActiveItem` before Task 8 uses it, and Task 8 says not to redefine it.\n- The liveness module (Task 9) precedes `claim` (Task 11), wait (Task 19), listing (Task 21) and prune (Task 33).\n- The renderer (Task 23) precedes its consumers (Tasks 25 and 27).\n- `scan_runs` and the report glob (Task 32) precede `plan_prune` and `apply_prune`.\n- Task 5 intentionally leaves tests red until Task 6, and the commit is placed at Task 7, where the tree is green.\n- The spike (Task 2) correctly gates Tasks 15 and 16.\n\nCommit markers sit at working, tested points. The only concern is how many there are, covered under proportionality above.",
+      "file_ref": null,
+      "category": "sequencing",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "pass",
+      "category": "coverage",
+      "raw_category": null,
+      "summary": "Success-criteria coverage is complete",
+      "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "pass",
+      "category": "nfr-coverage",
+      "raw_category": null,
+      "summary": "NFR load test and CI gating are present and explicit",
+      "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md (Task 22a)",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "Slice design still says \"no assertion on time in tests\", which contradicts Task 22a",
+      "location": "project-documents/user/slices/174-slice.run-liveness-stall-bounds-pruning-and-readable-listings.md:648",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "Foreground timeout value has no stated source or plumbing",
+      "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md (Tasks 8, 15, 17)",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "clarity",
+      "raw_category": null,
+      "summary": "Task 11 attaches `finalize` to `RunStateRecorder`, but the design puts it on `StateManager`",
+      "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md (Task 11, Task 12)",
+      "location_verified": null
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "task-scope",
+      "raw_category": null,
+      "summary": "Task 42 mixes validation, new code and a status update",
+      "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md (Task 42)",
+      "location_verified": null
+    },
+    {
+      "id": "F007",
+      "severity": "concern",
+      "category": "proportionality",
+      "raw_category": null,
+      "summary": "Task file is overweight for a 3/5 slice",
+      "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md",
+      "location_verified": null
+    },
+    {
+      "id": "F008",
+      "severity": "note",
+      "category": "sequencing",
+      "raw_category": null,
+      "summary": "Task ordering is sound",
+      "location": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md",
+      "location_verified": null
+    }
+  ],
+  "template_name": "tasks",
+  "input_files": {
+    "input": "project-documents/user/tasks/174-tasks.run-liveness-stall-bounds-pruning-and-readable-listings.md",
+    "against": "project-documents/user/slices/174-slice.run-liveness-stall-bounds-pruning-and-readable-listings.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/squadron-174-tasks"
+  },
+  "timestamp": "2026-11-16T10:14:42.824054",
+  "model": "claude-sonnet-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 9,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-sonnet-5-5",
+  "answering_models": [
+    "claude-sonnet-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 8,
+    "in_fences": 0,
+    "in_section": 8,
+    "surviving": 8
+  },
+  "effort": "high",
+  "profile": "sdk",
+  "turns": 10,
+  "prompt_tokens": 622223,
+  "cached_tokens": 504204,
+  "cache_write_tokens": 118007,
+  "completion_tokens": 9031,
+  "reasoning_tokens": null,
+  "duration_seconds": 72.85780570912175,
+  "cost_usd": 0.6134530999999999,
+  "cost_basis": "provider"
+}

@@ -1,0 +1,225 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "PASS",
+      "title": "Plan's open design questions are answered and recorded",
+      "description": "The plan entry for 928 asks for three decisions, and the design makes and justifies all three:\n- **Loud refusal or a pack-format declaration (Part A):** D2 chooses a declared `agents/` directory and rejects automatic conversion.\n- **Doctor check for the Codex rule (Part B):** D11 says no and gives the reason.\n- **Which commands need the rule:** D10 enumerates them rather than covering only `sq review`.\n\nThe design also departs from the plan in two places. The rule goes in its own `squadron.rules` instead of `default.rules` (D9), and effort rises from 2/5 to 3/5. Both changes are explained and already written back into the slice plan (`900-slices\u2026md:457`). Neither is drift.",
+      "file_ref": null,
+      "category": "alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md:121-170"
+    },
+    {
+      "severity": "PASS",
+      "title": "Dependency direction and layer placement",
+      "description": "Shared logic moves down out of the CLI layer:\n- `remove_receipt_files` moves from `cli/commands/install.py` into `skills/receipts.py`.\n- The per-target layout knowledge goes in the new `skills/pack_layouts.py`.\n\nThe CLI and doctor modules then use these. Nothing in `skills/` imports from `cli/`.\n\nD6 removes logic that `skills list` and `check_skill_packs` currently duplicate, and D7 removes a second removal loop. Both fit the 900 architecture's \"consolidating duplicated logic\" scope. The target-keyed table with an exhaustiveness assertion follows the `DELIVERIES` precedent from 925.",
+      "file_ref": null,
+      "category": "architecture",
+      "raw_category": null,
+      "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md#component-structure"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Install into the shared flat agents root has no rule for a destination that already exists",
+      "description": "Claude packs are written into their own `~/.claude/commands/<prefix>/` folder. Agents skills go straight into `~/.agents/skills/`, a single flat folder shared with every other skill source, as D3 itself notes at line 123.\n\nThe install flow (lines 93-97) checks names and frontmatter, then calls `write_skill_dirs`. It never says what happens when `~/.agents/skills/<prefix>-x/` already exists and squadron didn't put it there, for example the user's own skill or another tool's. If it gets overwritten and recorded in the receipt, a later `skills uninstall` deletes files squadron never owned. That breaks the rule at line 176 (\"Receipts remain the only authority for what squadron owns in a shared directory\", #65) and makes Success Criterion 2 meaningless.\n\nThe exclusion at line 52 covers collisions with squadron's *own* receipt and skill names, described as already present on the Claude path. This collision is different: the flat shared root is new in this slice.\n\n**Fix:** Add a rule to D3, such as treating an existing destination folder that no receipt records as a validation error, reported before anything is written. Add one test for it.\n\nThe same issue affects status. `installed_path` for prefix packs proves an install with \"first `root/p-*/SKILL.md`\" (line 108). In a shared root, any skill from another source that happens to match `p-*` shows the pack as installed. For the agents target the per-target receipt is a more reliable signal, and the design already treats receipts as the authority.",
+      "file_ref": null,
+      "category": "integration",
+      "raw_category": null,
+      "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md:93-97"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Doctor's \"pack ships no Codex content\" check needs the pack source, and the design doesn't say how doctor gets it",
+      "description": "D8 has doctor report `WARN \u2014 pack ships no Codex content` for packs without an `agents/` directory, and walkthrough step 7 depends on it. To know that, doctor has to look at the pack's source.\n\nThat's simple for `bundled` and local-path sources. For a `github` source, the source exists only after `clone_github` (line 92). Doctor is read-only and offline by design (905 scope), so it can't clone just to report status. The design doesn't cover:\n- github sources\n- a local source path that has been deleted\n- a source that can't be read\n\nWithout that, doctor either quietly reports the wrong state or picks up an unlisted network dependency.\n\n**Fix:** In D8, state which source types doctor inspects and what it reports for sources it can't check, such as \"unknown \u2014 remote source\". Otherwise, cut the third state and report only installed or not installed for the agents rows. Cutting it also makes D8 smaller, which helps with the effort increase.",
+      "file_ref": null,
+      "category": "under-specification",
+      "raw_category": null,
+      "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md:140"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "A failed write partway through an agents install leaves files no receipt records",
+      "description": "D3 makes sure invalid input never reaches the disk. The receipt, though, is written only after `write_skill_dirs` returns (line 97).\n\nIf the write fails partway through a multi-skill pack (a permission error, a full disk, or an existing file that blocks a folder), the skill folders already copied stay in the shared root with no receipt. Per D7 and #65, `skills uninstall` can then never remove them. Nested folders in a shared root make this worse than the flat Claude case.\n\nThe failure-mode rule requires each new I/O path to say what happens on failure and how that is made visible. The design states nothing here.\n\n**Fix:** Say which of two strategies applies:\n- Undo the files already written in this install when the write fails, then raise `SkillSourceError` naming the failure.\n- Write the receipt step by step, so a partial install can still be uninstalled.\n\nAdd one test that simulates a failure partway through.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md:93-97"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The rule's exact command list is left to an implementation-time probe",
+      "description": "Several D10 rows still read \"confirm by probe\" or \"unprobed\". This includes the daemon-client commands, which may need a correction to the README. The procedure is concrete: a named tool, run from a terminal, with results recorded in the DEVLOG. Success Criterion 8 checks the result with `codex execpolicy check`. That's an acceptable handoff for a maintenance slice, provided the task breakdown makes the probe a task that must finish before the docs are written.",
+      "file_ref": null,
+      "category": "scope",
+      "raw_category": null,
+      "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md:155-166"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The `agents/` pack format is a small new capability",
+      "description": "The 900 architecture excludes new capabilities, and 912 was moved to initiative 300 for that reason. A pack-format declaration is close to that line. The 928 plan entry names \"a pack-format declaration of per-target content\" as an accepted option, though, and the format only mirrors the layout squadron's bundle already uses. No action needed. Future extensions to the pack format, such as conversion or more targets, belong in a feature initiative.",
+      "file_ref": null,
+      "category": "scope",
+      "raw_category": null,
+      "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md:121"
+    },
+    {
+      "severity": "PASS",
+      "title": "Behavior with no flags is preserved and old receipts still work",
+      "description": "The D5 formula produces exactly today's `squadron-commands*` and `<pack>.toml` receipt names, so no receipt migration is needed. The analysis-pack move leaves installed destinations unchanged, and its consumers are listed. Success Criteria 6 and 7 pin both. Tests run against a patched `HOME` (#47).",
+      "file_ref": null,
+      "category": "compatibility",
+      "raw_category": null,
+      "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md:180-184"
+    },
+    {
+      "severity": "PASS",
+      "title": "The security effect of the approval rule is stated up front",
+      "description": "D9 and Special Considerations require the docs to say that matching commands run outside Codex's sandbox with no prompt, meaning unrestricted filesystem access and not just network. That statement has to sit next to the snippet. The docs must also name `decision = \"prompt\"` as the ask-every-time alternative and explain the per-project rule location.",
+      "file_ref": null,
+      "category": "security",
+      "raw_category": null,
+      "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md:153"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "pass",
+      "category": "alignment",
+      "raw_category": null,
+      "summary": "Plan's open design questions are answered and recorded",
+      "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md:121-170",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "pass",
+      "category": "architecture",
+      "raw_category": null,
+      "summary": "Dependency direction and layer placement",
+      "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md#component-structure",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "integration",
+      "raw_category": null,
+      "summary": "Install into the shared flat agents root has no rule for a destination that already exists",
+      "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md:93-97",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "under-specification",
+      "raw_category": null,
+      "summary": "Doctor's \"pack ships no Codex content\" check needs the pack source, and the design doesn't say how doctor gets it",
+      "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md:140",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "A failed write partway through an agents install leaves files no receipt records",
+      "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md:93-97",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "scope",
+      "raw_category": null,
+      "summary": "The rule's exact command list is left to an implementation-time probe",
+      "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md:155-166",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "note",
+      "category": "scope",
+      "raw_category": null,
+      "summary": "The `agents/` pack format is a small new capability",
+      "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md:121",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "pass",
+      "category": "compatibility",
+      "raw_category": null,
+      "summary": "Behavior with no flags is preserved and old receipts still work",
+      "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md:180-184",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "pass",
+      "category": "security",
+      "raw_category": null,
+      "summary": "The security effect of the approval rule is stated up front",
+      "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md:153",
+      "location_verified": true
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md",
+    "against": "project-documents/user/architecture/900-slices.maintenance-and-refactoring.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/squadron-928-design"
+  },
+  "timestamp": "2026-11-16T09:18:52.089692",
+  "model": "claude-opus-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 6,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-opus-5-5",
+  "answering_models": [
+    "claude-opus-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 9,
+    "in_fences": 0,
+    "in_section": 9,
+    "surviving": 9
+  },
+  "effort": "medium",
+  "profile": "sdk",
+  "turns": 7,
+  "prompt_tokens": 588102,
+  "cached_tokens": 477129,
+  "cache_write_tokens": 110961,
+  "completion_tokens": 7005,
+  "reasoning_tokens": null,
+  "duration_seconds": 80.53412020811811,
+  "cost_usd": 1.1239299,
+  "cost_basis": "provider"
+}

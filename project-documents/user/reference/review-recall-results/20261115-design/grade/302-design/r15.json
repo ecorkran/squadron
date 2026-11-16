@@ -1,0 +1,40 @@
+{
+ "review": "r15",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "The design drops the structured-output requirement that the plan and architecture assign to this slice",
+   "description": "The slice plan's success criteria for 302 include: \"The score-with-rationale shape is enforced by the template's structured output.\" The architecture also commits to this (Technical Considerations, reliability item (b)): \"the judge template uses a structured-output constraint for the score field and a score-with-rationale prompt shape.\"\n\nThe design only gives prompt instructions plus the lenient `score:` parser. It also says `## Rationale` \"is prose scaffolding for the model, not a new parser target\" (lines 180-183). So nothing enforces the rationale, and nothing constrains the score field. A response with a bare `score:` and no justification passes. This is one of the architecture's few in-engine mitigations against anchoring, so it can't be quietly dropped.\n\nEither:\n- name the structured-output mechanism the template uses (for example, an output-schema or response-format field on the template, if the review engine supports one), or\n- say explicitly that this slice defers the criterion, give the reason, and record it in the slice plan's Future Work so the gap is tracked.",
+   "location": "project-documents/user/slices/302-slice.design-phase-judge-templates.md:152-183"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "The `sq review` CLI path that the design relies on doesn't exist, and the design rules out changing the CLI",
+   "description": "The Value section (lines 31-33), Functional Requirement 3 (lines 277-282) and walkthrough step 3 (lines 361-379) all assume a CLI form like `sq review slice-vs-arch \u2026 --template judge.slice-vs-arch`. The current `sq review` subcommands are `slice`, `arch`, `tasks`, `code` and `list`. Each one hard-codes its template name, and none takes a `--template` option. The design's note that the CLI shape \"should be confirmed during implementation\" (lines 376-379) hides a real gap.\n\nThat conflicts with \"What changes\" (lines 39-57) and \"No other module changes\" (line 107). As written, Functional Requirement 3 can't be met. Pick one:\n- **(a)** Run the requirement and walkthrough through a pipeline `review` step, the selection path the architecture actually commits to, and remove the CLI claims from Value and Functional Requirement 3.\n- **(b)** Add a minimal `--template` option to the relevant review commands as an explicit, listed change.\n\nOption (a) is lighter and matches the architecture.",
+   "location": "project-documents/user/slices/302-slice.design-phase-judge-templates.md:277-282"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "The failure-mode table leaves out two failure modes the architecture lists",
+   "description": "The architecture lists these judge failure modes: unparseable response; score absent or outside 0\u2013100; **missing/unreadable ground-truth file**; provider unavailable; **injected ground truth exceeding the cap**. The slice's table claims to give \"the mapping \u2026 explicit for these specific paths,\" but it has no row for either of the two in bold.\n\nThe `TEMPLATE_INPUTS` row only covers a `SliceInfo` with a missing field. It doesn't cover a path that resolves but points to a file that doesn't exist. That case matters here because the new `judge.tasks-vs-slice` entry reuses `_tasks_input`, which builds the path from `task_files[0]` without checking that the file exists. Each of these rows can simply say \"inherited from the review path \u2192 `UNKNOWN`, WARNING log.\" But the no-silent-pass guarantee is only stated, not shown, until those rows are there. Add both rows and name the existing handler for each.",
+   "location": "project-documents/user/slices/302-slice.design-phase-judge-templates.md:394-400"
+  },
+  {
+   "i": 3,
+   "severity": "NOTE",
+   "title": "The data-flow example uses the wrong pass floor for `judge.slice-vs-arch`",
+   "description": "The example shows `score=82 \u2265 pass_floor(78)` for `judge.slice-vs-arch`. The thresholds table (lines 223-226) and the walkthrough give that template `pass_floor` 82. 78 belongs to `judge.tasks-vs-slice`. The outcome is still PASS, but fix the number so tests aren't copied from the wrong value.",
+   "location": "project-documents/user/slices/302-slice.design-phase-judge-templates.md:146"
+  },
+  {
+   "i": 4,
+   "severity": "NOTE",
+   "title": "The \"rogue verdict is discarded\" test re-tests slice 301",
+   "description": "`enforce_judge` never reads `result.verdict`. That is slice 301's contract, and 301's tests already cover it. Re-testing it here with a hand-built `ReviewResult` doesn't exercise anything this slice adds. Whether the model actually leaves out the verdict can only be seen in a live run, and the Mitigation section already plans for that. Drop this test, or replace it with a check that each template's system prompt contains the no-verdict instruction.",
+   "location": "project-documents/user/slices/302-slice.design-phase-judge-templates.md:300-305"
+  }
+ ]
+}

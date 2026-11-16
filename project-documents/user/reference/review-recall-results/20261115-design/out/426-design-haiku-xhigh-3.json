@@ -1,0 +1,333 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "Producer runs the installed sq, which the architecture's containment principle forbids",
+      "description": "D8 runs `<installed sq> run P6 \u2026 --producer-only` by absolute path under the scrubbed environment. The architecture says the reverse: the scrubbed `PATH` \"leaves out the user's tool installs, so a squadron case cannot run the installed, later `sq`\" (architecture line 46). 421 requires that inside a squadron sandbox `sq` resolves to the start commit's `.venv/bin/sq` (421 lines 168, 309).\n\nFor squadron slice cases the installed `sq` already contains the landed slice. The producer's pipeline, and any prompt the package ships, come from after the reference change. A slice that edits the implement prompt or the executor is then answered by the runner. Prompt identity records the sq version, which makes the leak visible but does not prevent it.\n\nThe doc's justification (line 525) is that the pipeline under test is today's and the code under change is the start commit's. The architecture does not grant that split. The installed sq is needed because `--producer-only` is new in 424 and start commits do not have it. The architecture does not resolve that tension.\n\nBefore implementation, the PM needs to decide and record the answer in the architecture. The likely resolution is to amend the principle and add a mechanical qualification rule: exclude or flag any slice whose reference diff touches the producer's pipeline, prompt or executor files, and record the installed sq version in the case's identity.",
+      "file_ref": null,
+      "category": "architecture-principle",
+      "raw_category": null,
+      "location": "project-documents/user/slices/426-slice.slice-cases.md:217-226"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "cf is placed on the producer's PATH, and the leak-coverage claim for cf is not in 424",
+      "description": "`with_tools((\"cf\",))` links the user's cf install into the producer's `bin` (line 234). 421's criterion is that the producer's PATH excludes user tool installs (slice plan line 48; 421 line 168, where the allowlist is git and uv). The doc calls this \"one addition\" and says the default list is unchanged, but the criterion is about the PATH, and cf is a user tool install. The exception is defensible because P6's cf-ops need cf and the architecture did not anticipate that. It should be named as an exception rather than presented as an addition.\n\nLine 235 also says 424's leak-scan path list \"covers the cf install location\". 424 D7 (line 223) lists the squadron install, the real HOME, the uv cache, the checkout, the distribution name and the code host. cf is not named, and it is a hit only if it sits under the real HOME. The referenced slice does not support the claim. The spike may catch it, but the design should state that cf's install path must be added to 424's rules, which is an edit to 424 (see the next finding).",
+      "file_ref": null,
+      "category": "architecture-principle",
+      "raw_category": null,
+      "location": "project-documents/user/slices/426-slice.slice-cases.md:232-235"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Scope section says no edits to 424 or 425, and no 422 changes, but the design makes all three",
+      "description": "- Line 42 says \"No edits to 424 or 425.\" D17 (lines 305-306) changes 425's `bench_report` so it renders 425's sections once per case kind, and line 426 says 424's `CaseDrop.reason` widens. 425's own doc (line 464) already expects 426 to add a slice-case table to `bench_report`, so the edit is anticipated; the statement is wrong.\n- D7 (line 214) says \"no 422 code changes,\" but lines 40 and 425 add slice-case rows to 422's yield report.\n\nEach cross-slice edit should appear in the scope and in that slice's interface list, or the grouping change should go into 425 first. Correct all three statements.",
+      "file_ref": null,
+      "category": "scope",
+      "raw_category": null,
+      "location": "project-documents/user/slices/426-slice.slice-cases.md:42"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Reference is the tip, not the landing commit the architecture names",
+      "description": "Architecture line 87 says slice cases use \"the landing commit\" as the reference, and the slice plan's 426 entry (line 135) repeats it. D2 decides `tip_sha` instead. The reason is sound: on a merge landing, `fork..after` includes whatever reached the target while the branch was open. 403 D3 (its line 204) already keeps `tip_sha` for this purpose. But the slice changes a reference the architecture states, and the doc does not record a deviation. Record it as an amendment to the architecture and the slice plan entry, or get PM confirmation before implementation. The report's \"reference\" line then describes the tip.",
+      "file_ref": null,
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/426-slice.slice-cases.md:176-178"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The reference is fitted and shown with a strength in the ranked table",
+      "description": "Architecture line 93 says the reference is \"reported as a reference line, not ranked as a config.\" D17 adds `reference` to the Bradley-Terry fit (line 308) and prints its strength in the config table. In the sample (lines 352-355), `reference 1.18` sits between `opus 1.42` and `sol 0.70`, so it reads as ranked. Including it in the fit also changes every config's strength, and the doc does not say so. Either fit the configs alone and give each a win share against the reference, or keep the reference in the fit, omit its strength from the table, and state its effect on the others.",
+      "file_ref": null,
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/426-slice.slice-cases.md:307-309"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Judgment identity does not cover the normalization rules",
+      "description": "Architecture line 40 says a report \"compares only results that match.\" Normalization is defined by a constant drop list. The pair record id (line 300) hashes only the refs, the judge prompt hash and the judge alias. Resume never re-judges a recorded pair (line 302). Changing the drop list changes the diff sidecar hash but not the pair id, so an old judgment is kept silently, with nothing showing it was made under the old rules. The drop list already differs from the plan's list (`uv.lock`, line 249), so a change is likely. Add a `NORMALIZE_RULES_VERSION` constant, recorded on `DiffJudgment` and included in the pair id, the same way `SLICE_RULE_VERSION` works for qualification (line 206).",
+      "file_ref": null,
+      "category": "reproducibility",
+      "raw_category": null,
+      "location": "project-documents/user/slices/426-slice.slice-cases.md:243-253"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "One judgment record per pair breaks the coarse-record rule",
+      "description": "Architecture line 65: \"Records stay coarse, one per case run, because the store reads every file on every query.\" The design writes one `diff_judgment` per pair and one `over_size_case` per case and judge (line 164). With two configs and k=3, each case has 9 pairs. The doc's own example (lines 292-294) has 54 pairs for six judged cases, so one judge pass writes about 54 files, and every report query reads all of them. Write one `diff_judgment` per (benchmark, case, judge) that holds its pair outcomes keyed by pair id. Resume can still look up a pair by id within the record.",
+      "file_ref": null,
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/426-slice.slice-cases.md:164"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Overweight for one slice; cut or split it",
+      "description": "The slice plan split 421/422 and 424/425 because each \"carried more than six concerns\" (plan line 164). This slice carries more than that: discovery, qualification, re-qualification routing, cf registration with a new tool-link mechanism, a runner, normalization, judge pairing, forfeits, over-size handling, caps, resume and locking, four record types with about eight store methods, report grouping, a pairwise section, two CLI commands plus a slash command, and yield rows. It is rated 3/5 (line 521), the plan's number, with no split.\n\nCuts and splits to consider:\n- Split into 426a (discovery, qualification, runner, cf registration, and slice-case rows in the yield report; replays and grades work without judging) and 426b (normalization, judge, pairwise report). Each leaves a working result.\n- Replace `SliceQualification` (lines 204-210) with 422's `FixQualification` plus a case-kind field. Its field list duplicates 422's (422 lines 80, 343).\n- Reuse 424's bound and cap arithmetic and 425's cap, resume and lock code for the judge. A third `diff_judge_runner` with its own bound, cap, lock and resume (line 86; judge lock at line 167) duplicates logic the architecture says to share.\n- Store the reference diff as a sidecar at build time. Discovery already reads the user's checkout (line 193). That removes `--repo` from `judge` and the \"`tip_sha` missing from `--repo`\" refusal (lines 148-149).",
+      "file_ref": null,
+      "category": "proportionality",
+      "raw_category": null,
+      "location": "project-documents/user/slices/426-slice.slice-cases.md:76-103, 206, 86, 287-302"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Frontmatter dependencies and interfaces disagree with the body",
+      "description": "`dependencies` lists 421, 422, 424 and 425, but the Dependencies section requires 403 (the `slice_ranges` record, line 60) and 177 (the judge core, line 61). `interfaces` is empty, though the Integration Points section lists what the slice provides. Plan line 142 lists only 425 for this slice. Make the frontmatter match the body, and check the plan entry.",
+      "file_ref": null,
+      "category": "documentation",
+      "raw_category": null,
+      "location": "project-documents/user/slices/426-slice.slice-cases.md:6-7"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Several 177 names are not in 177's design",
+      "description": "The doc names `parse_verdict`, `combine` and `one_shot_judge_dispatcher` from 177 (line 61), and says `judge_pair` is extracted from a file called `judging.py` (line 92). 177's design puts the judge in `replay/judge.py` and names `fit` and `PairOutcome`, but not the other items. They may exist in 177 as built. I could not confirm them from the parent document, so check them against 177 before 426 depends on them.",
+      "file_ref": null,
+      "category": "integration",
+      "raw_category": null,
+      "location": "project-documents/user/slices/426-slice.slice-cases.md:61, 92, 255-261"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Slice cases depend on the fix-case adapter protocol",
+      "description": "D7 uses 422's `FixCaseAdapter` for `is_test_side`, `collect` and `grader_commands`. 422 kept that protocol separate from 421's adapter so that slice-case languages need no fairness methods (422 line 284). D7 defers a narrower protocol until a language needs slice cases without fix cases, which is a reasonable deferral. The name is fix-only, though, and slice-case callers depend on fairness methods they never call. Rename or narrow it when the next language needs it.",
+      "file_ref": null,
+      "category": "interface-segregation",
+      "raw_category": null,
+      "location": "project-documents/user/slices/426-slice.slice-cases.md:212-215"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The over-size driver is missing from the Risk Assessment",
+      "description": "Special Considerations (line 527) says the repeated task text is \"the main reason pair prompts reach the over-size limit.\" D14 excludes the whole case when one pair is too large (lines 274-275), so the pairwise section depends on how often the limit is hit. The Risk Assessment does not list this. Add it as a risk, with the first check being the measured over-size count on squadron's own slices, so the limit decision is made on data.",
+      "file_ref": null,
+      "category": "risk",
+      "raw_category": null,
+      "location": "project-documents/user/slices/426-slice.slice-cases.md:496-506"
+    },
+    {
+      "severity": "NOTE",
+      "title": "A deterministic reference failure qualifies the case instead of rejecting it",
+      "description": "Architecture line 50: \"A case enters the set only if the original work passes its own grade.\" Under D5, a test that fails every run at the tip goes on `excluded_tests` as `fails_at_reference`, so the case qualifies and that test drops out of the regression selection. This matches 422 D9. Here, though, the failure is the slice's own breakage, which D10 calls the one objective fact a slice case gives. State whether a deterministic reference failure is a rejection or an exclusion, and count the exclusions in the yield rows.",
+      "file_ref": null,
+      "category": "validity",
+      "raw_category": null,
+      "location": "project-documents/user/slices/426-slice.slice-cases.md:200"
+    },
+    {
+      "severity": "PASS",
+      "title": "Named integration points match their parents",
+      "description": "Checked against the parent slices: `SliceLanding` has `fork_sha`, `tip_sha` and `after_sha` (403 line 188), so D2 reads fields that exist. 425 provides an empty-hidden-set path through `grade_one`, `bootstrap_mean_interval` and `reference_failed_grade` (425 lines 218, 278, 464), so the grade and interval reuse holds. 424 provides the `CaseKindRunner` seam with `requalify` (424 line 208). 422 provides `test_sets`, closure digests that are test-side only (422 lines 146-153), `FixCaseAdapter`, `excluded_tests` and the repeat settings. The dependency direction is correct: `diff_judge` is pure apart from the injected dispatcher and store (line 105).",
+      "file_ref": null,
+      "category": "integration",
+      "raw_category": null,
+      "location": "project-documents/user/slices/426-slice.slice-cases.md:54-70"
+    },
+    {
+      "severity": "PASS",
+      "title": "Judge rules and failure signals meet the architecture",
+      "description": "The judge sees only normalized diffs (D11). An over-size case is excluded and counted, never truncated (D14; architecture line 125). A config absence forfeits without a call, and a harness absence drops the case (D15; architecture line 67). The bound and cap print before the first call (D16; architecture line 119). Each failure path names its signal: harness failures are logged at ERROR and recorded (D6, line 209), a failed or timed-out cf step is a harness absence (D9, line 232), and a failed judge call is logged at ERROR, left unrecorded and counted (D15, line 283).",
+      "file_ref": null,
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/426-slice.slice-cases.md:272-285"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "architecture-principle",
+      "raw_category": null,
+      "summary": "Producer runs the installed sq, which the architecture's containment principle forbids",
+      "location": "project-documents/user/slices/426-slice.slice-cases.md:217-226",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "architecture-principle",
+      "raw_category": null,
+      "summary": "cf is placed on the producer's PATH, and the leak-coverage claim for cf is not in 424",
+      "location": "project-documents/user/slices/426-slice.slice-cases.md:232-235",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "scope",
+      "raw_category": null,
+      "summary": "Scope section says no edits to 424 or 425, and no 422 changes, but the design makes all three",
+      "location": "project-documents/user/slices/426-slice.slice-cases.md:42",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "summary": "Reference is the tip, not the landing commit the architecture names",
+      "location": "project-documents/user/slices/426-slice.slice-cases.md:176-178",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "summary": "The reference is fitted and shown with a strength in the ranked table",
+      "location": "project-documents/user/slices/426-slice.slice-cases.md:307-309",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "reproducibility",
+      "raw_category": null,
+      "summary": "Judgment identity does not cover the normalization rules",
+      "location": "project-documents/user/slices/426-slice.slice-cases.md:243-253",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "concern",
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "summary": "One judgment record per pair breaks the coarse-record rule",
+      "location": "project-documents/user/slices/426-slice.slice-cases.md:164",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "concern",
+      "category": "proportionality",
+      "raw_category": null,
+      "summary": "Overweight for one slice; cut or split it",
+      "location": "project-documents/user/slices/426-slice.slice-cases.md:76-103, 206, 86, 287-302",
+      "location_verified": null
+    },
+    {
+      "id": "F009",
+      "severity": "note",
+      "category": "documentation",
+      "raw_category": null,
+      "summary": "Frontmatter dependencies and interfaces disagree with the body",
+      "location": "project-documents/user/slices/426-slice.slice-cases.md:6-7",
+      "location_verified": true
+    },
+    {
+      "id": "F010",
+      "severity": "note",
+      "category": "integration",
+      "raw_category": null,
+      "summary": "Several 177 names are not in 177's design",
+      "location": "project-documents/user/slices/426-slice.slice-cases.md:61, 92, 255-261",
+      "location_verified": null
+    },
+    {
+      "id": "F011",
+      "severity": "note",
+      "category": "interface-segregation",
+      "raw_category": null,
+      "summary": "Slice cases depend on the fix-case adapter protocol",
+      "location": "project-documents/user/slices/426-slice.slice-cases.md:212-215",
+      "location_verified": true
+    },
+    {
+      "id": "F012",
+      "severity": "note",
+      "category": "risk",
+      "raw_category": null,
+      "summary": "The over-size driver is missing from the Risk Assessment",
+      "location": "project-documents/user/slices/426-slice.slice-cases.md:496-506",
+      "location_verified": true
+    },
+    {
+      "id": "F013",
+      "severity": "note",
+      "category": "validity",
+      "raw_category": null,
+      "summary": "A deterministic reference failure qualifies the case instead of rejecting it",
+      "location": "project-documents/user/slices/426-slice.slice-cases.md:200",
+      "location_verified": true
+    },
+    {
+      "id": "F014",
+      "severity": "pass",
+      "category": "integration",
+      "raw_category": null,
+      "summary": "Named integration points match their parents",
+      "location": "project-documents/user/slices/426-slice.slice-cases.md:54-70",
+      "location_verified": true
+    },
+    {
+      "id": "F015",
+      "severity": "pass",
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "summary": "Judge rules and failure signals meet the architecture",
+      "location": "project-documents/user/slices/426-slice.slice-cases.md:272-285",
+      "location_verified": true
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/426-slice.slice-cases.md",
+    "against": "project-documents/user/architecture/420-arch.model-benchmark.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261115-design/wt/426-design"
+  },
+  "timestamp": "2026-11-16T07:34:20.623668",
+  "model": "claude-haiku-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 17,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-haiku-5-5",
+  "answering_models": [
+    "claude-haiku-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 15,
+    "in_fences": 0,
+    "in_section": 15,
+    "surviving": 15
+  },
+  "effort": "xhigh",
+  "profile": "sdk",
+  "turns": 18,
+  "prompt_tokens": 1805891,
+  "cached_tokens": 1596523,
+  "cache_write_tokens": 209346,
+  "completion_tokens": 103462,
+  "reasoning_tokens": null,
+  "duration_seconds": 469.57151729101315,
+  "cost_usd": 0.5465602099999999,
+  "cost_basis": "provider"
+}

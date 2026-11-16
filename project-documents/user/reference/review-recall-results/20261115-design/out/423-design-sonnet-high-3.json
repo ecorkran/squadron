@@ -1,0 +1,207 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Prompt identity claim is unsupported for the fix prompt",
+      "description": "The architecture requires that a result name its prompt identity, so reports compare only matching results. D8 says the fix prompt's text \"is part of the dispatch's prompt identity\" and that 424 and 425 can use that to tell prompt versions apart. Slice 177 describes prompt identity as `cf_version` and `guide_version` recorded under `source: build_context`. `fix-context` deliberately emits `build_context`-keyed output, so the dispatch will record those versions. The fix prompt is a squadron data file that neither version covers. The assembled prompt also contains the issue text, so hashing it would give each case its own identity. D8 should state what identifies the fix prompt (a template hash or the squadron version) and say how `fix-context` records it. Otherwise fix-case results from different prompt revisions are indistinguishable, which breaks the comparable-over-time principle.",
+      "file_ref": null,
+      "category": "comparability",
+      "raw_category": null,
+      "location": "project-documents/user/slices/423-slice.fix-pipeline.md#D8 \u2014 Fix prompt as a data file (line 191)"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "No failure classification for 424's \"absent is not zero\" rule",
+      "description": "The architecture sorts failures into config-caused (producer crashed, cost cap, committed nothing), which count against the config, and harness-caused, which drop the case. This slice adds several new failure paths:\n- `fix-context` refusals: dirty tree, wrong branch, unreadable issue file, `CodeHost` errors.\n- `fix_report` defects and `blocked`.\n- HEAD moved.\n- Nothing staged.\n\nOnly `FailureKind.FIX_REPORT` and `cost_cap` are named. The slice never says which kind the `fix-context` refusals carry, or whether they can be told apart from agent-caused failures. 424 needs that to classify runs without parsing messages.\n\nOne path is especially exposed. A report that fails a shape check leaves a possibly correct tree uncommitted. Examples are a gate that already fails at the parent commit, or a missing `failed_before_change`. Under the architecture, that run counts as \"committed nothing\" and fails the config, even though the grader would take the producer's source and might pass the hidden test. The slice should do two things:\n- Map each refusal to a failure kind, or to a harness-caused versus config-caused flag.\n- State whether 424 may grade the uncommitted tree after a `fix_report` failure, or whether that outcome is intentionally a config fail.",
+      "file_ref": null,
+      "category": "integration",
+      "raw_category": null,
+      "location": "project-documents/user/slices/423-slice.fix-pipeline.md#D4 and #D5; Integration Points (\"Provides to Other Slices\")"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "A plan-assigned success criterion (MCP parity) is dropped",
+      "description": "The slice plan entry for 423 lists \"CLI, slash command and MCP give identical results\" as a success criterion. The slice excludes MCP because squadron has no MCP server for pipelines, and it narrows the criterion to CLI and `/sq:run`. The reasoning holds, but the plan entry is still unmet as written. The slice plan's 423 criterion should be amended to match, so the plan and slice don't disagree silently.",
+      "file_ref": null,
+      "category": "scope",
+      "raw_category": null,
+      "location": "project-documents/user/slices/423-slice.fix-pipeline.md:43 and :253"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Slice dependency contradicts the plan's ordering note",
+      "description": "The plan says 423 has \"none in this initiative\" and \"can be built earlier\". This slice depends on 422 for `CodeHost.get_issue` and the optional-cutoff renderer. 422's design does provide both, so the interface matches. It also means a production feature's fetch path now depends on a benchmark-qualification slice's modules. The dependency is real only for fetched mode, and the slice already orders that work last (step 4). The slice plan's 423 entry (dependencies, effort 2/5 \u2192 3/5) should be updated to match, and the fetched-mode-only nature of the dependency recorded there.",
+      "file_ref": null,
+      "category": "dependencies",
+      "raw_category": null,
+      "location": "project-documents/user/slices/423-slice.fix-pipeline.md (frontmatter `dependencies: [422]`; Prerequisites)"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Sandbox cleanliness is covered by 421",
+      "description": "I checked whether the clean-tree precondition and stage-all commit could collide with the sandbox's installed environment. 421 adds `.venv/` to the sandbox's `.git/info/exclude` and runs pytest with `no:cacheprovider`, so `changed_paths` should stay clean there. The stated \"no extra flags\" integration for 424 holds. The walkthrough's frozen-text check (step 4) exercises this path in a clone.",
+      "file_ref": null,
+      "category": "integration",
+      "raw_category": null,
+      "location": "project-documents/user/slices/423-slice.fix-pipeline.md#D5"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Effort increase is disclosed and reasonable",
+      "description": "Prompt-only parity (two hidden commands, one module, a parity test) is plan-assigned through the slash-command criterion, so it isn't scope creep. The 2/5 \u2192 3/5 effort increase is stated openly. The mechanisms (a report contract, `CommitTo`/`IssueSource` enums, one step type) are proportionate to the plan's criteria.",
+      "file_ref": null,
+      "category": "proportionality",
+      "raw_category": null,
+      "location": "project-documents/user/slices/423-slice.fix-pipeline.md:344"
+    },
+    {
+      "severity": "PASS",
+      "title": "Architecture alignment on the fix pipeline's role",
+      "description": "The slice provides what the architecture envisions:\n- It is a production `fix` pipeline, separate from `implement`, following the fix rule.\n- It takes frozen issue text through `issue-file`, makes no GitHub or Context Forge calls, and commits to the current branch.\n- It has no embedded review to strip, so 424 has a single producer step.\n- It leaves producer-only mode to 424 and grading to 425, and says that 425 does not trust the report.\n- It restates the cost cap (`--max-cost`, `pipeline.max_cost_usd`, `cost_cap`).",
+      "file_ref": null,
+      "category": "alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/423-slice.fix-pipeline.md#D1, #D2, #D5, #D7"
+    },
+    {
+      "severity": "PASS",
+      "title": "Failure modes for new I/O paths are enumerated",
+      "description": "Each new I/O path has an explicit handling strategy and an observable signal:\n- Issue fetch: the 30 s timeout, `HostCommandTimeoutError` and other `CodeHostError`s fail before dispatch, with no retry or fallback.\n- Issue file: missing, empty, unreadable and non-UTF-8 cases each fail before any model call.\n- Report: each defect is named and fails with `fix_report`, and `blocked` is handled.\n- Git: HEAD moved and nothing staged each have a refusal.\n\nRefusals log at WARNING and git or host errors log at ERROR. The unit tests cover the timeout and factory-must-not-be-called cases.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/423-slice.fix-pipeline.md#D2, #D4, #D5, #Patterns and Conventions"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "comparability",
+      "raw_category": null,
+      "summary": "Prompt identity claim is unsupported for the fix prompt",
+      "location": "project-documents/user/slices/423-slice.fix-pipeline.md#D8 \u2014 Fix prompt as a data file (line 191)",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "integration",
+      "raw_category": null,
+      "summary": "No failure classification for 424's \"absent is not zero\" rule",
+      "location": "project-documents/user/slices/423-slice.fix-pipeline.md#D4 and #D5; Integration Points (\"Provides to Other Slices\")",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "scope",
+      "raw_category": null,
+      "summary": "A plan-assigned success criterion (MCP parity) is dropped",
+      "location": "project-documents/user/slices/423-slice.fix-pipeline.md:43 and :253",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "dependencies",
+      "raw_category": null,
+      "summary": "Slice dependency contradicts the plan's ordering note",
+      "location": "project-documents/user/slices/423-slice.fix-pipeline.md (frontmatter `dependencies: [422]`; Prerequisites)",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "integration",
+      "raw_category": null,
+      "summary": "Sandbox cleanliness is covered by 421",
+      "location": "project-documents/user/slices/423-slice.fix-pipeline.md#D5",
+      "location_verified": null
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "proportionality",
+      "raw_category": null,
+      "summary": "Effort increase is disclosed and reasonable",
+      "location": "project-documents/user/slices/423-slice.fix-pipeline.md:344",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "pass",
+      "category": "alignment",
+      "raw_category": null,
+      "summary": "Architecture alignment on the fix pipeline's role",
+      "location": "project-documents/user/slices/423-slice.fix-pipeline.md#D1, #D2, #D5, #D7",
+      "location_verified": null
+    },
+    {
+      "id": "F008",
+      "severity": "pass",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "Failure modes for new I/O paths are enumerated",
+      "location": "project-documents/user/slices/423-slice.fix-pipeline.md#D2, #D4, #D5, #Patterns and Conventions",
+      "location_verified": null
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/423-slice.fix-pipeline.md",
+    "against": "project-documents/user/architecture/420-arch.model-benchmark.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261115-design/wt/423-design"
+  },
+  "timestamp": "2026-11-16T07:38:34.362870",
+  "model": "claude-sonnet-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 9,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-sonnet-5-5",
+  "answering_models": [
+    "claude-sonnet-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 8,
+    "in_fences": 0,
+    "in_section": 8,
+    "surviving": 8
+  },
+  "effort": "high",
+  "profile": "sdk",
+  "turns": 10,
+  "prompt_tokens": 594266,
+  "cached_tokens": 576763,
+  "cache_write_tokens": 17491,
+  "completion_tokens": 10407,
+  "reasoning_tokens": null,
+  "duration_seconds": 92.20164745813236,
+  "cost_usd": 0.23250539999999997,
+  "cost_basis": "provider"
+}

@@ -1,0 +1,153 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "PASS",
+      "title": "Alignment with architecture scope and principles",
+      "description": "The sweep matches the \"Hard-coded values \u2192 configuration or constants\" and \"Pattern consolidation\" scope in 900-arch. It is one theme with explicit success criteria, which meets the \"slice by theme\" and \"opportunistic but intentional\" principles. The dependency direction is correct: the slice only consumes `STATUS` from 241 and provides nothing downstream. The exclusions are well reasoned. They cover `frontmatterSchema.ts`, `SliceStatus.status`, the `'unknown'` sentinel and the `STATUS_MAP` keys, and each carries a technical decision explaining why.",
+      "file_ref": null,
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md#Overview"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Verification counts and grep criteria are internally inconsistent",
+      "description": "The success criteria and walkthrough contradict the scope table, so a mechanical check could give false failures or false passes.\n\n- **`types.ts` arithmetic:** The table says \"5 (of 8 total; 4 are the STATUS definition)\", but 5 + 4 = 9. The union `'complete' | 'in-progress' | 'not-started'` has 3 literals, not 5. The 8 literals appear to be 4 for the definition, 3 for `inferredStatus` and 1 for `SliceStatus`'s `'complete'`. The \"~65\" total is therefore probably overstated.\n- **`SliceStatus.status`:** The walkthrough expects 4 remaining `SliceStatus.status` sites. Only `'complete'` matches the grep pattern, so there is 1.\n- **Contradictory pass condition:** The functional criterion requires \"zero matches in the six swept files\". `types.ts` is one of those files, and the `SliceStatus` `'complete'` literal intentionally stays in it. The criterion also excludes the definition by hard-coded line numbers (`types.ts:[3-6]:`). Those lines shift as soon as the retype lands, and the references to `types.ts:44` and `ProjectModelBuilder.ts` line 179 are fragile in the same way.\n\nFix this by restating expected counts per file after the sweep. Exclude the `STATUS` definition and the `SliceStatus` line by pattern or context rather than by line number. Or add a lint or grep check that ignores those two known sites.",
+      "file_ref": null,
+      "category": "under-specification",
+      "raw_category": null,
+      "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md:29-41, 135, 147-152"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Behavior preservation relies on existing coverage that the design doesn't establish",
+      "description": "900-arch requires that refactoring slices \"have test coverage verifying preserved behavior before and after.\" The slice argues that the sweep cannot change behavior because `STATUS.X === 'x'` by construction. That is plausible for the type-level changes. It doesn't show that the 30\u201336 comparison sites in `ConsistencyChecker.ts` (about 15 rule functions) are exercised by tests. The only evidence offered is that no test asserts on the literals, which says nothing about whether the rules are covered. A transposed property, such as `STATUS.InProgress` swapped for `STATUS.Complete`, would compile cleanly and could pass if the rule has no test. The doc says a transcription error would show up as test changes, which holds only for covered rules.\n\nAdd a step before the sweep to confirm that each rule function in `ConsistencyChecker.ts` has at least one test hitting each status branch. Add tests for any that don't. Alternatively, state that the sweep is reviewed as a diff for transposition errors. Cite the `ConsistencyChecker` test file's coverage of these branches as the evidence.",
+      "file_ref": null,
+      "category": "test-coverage",
+      "raw_category": null,
+      "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md:51, 85"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Verification walkthrough step 4 is lightweight and partly redundant",
+      "description": "The live `cf status` and `cf list slices` spot-check duplicates the full `pnpm -r test` pass for a change with no runtime delta. It is cheap, so no action is required. The typo-injection check in step 2 is the more useful verification of the slice's value claim.",
+      "file_ref": null,
+      "category": "proportionality",
+      "raw_category": null,
+      "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md:160-165"
+    },
+    {
+      "severity": "NOTE",
+      "title": "No new I/O paths, NFR paths or failure modes",
+      "description": "The slice adds no I/O, message types or latency-sensitive paths, and 900-arch states no NFRs that it touches. Failure-mode enumeration and NFR restatement are not applicable.",
+      "file_ref": null,
+      "category": "failure-modes",
+      "raw_category": null,
+      "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "pass",
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "summary": "Alignment with architecture scope and principles",
+      "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md#Overview",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "under-specification",
+      "raw_category": null,
+      "summary": "Verification counts and grep criteria are internally inconsistent",
+      "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md:29-41, 135, 147-152",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "test-coverage",
+      "raw_category": null,
+      "summary": "Behavior preservation relies on existing coverage that the design doesn't establish",
+      "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md:51, 85",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "note",
+      "category": "proportionality",
+      "raw_category": null,
+      "summary": "Verification walkthrough step 4 is lightweight and partly redundant",
+      "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md:160-165",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "failure-modes",
+      "raw_category": null,
+      "summary": "No new I/O paths, NFR paths or failure modes",
+      "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md",
+      "location_verified": null
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md",
+    "against": "project-documents/user/architecture/900-arch.maintenance-and-refactoring.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/context-forge-910-slice"
+  },
+  "timestamp": "2026-11-16T09:28:03.356436",
+  "model": "claude-sonnet-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 3,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-sonnet-5-5",
+  "answering_models": [
+    "claude-sonnet-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 5,
+    "in_fences": 0,
+    "in_section": 5,
+    "surviving": 5
+  },
+  "effort": "medium",
+  "profile": "sdk",
+  "turns": 4,
+  "prompt_tokens": 188636,
+  "cached_tokens": 94682,
+  "cache_write_tokens": 93948,
+  "completion_tokens": 3343,
+  "reasoning_tokens": null,
+  "duration_seconds": 29.325660374946892,
+  "cost_usd": 0.4191583,
+  "cost_basis": "provider"
+}

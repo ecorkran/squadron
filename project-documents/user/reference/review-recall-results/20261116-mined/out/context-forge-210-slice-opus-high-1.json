@@ -1,0 +1,243 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "PASS",
+      "title": "Composition and layer boundaries match the architecture",
+      "description": "- **Composition holds.** The architecture's \"Composability preserved\" principle (init composes atomic `cf setup-ide`, which stays independently callable) is kept. `init.ts` is unchanged and passes `--ide copilot` through to `setupIdeAction`.\n- **Responsibilities are split correctly.** CF core validates, runs the safety check, calls the script and propagates to worktrees. Compilation stays in the guides script, as it does for the Claude target.\n- **Dependencies point the right way.** There are no `packages/core` or MCP changes.\n- **No scope creep.** Non-goals (Cursor, bidirectional sync, custom agents) match the slice plan exactly.",
+      "file_ref": null,
+      "category": "architecture",
+      "raw_category": null,
+      "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:57-69"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Overwrite-safety check covers only 2 of the 4 output locations",
+      "description": "The slice plan requires that the first run \"warns before overwriting unmanaged user content\". Step 4 and `isManagedCopilotFiles` (line 109) check only `.github/copilot-instructions.md` and `AGENTS.md`.\n\nThe script also writes `.github/instructions/*.instructions.md` and `.github/prompts/*.prompt.md`. `.github/` is a shared, user-owned directory, and teams already on Copilot often have hand-written prompt and instruction files there. A same-named file (e.g. `commit.prompt.md`) would be overwritten silently, with no prompt and no backup.\n\nThe design should state one of these:\n- (a) the collision rule: check each target file for the marker before writing, and treat an unmarked existing file as unmanaged; or\n- (b) that generated files use a namespacing convention (e.g. a `cf-` prefix or a `cf/` subfolder) so they cannot collide.\n\nTwo related details are also unspecified:\n- whether two unmanaged files give one prompt or two;\n- that `.bak` handling follows the Claude path, which keeps an existing backup rather than replacing it.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:98-100"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Older guide submodule: failure is assumed to be clean, but nobody has checked",
+      "description": "The Risks section calls this \"the highest-risk coupling\" and asserts that an older submodule \"will fail at the script step with a clear error\". Nothing in the design checks that. The guide script is not in this checkout, so I could not confirm what the current `setup-ide` does with an unknown argument.\n\nEvery existing project has a pinned guide version, so `cf setup-ide copilot` on any of them hits this path. If the old script ignores the argument or falls back to Claude, it would write `CLAUDE.md` and `.claude/`. That breaks the slice's \"never touches `.claude/` or `CLAUDE.md`\" guarantee (line 55).\n\nAlso, in the sequence, backup (step 4) happens before the script runs (step 5), so a failure mid-run leaves a partly written `.github/instructions/` with nothing said about recovery.\n\nThe design should specify:\n- how CF detects that the installed guide supports `copilot` before touching anything (a guide version check or a capability probe), with an error that names `cf guides update`;\n- which ships first, the guide release or the CF release, given that frontmatter declares `dependencies: []` despite this cross-repo dependency.",
+      "file_ref": null,
+      "category": "integration",
+      "raw_category": null,
+      "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:131-133"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Skill\u2192prompt translation and its compile source are unspecified",
+      "description": "**Missing translation.** The design specifies only the `paths`\u2192`applyTo` translation. The slice plan lists the prompt-file frontmatter fields (`name`, `description`, `argument-hint`, `agent`, `model`, `tools`), but the design never says how Claude skill frontmatter maps onto them, or what happens to fields with no equivalent. Without that, the plan's success criterion that `.github/prompts/*.prompt.md` is generated from skills has no defined result.\n\n**Unclear source.** The layout annotations (\"\u2190 from `.claude/rules/typescript.md`\", \"\u2190 from `.claude/skills/commit.md`\") suggest the Copilot backend reads the *generated* `.claude/` tree. Line 114 and the \"compilation lives in the guides submodule\" decision suggest it reads guide sources. If it reads `.claude/`, there is a hidden dependency on running `cf setup-ide claude` first. Copilot-only users, the slice's stated driver, would then get empty output. State which source is used.",
+      "file_ref": null,
+      "category": "under-specification",
+      "raw_category": null,
+      "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:36-49"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Two items the slice plan assigns to this slice are dropped",
+      "description": "- **Tool guide.** The plan's success criterion says the tool guide `project-documents/user/tool-guides/copilot-vscode/setup-ide.md` is \"referenced in slice design, promoted to a proper published tool guide if needed\". The design never references it or decides on promotion.\n- **Agent mapping.** The plan says to \"document mapping\" for `.claude/agents/*.md` \u2192 Copilot custom agents. Line 54 says \"document the mapping but defer implementation\", but the design contains no such mapping.\n\nEither add a short mapping paragraph and the tool-guide reference, or record both as deliberately deferred.",
+      "file_ref": null,
+      "category": "scope",
+      "raw_category": null,
+      "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:51-55"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Helper is named two ways, and the existing marker check is copied instead of reused",
+      "description": "- **Two names.** Technical Scope names `isManagedCopilot(filePath)`, a per-file check. Files Changed (line 109) names `isManagedCopilotFiles(projectPath)`, a project-level check. These are different contracts.\n- **Duplication.** The design says the `isManagedClaudeMd` pattern is \"replicated\" (line 65). That function already ignores the target: it checks any file path for the marker. Copying it breaks the project's DRY rule.\n\nSpecify one generic per-file check, renamed from the Claude-specific one (e.g. `isManagedFile`). Callers then pass the list of files for each target.",
+      "file_ref": null,
+      "category": "dry",
+      "raw_category": null,
+      "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:29"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Tests miss the translation and the additive guarantee",
+      "description": "The test list covers only the CF CLI surface. Missing:\n- **Translation.** The `paths`\u2192`applyTo` conversion (multi-path, absent `paths`, alwaysApply routing to `copilot-instructions.md`) is a slice-plan success criterion, but no test is listed in either repo.\n- **Additive guarantee.** Nothing checks that `setup-ide copilot` leaves `CLAUDE.md` and `.claude/` unchanged.\n- **Old guide failure.** Nothing checks the error when the guide script does not support `copilot` (see above).\n\nAdd these, and say which repo owns the translation tests.",
+      "file_ref": null,
+      "category": "testing",
+      "raw_category": null,
+      "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:121-129"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Onboarding NFR not restated",
+      "description": "The architecture doc's goal is \"from `npm install` to useful context output in under two minutes\". This slice adds a new `cf init --ide copilot` path into that flow but does not restate the target. Add one line restating it. The likely answer is that it is met because compilation is a local script run, but it should be written down.",
+      "file_ref": null,
+      "category": "nfr",
+      "raw_category": null,
+      "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md#sequence-cf-setup-ide-copilot"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Propagation recursion and flat output",
+      "description": "The existing Claude propagation copies only top-level files from each directory. VS Code searches `.github/instructions/` recursively, according to the tool guide. If the guide script ever writes subfolders, the Copilot propagation block would silently skip them. Say that output is flat, or that the copy is recursive.",
+      "file_ref": null,
+      "category": "integration",
+      "raw_category": null,
+      "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:89"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Always-on content will be loaded more than once in VS Code",
+      "description": "VS Code treats `.github/copilot-instructions.md` and `AGENTS.md` as always-on, and it also reads `CLAUDE.md` for compatibility (tool guide line 18). Writing identical content to both files, as the plan requires, means the content is loaded twice. For projects that target both Claude and Copilot it is loaded three times. This is not a defect against the plan, but it is worth a sentence so the duplicate-context cost is a known trade-off.",
+      "file_ref": null,
+      "category": "design",
+      "raw_category": null,
+      "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:61"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "pass",
+      "category": "architecture",
+      "raw_category": null,
+      "summary": "Composition and layer boundaries match the architecture",
+      "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:57-69",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "Overwrite-safety check covers only 2 of the 4 output locations",
+      "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:98-100",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "integration",
+      "raw_category": null,
+      "summary": "Older guide submodule: failure is assumed to be clean, but nobody has checked",
+      "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:131-133",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "under-specification",
+      "raw_category": null,
+      "summary": "Skill\u2192prompt translation and its compile source are unspecified",
+      "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:36-49",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "scope",
+      "raw_category": null,
+      "summary": "Two items the slice plan assigns to this slice are dropped",
+      "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:51-55",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "dry",
+      "raw_category": null,
+      "summary": "Helper is named two ways, and the existing marker check is copied instead of reused",
+      "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:29",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "concern",
+      "category": "testing",
+      "raw_category": null,
+      "summary": "Tests miss the translation and the additive guarantee",
+      "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:121-129",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "concern",
+      "category": "nfr",
+      "raw_category": null,
+      "summary": "Onboarding NFR not restated",
+      "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md#sequence-cf-setup-ide-copilot",
+      "location_verified": null
+    },
+    {
+      "id": "F009",
+      "severity": "note",
+      "category": "integration",
+      "raw_category": null,
+      "summary": "Propagation recursion and flat output",
+      "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:89",
+      "location_verified": true
+    },
+    {
+      "id": "F010",
+      "severity": "note",
+      "category": "design",
+      "raw_category": null,
+      "summary": "Always-on content will be loaded more than once in VS Code",
+      "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:61",
+      "location_verified": true
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md",
+    "against": "project-documents/user/architecture/200-slices.developer-onboarding.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/context-forge-210-slice"
+  },
+  "timestamp": "2026-11-16T10:08:38.468323",
+  "model": "claude-opus-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 9,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-opus-5-5",
+  "answering_models": [
+    "claude-opus-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 10,
+    "in_fences": 0,
+    "in_section": 10,
+    "surviving": 10
+  },
+  "effort": "high",
+  "profile": "sdk",
+  "turns": 10,
+  "prompt_tokens": 510046,
+  "cached_tokens": 418817,
+  "cache_write_tokens": 91215,
+  "completion_tokens": 7826,
+  "reasoning_tokens": null,
+  "duration_seconds": 88.02323054219596,
+  "cost_usd": 0.9704121,
+  "cost_basis": "provider"
+}

@@ -1,0 +1,153 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "PASS",
+      "title": "Success criteria are fully covered",
+      "description": "Every functional and technical criterion in the slice design maps to a task:\n- **PASS and FAIL output, including the missing-heading lines:** Tasks 3T and 4T.\n- **`docType` failure:** Tasks 3T and 4T.\n- **Multi-file ordering:** Tasks 3T and 4T.\n- **Exit 2 with empty stdout, in human and `--json` mode, including a valid file before a missing one:** Task 4T.\n- **Missing template naming `cf guides update`:** Tasks 3T and 4T.\n- **No required markers in the template:** Task 3T.\n- **`--json` contract:** Task 4T.\n- **Worktree-aware template:** Task 4T.\n- **Unit tests for normalization, matching, level mismatch, fenced blocks and CRLF:** Task 2T.\n- **Real-template test (non-empty list including `## Overview` and `### Verification Walkthrough`):** Task 3T.\n- **Real-design command test:** Task 4T.\n- **Build, lint, full suite and the ~300-line limit:** Task 6.\n- **Parity sweep and walkthrough:** Task 5.\n\nI found no scope creep. Guide-side edits and merging are correctly left out. The sequencing is sound: the constant, then the pure validator, then the file layer, then the CLI. Each test task directly follows its implementation task, and there are no circular dependencies.",
+      "file_ref": null,
+      "category": "coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md:59-115"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Commit markers are written as checkbox tasks, and 5C/6C can make notes-only commits",
+      "description": "(same pattern at lines 94, 117, 126 and 134)\n\nThe commit points are written as `- [ ] **Task 2C: Commit** \u2014 ...` checkboxes. The convention is a plain `**Commit**:` line that is never a checkbox. As written, the task-checker can tick them, and an implementer can read them as work items.\n\nTasks 5C and 6C are also conditional (\"only if Task N changed files\"). Project rules say never to make a commit that only adds notes. Task 5 is mostly a verification run. When it changes only the slice design's \"Parity differences\" note, 5C is a notes-only commit. 6C is the same for a README line.\n\nSuggested change:\n- Convert 2C, 3C and 4C to plain `**Commit**: feat(core): ...` lines.\n- Drop 5C and 6C.\n- Put one `**Commit**:` line after Task 6. It captures any parity-fix code and tests, the notes, and the docs together.",
+      "file_ref": null,
+      "category": "process",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md:71"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Lint is not part of the per-task success criteria before the commits",
+      "description": "(also lines 82 and 104; the first `pnpm lint` is at line 130, after the commits at 71, 94 and 117)\n\nTasks 2, 3 and 4 gate only on `pnpm -r build` and tests. `pnpm lint` first runs in Task 6, after three commits have already been made. The project's exception-handling lint rules matter most in Task 3, which wraps `fs` errors. A lint failure found at Task 6 forces a fix after the commit, and project policy is to avoid follow-up fixup commits. Add `pnpm lint` (and typecheck, if it is separate from build) to the Success lines of Tasks 2T, 3T and 4T, before their commits.",
+      "file_ref": null,
+      "category": "quality-gates",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md:57"
+    },
+    {
+      "severity": "NOTE",
+      "title": "\"Several\" real slice designs in Task 4T is undefined",
+      "description": "A junior implementer has to pick \"several files that pass the bash script today\". That requires running the script first, and the task doesn't say to. Name how many files to use, or say to choose them by running `./project-documents/ai-project-guide/scripts/validate-slice-design` and keeping those that print `PASS`. The 214 design is already named and should be one of them.",
+      "file_ref": null,
+      "category": "clarity",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md:108"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Tasks 0, 1 and 6 are small enough to fold into neighbours",
+      "description": "Task 1 is a one-line constant that only Task 4 uses. It could be folded into Task 4, or kept where it is. Task 6's README check and full-suite run could sit inside Task 5's closing steps, along with the single final commit suggested above. This is optional. The task count (7 numbered tasks plus 5 commit lines) is acceptable for a slice of this size.",
+      "file_ref": null,
+      "category": "proportionality",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md:41"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "pass",
+      "category": "coverage",
+      "raw_category": null,
+      "summary": "Success criteria are fully covered",
+      "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md:59-115",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "process",
+      "raw_category": null,
+      "summary": "Commit markers are written as checkbox tasks, and 5C/6C can make notes-only commits",
+      "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md:71",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "quality-gates",
+      "raw_category": null,
+      "summary": "Lint is not part of the per-task success criteria before the commits",
+      "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md:57",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "note",
+      "category": "clarity",
+      "raw_category": null,
+      "summary": "\"Several\" real slice designs in Task 4T is undefined",
+      "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md:108",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "proportionality",
+      "raw_category": null,
+      "summary": "Tasks 0, 1 and 6 are small enough to fold into neighbours",
+      "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md:41",
+      "location_verified": true
+    }
+  ],
+  "template_name": "tasks",
+  "input_files": {
+    "input": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md",
+    "against": "project-documents/user/slices/214-slice.native-slice-design-validation.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/context-forge-214-tasks"
+  },
+  "timestamp": "2026-11-16T09:27:46.407348",
+  "model": "claude-sonnet-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 2,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-sonnet-5-5",
+  "answering_models": [
+    "claude-sonnet-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 5,
+    "in_fences": 0,
+    "in_section": 5,
+    "surviving": 5
+  },
+  "effort": "medium",
+  "profile": "sdk",
+  "turns": 3,
+  "prompt_tokens": 114792,
+  "cached_tokens": 11436,
+  "cache_write_tokens": 103352,
+  "completion_tokens": 4431,
+  "reasoning_tokens": null,
+  "duration_seconds": 37.95574004203081,
+  "cost_usd": 0.45953390000000005,
+  "cost_basis": "provider"
+}

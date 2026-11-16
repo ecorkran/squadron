@@ -1,0 +1,47 @@
+{
+ "review": "r11",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Contradictory statements about edits to 421, 422, 424 and 425",
+   "description": "Technical Scope says \"No edits to 424 or 425: \u2026 425 provides `bootstrap_mean_interval`\". D17 repeats \"No change to 425\". Technical Requirements (line 451) says `tests/benchmark/` passes unchanged \"except where D8 routes re-qualification and D17 extracts the interval\". \"Extracts the interval\" means 425 is modified. Other edits are also stated inconsistently:\n- D7 says \"no 422 code changes\", but `yield_report.py` gains slice-case rows.\n- The Consumes section lists \"422 \u2026 all unchanged\", yet `yield_report.py` is edited.\n- `CaseDrop.reason` in 424 is widened.\n- `ScrubbedEnvironment.with_tools` is added to 421.\n- `start_point.py` patterns are made public in 177.\n\nDependency direction is fine, since this slice depends on all of these. The problem is that the consumed slices' owners cannot tell what contract changes to expect. Fix: replace the \"no edits\" claims with one explicit list of touchpoints in other slices. State whether `bootstrap_mean_interval` already exists in 425 or is extracted here. This matters because 426 may be built ahead of 424 (slice plan Notes), and then these assumptions would be wrong.",
+   "location": "project-documents/user/slices/426-slice.slice-cases.md:42"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Missing failure handling for the judge's checkout reads and the judge lock",
+   "description": "The judge reads reference diffs from the user's checkout with `git diff`. Two failure modes lack explicit handling:\n- **Failed or timed-out `git diff` at judge time.** D6 covers git failures during qualification only. No outcome or observable signal is stated for a `git diff` or `git rev-list` failure while judging.\n- **Missing `tip_sha`.** One missing `tip_sha` makes `judge` refuse the whole benchmark (line 153). 403 stores landings because reflogs expire, so a later `gc` could make this a common outcome. The document does not say whether the refusal is intended, or whether the case should instead be counted and skipped, like the over-size case.\n\nThe judge lock (line 167) says nothing about a second `judge` invocation while the lock is held, or about a stale lock after a crash. Add one line each. Each should name the exit code and the log level, so the \"one test per failure path asserts its signal\" criterion covers them.",
+   "location": "project-documents/user/slices/426-slice.slice-cases.md:142-160"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Reference diff is re-derived from the user's checkout at judge time instead of being captured at build time",
+   "description": "The architecture says cases are immutable and results stay comparable over time. The reference diff is the one case input that is not frozen. It is read live from `--repo` on every `judge` run, and the same input is needed for the reference grade. The design already stores normalized diffs in sidecars, so it could store the reference diff when the case is built or first graded. That would drop the `--repo` requirement and the \"tip missing\" refusal. At minimum, state whether 425 already persists the reference diff as a sidecar, and reuse it if so.",
+   "location": "project-documents/user/slices/426-slice.slice-cases.md:152"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Scrubbed-environment boundary is widened for cf with the leak-scan check left to a spike",
+   "description": "The architecture says the producer's `PATH` leaves out the user's tool installs. D9 deliberately adds the user's `cf` to the scrubbed `PATH` and sets `HOME` to the scrubbed home. Making the tool-link mechanism explicit and keeping it out of `EnvironmentIdentity` is reasonable. But the spike (implementation step 1) is the only protection against `cf` reading the user's real config, guides or store from outside the home. The design should state what verdict the spike must produce for the leak scan to count as covering this path. For example, the scan's path list must include the cf install location and cf's config directory, and a transcript read of either marks the run leaked. A `BLOCKED:` line alone does not say what happens to a run that reads those paths after the spike passes.",
+   "location": "project-documents/user/slices/426-slice.slice-cases.md:234-235"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Proportionality: several mechanisms can be cut or deferred",
+   "description": "The design is large for a 3/5 slice: 9 new modules, 4 new record types, and new cross-slice extractions. Candidates to cut:\n- **`uv.lock` dropping (D11).** The design admits it goes beyond the slice plan. Keep it only if a real-slice fixture shows lockfile noise pushing prompts over the limit. Otherwise defer.\n- **Separate `slice_task.py` and `slice_discovery.py` modules.** Both are small pure steps and could live in `slice_qualify.py` or `slice_case_build.py`.\n- **`--keep` flag.** It appears in the CLI contract but nowhere else, with no stated behavior.\n- **Both Bradley-Terry strengths and per-pair paired intervals (D17).** The design itself says the verdict comes from the interval, not the strengths. Keep the strengths only if the architecture's \"Bradley-Terry ranks configs\" requirement is meant to be satisfied by display.\n- **Restated content.** The Provides and Consumes sections and parts of Value restate other documents. Trim them to the integration points that are new.",
+   "location": "project-documents/user/slices/426-slice.slice-cases.md:30-42"
+  },
+  {
+   "i": 5,
+   "severity": "NOTE",
+   "title": "Reference is `tip_sha`, not the landing commit",
+   "description": "The architecture describes the landing commit as the reference. D2 uses the branch tip, because `fork..after` includes unrelated work on merge landings. The reasoning is sound and consistent with the architecture's intent. It would help to note the deviation in the architecture's next revision.",
+   "location": "project-documents/user/slices/426-slice.slice-cases.md:178"
+  }
+ ]
+}

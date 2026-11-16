@@ -1,0 +1,261 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Grading cap departs from the architecture's single run-level cap and is left unreconciled",
+      "description": "The architecture's design goal \"Spend is visible before it happens\" says a benchmark run states its bound before any dispatch and stops at its own cap, \"which covers grading and judging as well as the replays\". Its Cost section repeats this.\n\nD9 makes grading a separate command with a separate `--max-cost` and says \"the architecture's cost section should say so\". The consequences:\n- No bound printed before the first replay dispatch includes grading.\n- Total spend is the run cap plus the sum of every grade invocation's cap, which is unbounded across reruns and reviewers.\n- 424 is internally inconsistent on this: line 258 defers to 425 D9, while line 398 still says 425 extends `bench_plan` with grading terms.\n\nEither have `sq benchmark run` print a grading estimate in its bound (the store-observed per-review figure \u00d7 planned reviews), or amend the architecture goal and Cost section in the same change set. A \"should change\" note in the slice is not enough.",
+      "file_ref": null,
+      "category": "architectural-alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/425-slice.grading-and-paired-report.md:220-236"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Report row key contradicts 420's config identity rule and the slice's own Dependencies section",
+      "description": "D13 keys rows by `(alias, model, profile, effort_sent)`. Line 58 of the same document says rows group by 420 D6: `(model, profile, effort sent, tool_use, max_output_tokens)`.\n\n420 D6 makes the alias a display field and says its rule supersedes the architecture's tuple. Under D13's key:\n- Two aliases that sent the same thing become two rows, which is what 420's success criterion forbids.\n- Two configs that differ only in `tool_use` or `max_output_tokens` merge into one row.\n\nD13 should use the D6 identity and show aliases as a label. The \"no effort stamp counts by its failure class\" rule on line 58 also has no home in D13 or D16.",
+      "file_ref": null,
+      "category": "integration",
+      "raw_category": null,
+      "location": "project-documents/user/slices/425-slice.grading-and-paired-report.md:263"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Reviewer rules are claimed to be the start commit's but are read from the producer's tree, and `rules_hash` cannot be one value per benchmark",
+      "description": "D1 runs the review first, \"on the producer's commit exactly as written, before the grader changes anything\". D7 loads rules from \"the sandbox tree's own rules directory (the start commit's)\". At that step the tree is the producer's commit, so a producer that edits rules files changes what the grading reviewer is told. That is contrary to \"the producer cannot change the grade\" and to the architecture's \"fixed code-review config\".\n\nSeparately, `rules_hash` sits in `ReviewerRef`, which feeds the `GraderIdentity` digest that D10 says is \"one value for the whole benchmark\". Rules come from each case's start commit, so the hash differs per case, and per project in a pooled set. D13's \"latest grader identity\" and the `refgrade` and `implgrade` ids all depend on that digest.\n\nThe design should read rules through `TreeReader` at `start_sha` and move `rules_hash` onto the grade record beside `environment_digest`. The same question applies to \"the snapshot config read from the tree\" in D12.",
+      "file_ref": null,
+      "category": "under-specification",
+      "raw_category": null,
+      "location": "project-documents/user/slices/425-slice.grading-and-paired-report.md:208"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "A failed LLM review or snapshot removes the case from the objective comparison",
+      "description": "`review_failed`, `snapshot_failed` and `check_tool_mismatch` are harness absences. D13 excludes any case with a harness absence from every config, and D16 says \"nothing falls back to a partial grade\". Because the review is the first step in `grade_one`, one reviewer timeout on one sample means the hidden and regression suites never run for it. The case then leaves the pass-fraction and paired-bootstrap sections.\n\nThe architecture's \"Objective before opinion\" says LLM signals are reported beside the objective grade, \"never folded into them\". Its harness-absence examples are environment, grader timeout and leak, all of which invalidate the objective grade itself. A flaky reviewer endpoint shrinking n for the deterministic statistic couples the two.\n\nA lighter design keeps one record with the review, snapshot and check fields individually absent with a reason. The case would be excluded only from the report sections that need the missing signal. `reference_failed_grade` from a failed floor run (D8) has the same effect and should be limited to the review section.",
+      "file_ref": null,
+      "category": "architectural-alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/425-slice.grading-and-paired-report.md:296-311"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Reinstall failure is always charged to the config, including harness-caused failures",
+      "description": "D5 maps any failed `uv sync --locked` after a dependency change to `producer_env_unresolvable`, a config absence counted as a fail. The same call fails on harness causes: an `install_timeout_s` expiry, an index or network outage, or a hang.\n\nThe architecture's \"Absent is not zero\" requires those to drop the case from every config. 421's `EnvironmentResolutionError` already carries a `reason`. D5 should say which reasons are the producer's (lock inconsistent with `pyproject.toml`, unresolvable requirement) and send timeout and network reasons to a harness absence. The timeout that bounds the reinstall is not named either.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/425-slice.grading-and-paired-report.md:193-197"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The slice creates a 427\u2192425 dependency the slice plan rules out",
+      "description": "The slice plan says 427 depends only on 421, \"does not depend on 424\u2013426 and can be built any time after 421\". This slice has 427 import `ReviewerRef`/`reviewer_key`, `review_tree_diff` and `bootstrap_mean_interval` from 425's modules \"and define no copies\". It also has 427 edit `review_flag` in `bench_report.py` to call 427's `latest_recall_for`.\n\nThat makes 427 unbuildable before 425 and puts a two-way coupling between the report and the recall store. Options:\n- Place the three shared pieces where neither slice owns the other: `ReviewerRef` is already in `metrology/benchmark_models.py`; the review call and bootstrap could sit beside it.\n- Have `review_flag` take a recall lookup by injection, so 427 registers a lookup and does not edit 425's module.\n- Otherwise, update the slice plan's 427 entry to add the 425 dependency.",
+      "file_ref": null,
+      "category": "dependency-direction",
+      "raw_category": null,
+      "location": "project-documents/user/slices/425-slice.grading-and-paired-report.md:465"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Rebuilding the tree in a fresh sandbox departs from \"in the same sandbox\"",
+      "description": "The architecture and the slice plan entry both say the grader runs \"in the same sandbox\". D1 rebuilds from `start_sha` plus the stored diff and cites 424, which documents this as a deliberate departure for disk cost. The `environment_changed` check covers the main risk. The slice should name the departure itself, as D9 does for the cap, and the architecture wording should be amended with it.",
+      "file_ref": null,
+      "category": "architectural-alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/425-slice.grading-and-paired-report.md:161-162"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Small internal inconsistencies",
+      "description": "- Technical Scope says `ContentSidecars` adds a `snapshots` kind; D11 and State Management add `nodes` as well.\n- `check_tool_mismatch` is deterministic per case, so it will drop the same cases on every grade run. It would be cheaper to detect at planning, before any review is paid for.\n- The grade lock is per benchmark, but `ReferenceGrade` is keyed per (case, grader, environment) across benchmarks. Two benchmarks sharing a case can pay for the same floor reviews concurrently.",
+      "file_ref": null,
+      "category": "under-specification",
+      "raw_category": null,
+      "location": "project-documents/user/slices/425-slice.grading-and-paired-report.md:249"
+    },
+    {
+      "severity": "PASS",
+      "title": "Grader principles are carried through",
+      "description": "The slice follows \"the grader is not the producer\" in detail:\n- Tool config is restored by section, with packaging tables following the producer.\n- A dependency change triggers a recorded reinstall.\n- Producer-new tests are a separate signal and never enter the pass.\n- Existing tests are restored before the regression run.\n- Edits and suppressions are counted and never change the grade.\n- Regression selection is by node id, minus the superseded and excluded sets.\n- Hidden tests go into a sibling module, which meets \"renamed, not overwritten\" with clashes recorded.",
+      "file_ref": null,
+      "category": "architectural-alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/425-slice.grading-and-paired-report.md:152-203"
+    },
+    {
+      "severity": "PASS",
+      "title": "Paired statistics, no composite, and the unmeasured-reviewer flag match the architecture",
+      "description": "- Each config reduces to a per-case pass fraction, and the bootstrap runs over cases.\n- An interval containing zero shows \"not distinguishable\"; the reference is a line, never ranked.\n- The review floor applies only to review findings.\n- The sample-count estimate is measured from the small run.\n- A test asserts that the report model has no composite field.",
+      "file_ref": null,
+      "category": "architectural-alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/425-slice.grading-and-paired-report.md:260-291"
+    },
+    {
+      "severity": "PASS",
+      "title": "Scope and weight fit the slice plan entry",
+      "description": "Every included item traces to the 425 slice plan entry or to a hand-off stated in 421, 422 or 424 (store extension by sibling payloads, sidecars, the yield report's measured line). Nothing the plan assigns is dropped. Failure modes are enumerated in D16 with a class, ERROR logging and a test double per absence, and the timeouts for suite, review and snapshot are named.",
+      "file_ref": null,
+      "category": "proportionality",
+      "raw_category": null,
+      "location": "project-documents/user/slices/425-slice.grading-and-paired-report.md:31-49"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "architectural-alignment",
+      "raw_category": null,
+      "summary": "Grading cap departs from the architecture's single run-level cap and is left unreconciled",
+      "location": "project-documents/user/slices/425-slice.grading-and-paired-report.md:220-236",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "integration",
+      "raw_category": null,
+      "summary": "Report row key contradicts 420's config identity rule and the slice's own Dependencies section",
+      "location": "project-documents/user/slices/425-slice.grading-and-paired-report.md:263",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "under-specification",
+      "raw_category": null,
+      "summary": "Reviewer rules are claimed to be the start commit's but are read from the producer's tree, and `rules_hash` cannot be one value per benchmark",
+      "location": "project-documents/user/slices/425-slice.grading-and-paired-report.md:208",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "architectural-alignment",
+      "raw_category": null,
+      "summary": "A failed LLM review or snapshot removes the case from the objective comparison",
+      "location": "project-documents/user/slices/425-slice.grading-and-paired-report.md:296-311",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "Reinstall failure is always charged to the config, including harness-caused failures",
+      "location": "project-documents/user/slices/425-slice.grading-and-paired-report.md:193-197",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "dependency-direction",
+      "raw_category": null,
+      "summary": "The slice creates a 427\u2192425 dependency the slice plan rules out",
+      "location": "project-documents/user/slices/425-slice.grading-and-paired-report.md:465",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "note",
+      "category": "architectural-alignment",
+      "raw_category": null,
+      "summary": "Rebuilding the tree in a fresh sandbox departs from \"in the same sandbox\"",
+      "location": "project-documents/user/slices/425-slice.grading-and-paired-report.md:161-162",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "note",
+      "category": "under-specification",
+      "raw_category": null,
+      "summary": "Small internal inconsistencies",
+      "location": "project-documents/user/slices/425-slice.grading-and-paired-report.md:249",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "pass",
+      "category": "architectural-alignment",
+      "raw_category": null,
+      "summary": "Grader principles are carried through",
+      "location": "project-documents/user/slices/425-slice.grading-and-paired-report.md:152-203",
+      "location_verified": true
+    },
+    {
+      "id": "F010",
+      "severity": "pass",
+      "category": "architectural-alignment",
+      "raw_category": null,
+      "summary": "Paired statistics, no composite, and the unmeasured-reviewer flag match the architecture",
+      "location": "project-documents/user/slices/425-slice.grading-and-paired-report.md:260-291",
+      "location_verified": true
+    },
+    {
+      "id": "F011",
+      "severity": "pass",
+      "category": "proportionality",
+      "raw_category": null,
+      "summary": "Scope and weight fit the slice plan entry",
+      "location": "project-documents/user/slices/425-slice.grading-and-paired-report.md:31-49",
+      "location_verified": true
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/425-slice.grading-and-paired-report.md",
+    "against": "project-documents/user/architecture/420-arch.model-benchmark.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261115-design/wt/425-design"
+  },
+  "timestamp": "2026-11-16T07:03:15.862455",
+  "model": "claude-fable-5-2",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 10,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-fable-5-2",
+  "answering_models": [
+    "claude-fable-5-2"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 11,
+    "in_fences": 0,
+    "in_section": 11,
+    "surviving": 11
+  },
+  "effort": "medium",
+  "profile": "sdk",
+  "turns": 11,
+  "prompt_tokens": 408060,
+  "cached_tokens": 382471,
+  "cache_write_tokens": 25581,
+  "completion_tokens": 11927,
+  "reasoning_tokens": null,
+  "duration_seconds": 123.79435691703111,
+  "cost_usd": 0.9637020000000001,
+  "cost_basis": "provider"
+}

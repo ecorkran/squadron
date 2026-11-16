@@ -1,0 +1,207 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Config identity rule departs from the architecture without amending it",
+      "description": "The architecture defines identity in two places: Design Goals (\"config (alias, model, profile, effort sent)\") and Envisioned State. D6 drops the alias from the grouping key and adds `tool_use` and `max_output_tokens`. \"Provides to Other Slices\" says this \"supersedes\" the architecture. A slice doc should not override its parent architecture. Slices 421\u2013427 read the architecture first and would find the older rule. D6 does fall within the architecture's own statement that effort rows split \"only when the effort really differed on the wire\". The fix is to amend the architecture's identity wording, or to record the change as an architecture update with a pointer from this slice.",
+      "file_ref": null,
+      "category": "architectural-alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/420-slice.effort-audit-across-dispatch-paths.md#D6 \u2014 Config identity is what went on the wire; the alias is display"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Identity change goes beyond effort and is not shared",
+      "description": "The slice is an audit of effort. D6 adds `tool_use` and `max_output_tokens` to `ProducerConfigRef`, adds a private `config_identity` in `replay/report.py`, and changes the row and Bradley-Terry grouping. The slice plan's criterion requires only that aliases which sent the same effort merge, and that different efforts split. Neither new field is needed for that. The doc also says \"this slice ships no shared identity type\", so each later slice must rebuild the same tuple for its own record types. That duplicates logic and risks the identity rules drifting apart. Either cut D6 to model, profile and effort sent, or ship the identity as one shared definition that 424\u2013427 import.",
+      "file_ref": null,
+      "category": "scope",
+      "raw_category": null,
+      "location": "project-documents/user/slices/420-slice.effort-audit-across-dispatch-paths.md#D6 \u2014 Config identity is what went on the wire; the alias is display"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The \"sends and records\" guarantee is wider than the inventory supports",
+      "description": "\"Provides to Other Slices\" promises that \"every alias-resolving dispatch path, including the grading review and the judge, sends and records effort.\" The inventory contradicts this in three places:\n- Path 7 (the findings-addressed judge) writes no record.\n- Paths 10 and 11 (prompt-only runs) write no record.\n- The replay judge records its effort only on `JudgeRef`.\n\nThe architecture requires that \"every run records the effort actually sent\". Rows for which no record is written still need a stated treatment. Restrict the guarantee to the paths that write records, and name the exceptions. Alternatively, say how a consumer should read a path-7 judgment, since 425's report may include judge-effort columns.",
+      "file_ref": null,
+      "category": "integration",
+      "raw_category": null,
+      "location": "project-documents/user/slices/420-slice.effort-audit-across-dispatch-paths.md#Provides to Other Slices"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Reader raising on an unrecognized stored effort has no stated handling in report paths",
+      "description": "`action_effort_sent` \"raises on an unrecognized value\". The same reader feeds `sq replay report` and `sq stats producers`, which scan the whole store. One corrupt or future-valued record would abort an entire report. Raising is consistent with fail-fast, but the design does not say whether the failure is surfaced per record (logged at WARNING+ with the record excluded and counted) or kills the report. The rules require each failure mode to be observable and tested. Name the handling and add one test that asserts the observable signal.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/420-slice.effort-audit-across-dispatch-paths.md#D5 \u2014 Effort sent is stamped on the action, not only on the usage record"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Design restates material owned elsewhere and is heavier than the slice needs",
+      "description": "The doc is rated 2/5 effort, but several parts could be cut:\n- The Providers paragraph restates the wire mappings from slice 931, which the doc itself says \"none of [them] change\".\n- Rows 13\u201317 are out-of-scope rows in the inventory table, and the Excluded section repeats them.\n- The Data Flow diagram repeats the D5 and D2 text.\n- A 17-row inventory plus a 12-path test matrix is the heaviest way to lock the audit. The D7 enumeration test already enforces classification of each `AgentConfig` site.\n\nCut the Providers paragraph, fold the out-of-scope rows into Excluded, and keep the table to the rows that change or need a test.",
+      "file_ref": null,
+      "category": "proportionality",
+      "raw_category": null,
+      "location": "project-documents/user/slices/420-slice.effort-audit-across-dispatch-paths.md#Component Structure"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Compaction records the session's effort, not the alias's, and that is consistent",
+      "description": "The architecture says \"sends the alias's effort when the alias carries it\". For compaction, D2 records the effort that actually went on the wire. This matches the architecture's \"as sent\" principle and the #216 constraint. No change is needed.",
+      "file_ref": null,
+      "category": "architectural-alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/420-slice.effort-audit-across-dispatch-paths.md#D2 \u2014 Compaction records the session's effort"
+    },
+    {
+      "severity": "PASS",
+      "title": "Failure paths for new metadata and unreachable providers are explicit",
+      "description": "D5 handles three cases:\n- A failure before telemetry still carries `effort_sent`.\n- Runs that carry no stamp (subprocess died, cancelled, resolution failed) are listed with their failure classes.\n- Absent versus `null` is defined.\n\nThis matches the architecture's \"Absent is not zero\". Rejecting a zero-spend `UsageRecord` also protects 175's priced and unpriced tallies.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/420-slice.effort-audit-across-dispatch-paths.md#D5 \u2014 Effort sent is stamped on the action, not only on the usage record"
+    },
+    {
+      "severity": "PASS",
+      "title": "Layering, dependencies and exclusions match the architecture",
+      "description": "The slice depends only on completed slices (931, 175, #216). The metadata changes are optional fields with `None` defaults, which matches \"optional sibling payloads, no migration\". Excluding paths with no alias, and putting findings-addressed spend in a separate issue, keeps the slice from growing into a feature.",
+      "file_ref": null,
+      "category": "dependencies",
+      "raw_category": null,
+      "location": "project-documents/user/slices/420-slice.effort-audit-across-dispatch-paths.md#Dependencies"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "architectural-alignment",
+      "raw_category": null,
+      "summary": "Config identity rule departs from the architecture without amending it",
+      "location": "project-documents/user/slices/420-slice.effort-audit-across-dispatch-paths.md#D6 \u2014 Config identity is what went on the wire; the alias is display",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "scope",
+      "raw_category": null,
+      "summary": "Identity change goes beyond effort and is not shared",
+      "location": "project-documents/user/slices/420-slice.effort-audit-across-dispatch-paths.md#D6 \u2014 Config identity is what went on the wire; the alias is display",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "integration",
+      "raw_category": null,
+      "summary": "The \"sends and records\" guarantee is wider than the inventory supports",
+      "location": "project-documents/user/slices/420-slice.effort-audit-across-dispatch-paths.md#Provides to Other Slices",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "Reader raising on an unrecognized stored effort has no stated handling in report paths",
+      "location": "project-documents/user/slices/420-slice.effort-audit-across-dispatch-paths.md#D5 \u2014 Effort sent is stamped on the action, not only on the usage record",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "proportionality",
+      "raw_category": null,
+      "summary": "Design restates material owned elsewhere and is heavier than the slice needs",
+      "location": "project-documents/user/slices/420-slice.effort-audit-across-dispatch-paths.md#Component Structure",
+      "location_verified": null
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "architectural-alignment",
+      "raw_category": null,
+      "summary": "Compaction records the session's effort, not the alias's, and that is consistent",
+      "location": "project-documents/user/slices/420-slice.effort-audit-across-dispatch-paths.md#D2 \u2014 Compaction records the session's effort",
+      "location_verified": null
+    },
+    {
+      "id": "F007",
+      "severity": "pass",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "Failure paths for new metadata and unreachable providers are explicit",
+      "location": "project-documents/user/slices/420-slice.effort-audit-across-dispatch-paths.md#D5 \u2014 Effort sent is stamped on the action, not only on the usage record",
+      "location_verified": null
+    },
+    {
+      "id": "F008",
+      "severity": "pass",
+      "category": "dependencies",
+      "raw_category": null,
+      "summary": "Layering, dependencies and exclusions match the architecture",
+      "location": "project-documents/user/slices/420-slice.effort-audit-across-dispatch-paths.md#Dependencies",
+      "location_verified": null
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/420-slice.effort-audit-across-dispatch-paths.md",
+    "against": "project-documents/user/architecture/420-arch.model-benchmark.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261115-design/wt/420-design"
+  },
+  "timestamp": "2026-11-16T07:05:22.321294",
+  "model": "claude-sonnet-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 2,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-sonnet-5-5",
+  "answering_models": [
+    "claude-sonnet-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 8,
+    "in_fences": 0,
+    "in_section": 8,
+    "surviving": 8
+  },
+  "effort": "medium",
+  "profile": "sdk",
+  "turns": 3,
+  "prompt_tokens": 129389,
+  "cached_tokens": 129385,
+  "cache_write_tokens": 0,
+  "completion_tokens": 3638,
+  "reasoning_tokens": null,
+  "duration_seconds": 30.525134792085737,
+  "cost_usd": 0.0500944,
+  "cost_basis": "provider"
+}

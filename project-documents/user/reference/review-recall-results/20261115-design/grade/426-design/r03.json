@@ -1,0 +1,47 @@
+{
+ "review": "r03",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "The judge's overshoot bound is too low: the cap is checked once per pair, but each pair makes two calls",
+   "description": "The architecture requires that the run \"states its upper bound in dollars before any dispatch\". It also requires the bound to include the overshoot past the cap. D16 says \"The cap is checked before each call\", and the bound adds \"one call of overshoot\".\n\nThe data flow (line 158) disagrees. It shows `cap check \u2192 judge_pair (two orders) \u2192 DiffJudgment`. D12 defines `judge_pair` as one extracted function that makes both calls itself and returns `tuple[JudgeReply, JudgeReply]` (line 259). Nothing in that signature lets the caller check the cap between the two calls. So the real overshoot is up to one pair, which is two calls, and the printed bound is too low.\n\nThe per-call figure has two more gaps:\n- It is the largest cost seen so far for that judge alias. Prompts can reach 400k characters, so a case with a larger prompt can cost more than that figure. Neither the bound nor the overshoot line would cover it.\n- The doc does not say what happens when a judge call returns no `cost_usd`. In that case the tally never moves and the cap is never enforced. 424 D8 states its rule for unpriced replays; this slice has no equivalent.\n\nFix: either let `judge_pair` take a callback that checks the cap between the two calls, or state the overshoot as one pair. Also say how unpriced judge calls are counted and reported.",
+   "location": "project-documents/user/slices/426-slice.slice-cases.md:287-298"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "\"No edits to 424 or 425\" contradicts changes the slice makes elsewhere",
+   "description": "Line 42 says the slice makes \"No edits to 424 or 425\". But the slice does edit them:\n- It widens 424's persisted `CaseDrop.reason` model (lines 321 and 426).\n- It adds per-kind grouping and a pairwise section to 425's `bench_report` (lines 87 and 427).\n- Line 451 expects `tests/benchmark/` to change \"where D8 routes re-qualification and D17 extracts the interval\". That contradicts lines 225 and 312, which say 424 already provides `requalify` and 425 already provides `bootstrap_mean_interval`.\n\nSince the other slices' contracts are the integration points, the doc should list every cross-slice change in one place:\n- 421: `with_tools`\n- 422: yield rows\n- 424: `CaseDrop.reason`\n- 425: `bench_report` grouping\n- 177: `judge_pair`, `CfRegistration` and the public patterns\n\nLine 451 should then name only the tests that really change. As written, the implementer can't tell which upstream tests are allowed to change.",
+   "location": "project-documents/user/slices/426-slice.slice-cases.md:42"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "The doc doesn't say how `plan_file_for` reads the fork commit before any sandbox exists",
+   "description": "D3 rejects a candidate with `no_slice_plan_at_fork` when `plan_file_for` finds no plan \"at the fork\". The data flow runs this check before any sandbox is created (line 116, before line 118). But the slice gives the signature as `plan_file_for(index, root)` (line 66), which reads a directory on disk, not a commit.\n\nAt that point only the user's checkout is available, and it is at today's HEAD. Reading it there would check the wrong revision. The slice needs to choose one of these:\n- add a git-based variant that reads from `git ls-tree` / `git show`, as D3 already does for the design and task files;\n- move the check after the fork sandbox is created;\n- extract the fork tree to a temporary directory first.\n\nWhichever is chosen is another interface change and belongs in the list from the previous finding. Note that `CfRegistration` also calls `plan_file_for` (D9), but there it runs inside the sandbox tree, so it is fine.",
+   "location": "project-documents/user/slices/426-slice.slice-cases.md:187"
+  },
+  {
+   "i": 3,
+   "severity": "NOTE",
+   "title": "The runner method name differs from 424's seam",
+   "description": "426 calls `SliceCaseRunner.invoke`. 424 defines the `CaseKindRunner` protocol as `requalify` plus a replay method named `run` (424's `case_runners.py`, \"requalify, run\"). Use 424's name so the slice runner matches the protocol.",
+   "location": "project-documents/user/slices/426-slice.slice-cases.md:132"
+  },
+  {
+   "i": 4,
+   "severity": "NOTE",
+   "title": "Using the branch tip as the reference departs from the architecture's wording, with a stated reason",
+   "description": "The architecture and the slice plan both say \"the landing commit is the reference\". D2 uses `tip_sha` instead and explains why: on a merge landing, `fork..after` also contains work that reached the target while the branch was open. It also rejects branches that merged the target in. This is a sound refinement of the architecture's intent. The architecture's Envisioned State and the slice plan entry should be updated to match, so later slices do not take `after_sha` as the reference.",
+   "location": "project-documents/user/slices/426-slice.slice-cases.md:176-181"
+  },
+  {
+   "i": 5,
+   "severity": "NOTE",
+   "title": "One character limit applies to every judge model",
+   "description": "`benchmark.judge_max_prompt_chars` is a single global value (default 400 000), but the over-size records are keyed per judge. If a judge model's context window is smaller than the limit, its oversized prompts are not caught as `over_size`. They fail as calls, are left unrecorded, and show up as \"pending\" every time `judge` is rerun. That is visible in the report, but it never resolves. Consider either tying the limit to the judge alias, or treating a context-length error as `over_size`.",
+   "location": "project-documents/user/slices/426-slice.slice-cases.md:274"
+  }
+ ]
+}

@@ -1,0 +1,207 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Structured-output requirement for score-with-rationale is dropped and replaced by prompt text",
+      "description": "The slice plan assigns this slice the success criterion \"The score-with-rationale shape is enforced by the template's structured output.\" The architecture says the same thing (Technical Considerations, mitigation (b)): \"the judge template uses a structured-output constraint for the score field and a *score-with-rationale* prompt shape.\" The design only *asks* for the shape in the system prompt. It says outright that `## Rationale` is \"prose scaffolding for the model, not a new parser target.\" Nothing enforces that a rationale comes before each criterion's number, and nothing constrains the `score:` field beyond the parser's lenient extraction. So assigned scope has been dropped without saying so. Fix it one of two ways:\n- Name the structured-output mechanism the templates will use for `score` and the per-criterion rationale, or say which existing template field carries it.\n- Or state explicitly that this criterion is deferred and why, and record it in the slice plan's Future Work.",
+      "file_ref": null,
+      "category": "scope",
+      "raw_category": null,
+      "location": "project-documents/user/slices/302-slice.design-phase-judge-templates.md:152-183"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The CLI path claimed for judge templates does not exist",
+      "description": "The Value section says \"a pipeline step (or the `sq review` CLI) can run `template: judge.slice-vs-arch`.\" Functional Requirement 3 (lines 277-282) and walkthrough step 3 (lines 361-379) depend on the same thing: `sq review slice-vs-arch \u2026 --template judge.slice-vs-arch`. But the `sq review` CLI has only fixed subcommands (`slice`, `arch`, `tasks`, `code`, `list`). Each one hardcodes its template name, and none accepts a template override. The CLI also calls the review runner directly, so it never reaches the action-layer `enforce_judge()`. Even with a template flag, the CLI would return no threshold-derived verdict and no `provenance == \"judge\"`. The note at lines 376-379 calls this a matter of invocation shape, but it is a missing integration surface. Pick one:\n- **Recommended (lighter):** drop the CLI claims. Have FR3 and walkthrough step 3 run the judges through a pipeline `review` step, which is the path the architecture defines (\"How a step selects a judge\").\n- Or add CLI support, with the enforcement hook, to this slice's scope and to the Component Structure table. That breaks the \"one required code change\" claim.",
+      "file_ref": null,
+      "category": "integration",
+      "raw_category": null,
+      "location": "project-documents/user/slices/302-slice.design-phase-judge-templates.md:31-35"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Failure-mode table leaves out modes the architecture enumerates",
+      "description": "The architecture's failure-mode list covers: unparseable response; score absent or out of range; missing or unreadable ground-truth file; provider unavailable; injected ground truth over the cap. The table says it makes the mapping \"explicit for these specific paths,\" but it leaves out three of these:\n- **Missing or unreadable ground-truth file.** This one is new to this slice. `TEMPLATE_INPUTS` can resolve an `arch_file`/`design_file` path that is non-empty but does not exist on disk. That is different from the \"SliceInfo missing a field\" row.\n- **Injection cap exceeded.** For `judge.slice-vs-arch`, the architecture doc is the injected ground truth, and architecture docs can be large.\n- **Unparseable response,** as opposed to a missing score.\n\nAdd a row for each giving its handling and its verdict (`UNKNOWN` with a WARNING+ log, or whatever the existing path actually does). This holds even where the answer is \"inherited unchanged from the review subsystem.\" Without these rows, the no-silent-pass restatement at lines 402-408 is not backed for these paths.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/302-slice.design-phase-judge-templates.md:394-400"
+    },
+    {
+      "severity": "PASS",
+      "title": "No engine change; judges run on the existing `review` action",
+      "description": "This matches \"Reuse, don't rebuild\" and the architecture's \"How a step selects a judge.\" The new templates are found by glob. Dispatch depends only on the `judge:` block (`is_judge`). The only code change is two data entries in the registry. Dependencies point the right way: the slice consumes 300 and 301 and asks nothing back from them.",
+      "file_ref": null,
+      "category": "architecture",
+      "raw_category": null,
+      "location": "project-documents/user/slices/302-slice.design-phase-judge-templates.md#what-does-not-change"
+    },
+    {
+      "severity": "PASS",
+      "title": "The template name is never used as dispatch logic",
+      "description": "The design rejects a prefix-stripping fallback in favor of explicit `TEMPLATE_INPUTS` entries (lines 236-245). This follows the project rule against using user-visible labels as logical structure, and four lines of duplication is the right trade.",
+      "file_ref": null,
+      "category": "architecture",
+      "raw_category": null,
+      "location": "project-documents/user/slices/302-slice.design-phase-judge-templates.md:187-196"
+    },
+    {
+      "severity": "PASS",
+      "title": "Thresholds are set per template, can be overridden per step, and differ by ground-truth strength",
+      "description": "This matches the architecture's commitment that thresholds are template-level with step-level override, and that defaults are conservative. Giving the weaker-ground-truth judge (`slice-vs-arch`) the higher pass floor follows \"Bubble up the hard calls.\" Keeping the values in YAML only (line 447) avoids magic numbers in Python.",
+      "file_ref": null,
+      "category": "architecture",
+      "raw_category": null,
+      "location": "project-documents/user/slices/302-slice.design-phase-judge-templates.md:218-234"
+    },
+    {
+      "severity": "PASS",
+      "title": "Telling the model not to emit a verdict matches the architecture's output contract",
+      "description": "This matches the principle \"The judge emits score + findings, not a verdict.\" Discarding a rogue verdict is backed by 301's one-way enforcement, so a non-compliant model can't produce a second, conflicting judgment.",
+      "file_ref": null,
+      "category": "architecture",
+      "raw_category": null,
+      "location": "project-documents/user/slices/302-slice.design-phase-judge-templates.md:208-216"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Live-provider verification is correctly planned",
+      "description": "The design is honest that unit tests can't check prompt quality, and it plans one live run per template. Once the CLI finding is resolved, that run should go through the pipeline `review` path so it also checks the derived verdict and provenance.",
+      "file_ref": null,
+      "category": "testing",
+      "raw_category": null,
+      "location": "project-documents/user/slices/302-slice.design-phase-judge-templates.md:419-424"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "scope",
+      "raw_category": null,
+      "summary": "Structured-output requirement for score-with-rationale is dropped and replaced by prompt text",
+      "location": "project-documents/user/slices/302-slice.design-phase-judge-templates.md:152-183",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "integration",
+      "raw_category": null,
+      "summary": "The CLI path claimed for judge templates does not exist",
+      "location": "project-documents/user/slices/302-slice.design-phase-judge-templates.md:31-35",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "Failure-mode table leaves out modes the architecture enumerates",
+      "location": "project-documents/user/slices/302-slice.design-phase-judge-templates.md:394-400",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "pass",
+      "category": "architecture",
+      "raw_category": null,
+      "summary": "No engine change; judges run on the existing `review` action",
+      "location": "project-documents/user/slices/302-slice.design-phase-judge-templates.md#what-does-not-change",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "pass",
+      "category": "architecture",
+      "raw_category": null,
+      "summary": "The template name is never used as dispatch logic",
+      "location": "project-documents/user/slices/302-slice.design-phase-judge-templates.md:187-196",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "pass",
+      "category": "architecture",
+      "raw_category": null,
+      "summary": "Thresholds are set per template, can be overridden per step, and differ by ground-truth strength",
+      "location": "project-documents/user/slices/302-slice.design-phase-judge-templates.md:218-234",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "pass",
+      "category": "architecture",
+      "raw_category": null,
+      "summary": "Telling the model not to emit a verdict matches the architecture's output contract",
+      "location": "project-documents/user/slices/302-slice.design-phase-judge-templates.md:208-216",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "note",
+      "category": "testing",
+      "raw_category": null,
+      "summary": "Live-provider verification is correctly planned",
+      "location": "project-documents/user/slices/302-slice.design-phase-judge-templates.md:419-424",
+      "location_verified": true
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/302-slice.design-phase-judge-templates.md",
+    "against": "project-documents/user/architecture/300-arch.eval-actions-llm-as-judge-scoring.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261115-design/wt/302-design"
+  },
+  "timestamp": "2026-11-16T07:05:42.608347",
+  "model": "claude-opus-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 8,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-opus-5-5",
+  "answering_models": [
+    "claude-opus-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 8,
+    "in_fences": 0,
+    "in_section": 8,
+    "surviving": 8
+  },
+  "effort": "medium",
+  "profile": "sdk",
+  "turns": 9,
+  "prompt_tokens": 531185,
+  "cached_tokens": 518850,
+  "cache_write_tokens": 12321,
+  "completion_tokens": 4594,
+  "reasoning_tokens": null,
+  "duration_seconds": 59.41060079098679,
+  "cost_usd": 0.29488030000000004,
+  "cost_basis": "provider"
+}

@@ -1,0 +1,103 @@
+{
+ "review": "r06",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "FAIL",
+   "title": "Producer-added test-side files are never restored or counted",
+   "description": "D6 restores and counts only \"existing test-side files \u2026 that the producer modified or deleted\" (line 201). Test-side status is judged at the start tree, so a file the producer adds is neither restored nor counted. pytest loads every `conftest.py` on the path from the rootdir to each collected test file. A producer that adds `tests/conftest.py`, or a conftest in a subdirectory, with an autouse fixture or a `pytest_runtest_makereport` hook changes the outcomes of the start tree's node ids in the regression run. Nothing in D1\u2013D6 or the Success Criteria (line 481) catches this. The architecture (420-arch line 48) requires the regression suite and tool config to come from the start commit, and requires that the producer cannot change the grade. Fix: restore every test-side path to its start content, delete the paths the start lacks, and count each addition in `test_edits`. Add a success criterion: a producer-added conftest that turns a failure into a pass leaves the grade unchanged.",
+   "location": "project-documents/user/slices/425-slice.grading-and-paired-report.md:199-203"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Other producer inputs can still change the regression run",
+   "description": "Two channels remain after the conftest gap. (1) `TOOL_CONFIG_FILES` (line 189) is a closed list of six names. The architecture says \"any standalone\" tool config (420-arch line 48). pytest also reads `[pytest]` from `tox.ini` and `[tool:pytest]` from `setup.cfg` when the start tree has no `pytest.ini` or `[tool.pytest.ini_options]`, and neither is restored. (2) D5 reinstalls the producer's dependencies. pytest auto-loads any installed `pytest11` plugin, so a producer that adds a plugin dependency changes regression outcomes. The reinstall is recorded, but its effect on the grade is not. The grading runs need either `PYTEST_DISABLE_PLUGIN_AUTOLOAD` with the start tree's plugin set loaded explicitly, or a counted diff of the `pytest11` entry points.",
+   "location": "project-documents/user/slices/425-slice.grading-and-paired-report.md:186-197"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Reviewer identity uses the alias's configured effort, not effort sent",
+   "description": "D7 builds `ReviewerRef(alias, model, profile, effort, \u2026)` from the alias, and `reviewer_key` (line 385) hashes that configured value. 420 says a config is what went on the wire, and that the alias's value never stands in for effort sent (420 D5, line 138). 420's Integration Points also guarantee that the grading review sends and records effort. 425 should read effort sent from the review call (`effort_sent_by_profile`, or the review's usage metadata), store it on `ReviewOutcome`, and key `reviewer_key` on it. Otherwise a reviewer path that dropped effort would be keyed as if it sent it, and 427's recall would attach to the wrong reviewer.",
+   "location": "project-documents/user/slices/425-slice.grading-and-paired-report.md:207"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "The report row key contradicts 420's identity rule",
+   "description": "D13 keys rows on `(alias, model, profile, effort_sent)` and cites 420. The Dependencies section of this same document (line 58) cites 420's D6 rule as `(model, profile, effort sent, tool_use, max_output_tokens)`. 420 D6 (line 146) makes the alias a display field and adds `tool_use` and `max_output_tokens`. It says it narrows the architecture's four-tuple (420-arch line 40) for that reason. Under D13, two aliases that send identical wire settings become separate rows, and two configs that differ only in `tool_use` or `max_output_tokens` merge. Key rows on 420's five-tuple, show the alias as a label, and remove it from the key.",
+   "location": "project-documents/user/slices/425-slice.grading-and-paired-report.md:263"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Reinstall failures are all charged to the producer",
+   "description": "\"A reinstall that fails is `producer_env_unresolvable`... a config absence.\" The architecture lists \"the environment did not resolve\" as a harness cause (420-arch line 67). A stale lock the producer committed is config-caused. But 421's install failures include `install_timeout` and `installer_missing` (421 D5, line 152). Its `lock_stale_or_unresolvable` reason also covers \"a package that no longer downloads\", which is a transport failure. A network outage or a timeout during the reinstall would currently be charged to the config. Map the reasons separately: a stale or unsupported lock is config, and timeouts, a missing installer and transport failures are harness `environment_failed`. Add a test for each mapping, as D16 does for the other absences.",
+   "location": "project-documents/user/slices/425-slice.grading-and-paired-report.md:197"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "New I/O paths have unenumerated failure handling",
+   "description": "D16 handles suite, review, snapshot and git failures well. Three new I/O paths are not enumerated, and the failure-mode rule requires each to be:\n- **Store writes** (`write_reference_grade`, `write_grade`, `write_estimate`): no rule for a failed write. 424 says a store write failure stops the run and keeps the sandbox. 425 should say the same, or say why it differs.\n- **Sidecar reads** (`ContentSidecars.get` for the replay diff, the baseline snapshot and the node list): D11 raises `MetrologyStoreError` on a hash mismatch, but no absence or stop is named for a missing or tampered sidecar.\n- **Reinstall hang:** D5 names no timeout. 421's install timeout applies only if the reinstall reuses 421's resolution call, which the slice does not say.\n\nEach needs an explicit handling and a test that asserts its observable signal.",
+   "location": "project-documents/user/slices/425-slice.grading-and-paired-report.md:293-312"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "The printed bound says \"at most\" but is an estimate",
+   "description": "The per-review figure is the largest observed cost (line 223), not a cap, and the cap is checked only before each review (line 233). The printed line \"+ one review of overshoot $0.18 \u2192 at most $15.18\" (line 230) is therefore a guess, not an upper bound. Line 223 says \"the bound says so\", but the example output does not. The architecture requires a stated upper bound before dispatch (420-arch lines 42, 119). Either apply a per-call budget to SDK-path reviews, as 424 D9 does for producers, so each review is capped inside the call, or print the figure as an estimate and drop \"at most\".",
+   "location": "project-documents/user/slices/425-slice.grading-and-paired-report.md:222-233"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "Architecture departures are not written back into the architecture",
+   "description": "The slice departs from three architecture statements, and none is recorded as a departure in the architecture:\n- **Grading in \"the same sandbox\"** (420-arch line 48). D1 rebuilds the tree in a fresh sandbox from `start_sha` and the diff. 424 records this departure. 425 only cites \"as 424 states\".\n- **Grading outside the run's cap** (420-arch lines 42, 119). D9 flags it and asks for the cost section to change, but no task owns that edit.\n- **Environment mismatch drops the case** (line 162). 420-arch line 50 says a benchmark run re-qualifies a case whose environment identity differs.\n\nAdd a step, before 425 is built, that amends 420 for each departure. Otherwise the slice reads as a violation of the architecture.",
+   "location": "project-documents/user/slices/425-slice.grading-and-paired-report.md:161-162, 236"
+  },
+  {
+   "i": 8,
+   "severity": "CONCERN",
+   "title": "The review floor is per case, from three runs, and departs from the plan",
+   "description": "The plan (420-slices line 121) reads review findings \"against 320's noise floor\". D8 computes a floor per case from the reference's own reviews (default 3, minimum 2) and does not use 320's floors (line 217). The reason is sound: 320's floors measure the audit prompt, not this reviewer. The change should still be recorded in the plan. Two gaps remain. A spread estimated from three counts is very rough, so the \"beyond the floor\" counts will partly reflect that roughness. A case whose three reviews return the same count has a zero-width floor, and the slice does not say how `is_within_floor` treats it. If it treats zero width strictly, every nonzero difference counts as beyond the floor. State how zero width is read, and either pool the floor across the case set or report the floor's own uncertainty beside the counts.",
+   "location": "project-documents/user/slices/425-slice.grading-and-paired-report.md:213-217"
+  },
+  {
+   "i": 9,
+   "severity": "CONCERN",
+   "title": "The 16 KB record limit has uncapped lists",
+   "description": "The schema states that a grade record stays under 16 KB (line 458), and only regression failures are capped (50 ids, line 403). These fields have no cap: `hidden_id_map` (line 400), `injection_clashes` (401), `config_edits` and `test_edits` (407\u2013408), and `ReviewOutcome.findings` (394\u2013395, 415). A producer that edits a few hundred test files, or a reference whose three floor reviews return long finding lists, can exceed 16 KB. Cap each list and store its total count, or move the lists into a content-addressed sidecar as 424 does for diffs.",
+   "location": "project-documents/user/slices/425-slice.grading-and-paired-report.md:398-415"
+  },
+  {
+   "i": 10,
+   "severity": "CONCERN",
+   "title": "A persisted sample-size estimate duplicates derived data",
+   "description": "D15 says the estimate \"is a pure function of the grades, so it is recomputed, not appended\". The schema still persists it as `SampleSizeEstimate` (lines 447\u2013456), with `write_estimate` and `latest_estimate` (line 458). A stored copy can go stale when grades change between runs, and it adds a record type, two store methods and a `PairEstimate` tuple. Cut the record and its store methods. Have `sq benchmark yield` (422) compute the estimate from the grades of the latest benchmark for the case set, using the same pure function. The `--json` option on `report` is in no success criterion, so cut it too unless something needs it.",
+   "location": "project-documents/user/slices/425-slice.grading-and-paired-report.md:289-291"
+  },
+  {
+   "i": 11,
+   "severity": "NOTE",
+   "title": "Suppression wording disagrees with what the totals do",
+   "description": "D6's heading says suppressions are \"never honored\". Line 203 measures lint and type totals with them in place, so an added `# type: ignore` lowers the type total the report credits. The count is shown beside the totals, which meets the architecture's \"counted and reported\" (420-arch line 48). Change the heading to say what happens. Consider also showing the totals with suppressed diagnostics added back, so the check delta cannot improve through a suppression.",
+   "location": "project-documents/user/slices/425-slice.grading-and-paired-report.md:199-203"
+  },
+  {
+   "i": 12,
+   "severity": "NOTE",
+   "title": "Planning rules are under-specified",
+   "description": "Three rules are missing. (1) A case with no committed replays has no environment digest, so its reference cannot be planned. (2) If a case's replays carry different digests, the reference's digest is undefined. (3) D13 reads \"its latest grader identity\" without defining \"latest\". Each needs a one-line rule. Separately, `--review-model` (line 341) lets a re-grade use another reviewer. The identity keeps the results apart, but the architecture's \"fixed code-review config\" (420-arch line 91) should be recorded as fixed per benchmark identity.",
+   "location": "project-documents/user/slices/425-slice.grading-and-paired-report.md:108-109, 262"
+  },
+  {
+   "i": 13,
+   "severity": "NOTE",
+   "title": "Dependency list omits modules this slice changes",
+   "description": "The frontmatter lists 421, 422 and 424. The Prerequisites add 420, 400, 320 and 300. The design also modifies code in 400 (`take_snapshot_at` extracted, line 473) and 320 (`is_within_floor` takes a float, line 474), and generalizes 424's `DiffSidecars`. Add 400 and 320 to the frontmatter so the change shows in the dependency graph. D7 also asserts that the `code` review template injects file contents when `no_tools=True` (line 208). I did not check that against 300, so verify it before 425 relies on it.",
+   "location": "project-documents/user/slices/425-slice.grading-and-paired-report.md:6, 55-61"
+  }
+ ]
+}

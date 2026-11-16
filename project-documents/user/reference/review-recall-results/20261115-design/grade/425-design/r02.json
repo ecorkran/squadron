@@ -1,0 +1,61 @@
+{
+ "review": "r02",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Separate grading cap departs from the \"one bound, one cap\" design goal",
+   "description": "The architecture's design goal \"Spend is visible before it happens\" says a benchmark run states its dollar bound before any dispatch and stops at its own cap, \"which covers grading and judging as well as the replays\". D9 makes grading a separate command with its own cap and bound, and line 236 admits the departure.\n\n- **Unmet goal:** when `sq benchmark run` starts, no stated figure covers what the benchmark will cost including grading. The total bound is only known after a second command is invoked.\n- **Architecture not amended:** line 236 says the cost section \"should say so\", but the change is not made or tracked as a deliverable. The same applies to grading in a rebuilt tree rather than \"in the same sandbox\" (D1, line 161).\n- **Stale text in 424:** 424 D8 already defers to 425 D9, but 424's Integration Points still says 425 extends `bench_plan` \"with grading terms\". Line 472 names the sentence without assigning the edit.\n- **Bound is not a bound:** the \"at most $15.18\" line multiplies an estimated per-review figure, and D9 says no per-review cap exists. It should be labelled an estimate.\n- **Uncounted spend:** D9 does not say whether a review that raises or times out counts toward the cap, though such a call may still be billed.\n\nA light fix that keeps the separate command: have `sq benchmark run` print the grading estimate (references \u00d7 floor runs + replays, \u00d7 observed per-review cost) beside its replay bound, and include the architecture and 424 edits in this slice's commit.",
+   "location": "project-documents/user/slices/425-slice.grading-and-paired-report.md:221-236"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "A failed opinion signal discards the objective grade",
+   "description": "The architecture's \"Objective before opinion\" says LLM signals are reported beside the objective grade, \"never folded into\" it. D16 makes `review_failed`, `snapshot_failed` and `check_tool_mismatch` harness absences, and D13 drops a harness-absent case from every config's comparison.\n\n- **Effect on pass fractions:** one reviewer timeout or `UNKNOWN` verdict on any replay removes that case's hidden-test and regression results for every config. D8 goes further: one failed floor run fails the reference and skips all its replays.\n- **Exposure:** with 3 configs \u00d7 3 samples plus 3 floor runs, a case has 12 review calls, and any one failing drops it. `MIN_PAIRED_CASES` is 5, so a flaky reviewer can empty the comparison.\n- **Coupled identity:** `GraderIdentity` includes the reviewer, so regrading under a new reviewer (D10) re-runs every sandbox, reinstall and suite to produce objective results that cannot differ.\n\nThe fix is to record review and snapshot absence per signal. The pass comes only from the hidden and regression runs, and the review section already has a \"no floor\" path for a missing floor. Line 311's \"nothing falls back to a partial grade\" should apply to the objective pass only.",
+   "location": "project-documents/user/slices/425-slice.grading-and-paired-report.md:296-311"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Reinstall failure is charged to the config whatever its cause",
+   "description": "D5 classifies any failed reinstall as `producer_env_unresolvable`, a config absence that counts as a fail. The reinstall is a network I/O path (`uv sync --locked`, bounded by 421's `benchmark.install_timeout_s`). A registry outage, an install timeout or a full disk would therefore be charged to the config.\n\nThat contradicts \"Absent is not zero\": a harness-caused failure must drop the case, not charge a config. 421's `EnvironmentResolutionError` carries a `reason`. D5 should map only the lock-does-not-resolve reason to config and send timeout and transport reasons to harness (`environment_failed`).\n\nTwo other failure paths are missing from D16:\n- `ContentSidecars.get` raising `MetrologyStoreError` on a missing or corrupt diff sidecar.\n- A failed grade-record or sidecar write.\n\nExit code 1 \"harness stop\" (line 345) implies a stop, but no decision says which conditions stop the run and which record an absence.",
+   "location": "project-documents/user/slices/425-slice.grading-and-paired-report.md:193-197"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Grader digest cannot be one value per benchmark if it includes a per-case rules hash",
+   "description": "D10 says the `GraderIdentity` digest covers the `ReviewerRef` and is \"one value for the whole benchmark\". But `ReviewerRef` carries `rules_hash` (line 384), and D7 loads rules from \"the sandbox tree's own rules directory (the start commit's)\". That differs for each case's start commit.\n\n- The Data Flow resolves the `ReviewerRef` at planning (line 106), before any sandbox exists, so the hash is not available then.\n- If the hash is per case, the digest varies per case. That breaks the plan lookup (\"no ReferenceGrade under this grader identity\"), `SampleSizeEstimate.grader_digest`, and D13's \"latest grader identity\".\n- If it is not per case, the record does not name the rules the reviewer actually saw. The design goal \"Results stay comparable over time\" needs that.\n\nThe design should pick one: keep `rules_hash` out of the digest and store it per grade record (as `environment_digest` already is), or define which rules it hashes. D13 also does not define \"latest\" identity (by `created_at`, or something else).",
+   "location": "project-documents/user/slices/425-slice.grading-and-paired-report.md:238-245"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Report row key contradicts the slice's own identity rule",
+   "description": "Line 58 says rows group by 420's D6 identity: model, profile, effort sent, `tool_use`, `max_output_tokens`. D13 keys rows by `(alias, model, profile, effort_sent)`, which adds the alias and drops the last two fields.\n\n- **Alias in the key:** two aliases that sent the same effort to the same model become two rows. The architecture says rows differ \"only when the effort really differed on the wire\".\n- **Case inclusion undefined:** D13 requires \"every config has all k samples\". 424 schedules by a config key using the alias's configured effort, while rows group by effort sent. If one scheduled config's samples carry different `effort_sent` values, the row splits and no row has k samples. The design does not say whether those cases are excluded, reported under a reason, or handled another way.\n\nD13 should state one key and say how scheduled configs map to rows for the completeness check.",
+   "location": "project-documents/user/slices/425-slice.grading-and-paired-report.md:263-264"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "427 is made to depend on 425, which the slice plan rules out",
+   "description": "The slice plan says 427 depends on [421] only, \"does not depend on 424\u2013426 and can be built any time after 421\", and may move up. This slice has 427 import `ReviewerRef`, `review_tree_diff` and `bootstrap_mean_interval` from 425 modules, \"defining no copies\", and edit `review_flag` in 425's `bench_report.py` (lines 269, 465, 502).\n\nIf 427 is built first, as the plan allows, those pieces do not exist. Either 427 writes its own and 425 duplicates or refactors them, or the order is silently fixed. The design should do one of:\n- State the ordering constraint and update the slice plan's 427 entry.\n- Have `review_flag` read 427's recall record through the store when one exists, which works in either build order and matches the plan's \"425's report reads recall for its grading config\".",
+   "location": "project-documents/user/slices/425-slice.grading-and-paired-report.md:465"
+  },
+  {
+   "i": 6,
+   "severity": "NOTE",
+   "title": "Rebuilt tree instead of \"the same sandbox\"",
+   "description": "The architecture and the slice plan say the grader runs \"in the same sandbox\". The slice rebuilds from `start_sha` plus the stored diff. 424 explains the reason (disk held per replay), and the digest-equality check with `environment_changed` protects the \"same environment\" intent. The graded subject is the producer's commit either way. This is acceptable, but it belongs in the architecture amendment named in the first finding.",
+   "location": "project-documents/user/slices/425-slice.grading-and-paired-report.md:161-162"
+  },
+  {
+   "i": 7,
+   "severity": "NOTE",
+   "title": "Edits to 320, 400 and 422 code are declared and small",
+   "description": "The slice changes `is_within_floor` (320), extracts `measure_snapshot` (400), generalizes `DiffSidecars` (424) and adds a line to 422's yield report. Each change is stated with a compatibility claim and a test requirement, and each serves a slice-plan item. The yield line is the only one not strictly required, since the plan asks only that the measurement be \"shown in the report\". It can be deferred if the slice runs long.",
+   "location": "project-documents/user/slices/425-slice.grading-and-paired-report.md:460-474"
+  }
+ ]
+}

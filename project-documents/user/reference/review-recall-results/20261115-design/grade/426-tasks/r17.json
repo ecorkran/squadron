@@ -1,0 +1,40 @@
+{
+ "review": "r17",
+ "findings": [
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Too many tasks and test files for a 3/5 slice",
+   "description": "There are 42 tasks, which is heavy for a slice the design rates 3/5.\n\n- **Qualification (Tasks 15\u201319):** one function, `qualify_slice_candidate`, is split into five tasks, each with its own test file (`test_slice_qualify_checks`, `_sets`, `_repeats`, `_case`, `_errors`). Merge them into two tasks: pre-sandbox checks with reuse, then sandbox, test sets, repeats, case and harness errors. Use one or two test files.\n- **Judge runner (Tasks 31\u201335):** five tasks for one module plus its command. Tasks 31 and 32 (plan inputs and plan pairs) and Tasks 33 and 34 (bound/cap and lock/resume) can each be merged.\n- **Over-specified steps:** a few steps fix details the slice does not need:\n  - Task 21 tells the test to check `option.hidden` rather than the help text.\n  - Task 7 asks for CRLF and quoted-path cases. These are reasonable under the lenient-parsing rule, but they are not success criteria.\n\n  Trim steps like these to the behavior the design requires.",
+   "location": "project-documents/user/tasks/426-tasks.slice-cases.md:167-193"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Two \"load tests\" are added with no NFR behind them",
+   "description": "The slice design states no non-functional requirement: no concurrency, throughput or latency targets. Even so, the task file adds two tests it calls load tests:\n- Task 24: eight concurrent `invoke` calls.\n- Task 33: a 200-pair plan with a slow dispatcher.\n\nNeither one traces to a success criterion. They live in `tests/benchmark/`, not `tests/load/`, and nothing wires them into CI. The parts that do matter are already tested elsewhere:\n- Separate scrubbed homes are covered by Task 24's argv/env test.\n- The hung-dispatcher timeout is covered by Task 3's `judge_pair` tests and Task 30's failed-pair test.\n\nRemove the concurrency and 200-pair cases and the \"Load tests\" bullet in the Context Summary. Keep one hung-dispatcher case in Task 33 only if Task 30 does not already cover it.",
+   "location": "project-documents/user/tasks/426-tasks.slice-cases.md:53"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Task 6 uses slice 403 before the gate checks that it exists",
+   "description": "Tasks 2\u20137 are meant to need nothing from the precondition gate (Task 8), and they are committed before it. But Task 6's second bullet runs `sq metrology slice-ranges`, reads the result with `get_slice_ranges`, and validates the saved JSON as `SliceRanges`. Task 7's real-slice fixture is then picked from those landings.\n\nTask 8 lists 403's `get_slice_ranges`, `SliceLanding` and `sq metrology slice-ranges` as things to confirm. Task 6 simply asserts \"403 is implemented\". If that assertion is wrong, Tasks 6\u20137 fail before the gate that would have caught it. Do one of these:\n- Move a 403 check (and the matching 177 check) to the start of Task 6.\n- Move the real-landing and real-diff bullets to after Task 8.",
+   "location": "project-documents/user/tasks/426-tasks.slice-cases.md:107"
+  },
+  {
+   "i": 6,
+   "severity": "NOTE",
+   "title": "Record validators go beyond the design schema",
+   "description": "Task 11 says to add the records \"exactly as the design's Database Schema gives them\". Its tests then require rules the schema does not define:\n- `qualified` requires a `case_id`.\n- `rejected` requires a `rejection`.\n- A forfeit `DiffJudgment` has no calls.\n\nThese rules are sensible, but a junior implementer will see a conflict between \"exactly as the schema\" and the tests. Either add the rules to Task 1's design corrections, or drop them from the tests.",
+   "location": "project-documents/user/tasks/426-tasks.slice-cases.md:141-143"
+  },
+  {
+   "i": 7,
+   "severity": "NOTE",
+   "title": "\"Grade grades slice cases\" relies on a double-based test and the live walkthrough",
+   "description": "D10 says the hidden set is empty and that `reference_failed_grade` applies to slice cases. The only checks for this are Task 39's mixed test, which uses doubles, and Task 41's live step 4. The design says 425 runs unchanged, so this is adequate. One assertion in Task 39 would make it explicit: a slice subject with no failing regression node passes even though no hidden node was selected.",
+   "location": "project-documents/user/tasks/426-tasks.slice-cases.md:306-308"
+  }
+ ]
+}

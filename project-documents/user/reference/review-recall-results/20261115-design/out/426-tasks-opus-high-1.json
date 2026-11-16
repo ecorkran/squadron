@@ -1,0 +1,207 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Slices rejected at discovery never get a `SliceQualification` record",
+      "description": "Task 13's `discover` returns `multiple_landings` and `branch_contains_merges` rejections, and `harness_error` entries, as an in-memory `DiscoveryResult`. Task 20 (line 196) only calls `qualify_slice_candidate` \"for each candidate\". Discovery rejections are not candidates, so no task writes a record for them. Task 15 writes records only for the task-text and no-code rejections.\n\nThis leaves several requirements unmet:\n- **First functional criterion:** \"writes a `SliceQualification` for every slice index in it \u2026 None is silently dropped.\"\n- **Yield rows:** Task 22 (line 207) counts from stored `SliceQualification`s, so `multiple_landings` and `branch_contains_merges` would always show zero. The design's mitigation strategy depends on exactly those two counts (\"the candidates to relax if they dominate\").\n- **Discovery `harness_error`:** D6 requires a failed `git` call in discovery to be recorded as `harness_error`. Task 20 records `harness_error` only for a failing candidate inside qualification.\n\nFix:\n- Have Task 20 write a `rejected` or `harness_error` `SliceQualification` (with `start_environment=None` and key `pre`) for every discovery entry.\n- Say which landing's `after_sha` keys a `multiple_landings` record. The record id needs one, and there are several.\n- Add a test asserting one stored record per discovery rejection.\n\nRelated: Task 20's \"not attempted \u2026 no record\" rule for indexes after a build stop also contradicts that same criterion. Task 1 (line 63) corrects the API Contracts but not the Success Criteria line. Add the Success Criteria to Task 1's list of edits.",
+      "file_ref": null,
+      "category": "coverage-gap",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/426-tasks.slice-cases.md:153-157"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Load tests with no NFR behind them",
+      "description": "The slice design states no performance or concurrency NFR, yet line 53 adds two \"load tests\":\n- **Task 24 (line 223):** eight concurrent `invoke` calls under separate scrubbed homes.\n- **Task 33 (line 276):** a 200-pair plan with slow and hung dispatcher doubles.\n\nNeither traces to a success criterion. Judging is sequential by design (\"runs the calls one at a time\"), and the hung-dispatcher case is already tested in Task 3 (line 83) and Task 30 (line 259). Because they are called load tests but live in `tests/benchmark/` with no CI gating task, they also blur the load-test convention. Cut both, along with the \"Load tests\" bullet at line 53. Task 24's runner tests already show that each registration uses its own home and branch.",
+      "file_ref": null,
+      "category": "proportionality",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/426-tasks.slice-cases.md:53"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Tasks 2\u20137 run before the precondition gate",
+      "description": "Task 8 stops with `BLOCKED:` if anything from 421\u2013425 is missing, but Tasks 2\u20137 are committed on the slice branch before it. If 426 starts before its dependencies (which the frontmatter lists), the slice branch stays open across units. Tasks 5, 6 and 7 also write into `config/keys.py`, `tests/benchmark/` and a new `src/squadron/benchmark/` package that 421, 422 and 425 also create or extend, which risks merge conflicts. If 426 starts after 421\u2013425 as its dependencies say, the gate costs nothing. Consider moving Task 8 to the front so the ordering is simpler.",
+      "file_ref": null,
+      "category": "sequencing",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/426-tasks.slice-cases.md:121-124"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Task 6 builder list is unclear",
+      "description": "\"a slice whose every test changed and one whose regression selection would be empty (the test files are all rewritten)\" reads as two builders for the same shape. No test in Tasks 13\u201319 names an \"every test changed\" repo apart from the `no_regression_signal` case. Merge them into one builder, or say what the second one is for.",
+      "file_ref": null,
+      "category": "clarity",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/426-tasks.slice-cases.md:105"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Qualification is split finely",
+      "description": "Tasks 15\u201319 each add one stage to `qualify_slice_candidate`, with one commit at the end. Task 17 (repeats) and Task 19 (harness-error wrapping) are small enough to fold into Tasks 16 and 18. This is acceptable as written; with 42 tasks overall, merging would make the file lighter.",
+      "file_ref": null,
+      "category": "granularity",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/426-tasks.slice-cases.md:167-193"
+    },
+    {
+      "severity": "PASS",
+      "title": "Most success criteria are covered",
+      "description": "Every success criterion except the record-per-index one above has a task:\n- **Case fields:** Tasks 14, 16, 17 and 18.\n- **Fixture rejections:** Tasks 6, 13, 15 and 18.\n- **P6 replay in a scrubbed home, cf list unchanged:** Tasks 24\u201326.\n- **Grade and per-kind tables:** Tasks 36, 39 and 41.\n- **Normalization:** Task 7, including the real-diff fixture.\n- **Reference line never ranked:** Tasks 37\u201338.\n- **Over-size rule:** Tasks 29, 32, 34, 38 and 41.\n- **Forfeits and harness-absent cases:** Tasks 27 and 32.\n- **Failure-path signals:** Tasks 19, 24 and 31.\n- **Refusals, bound, cap and resume:** Tasks 31 and 33\u201335.\n- **Hand-computed pairwise tests:** Task 37.\n- **Mixed-kind integration and yield rows:** Tasks 22 and 39.\n- **Verification walkthrough steps 1\u20138:** Tasks 23, 26 and 41.",
+      "file_ref": null,
+      "category": "coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/426-tasks.slice-cases.md"
+    },
+    {
+      "severity": "PASS",
+      "title": "The extractions keep `tests/replay/` unchanged",
+      "description": "`tests/replay/` does not reference `_KINDS`, `_ArtifactKind`, `_suffix_order`, `_judge_pair`, `_call` or `_register_with_cf`. The renames and extractions in Tasks 2\u20134 can therefore leave the existing tests unchanged, as the success criteria require. The helpers the tasks depend on all exist: `get_positive_int_config`, `plan_file_for`, `data_dir` and `judge_prompt_hash`.",
+      "file_ref": null,
+      "category": "sequencing",
+      "raw_category": null,
+      "location": "src/squadron/replay/start_point.py:23-124"
+    },
+    {
+      "severity": "PASS",
+      "title": "Test-with pattern and commit cadence",
+      "description": "Each implementation task carries its own tests. `**Commit**:` markers are plain lines at tested points (after the extractions, records, discovery, qualification, build, runner, judge, report and slash commands). The live-run tasks use conditional fix-up commits. No task merges or pushes, and the cf spike's `BLOCKED:` handling follows D9.",
+      "file_ref": null,
+      "category": "structure",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/426-tasks.slice-cases.md"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "coverage-gap",
+      "raw_category": null,
+      "summary": "Slices rejected at discovery never get a `SliceQualification` record",
+      "location": "project-documents/user/tasks/426-tasks.slice-cases.md:153-157",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "proportionality",
+      "raw_category": null,
+      "summary": "Load tests with no NFR behind them",
+      "location": "project-documents/user/tasks/426-tasks.slice-cases.md:53",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "note",
+      "category": "sequencing",
+      "raw_category": null,
+      "summary": "Tasks 2\u20137 run before the precondition gate",
+      "location": "project-documents/user/tasks/426-tasks.slice-cases.md:121-124",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "note",
+      "category": "clarity",
+      "raw_category": null,
+      "summary": "Task 6 builder list is unclear",
+      "location": "project-documents/user/tasks/426-tasks.slice-cases.md:105",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "granularity",
+      "raw_category": null,
+      "summary": "Qualification is split finely",
+      "location": "project-documents/user/tasks/426-tasks.slice-cases.md:167-193",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "pass",
+      "category": "coverage",
+      "raw_category": null,
+      "summary": "Most success criteria are covered",
+      "location": "project-documents/user/tasks/426-tasks.slice-cases.md",
+      "location_verified": null
+    },
+    {
+      "id": "F007",
+      "severity": "pass",
+      "category": "sequencing",
+      "raw_category": null,
+      "summary": "The extractions keep `tests/replay/` unchanged",
+      "location": "src/squadron/replay/start_point.py:23-124",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "pass",
+      "category": "structure",
+      "raw_category": null,
+      "summary": "Test-with pattern and commit cadence",
+      "location": "project-documents/user/tasks/426-tasks.slice-cases.md",
+      "location_verified": null
+    }
+  ],
+  "template_name": "tasks",
+  "input_files": {
+    "input": "project-documents/user/tasks/426-tasks.slice-cases.md",
+    "against": "project-documents/user/slices/426-slice.slice-cases.md",
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/3e1bc1cd-e8c0-4d04-8eb6-68e1bced119f/scratchpad/design-recall/wt/426-tasks"
+  },
+  "timestamp": "2026-11-15T15:39:25.348812",
+  "model": "claude-opus-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 4,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-opus-5-5",
+  "answering_models": [
+    "claude-opus-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 8,
+    "in_fences": 0,
+    "in_section": 8,
+    "surviving": 8
+  },
+  "effort": "high",
+  "profile": "sdk",
+  "turns": 5,
+  "prompt_tokens": 258606,
+  "cached_tokens": 140321,
+  "cache_write_tokens": 118279,
+  "completion_tokens": 8016,
+  "reasoning_tokens": null,
+  "duration_seconds": 82.61161724990234,
+  "cost_usd": 1.1354099,
+  "cost_basis": "provider"
+}

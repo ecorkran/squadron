@@ -1,0 +1,207 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "PASS",
+      "title": "Layering and dispatch signal respect architecture boundaries",
+      "description": "The slice adds only data files and two registry entries. The `review` action, `judge.py`, the parser and the pipeline step schema are explicitly untouched, which matches \"Reuse, don't rebuild\" and \"How a step selects a judge\". It keeps `is_judge` (the `judge:` block) as the only dispatch signal. It also rejects a prefix-stripping fallback in `TEMPLATE_INPUTS`, so the `judge.` name never becomes logical structure. Dependency direction is correct: 302 consumes 300 and 301 and provides to 303 and 304.",
+      "file_ref": null,
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/302-slice.design-phase-judge-templates.md#technical-decisions"
+    },
+    {
+      "severity": "PASS",
+      "title": "Verdict-from-score, no-verdict prompt, and no-silent-pass NFR are restated",
+      "description": "The slice carries the \"judge emits score + findings, not a verdict\" principle into both prompts. It treats `enforce_judge` ignoring `result.verdict` as backstop only. It restates the no-silent-pass NFR for the paths it touches (lines 402-408). Differentiated default floors follow the \"bubble up the hard calls\" principle.",
+      "file_ref": null,
+      "category": "nfr",
+      "raw_category": null,
+      "location": "project-documents/user/slices/302-slice.design-phase-judge-templates.md:208-216"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Architecture's structured-output constraint on the score field is not addressed",
+      "description": "The architecture commits the judge template to two things: \"a structured-output constraint for the score field *and* a score-with-rationale prompt shape\". The slice implements only the rationale half, as prose scaffolding with a lenient `score:` line. It neither adopts a structured-output constraint nor states why one is deferred or not applicable to the `review` engine. The unmet requirement is Technical Considerations item (b) of the architecture. Either name the mechanism the template uses, or record an explicit deferral with a reason. The score-absent and out-of-range failure rows currently carry all the weight that constraint was meant to share.",
+      "file_ref": null,
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/302-slice.design-phase-judge-templates.md:152-183"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Failure-mode enumeration omits architecture-listed modes and has no observable-signal test",
+      "description": "The architecture enumerates these failure modes: unparseable response, missing or unreadable ground-truth file, and injected ground truth exceeding the cap. The slice's table covers neither the unreadable-file nor the over-cap case. It also does not cover an unparseable response beyond the score-absent row. Both judge templates take two documents (`input` and `against`), so the over-cap case is not hypothetical. A `SliceInfo` field being absent is different from a path that resolves to a missing file.\nThe table is also not backed by tests that check the failure is observable. The slice tests assert verdicts only (lines 300-305). The project's failure-mode rule requires at least one test asserting the WARNING+ log or metric for the failure. Add the missing rows, each mapped to `UNKNOWN` and logged. Add a test that asserts the log signal for the new `TEMPLATE_INPUTS` failure path.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/302-slice.design-phase-judge-templates.md:394-400"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Criteria and rubric for the judge are under-specified",
+      "description": "The slice says each template \"reuses the same list already proven in `slice.yaml` / `tasks.yaml`\". It does not fix the criterion names the `criteria:` map will use. The only names are the illustrative `alignment` and `scope` in the example (lines 169-171). It also gives no anchoring guidance for what a 60, 80 or 90 means. Without stable criterion keys per template, the reserved `criteria` map cannot be compared across runs, which the calibration initiative [320] relies on. The slice's own anchoring-reduction goal also has nothing concrete to work with. Name the criterion set for each template. State whether the top-level score is the model's holistic number or a defined roll-up of the criteria. The example text \"roll the criteria into the top-level `score:`\" leaves this open.",
+      "file_ref": null,
+      "category": "under-specification",
+      "raw_category": null,
+      "location": "project-documents/user/slices/302-slice.design-phase-judge-templates.md:198-206"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Defaults are asserted without tying them to the \"advisory until calibrated\" stance, and the data-flow example contradicts the table",
+      "description": "The architecture says early scores are advisory and defaults are deliberately conservative. The slice sets `pass_floor` at 78 for tasks-vs-slice and 82 for slice-vs-arch. It gives only a relative rationale (one stricter than the other), not an absolute one for why auto-pass at 78 is conservative for an uncalibrated judge. Add one sentence of justification or mark the values as provisional pending [320].\nThe data-flow example for `judge.slice-vs-arch` also shows `pass_floor(78)`. The threshold table sets that template's floor at 82, and 78 belongs to `judge.tasks-vs-slice`. The example also uses a score of 82, which sits exactly on the boundary. Fix the number and use a score that doesn't sit on the boundary.",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/slices/302-slice.design-phase-judge-templates.md:146"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Document is overweight for the delivered scope; restatement can be cut",
+      "description": "The slice delivers two YAML files and two dict entries, yet the document carries material restating other slices.\n- **Data Flow diagram (lines 110-150):** it restates the full `review` action pipeline through `enforce_judge`, all of which is unchanged. A three-line \"unchanged path\" statement would do.\n- **Failure-mode table:** four of five rows are labelled \"Not new\". Keep only rows new to this slice, plus the added rows from the earlier finding.\n- **Provides and Consumes sections:** they repeat the Dependencies and Overview content.\n- **No-silent-pass paragraph (lines 402-408):** it restates the architecture NFR at length.\n- **Verification step 3:** the CLI shape is flagged as unconfirmed, and the success criterion uses a different invocation (`sq review slice-vs-arch <artifact> <against>`). Resolve this to one confirmed form or drop it to a pointer.",
+      "file_ref": null,
+      "category": "proportionality",
+      "raw_category": null,
+      "location": "project-documents/user/slices/302-slice.design-phase-judge-templates.md#risk-assessment"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Integration requirement about `sq review list` is unverified against the codebase",
+      "description": "The requirement says the listing \"shows both new templates alongside the existing four\". The slice does not cite where that count or listing surface comes from. Confirm during implementation, or drop the count.",
+      "file_ref": null,
+      "category": "integration",
+      "raw_category": null,
+      "location": "project-documents/user/slices/302-slice.design-phase-judge-templates.md:314-315"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "pass",
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "summary": "Layering and dispatch signal respect architecture boundaries",
+      "location": "project-documents/user/slices/302-slice.design-phase-judge-templates.md#technical-decisions",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "pass",
+      "category": "nfr",
+      "raw_category": null,
+      "summary": "Verdict-from-score, no-verdict prompt, and no-silent-pass NFR are restated",
+      "location": "project-documents/user/slices/302-slice.design-phase-judge-templates.md:208-216",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "summary": "Architecture's structured-output constraint on the score field is not addressed",
+      "location": "project-documents/user/slices/302-slice.design-phase-judge-templates.md:152-183",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "Failure-mode enumeration omits architecture-listed modes and has no observable-signal test",
+      "location": "project-documents/user/slices/302-slice.design-phase-judge-templates.md:394-400",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "under-specification",
+      "raw_category": null,
+      "summary": "Criteria and rubric for the judge are under-specified",
+      "location": "project-documents/user/slices/302-slice.design-phase-judge-templates.md:198-206",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "Defaults are asserted without tying them to the \"advisory until calibrated\" stance, and the data-flow example contradicts the table",
+      "location": "project-documents/user/slices/302-slice.design-phase-judge-templates.md:146",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "concern",
+      "category": "proportionality",
+      "raw_category": null,
+      "summary": "Document is overweight for the delivered scope; restatement can be cut",
+      "location": "project-documents/user/slices/302-slice.design-phase-judge-templates.md#risk-assessment",
+      "location_verified": null
+    },
+    {
+      "id": "F008",
+      "severity": "note",
+      "category": "integration",
+      "raw_category": null,
+      "summary": "Integration requirement about `sq review list` is unverified against the codebase",
+      "location": "project-documents/user/slices/302-slice.design-phase-judge-templates.md:314-315",
+      "location_verified": true
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/302-slice.design-phase-judge-templates.md",
+    "against": "project-documents/user/architecture/300-arch.eval-actions-llm-as-judge-scoring.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261115-design/wt/302-design"
+  },
+  "timestamp": "2026-11-16T07:01:18.398290",
+  "model": "claude-sonnet-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 2,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-sonnet-5-5",
+  "answering_models": [
+    "claude-sonnet-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 8,
+    "in_fences": 0,
+    "in_section": 8,
+    "surviving": 8
+  },
+  "effort": "medium",
+  "profile": "sdk",
+  "turns": 3,
+  "prompt_tokens": 116128,
+  "cached_tokens": 11400,
+  "cache_write_tokens": 104724,
+  "completion_tokens": 5052,
+  "reasoning_tokens": null,
+  "duration_seconds": 50.01085091615096,
+  "cost_usd": 0.47118030000000005,
+  "cost_basis": "provider"
+}

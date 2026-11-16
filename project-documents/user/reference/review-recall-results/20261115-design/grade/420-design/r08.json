@@ -1,0 +1,82 @@
+{
+ "review": "r08",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "FAIL",
+   "title": "Absent effort stamp is read as \"not sent,\" which contradicts \"absent is not zero\"",
+   "description": "D5 says a failed run with no stamp is \"counted by that class, not by effort.\" The reader rule on line 138 then returns `None` when neither the key nor a usage record exists. D1 (line 115) defines `None` as \"not sent,\" so those runs land in the \"not sent\" effort row. That is the stand-in D5 (line 135) names as the defect. The architecture's \"Absent is not zero\" principle (architecture line 67) says a run with no record must say why, and the reason decides how it counts. Replay and `sq stats producers` (424, 425) will inherit this reader. Fix: `action_effort_sent` should return a distinct absent result, or raise, when neither source exists. Callers should then classify those runs by failure reason. This also avoids the silent fallback that the project's core principles prohibit.",
+   "location": "project-documents/user/slices/420-slice.effort-audit-across-dispatch-paths.md:137-138"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Some runs still carry no effort record, against \"every run records\"",
+   "description": "The architecture's Overview (line 22) requires every run to record the effort actually sent, or to record that none was sent. D5 accepts three unstamped cases: a subprocess that died with no run state, a cancelled action, and a resolution failure. For a resolution failure, nothing was sent, so the design can stamp `null`. For a subprocess that died, the design asserts \"Nothing was sent in those runs\" with no evidence. The process may have dispatched before it died. Fix: stamp `null` where nothing was sent, such as a resolution failure or a cancel before the provider call. For a dead subprocess, state that effort is unknown and that the run is a harness failure class, rather than claiming it sent nothing.",
+   "location": "project-documents/user/slices/420-slice.effort-audit-across-dispatch-paths.md:137"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Compaction record's model and profile are not what went on the wire",
+   "description": "D2 fixes effort only. In the current compaction action, the record's `model` is the raw step parameter, and `alias` and `profile` are `None`. When the step names no model, `model` is `None`, but the summary turn runs on the session's current model. D6 (line 146) makes `model` and `profile` part of identity and defines identity as \"what went on the wire.\" Compaction rows would therefore still not match what was sent. Fix: D2 should take `model` and `profile` from the model the summary turn actually ran on, and say how an alias is resolved to a model id. Otherwise, state that compaction turns are excluded from identity.",
+   "location": "project-documents/user/slices/420-slice.effort-audit-across-dispatch-paths.md:119-122"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Pre-slice compaction records will read as \"not sent,\" with no flag",
+   "description": "The architecture requires that results stay comparable over time and that a report flag the rest (architecture line 40). Before this slice, compaction hard-codes effort to `None` even though the session's effort was sent. Under D5's fallback (line 138), those old records read `usage.effort = None`, which is \"not sent,\" so they land in a wrong row. The `JudgeRef` default is correct for the replay judge, since that judge sent no effort before. D2 and D5 say nothing about compaction. Fix: state that pre-slice compaction records are indistinguishable, and have the report flag them, or have the reader mark records written before the fix as unknown.",
+   "location": "project-documents/user/slices/420-slice.effort-audit-across-dispatch-paths.md:121, 138"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "`tool_use` and `max_output_tokens` join config identity without a plan or effort basis",
+   "description": "The parent plan (420-slices line 33) scopes identity to \"carry the effort sent.\" The architecture's identity tuple (line 40) is alias, model, profile, and effort sent. D6 adds `tool_use` and `max_output_tokens` to the grouping key and to `ProducerConfigRef`, and no success criterion tests them. Slices 421\u2013427 would then inherit a second identity change. Options: take this to the Project Manager as a plan change, or cut it. If it is cut, the design must say that rows can merge across `max_output_tokens` and `tool_use` differences.",
+   "location": "project-documents/user/slices/420-slice.effort-audit-across-dispatch-paths.md:145 (also line 91)"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Paths excluded as \"no alias\" still lack the \"not sent\" record the plan requires",
+   "description": "The plan's criterion (420-slices line 32) says \"a path that cannot send effort records 'not sent'.\" The exclusion on line 37 covers sending, not recording. The metrology audit, the PR composer and daemon agents construct agent configs and call a provider. In their current code they write no usage record and no effort value. So they neither send nor record effort, and the architecture's \"every run records\" applies to them too. The auth probe makes no LLM call and can stay out. Fix: either give these paths a `null` effort record, or get the Project Manager to accept an explicit exception to the architecture's requirement, written into the architecture.",
+   "location": "project-documents/user/slices/420-slice.effort-audit-across-dispatch-paths.md:37"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "The new reader has no tests and no enumerated failure modes",
+   "description": "The Technical Requirements (line 180) cover one test per sending path and the capability gate. Nothing tests `action_effort_sent`, the new read path over persisted state. Its branches are: key present with a string value, key absent with a usage record, key absent with no usage record (see the FAIL above), and an unrecognized string (which raises, per line 139). Each branch needs an observable signal and a test. Project rules also require a parser's test fixture to use the persisted format it consumes. Here that is the JSON string form, not the enum. Add tests against a real persisted run-state fixture covering each branch.",
+   "location": "project-documents/user/slices/420-slice.effort-audit-across-dispatch-paths.md:180"
+  },
+  {
+   "i": 7,
+   "severity": "NOTE",
+   "title": "Frontmatter dependencies and interfaces do not match the body",
+   "description": "`dependencies: []` conflicts with the body, which lists prerequisites 931, 175 and #216 (lines 44\u201346). `interfaces` omits 423, the fix pipeline. The plan (420-slices lines 81\u201390) makes 423 a production pipeline whose producer effort 424 reads through `action_effort_sent`. Line 186 says \"421\u2013427.\" Align the frontmatter with the body.",
+   "location": "project-documents/user/slices/420-slice.effort-audit-across-dispatch-paths.md:6-7"
+  },
+  {
+   "i": 8,
+   "severity": "NOTE",
+   "title": "Identity narrowing should be carried back into the architecture",
+   "description": "D6 says it narrows the architecture's identity tuple, and the narrowing is disclosed. Keeping the alias for provenance and in the label does preserve the architecture's \"names the alias\" requirement (line 40). Still, the architecture's Design Goal and its Envisioned State (line 99) should be amended, so that slices 424\u2013427 are not reviewed against conflicting text.",
+   "location": "project-documents/user/slices/420-slice.effort-audit-across-dispatch-paths.md:147"
+  },
+  {
+   "i": 9,
+   "severity": "NOTE",
+   "title": "Findings-addressed judge changes cost but records no spend",
+   "description": "The change to this judge's effort can change its cost (the CHANGELOG bullet on line 183 says so). That spend never appears in run totals or under `pipeline.max_cost_usd`, so the cost change is unobservable here. Benchmark validity is not affected, because benchmark runs do not call this judge. Still, a higher effort inside a capped pipeline raises unobserved spend. Filing the issue, as the design proposes, is reasonable. The verification section should say that the cost change is not measured in this slice.",
+   "location": "project-documents/user/slices/420-slice.effort-audit-across-dispatch-paths.md:232, 183"
+  },
+  {
+   "i": 10,
+   "severity": "NOTE",
+   "title": "One metadata key string serves two containers",
+   "description": "`EFFORT_SENT_KEY` already names the `usage_metadata` key read by `read_effort_sent` (D3). D5 uses the same string for action metadata, read by `action_effort_sent`. Two readers over one string in two dicts invite mixing them. Use a separate constant for the action key, or document the shared value explicitly.",
+   "location": "project-documents/user/slices/420-slice.effort-audit-across-dispatch-paths.md:156"
+  }
+ ]
+}

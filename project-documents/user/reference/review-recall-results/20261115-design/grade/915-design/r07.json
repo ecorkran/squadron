@@ -1,0 +1,47 @@
+{
+ "review": "r07",
+ "findings": [
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "D1's reasoning misdescribes when a pause happens",
+   "description": "Rationale points 2 and 3 say a human who chose `Continue` gets a paused run that resume then skips, and that `Exit` is the separate \"human takes over\" escape hatch. The executor works differently:\n\n- **Accept/Override (the \"continue\" choices):** `_prompt_checkpoint_interactive` returns `ACCEPT` or `OVERRIDE`, and execution carries on in-process to the next action and round. No pause, no resume.\n- **Exit:** `PAUSED` is returned only when the resolution is `EXIT`. Non-interactive runs also default to `EXIT`, with a WARNING.\n- **What Exit promises:** the menu text for Exit is \"save state; resume: sq run --resume {run_id}\".\n\nSo the paused state that #48 is about is always the Exit path. That actually supports D1's conclusion more strongly than the doc does: the UI already promises that Exit can be resumed. But the stated chain is wrong in two ways:\n\n1. **Point 2 is moot.** \"The current behavior silently overrides an explicit human answer\" doesn't happen; a \"continue\" answer never reaches resume.\n2. **Point 3 has no basis.** After this slice there is no checkpoint choice that ends a loop for good, because Exit becomes resume-into-loop.\n\nThere is also an internal mismatch. Point 2 says \"proceed \u2026 means the next round\", but the `max:` consequence and D3 resume at the paused round. Rewrite D1 around the real vocabulary (`CheckpointResolution.ACCEPT/OVERRIDE/EXIT`). State plainly that Exit means \"pause, re-enter the loop on resume\", and that ending a run means not resuming it.",
+   "location": "project-documents/user/slices/915-slice.loop-checkpoint-pause-resume-correctness.md:161-171"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "A re-entered round loses the previous round's findings but still uses up a round",
+   "description": "D3 restarts the paused round N from its first action with `prior_iteration_step_outputs = {}`. The original round N's dispatch received round N-1's findings through slice 910's findings feedback. The re-run does not. Three costs follow:\n\n- **Repeated work:** dispatch and review both run again.\n- **Weaker convergence:** round N now looks like a round-1 dispatch to the agent, yet it still counts against `max:`.\n- **Likely re-pause:** in non-interactive environments, which default to Exit, the same review is likely to return CONCERNS and pause again. Each resume then spends a round with no new input.\n\nThe doc calls the empty dict \"honest\" and pushes rehydration to \"911/305 territory\". However, 910's convergence guarantee, which D1 point 4 relies on, is exactly what this weakens. The design should do one of two things:\n\n- **Rebuild the feedback:** reconstruct round N-1's review findings from the persisted `action_results` of the paused `StepState`. They are already on disk and are the minimal input 910 needs.\n- **Or own the trade-off:** state it explicitly, and add a success criterion or test covering the repeated-pause case so the loop doesn't drift without anyone noticing.",
+   "location": "project-documents/user/slices/915-slice.loop-checkpoint-pause-resume-correctness.md:258-264"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Prompt-only callers of `first_unfinished_step` are not covered",
+   "description": "The Risk Assessment says `first_unfinished_step` is \"the single predicate behind both resume paths\". It has two more callers in `cli/commands/run.py`:\n\n- **Next-step emitter (line 653):** emits the next step's instructions for a prompt-only run, and calls `finalize(... COMPLETED)` when the predicate returns `None`.\n- **`_handle_step_done` (line 799):** marks the current step done in a prompt-only run.\n\nPart A changes what both of these return for any run with a `paused` or `failed` entry. This matters most because D2 deliberately adds `FAILED`. The Component Structure table and Success Criteria cover only `--resume` and implicit resume. Name these callers, say what behavior they should have, and add a regression test for each, alongside Verification step 5.",
+   "location": "project-documents/user/slices/915-slice.loop-checkpoint-pause-resume-correctness.md#risk-assessment"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "`resume_iteration_for` doesn't say which entry wins when a step was recorded more than once",
+   "description": "`_append_step` appends without checking for an existing entry. Once a loop is re-entered and pauses again (likely, per the previous finding), `completed_steps` holds several entries for the same `step_name`. Their iterations may differ, and statuses may mix, e.g. `paused`, then `failed`, then `completed`.\n\nThe design doesn't specify:\n\n- which entry `resume_iteration_for` reads (it should presumably be the last one);\n- what it returns when the latest entry has `iteration` of 0 or missing (older runs);\n- whether the Part A predicate should judge doneness by the *latest* entry rather than \"any entry with a non-resumable status\".\n\nAs written, a set built from any completed entry gives the right answer for paused-then-completed. It gives the wrong answer for completed-then-failed, which can happen if a step is re-run under `--from`. Specify \"latest entry wins\" for both functions and test the multi-entry case.",
+   "location": "project-documents/user/slices/915-slice.loop-checkpoint-pause-resume-correctness.md:287"
+  },
+  {
+   "i": 5,
+   "severity": "NOTE",
+   "title": "Adding `FAILED` widens scope beyond #48, but the case is well argued",
+   "description": "Issue #48 is about pauses only. Treating `FAILED` as resumable uses the same mechanism and is clearly justified (\"a matched pair half-repaired\"). It is also the main source of the user-visible change already listed in Risk Assessment. No action needed beyond the prompt-only caller coverage above.",
+   "location": "project-documents/user/slices/915-slice.loop-checkpoint-pause-resume-correctness.md:204-208"
+  },
+  {
+   "i": 6,
+   "severity": "NOTE",
+   "title": "Failure modes and NFRs",
+   "description": "The slice adds no new network or I/O path; it only reads state that is already persisted. Pause-time abandonment is logged at WARNING, re-entry at INFO, and a non-loop target is logged at DEBUG and ignored. Each new signal has a required test. The 900 architecture states no NFRs, so none needed restating.",
+   "location": "project-documents/user/slices/915-slice.loop-checkpoint-pause-resume-correctness.md#d4--part-c-an-abandoned-round-is-never-silent"
+  }
+ ]
+}

@@ -1,0 +1,47 @@
+{
+ "review": "r05",
+ "findings": [
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "The separability answer is only conservative in one direction, and it decides initiative order",
+   "description": "D12 calls the formula a \"worst case\" bound. It takes p = 0.5 for within-case variance and ignores between-case variation in the true difference. The slice admits this: \"enough cases\" fails if per-case differences vary. So the bound can be too high or too low, depending on the project's data.\n\nThe arch and slice plan say this one answer decides whether fix cases are pooled, or whether 426 moves ahead of 424. A \"not enough\" answer is reliable, because the analytic MDD is a floor. An \"enough\" answer is not reliable.\n\nThe report should present the result as asymmetric, for example \"necessary, not sufficient\". Alternatively, add an explicit between-case variance assumption. The current wording sits in a caveat line, and the PM may act on the headline.",
+   "location": "project-documents/user/slices/422-slice.fix-case-qualification-and-yield-report-keystone.md:253-265"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Record key permits several records per commit, and the yield report's per-candidate count is unspecified",
+   "description": "The record id ends in `<env digest[:12] or \"pre\">`. One commit can therefore hold several records:\n- a `pre` rejection and an environment-keyed record\n- records under different environment digests after a toolchain or lockfile change\n\nD12 counts \"candidates, qualified, rejected per reason\", but it never says which record counts per commit. The success criterion \"number of records equals the number of closing commits\" cannot hold once an environment changes.\n\nRebuild semantics add a second problem. Issue freeze (step 2) runs before the reuse check (step 4), so every rebuild refetches every issue. D2 says the issue is \"never fetched again\". If an issue is edited after the fix, a previously qualified commit gets a new `issue_edited_after_fix` pre-record. The old case then remains in the case set while the report counts a rejection.\n\nSpecify:\n- The yield report takes the latest record per `(project_id, commit_sha)`.\n- Either the reuse check happens before the issue fetch, or a pre-record never supersedes a qualified one without being surfaced.\n- The record-count criterion is reworded accordingly.",
+   "location": "project-documents/user/slices/422-slice.fix-case-qualification-and-yield-report-keystone.md:229-243"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Failure modes are incomplete on the new I/O paths",
+   "description": "Timeout handling is stated only for the test-first runs (D5). Several other new paths have no stated handling:\n- **No timeout for collection, trace and resolver subprocesses.** No config key or timeout covers them. 421 declares install and suite timeouts only, so a hang in the trace or collect run is unbounded.\n- **No timeout for `gh` GraphQL calls.** Rate limit and network stall are also unaddressed. Only `CodeHostError` other than not-found is covered.\n- **`git log`/`git show` failures are not enumerated.** Examples are a shallow clone with the parent missing, or a path absent at a sha. No reason in the closed enums fits. They are either a `harness_error` or a silent skip, and the doc doesn't say which.\n- **Resolver failures are classified two ways.** D6 maps a resolver import failure to `boundary_undecidable`. The Technical Requirements test \"resolver crash\" as `harness_error`. The doc doesn't say where the line falls between an import failure and a crash.\n- **Build-stopping versus per-candidate failures are not distinguished.** The CLI \"exits 1 on a harness failure that stops the build (for example, `gh` missing)\". Elsewhere a `CodeHostError` is a per-candidate `harness_error`. The doc doesn't say which failures abort the run and which continue.\n\nName the timeout keys (reusing 421's where they fit). Give each git failure a recorded outcome. Pick one classification for resolver failures.",
+   "location": "project-documents/user/slices/422-slice.fix-case-qualification-and-yield-report-keystone.md:177,185,285,389"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "State transitions in the one-sandbox, three-state design (D4) are underspecified",
+   "description": "The data flow moves one sandbox through parent, reference, parent plus overlay, and reference again (steps 5\u20138). The doc defines each state but not how the sandbox returns to a state. It doesn't say how files the reference added or deleted are restored or removed. It doesn't say what happens to artifacts that earlier runs leave in the tree. Test runs can write files, and `__pycache__` and pytest caches also accumulate. A stale file from the reference state could let a parent-plus-overlay run pass or fail for the wrong reason. That would corrupt test-first verdicts and the repeat comparisons.\n\nDefine the transition. Examples: rewrite every file in the diff's path set from `git show` for the target state, then verify against a recorded tree manifest. Or rebuild the tree per state. Also state whether `.pytest_cache` and bytecode are excluded or cleaned between runs.",
+   "location": "project-documents/user/slices/422-slice.fix-case-qualification-and-yield-report-keystone.md:160-167"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "Some scope is speculative or heavier than needed",
+   "description": "- **The no-cutoff renderer mode serves a slice that doesn't depend on 422.** D2 builds an optional-cutoff renderer \"with no cutoff (423's live fix)\". The slice plan lists 423 with no dependencies in this initiative. 422's frontmatter interfaces and \"Provides to Other Slices\" omit 423. Nothing in 422 exercises this path. Cut it. 423 can render a live issue itself or add the mode when it needs it. This also removes a branch from `issue_freeze` and the `issue_edited_after_fix` conditional.\n- **Closure digests are the heavy option.** D3 recurses through code-object `co_names` into test-side constants and helpers. `modifies_test_support` already rejects any `conftest.py` change beyond added fixtures. A lighter rule would digest the test function source plus its resolved fixtures' source. It would reject any change to a non-`test_*` test-side helper module under `modifies_test_support`. That would drop the recursive closure walk. If the author keeps the closure walk, the doc should name the requirement the lighter rule leaves unmet.\n- **\"Rejected:\" entries restate the architecture.** The perturbation rejection in D6 repeats the architecture's own rejection and can go.",
+   "location": "project-documents/user/slices/422-slice.fix-case-qualification-and-yield-report-keystone.md:139,144-158"
+  },
+  {
+   "i": 7,
+   "severity": "NOTE",
+   "title": "Registry extension and rebuild cost",
+   "description": "The slice says 421's registry maps the language to the `FixCaseAdapter`, and also that 421's pieces are \"used unchanged\". The 421 design describes `registry.py` as keyed to `BenchmarkAdapter` only, with `adapter_for` as the only importer of concrete adapters. Say whether this slice adds a second lookup to that file, and treat it as a recorded 421 extension if so.\n\nSeparately, a rebuild still installs a sandbox for every candidate that reaches step 4, because the environment digest includes the interpreter version and is known only after install. That is acceptable for squadron's roughly 53 candidates. It will scale with other projects' history, so record the rebuild time in the DEVLOG walkthrough.",
+   "location": "project-documents/user/slices/422-slice.fix-case-qualification-and-yield-report-keystone.md:98,241,395"
+  }
+ ]
+}

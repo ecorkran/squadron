@@ -1,0 +1,243 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "GPU path never writes results back to `EntityManager.state`, so spawn/despawn re-upload uses stale data",
+      "description": "- On the CPU path, `tick()` mutates `entity_manager.state` in place. On the GPU path, positions and velocities live in GPU fields. The only copy returned is the `TickResult`. Nothing in the design copies it back into `entity_manager.state`.\n- `sync_from_entity_manager()` (:89-90, :178-179) re-uploads \"CPU state\" after a count change. That state is still the startup snapshot, so every surviving agent would teleport back to its initial position on any spawn or despawn.\n- Other consumers of `entity_manager.state` would also see frozen data. These include `environment.pre_tick/post_tick`, the spawn and despawn selection logic, and the sim logger.\n- The design never says which side owns authoritative state. The plan's \"handles spawn/despawn (re-upload changed agent state)\" is therefore not deliverable as written.\n- `setup_from_server()` sizes the fields from `entity_manager.count` (:144). Quadrants fields are fixed-size, and `finalize()` calls `qd.reset()`. A spawn that raises the count above the allocated capacity has no stated reallocation or capacity strategy.\n- `count_changed_since_last_tick()` compares counts only. A despawn plus spawn in the same tick, or a profile or leadership change on an existing agent, would not trigger a re-upload.\n- The design needs to:\n  - state who owns authoritative state;\n  - define the write-back (or a dirty-flag protocol) from `TickResult` to `entity_manager.state`;\n  - define the capacity and reallocation policy.",
+      "file_ref": null,
+      "category": "integration",
+      "raw_category": null,
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:168-201"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Bounds sync-back uploads only positions; reflect and soft modify velocities",
+      "description": "- `apply_bounds_policy` is called with both `positions` and `velocities` (:186-191). The sync-back path, `notify_positions_modified` and `upload_positions`, returns only positions to the GPU (:213, :227).\n- If reflect or soft change velocities, which is the normal behavior for reflection, those changes are discarded. Agents would then re-hit the boundary each tick.\n- Success criterion A4 (\"all four policies produce valid positions\") would be unmet for these policies.\n- Either sync velocities too, or state why `apply_bounds_policy` never alters them.\n- Testing covers only wrap (test 7, :315). Add reflect and soft cases.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:185-213"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The A7 fallback is not implemented by `_select_arch()` as specified, and it contradicts the default",
+      "description": "- `_select_arch()` branches on `platform.system()` only: Darwin returns Metal and Linux returns CUDA. A Linux host with no CUDA driver, such as CI or a headless box, still gets `qd.cuda`, so `qd.init` fails and the server exits.\n- The plan entry and A7 promise a fallback \"if neither is detected\". The design delivers one only for Windows and other platforms.\n- Because `quadrants` is the default, this affects every non-GPU Linux host.\n- The design needs a real capability check, or a stated `qd.init` failure-to-CPU strategy with a WARNING.\n- The doc also never says where `_select_arch()` lives. The scope says it is \"updated from the bench backend version\", but the bench harness is declared untouched (:40). The mapping from the arch object to the `arch` property string is also unspecified.",
+      "file_ref": null,
+      "category": "failure-modes",
+      "raw_category": null,
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:98-117"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Verification walkthrough and tests contradict the `quadrants` default",
+      "description": "- \"CPU default (no GPU)\" says that removing the `compute:` block should produce no GPU initialization. That contradicts the stated default of `quadrants` (:33, :61) and test 1 (:309).\n- Metal step 1 has the user add `compute:` to `default.yaml` and step 5 says \"restore `backend: cpu`\". Files Changed says the block is added commented out (:298).\n- The testing section says \"All tests are CPU-only\" (:307) but also lists GPU-required tests.\n- Fix these so the acceptance walkthrough matches the design.",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:358-362"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Open Notes prohibit repeated `qd.init()` in a process, but Testing has no isolation strategy",
+      "description": "- The Open Notes call a second `qd.init()` in the same process undefined behavior (:382). Tests 5-8 each call `setup()`, so they would run in one pytest process.\n- The isolation requirement lives in a note and is not in the test plan.\n- No test covers:\n  - the fallback (A7);\n  - a `qd.init` or setup failure being logged and exiting at startup;\n  - the observable signal for any failure mode.\n- A runtime GPU error (kernel fault, OOM mid-session) is declared fatal (:382). The design does not say how that is surfaced from `step()` or what the server tick loop does with it.",
+      "file_ref": null,
+      "category": "testing",
+      "raw_category": null,
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:305-316"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "CPU-path inputs are silently ignored on the GPU path",
+      "description": "- The GPU branch ignores `self._forces`, `self._spatial`, and `seasonal_parameter`. The fused kernel hardcodes the seven forces.\n- Profiles are frozen at `setup()`.\n- If the force configuration (`_build_forces`) or `environment.pre_tick` alters forces or profile parameters, GPU behavior diverges from CPU with no warning. That includes the default-on case.\n- State the supported subset explicitly and fail or warn when the config falls outside it.",
+      "file_ref": null,
+      "category": "integration",
+      "raw_category": null,
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:168-200"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Core package takes server types, reversing the dependency direction",
+      "description": "- `GpuAgentState.setup_from_server()` moves into the library package `migratory.gpu` (:294), but takes `EntityManager` and `WorldBoundsConfig`. These are `migratory_server` types, so the library would depend on the server.\n- The move was justified as removing a production\u2192bench dependency (:383), yet this adds a library\u2192server one.\n- Have the server-side driver unpack the primitives (arrays, `w`, `h`, `dt`, profiles) and pass them to a library initializer.",
+      "file_ref": null,
+      "category": "layering",
+      "raw_category": null,
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:127-150"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Relocating `GpuAgentState` conflicts with \"bench harness unchanged\" and duplicates the tick sequence",
+      "description": "- Out of scope says \"any changes to the bench harness\", and A5 says bench tests pass \"without modification\". The module move and import update (:294-296) is a change.\n- The doc lists only `quadrants_fused_backend.py` as updated. Other importers (`runner.py`, bench tests) are not accounted for, and no re-export shim is mentioned.\n- `GpuSimulationDriver.step()` re-implements the sequence from `QuadrantsFusedTickRunner.tick_once()`. The doc says \"three phases\" and then lists four (:119-123). That duplicates logic across bench and production and invites drift.\n- Extract the tick sequence into `migratory.gpu` and have both callers use it. Alternatively, state explicitly why duplication is accepted.",
+      "file_ref": null,
+      "category": "scope",
+      "raw_category": null,
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:40-41, 119-125, 294-301"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Precision contract differs from the parent plan, and the dependency list is incomplete",
+      "description": "- The parent plan says slice 145's integrated tick uses f64 throughout on CUDA. This slice documents f32 GPU fields with an accepted deviation of about 1.37e-6.\n- The slice also depends on `subdivision_factor` from slice 149 (:386) and on slice 147's gating. Frontmatter lists only 145, matching the plan entry.\n- Reconcile the f32/f64 statement and add 149 to the dependencies.\n- The Open Notes transfer estimate of ~200 KB at N=50k also looks understated: 50k \u00d7 2 components \u00d7 2 arrays is ~400 KB in f32 and ~800 KB in f64.",
+      "file_ref": null,
+      "category": "alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:150"
+    },
+    {
+      "severity": "PASS",
+      "title": "Tier 2 NFR restated with a specific target",
+      "description": "- A6 and the integration test restate the 60 TPS at N=50k gate.\n- The slice keeps wire work out of scope, consistent with the plan's separation of compute and wire tracks.\n- The config surface, startup validation, and one-way `server.py` \u2192 driver wiring are proportionate.",
+      "file_ref": null,
+      "category": "nfr",
+      "raw_category": null,
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:320, 334"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "integration",
+      "raw_category": null,
+      "summary": "GPU path never writes results back to `EntityManager.state`, so spawn/despawn re-upload uses stale data",
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:168-201",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Bounds sync-back uploads only positions; reflect and soft modify velocities",
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:185-213",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "failure-modes",
+      "raw_category": null,
+      "summary": "The A7 fallback is not implemented by `_select_arch()` as specified, and it contradicts the default",
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:98-117",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "Verification walkthrough and tests contradict the `quadrants` default",
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:358-362",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "testing",
+      "raw_category": null,
+      "summary": "Open Notes prohibit repeated `qd.init()` in a process, but Testing has no isolation strategy",
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:305-316",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "integration",
+      "raw_category": null,
+      "summary": "CPU-path inputs are silently ignored on the GPU path",
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:168-200",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "concern",
+      "category": "layering",
+      "raw_category": null,
+      "summary": "Core package takes server types, reversing the dependency direction",
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:127-150",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "concern",
+      "category": "scope",
+      "raw_category": null,
+      "summary": "Relocating `GpuAgentState` conflicts with \"bench harness unchanged\" and duplicates the tick sequence",
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:40-41, 119-125, 294-301",
+      "location_verified": null
+    },
+    {
+      "id": "F009",
+      "severity": "note",
+      "category": "alignment",
+      "raw_category": null,
+      "summary": "Precision contract differs from the parent plan, and the dependency list is incomplete",
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:150",
+      "location_verified": true
+    },
+    {
+      "id": "F010",
+      "severity": "pass",
+      "category": "nfr",
+      "raw_category": null,
+      "summary": "Tier 2 NFR restated with a specific target",
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:320, 334",
+      "location_verified": null
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md",
+    "against": "project-documents/user/architecture/140-slices.simulation-scaling.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/migratory-146-slice"
+  },
+  "timestamp": "2026-11-16T09:30:12.066947",
+  "model": "claude-sonnet-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 2,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-sonnet-5-5",
+  "answering_models": [
+    "claude-sonnet-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 10,
+    "in_fences": 0,
+    "in_section": 10,
+    "surviving": 10
+  },
+  "effort": "medium",
+  "profile": "sdk",
+  "turns": 3,
+  "prompt_tokens": 112824,
+  "cached_tokens": 11400,
+  "cache_write_tokens": 101420,
+  "completion_tokens": 7662,
+  "reasoning_tokens": null,
+  "duration_seconds": 63.0422265001107,
+  "cost_usd": 0.4839813,
+  "cost_basis": "provider"
+}

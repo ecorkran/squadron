@@ -1,0 +1,47 @@
+{
+ "review": "r16",
+ "findings": [
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Rebuild re-fetches issues, which contradicts \"frozen once\" and case immutability",
+   "description": "The architecture says issue text is frozen when the case is created, and cases are immutable. D2 says the case \"is never fetched again\". But the Data Flow runs `get_issue` and the `issue_edited_after_fix` check at step 2, before the reuse check at step 4. Every rebuild therefore refetches every candidate's issue.\n\nTwo consequences:\n- **Qualified record overwritten.** If an issue body is edited after a case qualified, the rebuild produces `issue_edited_after_fix`. D10 says a newer result under the same key overwrites, so a qualified record becomes rejected. The case set still lists the case, but `qualification_for` now returns a rejection for it. That is not the immutable behavior the architecture describes.\n- **Reuse is not free.** The Success Criteria say a second `build` \"runs no collection or test for reused candidates\". Reuse is keyed on the environment digest, which exists only after a sandbox install. So every candidate still pays the network call and an install on every rebuild.\n\nFix: check for an existing record before step 2, using `(project, commit, rule_version)` and a stored frozen `task_text` or `case_id`. Make only a missing or `harness_error` record trigger a refetch. State which pre-sandbox rejections are final and which are retried. `issue_not_found` and `harness_error` look like candidates for retry, and `issue_edited_after_fix` looks final.",
+   "location": "project-documents/user/slices/422-slice.fix-case-qualification-and-yield-report-keystone.md#Data Flow, D2, D10"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Failure modes for the resolver, trace run and git extraction are not enumerated",
+   "description": "Timeouts and `SuiteRunError` on test runs map to `harness_error` (D5). Issue-fetch errors map to `harness_error` (Patterns and Conventions). Several other new I/O paths have no stated handling:\n- **Resolver script and trace plugin runs.** The slice does not say whether a hang or crash is `harness_error` or a case verdict. D6 maps a resolver import failure to `boundary_undecidable`, which blames the case. A resolver that times out or is killed is a harness failure by the slice's own rule.\n- **`git show <sha>:<path>`.** This feeds the overlay and reference states. A missing object, such as a shallow clone, has no stated outcome.\n- **Interruption mid-candidate.** Nothing says what happens to the sandbox, or to a partial record, if the process dies during a repeat run. Resumability is claimed (\"restartable without extra state\") but only discussed for completed records.\n- **Which failures stop the build.** The CLI contract says exit 1 for \"a harness failure that stops the build (for example, `gh` missing)\". Elsewhere harness failures are recorded per candidate and the build continues. Name the failures that abort and the ones that continue.\n\nThe failure-mode rule needs each mode to be observable, with at least one test per signal. The Technical Requirements cover issue fetch, suite timeout and resolver crash, but not a trace-run timeout or a `git show` failure.",
+   "location": "project-documents/user/slices/422-slice.fix-case-qualification-and-yield-report-keystone.md#D5, D6, Patterns and Conventions"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Design is heavier than the keystone needs; several pieces can be cut or deferred",
+   "description": "Effort is 4/5, with 13 decisions and about 15 new modules and records. The goal is a yield report that decides initiative order. Cuttable or deferrable items:\n- **Dual boundary trace (D6).** It combines static `co_names` resolution with a `sys.setprofile` crossing hook, plus its own list of known gaps. If the static reference pass catches the same coupled tests the dynamic hook does, ship static first and add the profile hook only if the yield report shows the boundary check admitting coupled tests. If the dynamic hook is kept, say what it catches that the static pass does not.\n- **Debug and convenience surface.** `--commit SHA \u2026` and `--keep` on `build`, and a `fix-cases show` command that prints five categories of detail. The slice needs only `build` and `yield`. A `show` is useful, but the Verification Walkthrough relies on it, so keep a minimal version.\n- **`/sq:benchmark` slash command.** It mirrors every subcommand. Defer it, or create it for `yield` only, until the CLI is proven.\n- **Restated architecture.** The Overview, Value, and the \"Rejected:\" lists in D1, D3, D6, D8 and D12 largely repeat the architecture's own rationale. They do not add a decision for implementers.\n- **Grader commands (D11).** They are case identity, so keep them. The `ruff.toml` and `pyrightconfig.json` detection is only needed once 425 runs the commands. Keep it only if it is cheap.",
+   "location": "project-documents/user/slices/422-slice.fix-case-qualification-and-yield-report-keystone.md#D6, Technical Scope, Component Structure"
+  },
+  {
+   "i": 4,
+   "severity": "NOTE",
+   "title": "Separability bound can say \"enough cases\" when per-case differences vary",
+   "description": "The architecture specifies a paired bootstrap over cases. The slice substitutes an analytic bound. That is reasonable with no replay data, and the slice states the assumptions beside the answer. The bound ignores case-to-case variance in the true difference, so it can say \"enough\" when the paired bootstrap would not. Since that answer sets the 423\u2192424\u2192425 order versus pooling, the report should word \"enough cases\" as \"not ruled out by sample noise alone\", or provide only a lower bound on cases needed. The caveat line already moves in that direction.",
+   "location": "project-documents/user/slices/422-slice.fix-case-qualification-and-yield-report-keystone.md#D12 \u2014 Yield report and the separability answer"
+  },
+  {
+   "i": 5,
+   "severity": "NOTE",
+   "title": "Agent-auth check is assigned to 421",
+   "description": "The architecture assigns the \"does agent auth survive a redirected config directory\" check to the fix-cases slice, because it builds the sandbox environment. This slice says that if \"the 421 auth check answered no, nothing here is affected\". That is consistent only if the slice plan moved the check into 421. I did not read the slice plan, so please confirm the plan entry for 421 owns it. If it does, no action is needed.",
+   "location": "project-documents/user/slices/422-slice.fix-case-qualification-and-yield-report-keystone.md#Dependencies, Consumes from Other Slices"
+  },
+  {
+   "i": 6,
+   "severity": "NOTE",
+   "title": "Modifying 421's record types while claiming \"used unchanged\"",
+   "description": "The slice adds `fix_qualification` to `MetrologyRecord` and new methods to `BenchmarkRecordStore`, while also saying \"421's sandbox, records and suite runner are used unchanged\". The additions follow 421 D3's sibling-payload pattern and look intended. Reword the sentence to \"extended only through 421's sibling-payload mechanism\", so a reviewer does not read it as a contradiction.",
+   "location": "project-documents/user/slices/422-slice.fix-case-qualification-and-yield-report-keystone.md#Integration Requirements"
+  }
+ ]
+}

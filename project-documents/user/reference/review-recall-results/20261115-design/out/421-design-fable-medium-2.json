@@ -1,0 +1,261 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "`EnvironmentIdentity` lives in `benchmark/`, but store records must carry it",
+      "description": "The design places `EnvironmentIdentity` in `benchmark/adapter.py` (lines 82-83) and states that neither `metrology/` nor `replay/sandbox.py` depends on `benchmark/` (line 97). Line 119 then says 422's qualification records and 424's replay records carry it. Those are metrology store payloads, on the pattern of `metrology/benchmark_models.py`. So either `metrology/` imports from `benchmark/`, which breaks the stated direction, or 422 duplicates the model.\n\nFix: define `EnvironmentIdentity` in `metrology/benchmark_models.py` and have `benchmark/adapter.py` import it. This matters now because the architecture makes environment identity the qualification key and part of the grader identity.",
+      "file_ref": null,
+      "category": "dependency-direction",
+      "raw_category": null,
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:119"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Case sets are not keyed on `ProjectId`, against the architecture and the slice plan",
+      "description": "The architecture's \"Extend 320's store\" principle and the 421 plan entry both say the new record types are keyed on `ProjectId`. D2 keys `CaseSet` by name only, with the id `caseset-<sha256(name)[:12]>-v<version>`. The reason given (422 may pool cases across projects) is sound, but the deviation is left unreconciled:\n\n- **Envelope:** the design does not say what the `MetrologyRecord` envelope's project field holds for a `case_set` record.\n- **Project-scoped reads:** it does not say how existing project-scoped store queries treat such a record.\n- **Name scope:** set names become global, so two projects that both use the same name share one version sequence.\n\nFix: either state the envelope and query behaviour here and record the deviation against the architecture, or key single-project sets on `ProjectId` and define the pooled case explicitly.",
+      "file_ref": null,
+      "category": "architectural-alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:134"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Install failure reasons have no value for transient or other failures",
+      "description": "`EnvironmentFailureReason` has five values: `no_lockfile`, `lockfile_unsupported`, `lock_stale_or_unresolvable`, `install_timeout`, `installer_missing`. The install is a network I/O path, and several failures have no home:\n\n- registry unreachable or the network down;\n- a build-backend failure on historical code;\n- a full disk or any other non-zero `uv` exit.\n\nThe design does not say which reason these get. If they fall into `lock_stale_or_unresolvable`, a transient outage is recorded as a permanent lock problem. The architecture disqualifies a case whose lockfile no longer resolves, and 422's yield report counts exclusions per reason, so this would silently mis-exclude cases and skew yield.\n\nFix: add a distinct reason (for example `install_failed`) for non-zero exits that are not positively identified as lock problems, and state how the lock case is identified.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:152"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "A suite run that dies mid-run can return as a short, clean result",
+      "description": "D10 handles two cases: a timeout (`timed_out=True`, missing nodes become `not_run`) and a missing or unparseable JSONL with a non-zero exit (`SuiteRunError`). It does not handle pytest dying partway with a parseable partial JSONL, such as an interpreter crash, an internal error or an interrupted session.\n\nFor `nodes(ids)` the gap is detectable, but the `not_run` rule is stated only for timeouts. For `all_tests()` there is no requested list, so a truncated run looks like a smaller suite. 425 counts regressions from exactly that mode, so a crash would hide regressions. The architecture's \"Absent is not zero\" principle requires this to surface as a harness-caused absence.\n\nFix:\n- Have the plugin write a session-finish line with the collected count and exit status.\n- Treat a JSONL without that line as `SuiteRunError`, or as an explicit incomplete flag.\n- Say which pytest exit codes are normal and which are errors.\n- Say that a truncated final line after a kill is tolerated.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:209"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Slice 400 is a dependency but is not in frontmatter",
+      "description": "The design consumes `SourceLanguage` from `metrology/snapshot_models.py` (line 67), follows 400's registry keying, and relies on 400's `.venv` and `uv.lock` layout (line 154). The frontmatter `dependencies` lists only `[420, 177, 320]`. Add 400.",
+      "file_ref": null,
+      "category": "hidden-dependencies",
+      "raw_category": null,
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:6"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`lockfile_path` must be tree-relative for the identity digest to be stable",
+      "description": "`identity_digest` hashes every other field, including `lockfile_path`. If that path is absolute it contains the sandbox id, so every sandbox gets a different digest. That would defeat the environment-keyed re-qualification 422 depends on. State that it is relative to the tree.",
+      "file_ref": null,
+      "category": "under-specification",
+      "raw_category": null,
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:159"
+    },
+    {
+      "severity": "NOTE",
+      "title": "A missing project module has no `__file__` to classify by",
+      "description": "A \"project module\" is defined as a module whose `__file__` is project source. `ModuleNotFoundError` for a module the fix added has a name but no file, and this is the most common missing-symbol case. As written it falls through to `other_exception`. 422 excludes both kinds, so the outcome is safe, but the yield report's reason is wrong. Define the match by package prefix against project source roots.",
+      "file_ref": null,
+      "category": "under-specification",
+      "raw_category": null,
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:220"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Identity fields and failure kinds go beyond the parents' lists, with reasons",
+      "description": "D1 adds `reference_sha`, `project_id`, `kind` and `hidden_fixtures` to the architecture's content-identity list. D11 adds `other_exception`, and splits out `collection_error`, beyond the plan's three classes. Both are justified in the design and are stricter than the parents, so they are consistent with \"Cases are immutable\" and with \"where a check cannot decide, the case is excluded\". The architecture's identity list should be updated to match.",
+      "file_ref": null,
+      "category": "architectural-alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:126"
+    },
+    {
+      "severity": "PASS",
+      "title": "Scope matches the slice plan entry",
+      "description": "All four plan items are present: records, environment resolution, the scrubbed environment with the auth check, and the adapter seam with the Python suite runner. Discovery, the fairness rule, injection, the leak scan and grading are correctly excluded to 422\u2013425. Both open questions the plan assigns to 421 are answered (D5 for no lockfile, D9 for the seam shape). The two CLI commands are verification tools the success criteria use, and the mechanism count is proportionate to the plan's High risk rating.",
+      "file_ref": null,
+      "category": "scope",
+      "raw_category": null,
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:32-51"
+    },
+    {
+      "severity": "PASS",
+      "title": "Scrubbed environment implements the leak-containment principle",
+      "description": "The environment is built from an allowlist, not a denylist. One `HOME` redirect covers squadron's and the agents' config directories with no store and no memory. `PATH` puts the sandbox first and omits user tool installs, so the installed `sq` is unreachable. This matches the architecture's principle and the plan's success criteria. The remaining leak paths (the adjacent store, the open network) are named and handed to 424's scan.",
+      "file_ref": null,
+      "category": "architectural-alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:163-174"
+    },
+    {
+      "severity": "PASS",
+      "title": "No silent fallbacks, and timeouts are bounded and configured",
+      "description": "Unpinned installs are refused (D5). A no from the auth check is never worked around (D8). A probe that hangs becomes a `timed out` no. All three timeouts are config keys enforced through `ProcessRunner`'s process-group kill, and each failure path has a test asserting its error and reason (line 316).",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:223-226"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "dependency-direction",
+      "raw_category": null,
+      "summary": "`EnvironmentIdentity` lives in `benchmark/`, but store records must carry it",
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:119",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "architectural-alignment",
+      "raw_category": null,
+      "summary": "Case sets are not keyed on `ProjectId`, against the architecture and the slice plan",
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:134",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "Install failure reasons have no value for transient or other failures",
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:152",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "A suite run that dies mid-run can return as a short, clean result",
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:209",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "hidden-dependencies",
+      "raw_category": null,
+      "summary": "Slice 400 is a dependency but is not in frontmatter",
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:6",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "under-specification",
+      "raw_category": null,
+      "summary": "`lockfile_path` must be tree-relative for the identity digest to be stable",
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:159",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "note",
+      "category": "under-specification",
+      "raw_category": null,
+      "summary": "A missing project module has no `__file__` to classify by",
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:220",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "note",
+      "category": "architectural-alignment",
+      "raw_category": null,
+      "summary": "Identity fields and failure kinds go beyond the parents' lists, with reasons",
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:126",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "pass",
+      "category": "scope",
+      "raw_category": null,
+      "summary": "Scope matches the slice plan entry",
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:32-51",
+      "location_verified": true
+    },
+    {
+      "id": "F010",
+      "severity": "pass",
+      "category": "architectural-alignment",
+      "raw_category": null,
+      "summary": "Scrubbed environment implements the leak-containment principle",
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:163-174",
+      "location_verified": true
+    },
+    {
+      "id": "F011",
+      "severity": "pass",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "No silent fallbacks, and timeouts are bounded and configured",
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:223-226",
+      "location_verified": true
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md",
+    "against": "project-documents/user/architecture/420-arch.model-benchmark.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261115-design/wt/421-design"
+  },
+  "timestamp": "2026-11-16T07:02:15.383407",
+  "model": "claude-fable-5-2",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 4,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-fable-5-2",
+  "answering_models": [
+    "claude-fable-5-2"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 11,
+    "in_fences": 0,
+    "in_section": 11,
+    "surviving": 11
+  },
+  "effort": "medium",
+  "profile": "sdk",
+  "turns": 5,
+  "prompt_tokens": 253959,
+  "cached_tokens": 247012,
+  "cache_write_tokens": 6941,
+  "completion_tokens": 8699,
+  "reasoning_tokens": null,
+  "duration_seconds": 94.03883525007404,
+  "cost_usd": 0.5092373000000001,
+  "cost_basis": "provider"
+}

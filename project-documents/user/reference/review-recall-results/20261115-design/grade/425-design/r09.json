@@ -1,0 +1,110 @@
+{
+ "review": "r09",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "FAIL",
+   "title": "Reinstall runs producer-authored build code in the harness environment",
+   "description": "When the producer changes `pyproject.toml` or `uv.lock`, D5 runs 421's `uv sync --locked --all-extras --dev` \"under the harness environment\". `[build-system]` is not a tool table, so D4 leaves it with the producer (line 188), and a change to it triggers the reinstall (line 195). `uv sync` builds the project through that backend, so the producer can make its own code run during grading. Two architecture principles break:\n\n- **The scrub.** The producer's code must not reach GitHub credentials or the store (arch:46). The harness environment carries the user's variables; 421 D7 removes them only from the producer's environment. The store and the reference commit in the user's checkout are reachable from there.\n- **Grade integrity.** The build runs before the regression and hidden runs (lines 132\u2013138). It can write into `.venv`, for example a `.pth` file, and change those results. The producer cannot change the grade (arch:48).\n\nThe leak scan (424) reads only the producer's transcript, so a reach on this path is never detected, and \"a run that reaches for it is not graded\" (arch:46) cannot be enforced here. Special Considerations (line 566) states the harness-environment install as settled, so the gap is not visible in the doc.\n\nFix, keeping the reinstall that arch:48 requires: refuse, as a config absence, any reinstall whose producer-changed build config names in-tree code (`build-backend` with `backend-path`, or path or git entries in `[tool.uv.sources]`). Run any allowed reinstall under the scrubbed environment with `CredentialGrant.none()`. Filesystem reach to the checkout remains, so the architecture should name it as dependent on #213.",
+   "location": "project-documents/user/slices/425-slice.grading-and-paired-report.md:195-197"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Pytest settings in setup.cfg and tox.ini are not restored",
+   "description": "TOOL_CONFIG_FILES covers `pytest.ini` and the `[tool.*]` tables, but not `[pytest]` in `tox.ini` or `[tool:pytest]` in `setup.cfg`. When no `pytest.ini` or `[tool.pytest.ini_options]` exists, pytest reads those two files. A producer that creates or edits either one can add `addopts = --deselect \u2026` and drop a failing regression node from the run, which flips the pass. `config_edits` (line 191) does not list it, because the file is never restored or removed. arch:48 gives the same file list, so the gap is in the architecture too. Fix: restore the pytest sections of both files from the start commit, as D4 does for `pyproject.toml`, delete producer-created copies, and list them in `config_edits`.",
+   "location": "project-documents/user/slices/425-slice.grading-and-paired-report.md:189"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Reviewer rules come from the producer's tree",
+   "description": "D7 says the reviewer loads rules \"from the sandbox tree's own rules directory (the start commit's)\". But review runs first, \"on the producer's commit exactly as written\" (line 155), and at that point the tree is `start_sha` plus the producer's diff (line 161). A producer's edit to `CLAUDE.md` or `.claude/rules/` therefore changes the reviewer's instructions, and `rules_hash` in `ReviewerRef` (line 384) varies by replay. arch:91 requires one fixed code-review config, and D10 treats the reviewer as one identity. Fix: read the rules from the start commit (for example `git show <start_sha>:<path>`). Also state in Special Considerations that the reviewer reads producer-written code and comments, so review columns can be steered by the producer.",
+   "location": "project-documents/user/slices/425-slice.grading-and-paired-report.md:208"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "GradeResult in the metrology layer imports a benchmark type",
+   "description": "`GradeResult.hidden` is typed `tuple[NodeResult, ...]`, and the component table places `GradeResult` in `metrology/benchmark_models.py` (lines 87\u201388). In 421, `NodeResult` lives in `benchmark/adapter.py` (421 lines 82\u201383), and 421 states that `benchmark/` depends on `metrology/` and that \"neither of those depends on `benchmark/`\" (421 line 97). As written, the records layer imports from the benchmark layer. Fix: move `NodeResult`, `NodeOutcome` and `FailureKind` to the metrology side, or give hidden results their own record type. The doc should say which module owns each type.",
+   "location": "project-documents/user/slices/425-slice.grading-and-paired-report.md:399"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Reinstall failures are all charged to the config",
+   "description": "D5 maps every reinstall failure to `producer_env_unresolvable`, a config absence. 421's `EnvironmentFailureReason` (421 line 152) also includes `install_timeout` and `installer_missing`, which are harness conditions such as a slow network or a missing uv. Charging them to a config breaks \"absent is not zero\" (arch:67), under which a harness failure drops the case from every config. Only a lock that does not resolve is clearly producer-caused. Fix: map each reason explicitly, and state how `install_timeout` is attributed, because a producer's build can also hang.",
+   "location": "project-documents/user/slices/425-slice.grading-and-paired-report.md:197"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Four failure paths have no enumerated handling",
+   "description": "D16 lists eleven classes, but these new I/O paths have none:\n\n- A producer `pyproject.toml`, `uv.lock` or `pyrightconfig.json` that does not parse (D4 reads it with `tomllib`, line 190). The producer caused it, so it should be a config absence, but it has no class.\n- Collection (\"collect node ids\", line 134). The only bound named is `grader_timeout`, which covers suite runs.\n- `git apply`, `git show` and `git diff` hanging (lines 128, 215). D16 covers their failures but names no bound.\n- A store write failure while writing a grade. 424 states its rule (line 283: keep the sandbox and stop). 425 states none.\n\nEach needs an explicit class, a bound where it can hang, and a test that asserts the observable signal.",
+   "location": "project-documents/user/slices/425-slice.grading-and-paired-report.md:296-312"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "Grading rebuilds the tree instead of using the architecture's same sandbox",
+   "description": "arch:48 says the grade runs \"in the same sandbox\". D1 rebuilds the tree from `start_sha` plus the stored diff in a fresh sandbox. The reason is sound: keeping every replay sandbox alive would hold cases \u00d7 configs \u00d7 samples environments (424 line 400). But the departure is recorded only in 424 (line 400). This doc says only \"as 424 states\", and the architecture is unchanged. The cost is also understated. Each grade pays a full install at `start_sha`, not just a reinstall, and D9 does not mention that wall time. Fix: record the departure in the architecture and name the install cost in D9.",
+   "location": "project-documents/user/slices/425-slice.grading-and-paired-report.md:161"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "Grading has its own cap, against the architecture's cost statement",
+   "description": "D9 gives `grade` its own `--max-cost`, so total spend is bounded by the run cap plus each grade invocation's cap. The architecture says the run's cap \"covers grading and judging as well as the replays\" (arch:42) and \"covers all of it\" (arch:119). This doc flags the departure (line 236) but does not change the architecture. 424 is also inconsistent: line 398 says `bench_plan` is \"extended with grading terms\", while line 258 says grading has its own cap. Fix: give the three documents one statement of the spend bound. D9's per-review arithmetic and one-review overshoot are sound and can stay.",
+   "location": "project-documents/user/slices/425-slice.grading-and-paired-report.md:235-236"
+  },
+  {
+   "i": 8,
+   "severity": "CONCERN",
+   "title": "427 imports from 425, but the plan lets it build from 421 alone",
+   "description": "Line 465 says 427 imports `ReviewerRef`, `review_tree_diff`, `bootstrap_mean_interval` and `review_flag` from 425, and line 7 lists 427 as an interface. The plan says 427 \"does not depend on 424\u2013426 and can be built any time after 421\" (420-slices, line 154) and that it \"can move up\". Either 427 depends on 425, which breaks that ordering claim, or the shared pieces move to a module 427 can depend on. Fix: decide which, then correct the plan or this slice.",
+   "location": "project-documents/user/slices/425-slice.grading-and-paired-report.md:465"
+  },
+  {
+   "i": 9,
+   "severity": "CONCERN",
+   "title": "Lint and type totals ignore the case's grader commands",
+   "description": "422 D11 (line 251) makes the case's `lint` and `typecheck` commands part of identity \"for 425, which reports them as totals\". D12 instead takes the totals from 400's snapshot and uses the commands only as a presence check. The argv goes into the case id but is never run, so two cases that differ only in lint argv get different ids and identical grades. Fix, the lighter option: drop argv from identity, keep the command kind, and state that 400's measurement defines the totals. 422 D11 needs the same change.",
+   "location": "project-documents/user/slices/425-slice.grading-and-paired-report.md:256"
+  },
+  {
+   "i": 10,
+   "severity": "CONCERN",
+   "title": "Review noise floors use a third of the reviews, from three samples per case",
+   "description": "`review_floor_runs` defaults to 3 per reference, per case. In the walkthrough bound (line 228) that is 30 of 84 reviews (36%), spent only on noise estimates, each from three runs of one reference. The plan asks for \"320's noise floor\" (420-slices, line 121), and arch:79 describes that floor as per-category. D8 replaces it with a per-case floor. It also uses `_stat`, a private 320 helper that the Dependencies list (line 60) does not name. Lighter options: one floor per reviewer, estimated from repeated reviews of a few references, or a default of two runs. Also cut `report --json` (line 347), which no walkthrough step or requirement uses. Expose 320's reduction as a public function.",
+   "location": "project-documents/user/slices/425-slice.grading-and-paired-report.md:217"
+  },
+  {
+   "i": 11,
+   "severity": "CONCERN",
+   "title": "The verification walkthrough cannot run as written",
+   "description": "Two defects. Step 1 caps grading at `--max-cost 10 --review-cost 0.25` (line 512), but its own count (five references \u00d7 3 floor runs, plus up to 30 replays, line 514) is 45 reviews \u00d7 $0.25 = $11.25. The run stops at the cap with exit 2 and never reaches the replay lines the step expects. Step 5 (line 530) uses `sq benchmark replay-show` to show a grade. 424 defines `replay-show` as printing the replay record (424 line 318), and 425 defines no grade display, so no command shows `regression_failures`. Fix: set the step's cap to the bound or expect exit 2, and add a grade display to `replay-show` or a `grade-show`.",
+   "location": "project-documents/user/slices/425-slice.grading-and-paired-report.md:512-530"
+  },
+  {
+   "i": 12,
+   "severity": "NOTE",
+   "title": "Under-specified details",
+   "description": "- D2 treats `failed`, `error` and `not_run` as regressions, and `skipped` and `xfailed` as not. It does not say whether `xpassed` is a regression.\n- D14 (line 278) says the bootstrap seed \"is derived from the benchmark id and the pair\" without the derivation, so the reproducibility the success criteria require cannot be tested as written.\n- D8 (line 215) and the data flow (lines 108\u2013109) key the reference grade on \"the environment digest on the case's replays\". That assumes one digest per case. Replays of one case can span digests if the toolchain changed between runs, and the doc does not say what happens then.",
+   "location": "project-documents/user/slices/425-slice.grading-and-paired-report.md:166"
+  },
+  {
+   "i": 13,
+   "severity": "NOTE",
+   "title": "Environment identity sits outside the grader identity the architecture names",
+   "description": "D10 keeps the environment digest on each grade record rather than in `GraderIdentity`, because it varies by case. That is a sensible split. But arch:111 says environment identity is part of the grader identity, and 421 (421 line 292) expects `EnvironmentIdentity` there too. Say in the architecture that the grader identity is the reviewer, floor and version, plus the per-record environment digest.",
+   "location": "project-documents/user/slices/425-slice.grading-and-paired-report.md:241"
+  },
+  {
+   "i": 14,
+   "severity": "NOTE",
+   "title": "Frontmatter dependencies are incomplete",
+   "description": "`dependencies` lists 421, 422 and 424. The Prerequisites section (lines 55\u201361) and the plan entry (420-slices, line 130) also name 400, 320 and 300 as direct dependencies. Add them so the record matches the text.",
+   "location": "project-documents/user/slices/425-slice.grading-and-paired-report.md:6"
+  }
+ ]
+}

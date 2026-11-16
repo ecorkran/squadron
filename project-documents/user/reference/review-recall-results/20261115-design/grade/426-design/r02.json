@@ -1,0 +1,54 @@
+{
+ "review": "r02",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "The \"no edits to 424 or 425\" claim is contradicted elsewhere in the doc",
+   "description": "Line 42 says \"No edits to 424 or 425.\" Other parts of the document say otherwise:\n- Line 321 and line 426 widen 424's `CaseDrop.reason` to accept `SliceCandidateRejection`. That is a type change in 424's code.\n- Line 427 and D17 (line 306) change 425's `bench_report`: grouping by case kind, a `no regressions` heading, and a new pairwise section.\n- Line 451 says `tests/benchmark/` passes \"except where D8 routes re-qualification and D17 extracts the interval.\" But D8 (line 225) says 424's seam already routes re-qualification. 424 D5 confirms that `replay_one` calls only `runner.requalify`, so 426 needs no edit to `bench_runner.py`. And D17 (line 312) says the interval already exists in 425 and nothing is extracted. This line looks left over from an earlier draft.\n\nThe task breakdown needs to know which of 424's and 425's files and tests change. Replace line 42 with an exact list: `CaseDrop.reason` widened in 424; per-kind grouping and the pairwise section in 425's `bench_report`; no other 424 or 425 changes. Then fix line 451 to match D8 and D17.",
+   "location": "project-documents/user/slices/426-slice.slice-cases.md:42"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "An over-size diff written by one config drops the case for every config",
+   "description": "D14 drops the whole case when its longest pair prompt exceeds `benchmark.judge_max_prompt_chars`, and treats that the same as a harness absence. But the architecture's \"Absent is not zero\" principle separates failures by who caused them. If a config's replay produced the huge diff (for example, by committing generated files or vendored code), the config caused it. Dropping the case then removes it from that config's comparison, which is the outcome the principle is meant to prevent. A config that runs away on a hard case escapes judgment on it.\n\nD14's case-mix argument only rules out dropping the oversized diff and judging the rest. It doesn't consider forfeiting that contestant instead. Suggested split:\n- **Drop the case** when the task text plus the reference diff alone exceed the limit. That is a property of the case.\n- **Treat it as a config absence** when only a replay's diff pushes a prompt over the limit. That contestant forfeits its pairs, as in D15. The case mix stays the same for every config, and no truncation is needed.\n\nEither adopt this or state why config-caused over-size should drop the case anyway.",
+   "location": "project-documents/user/slices/426-slice.slice-cases.md:272-277"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "The doc doesn't say how forfeits count in the Bradley-Terry fit and the paired interval",
+   "description": "D15 (line 282) says \"committing nothing is a loss\" and records forfeit judgments with an outcome. D17 lists forfeits as their own column, and the `d(c)` formula covers wins, ties, inconsistent pairs and invalid pairs. It never says whether forfeit wins and forfeit ties:\n- go into the `bradley_terry.fit` input; or\n- count in a case's `w(c)` for the sample-matched pairs.\n\nIf forfeits are left out of either one, a config that often commits nothing is not penalized in strength or in the verdict, which contradicts D15. Say explicitly that forfeits enter both, counted as a win (or a 0.5 tie when both sides are absent). Add a hand-computed test with a forfeit to the pairwise-reduction tests (line 452).",
+   "location": "project-documents/user/slices/426-slice.slice-cases.md:304-312"
+  },
+  {
+   "i": 3,
+   "severity": "NOTE",
+   "title": "The reference is the branch tip, not the landing commit the architecture names",
+   "description": "The architecture's Envisioned State says \"the landing commit is the reference\" for slice cases. D2 uses `tip_sha` instead, because on a merge landing `fork..after` also contains unrelated work that reached the target. The reasoning is sound and serves the goal of comparing configs on identical work. The architecture text should be updated to say \"branch tip\" so the two documents agree.",
+   "location": "project-documents/user/slices/426-slice.slice-cases.md:176-178"
+  },
+  {
+   "i": 4,
+   "severity": "NOTE",
+   "title": "Putting `cf` on the scrubbed `PATH` widens the architecture's environment scrub",
+   "description": "The architecture's containment principle leaves the user's installed tools off the producer's `PATH`. D9 deliberately adds `cf`, which P6's cf operations need. It limits the change to slice-case producers, keeps it out of `EnvironmentIdentity` and out of fix-case and suite runs, and makes the step-1 spike check that the leak-scan paths cover cf's install location. That is a proportionate way to handle it. Record the widening as an intended exception when the architecture's containment text is next updated.",
+   "location": "project-documents/user/slices/426-slice.slice-cases.md:228-235"
+  },
+  {
+   "i": 5,
+   "severity": "NOTE",
+   "title": "The slice plan lets case building move ahead of 424, but the design doesn't mark where to split",
+   "description": "The slice plan's measurement-driven ordering (420-slices line 170) allows 426's case-building part to move ahead of 424 if 422's yield is too low. Case building (D1\u2013D7, development steps 3\u20134) uses only 421, 422 and 403. The frontmatter dependencies `[421, 422, 424, 425]` and the step order, which starts with the cf spike that only replay needs, don't say this. One sentence naming steps 3\u20134 plus the `slice-cases build` CLI as a part that can ship on its own would keep that option open.",
+   "location": "project-documents/user/slices/426-slice.slice-cases.md:6"
+  },
+  {
+   "i": 6,
+   "severity": "NOTE",
+   "title": "The judge cap is separate from the replay and grading caps",
+   "description": "The architecture describes one run-level cap that covers replays, grading and judging. D16 gives `judge` its own required `--max-cost`, following 425 D9's grade-command pattern. That is consistent with the precedent 425 set. The spending NFR is still restated with specific targets: the dollar bound prints before any dispatch, the cap is checked before each call, overshoot is limited to one call, and hitting the cap exits 2. The bound line at line 294 says \"run cap\" where it means the judge command's `--max-cost`, so it should be relabeled.",
+   "location": "project-documents/user/slices/426-slice.slice-cases.md:287-298"
+  }
+ ]
+}

@@ -1,0 +1,97 @@
+{
+ "case": "426-design",
+ "flaws": [
+  {
+   "id": "F1",
+   "text": "judge_pair signature cannot keep summary.calls counting that _call does at replay/judging.py:173, yet '177's tests pass unchanged'",
+   "hits": {}
+  },
+  {
+   "id": "F2",
+   "text": "plan_file_for(index, root) reads plan files under a directory; no working tree exists at the fork",
+   "hits": {
+    "r03": [
+     2
+    ]
+   }
+  },
+  {
+   "id": "F3",
+   "text": "task_text sorts task files by name, putting -10 before -2; start_point.py orders numerically and order is part of case id",
+   "hits": {}
+  },
+  {
+   "id": "F4",
+   "text": "OverSizeCase 'replaced when limit changes' but id excludes limit; stale record remains and case counted both judged and over size",
+   "hits": {
+    "r01": [
+     4
+    ],
+    "r17": [
+     1
+    ]
+   }
+  },
+  {
+   "id": "F5",
+   "text": "'No edits to 424 or 425' contradicted by D8 (424 refusal) and CaseDrop.reason widening / bench_report changes",
+   "hits": {
+    "r01": [
+     6
+    ],
+    "r02": [
+     0
+    ],
+    "r03": [
+     1
+    ],
+    "r04": [
+     2
+    ],
+    "r05": [
+     1
+    ],
+    "r06": [
+     0
+    ],
+    "r07": [
+     0
+    ],
+    "r08": [
+     2
+    ],
+    "r09": [
+     1
+    ],
+    "r10": [
+     1
+    ],
+    "r11": [
+     0
+    ],
+    "r12": [
+     0
+    ],
+    "r13": [
+     8
+    ],
+    "r14": [
+     0
+    ],
+    "r15": [
+     0
+    ],
+    "r16": [
+     1
+    ],
+    "r17": [
+     0
+    ],
+    "r18": [
+     0
+    ]
+   }
+  }
+ ],
+ "note": "F5 hit by all 18 (each cites CaseDrop.reason / bench_report edits vs line 42). r03 f0 (judge_pair two calls overshoot) judged not an F1 hit: different defect."
+}

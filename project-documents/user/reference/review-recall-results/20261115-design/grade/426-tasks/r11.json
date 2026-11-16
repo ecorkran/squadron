@@ -1,0 +1,47 @@
+{
+ "review": "r11",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Discovery rejections and discovery harness errors are never written as `SliceQualification` records",
+   "description": "The first functional requirement says build \"writes a `SliceQualification` for every slice index\" and that no slice is silently dropped. No task writes a record for a slice rejected in discovery:\n\n- **Task 13:** `discover` returns `multiple_landings`, `branch_contains_merges` and discovery `harness_error` entries in a `DiscoveryResult`, and writes nothing.\n- **Task 15:** writes records only for the task-text and no-code rejections.\n- **Task 20:** prints a line for every index but only calls `qualify_slice_candidate` \"for each candidate\".\n- **Task 22:** counts yield rows \"from stored `SliceQualification`s\", so these two rejections would always read zero.\n\nThe design's Mitigation Strategies name exactly these two as the candidates to relax if they dominate, so the undercount hides the number the PM needs.\n\nFix: add a bullet to Task 20 that writes a `rejected` or `harness_error` record for each discovery entry, with a test in `test_slice_case_build.py`. State which landing supplies `landing_after_sha`, `fork_sha` and `tip_sha` for a `multiple_landings` slice, since the record id and model both require one.",
+   "location": "project-documents/user/tasks/426-tasks.slice-cases.md:196"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Yield rows count stale qualification records for the same slice",
+   "description": "Task 22 counts every stored `SliceQualification` with no rule for picking one record per slice. Records are keyed by fork digest or `pre`, so one slice can hold several:\n\n- **Stale `pre` record:** a pre-sandbox `harness_error` is stored under `pre`. The rerun Task 20 tests succeeds and writes under the digest key, so the slice is counted as both `harness_error` and `qualified`.\n- **Environment change:** a new fork digest writes a second record beside the old one.\n- **Rule version bump:** an old-version rejection stays beside the new result.\n\nThe task file caught the same problem for `OverSizeCase` (the over-size count gap bullet) but not here.\n\nFix: have Task 22 select one record per (project, slice index, landing), the latest at the current `SLICE_RULE_VERSION`. Add a test with a stale `pre` harness error beside a later qualified record.",
+   "location": "project-documents/user/tasks/426-tasks.slice-cases.md:207"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Tasks 24\u201325 do not say how the runner gets the slice index and landing from a case, or what `requalify` is wired with",
+   "description": "Three things are left for the implementer to invent:\n\n- **Slice index for `invoke`:** it runs `sq run P6 <index>` and registers with `slice index`, but receives a `BenchmarkCase`. The only place the tasks put the index is `CaseProvenance.source_ref = \"slice:<index>@<landing_after_sha>\"` (Task 18). Parsing that string breaks the project rule against using labels as logical structure.\n- **Key for `slice_qualification_for`:** Task 15 keys it on (project, index, landing, fork digest), and the same derivation is missing.\n- **Collaborators for the fall-through:** `requalify` falls through to `qualify_slice_candidate`, which needs the sandbox factory, adapter registry, store, clock and the user's repo path. Task 24's injected list and Task 25's production construction name only `CfRegistration`, the process runner and the installed `sq` path.\n\nFix: name the source of index and landing, either typed fields on the case or provenance, or a lookup of the stored `SliceQualification` by `case_id`. List the full collaborator set in Tasks 24 and 25. Add the design gap to the Context Summary list so Task 1 writes it into D8.",
+   "location": "project-documents/user/tasks/426-tasks.slice-cases.md:222-227"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Two \"load tests\" trace to no requirement and are not placed or gated like the sibling slices' load tests",
+   "description": "The slice design states no NFR and no concurrency requirement, so neither test is required:\n\n- **Task 24, eight concurrent `invoke` calls:** 424's harness runs one replay at a time, so this exercises a path nothing uses.\n- **Task 33, 200-pair slow or hung dispatcher:** the judge loop is sequential, and the hung-dispatcher case is already asserted in Task 3 and Task 30.\n\nThey also sit in `tests/benchmark/` with no CI check, where 421 and 424 put theirs in `tests/load/` with a \"Confirm CI gates it\" step.\n\nFix: cut both and the Context Summary bullet. If they stay, move them to `tests/load/` and add the CI confirmation step 424 Task 10 uses. CI does run them today: `.github/workflows/ci.yml:38` runs `uv run pytest` over `testpaths = [\"tests\"]`.",
+   "location": "project-documents/user/tasks/426-tasks.slice-cases.md:53"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Task count is heavy for a 3/5 slice; several tasks split one function across files",
+   "description": "The file has 42 tasks and roughly 27 new test files. Three groups can merge without losing a tested commit point:\n\n- **Tasks 15\u201319:** five tasks and five test files build the single function `qualify_slice_candidate` under one commit. Merge into two: pre-sandbox checks with reuse, then sandbox stages with repeats, the case and harness errors.\n- **Tasks 31\u201334:** four tasks build `diff_judge_runner.py` under one commit with Task 35. Merge into two: plan with refusals and counts, then bound, cap, lock and resume.\n- **Tasks 37\u201338:** the pairwise reduction and its rendering can be one task.\n\nThat brings the file to about 35 tasks.",
+   "location": "project-documents/user/tasks/426-tasks.slice-cases.md:167-193"
+  },
+  {
+   "i": 5,
+   "severity": "NOTE",
+   "title": "Minor sequencing and blocking gaps",
+   "description": "- **Tasks 21 and 22 are inverted.** Task 21 prints yield rows that \"Task 22 supplies; until then print the lines only\", so its output test is written and then revised. Swap them; they share a commit.\n- **Task 26 has no stop if Task 23 qualifies nothing.** Task 23 accepts zero qualified cases, but Task 26 needs a `<case-id>`. Give it the `BLOCKED:` line Task 41 already has.\n- **The slice branch stays open across the gate.** Tasks 2\u20137 commit before the Task 8 gate, which the file expects to block. The branch then sits open while 421\u2013425 land, and Task 5 edits `config/keys.py`, which 421, 422 and 425 also edit. Expect a refresh from the target when work resumes.",
+   "location": "project-documents/user/tasks/426-tasks.slice-cases.md:200-209"
+  }
+ ]
+}

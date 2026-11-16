@@ -1,0 +1,207 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Prompt identity will not tell fix-prompt versions apart, and the dispatch records the wrong source",
+      "description": "The architecture's goal \"Results stay comparable over time\" (420-arch line 40) says every result names its prompt identity, so that a report compares only results that match. D8 (line 191) claims that \"the prompt's text is part of the dispatch's prompt identity, which `prompt_identity.py` already records.\" Slice 177 defines prompt identity differently. It is a `PromptSource` (`build_context`, `feedback`, `explicit`, `review_findings`) plus `cf_version` and `guide_version` (177 tasks line 69, 177 slice line 433). It is not a hash of the prompt text.\n\nD2 (line 139) also makes `fix-context` write its outputs under `cf-op(build_context)`'s keys (`operation: build_context`, `context`) so the dispatch fallback picks them up. As a result:\n- The fix dispatch is recorded with `source: build_context`, but no cf build happened.\n- `cf_version` and `guide_version` are either null or wrong, because the fix prompt doesn't come from cf.\n- Nothing identifies the version of `data/prompts/fix.md`. If someone edits the fix prompt, 424 and 425 can't separate results from before and after the edit, and that is the comparability the architecture requires.\n\nFix: give `fix-context` a prompt identity of its own and record it on the dispatch. One option is a new `PromptSource` value with a hash of `fix.md`, or the squadron version. Drop the claim that this is \"already recorded.\" If reusing the `build_context` output keys is still the right way to hook into the fallback, say in the design that this is deliberate coupling, and make sure the recorded source is correct.",
+      "file_ref": null,
+      "category": "integration",
+      "raw_category": null,
+      "location": "project-documents/user/slices/423-slice.fix-pipeline.md:139"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The slice plan's MCP parity criterion is dropped",
+      "description": "The slice plan entry for 423 (420-slices line 87) includes the success criterion \"CLI, slash command and MCP give identical results.\" The design leaves out the MCP part, and D9 rejects an MCP `run` tool. The reasoning is sound: squadron has no MCP server for any pipeline, and building the first one just for `fix` would be a separate feature. It is still scope the slice plan assigns to this slice, so it counts as a CONCERN. Fix: amend the 423 entry in the slice plan so the criterion covers only the CLI and `/sq:run`. Then the plan and the design agree, and a later review won't flag the slice as incomplete.",
+      "file_ref": null,
+      "category": "scope",
+      "raw_category": null,
+      "location": "project-documents/user/slices/423-slice.fix-pipeline.md:43"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The new dependency on 422 conflicts with the slice plan's \"no dependencies\"",
+      "description": "The frontmatter lists `dependencies: [422]`. The slice plan (lines 88 and 166) says 423 has no dependencies in this initiative and \"can be built earlier.\" The dependency points the right way, since 422 comes before 423, and 422's design already provides a renderer with an optional cutoff for 423's use (422 slice line 139). File mode doesn't need 422 at all. Update the slice plan entry so it no longer says 423 can be built before 422. Alternatively, note that steps 1\u20133 and 5 of the development approach can run before 422 lands and step 4 cannot.",
+      "file_ref": null,
+      "category": "dependencies",
+      "raw_category": null,
+      "location": "project-documents/user/slices/423-slice.fix-pipeline.md:6"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The behavior when a commit hook fails is not stated",
+      "description": "The project runs its linter in a pre-commit hook. A hook can reject the fix commit, or rewrite files and then fail. D5 and D6 say what happens with report defects and when HEAD moves. They don't say what happens when `git commit` itself fails after staging. The existing `CommitAction` probably fails the action already. Add one line saying the step fails with the hook's output, and that the tree, now staged, is left for inspection just as it is after a report refusal. That keeps the failure visible.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/423-slice.fix-pipeline.md#d5--commit-destination-and-preconditions"
+    },
+    {
+      "severity": "PASS",
+      "title": "The single producer step matches the replay principle",
+      "description": "D1 expands one `fix` step into `fix-context \u2192 dispatch \u2192 commit`, with no embedded review. This satisfies \"Replays run the production pipelines\" (420-arch line 61). It also gives 424's producer-only mode a single step to run, with nothing to strip and no copied prompt.",
+      "file_ref": null,
+      "category": "architecture",
+      "raw_category": null,
+      "location": "project-documents/user/slices/423-slice.fix-pipeline.md#d1--a-fix-step-type-not-a-pipeline-of-generic-steps"
+    },
+    {
+      "severity": "PASS",
+      "title": "Sandbox mode fits the containment principles",
+      "description": "With `issue-file` and `commit-to: current`, the pipeline doesn't construct a `CodeHost` and makes no cf or `gh` calls. It uses the frozen text verbatim and records its sha256. That matches the architecture's \"frozen issue text is passed in rather than fetched\" (420-arch line 117) and the requirement that the producer run without GitHub credentials. Walkthrough step 4 checks this with `gh` and `cf` removed from `PATH`.",
+      "file_ref": null,
+      "category": "architecture",
+      "raw_category": null,
+      "location": "project-documents/user/slices/423-slice.fix-pipeline.md#d7--the-fix-step-does-not-declare-a-context-forge-need"
+    },
+    {
+      "severity": "PASS",
+      "title": "Failure modes for the new I/O paths are listed",
+      "description": "The issue-file path covers files that are missing, empty, unreadable, non-UTF-8, or have a `..` path. The fetch path covers not-found, auth, transport, and timeout errors, using the existing 30 s `HOST_COMMAND_TIMEOUT_SECONDS`, with no retry or fallback. Each fails before dispatch, with a named message logged at WARNING or ERROR. Report defects, `blocked`, HEAD moved, and nothing staged each have an explicit outcome. Tests are planned for the timeout and for the factory that must not be called in file mode.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/423-slice.fix-pipeline.md:136-137"
+    },
+    {
+      "severity": "PASS",
+      "title": "The cost cap NFR is restated",
+      "description": "The architecture's per-pipeline cap (`pipeline.max_cost_usd`) is restated with `--max-cost`. It appears in the success criteria (`failure_kind: cost_cap`) and is checked in walkthrough step 5, which is what 424's stated benchmark bound depends on.",
+      "file_ref": null,
+      "category": "nfr",
+      "raw_category": null,
+      "location": "project-documents/user/slices/423-slice.fix-pipeline.md:58"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "integration",
+      "raw_category": null,
+      "summary": "Prompt identity will not tell fix-prompt versions apart, and the dispatch records the wrong source",
+      "location": "project-documents/user/slices/423-slice.fix-pipeline.md:139",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "scope",
+      "raw_category": null,
+      "summary": "The slice plan's MCP parity criterion is dropped",
+      "location": "project-documents/user/slices/423-slice.fix-pipeline.md:43",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "note",
+      "category": "dependencies",
+      "raw_category": null,
+      "summary": "The new dependency on 422 conflicts with the slice plan's \"no dependencies\"",
+      "location": "project-documents/user/slices/423-slice.fix-pipeline.md:6",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "note",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "The behavior when a commit hook fails is not stated",
+      "location": "project-documents/user/slices/423-slice.fix-pipeline.md#d5--commit-destination-and-preconditions",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "pass",
+      "category": "architecture",
+      "raw_category": null,
+      "summary": "The single producer step matches the replay principle",
+      "location": "project-documents/user/slices/423-slice.fix-pipeline.md#d1--a-fix-step-type-not-a-pipeline-of-generic-steps",
+      "location_verified": null
+    },
+    {
+      "id": "F006",
+      "severity": "pass",
+      "category": "architecture",
+      "raw_category": null,
+      "summary": "Sandbox mode fits the containment principles",
+      "location": "project-documents/user/slices/423-slice.fix-pipeline.md#d7--the-fix-step-does-not-declare-a-context-forge-need",
+      "location_verified": null
+    },
+    {
+      "id": "F007",
+      "severity": "pass",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "Failure modes for the new I/O paths are listed",
+      "location": "project-documents/user/slices/423-slice.fix-pipeline.md:136-137",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "pass",
+      "category": "nfr",
+      "raw_category": null,
+      "summary": "The cost cap NFR is restated",
+      "location": "project-documents/user/slices/423-slice.fix-pipeline.md:58",
+      "location_verified": true
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/423-slice.fix-pipeline.md",
+    "against": "project-documents/user/architecture/420-arch.model-benchmark.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261115-design/wt/423-design"
+  },
+  "timestamp": "2026-11-16T07:35:41.168337",
+  "model": "claude-opus-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 6,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-opus-5-5",
+  "answering_models": [
+    "claude-opus-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 8,
+    "in_fences": 0,
+    "in_section": 8,
+    "surviving": 8
+  },
+  "effort": "high",
+  "profile": "sdk",
+  "turns": 7,
+  "prompt_tokens": 453838,
+  "cached_tokens": 370152,
+  "cache_write_tokens": 83676,
+  "completion_tokens": 6336,
+  "reasoning_tokens": null,
+  "duration_seconds": 69.73203475004993,
+  "cost_usd": 0.8709695,
+  "cost_basis": "provider"
+}

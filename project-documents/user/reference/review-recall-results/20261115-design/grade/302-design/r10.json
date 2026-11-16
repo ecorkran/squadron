@@ -1,0 +1,40 @@
+{
+ "review": "r10",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Structured-output constraint for the score is dropped without acknowledgement",
+   "description": "The slice plan entry for 302 requires that \"each template uses a structured-output constraint for the score field\", with the success criterion \"the score-with-rationale shape is enforced by the template's structured output\". The architecture lists the same pair as mitigation (b) under score reliability. Slice 300 deferred this here explicitly: \"302 will extend the extraction and add its own parser test for that variant.\"\n\nThe design does the opposite and does not say so:\n- **Only prompt wording enforces the shape.** `## Rationale` is \"prose scaffolding \u2026 not a new parser target\" (lines 180-183), and the design declares \"no parser change needed\" (lines 93-95).\n- **A response with a bare `score:` and no rationale passes enforcement unchanged.** Nothing checks that the justification exists.\n- **The roll-up from criteria to score is undefined.** The example gives 85 and 80 \u2192 82 with no stated rule.\n- **The criterion keys per template are never pinned.** They are persisted to frontmatter and are what initiative 320 will query.\n\nEither design the structured-output shape (with its parser test), or record the deviation and move the scope to a named slice or Future Work entry. If the line-based shape is kept, state the roll-up rule and fix the criterion key set for each template.",
+   "location": "project-documents/user/slices/302-slice.design-phase-judge-templates.md:152-183"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Persisted derived verdict and CLI path are unresolved",
+   "description": "The slice plan requires a real run to produce \"a score, derived verdict, and findings, persisted like any review output\". The design's own data flow (lines 138-149) shows `ReviewResult(verdict=UNKNOWN)` leaving the parser. Per slice 301, the derived verdict and provenance are written only onto the returned `ActionResult`. Slice 300's persistence writes the review-file frontmatter from the result.\n\nThe design never says how the derived verdict reaches the persisted file. As documented, a passing judge run would persist `verdict: UNKNOWN` beside `score: 82`. That is the ambiguous, non-self-describing result the architecture's provenance principle exists to prevent.\n\nThe CLI path has the same gap:\n- Success criterion 3 and walkthrough step 3 assert a threshold-derived verdict from `sq review`.\n- Slice 301 places enforcement in the pipeline `review` action, and this design does not establish that the CLI routes through it.\n- The invocation is admitted to be a guess (\"should be confirmed \u2026 during implementation\", lines 376-379).\n\nIf either path needs a change to persist the derived verdict, \"no engine change\" (lines 59-67) is false and the scope must say so. Resolve both in the design: name the path, and state what verdict and provenance the persisted file carries.",
+   "location": "project-documents/user/slices/302-slice.design-phase-judge-templates.md:361-379"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Failure-mode table omits two architecture-enumerated ground-truth modes",
+   "description": "The architecture enumerates five judge failure modes. The table covers provider unavailable, absent or out-of-range score, and unresolved `TEMPLATE_INPUTS` keys. It then claims \"every row above terminates in `UNKNOWN` \u2026 or a score-derived verdict\". Two modes are missing:\n\n- **Ground-truth file missing or unreadable.** The path resolves from `SliceInfo` but the file is absent. This is distinct from the missing-key row.\n- **Injected ground truth exceeding the cap.** No slice covers this one: 301's table does not mention it either.\n\nThese are the first templates to supply real ground truth, and `judge.slice-vs-arch` injects a whole architecture document for non-file-reading providers. If the over-cap behaviour is truncation, the judge scores against partial ground truth and can produce a threshold-derived `PASS`. That would breach the no-silent-pass NFR this section says it restates.\n\nAdd both rows with their handling and observable signal. The design is also silent on how ground truth is supplied (native read vs. injection), which the slice plan entry names.",
+   "location": "project-documents/user/slices/302-slice.design-phase-judge-templates.md:383-408"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Design is overweight on restatement, light on the actual deliverable",
+   "description": "This is a 2/5-effort, low-risk slice delivering two YAML files and two registry entries, in about 450 lines. Much of that restates slices 300 and 301:\n\n- Three of the five failure-table rows are self-labelled \"Not new\" (lines 396-400).\n- \"Template naming \u2026 not a dispatch signal\" (lines 187-196) repeats 301's decision.\n- \"What does NOT change\", \"Interfaces Required\" and \"Consumes from Other Slices\" cover the same ground three times.\n- The data-flow diagram re-draws 301's.\n\nCut these to one-line references. The deliverable itself is absent: the system-prompt text or outline, the criterion list per template, and `required_inputs`, `allowed_tools` and `prompt_template`. \"Same list as `slice.yaml` / `tasks.yaml`\" (lines 198-206) is the only specification of what each judge evaluates.",
+   "location": "project-documents/user/slices/302-slice.design-phase-judge-templates.md"
+  },
+  {
+   "i": 4,
+   "severity": "NOTE",
+   "title": "Example numbers in the prompt shape are an anchoring source",
+   "description": "The design does not say whether the example block (`score: 82`, `alignment: 85`, `scope: 80`) is illustrative or literal system-prompt content. If it is copied into the templates, it works against the anti-anchoring purpose the architecture gives for the rationale shape, and against the project's hallucination-trap rule. State that the templates describe the shape with placeholders, not concrete values.",
+   "location": "project-documents/user/slices/302-slice.design-phase-judge-templates.md:161-178"
+  }
+ ]
+}

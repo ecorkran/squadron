@@ -1,0 +1,5 @@
+{"case":"423-design","flaws":[
+{"id":"F1","text":"D2 claims fix-context outputs operation build_context/context so DispatchAction need not change, but _resolve_prompt accepts only CF_OP action type and reads outputs['stdout']","hits":{"r16":[0]}},
+{"id":"F2","text":"IssueSource named both as a class in the component list and as a StrEnum (file, github) in Patterns","hits":{"r03":[6],"r08":[5]}},
+{"id":"F3","text":"Prompt-only renders sq _fix-prompt with [--io-dir DIR] but sq run refuses --io-dir with --prompt-only (run.py:1214), so the flag can never be passed","hits":{}}
+],"note":"r14 f3 and r18 f8 discuss the build_context reuse but affirm the fallback works (miss the action_type/stdout defect), so not counted for F1. r02/r04/r13 prompt-identity findings are a different defect."}

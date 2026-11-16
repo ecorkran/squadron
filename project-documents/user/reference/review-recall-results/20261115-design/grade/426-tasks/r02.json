@@ -1,0 +1,40 @@
+{
+ "review": "r02",
+ "findings": [
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Qualification and judge-runner work is split finer than the slice needs",
+   "description": "- **Tasks 15\u201319:** these are five top-level tasks and five test files (`test_slice_qualify_checks/sets/repeats/case/errors`). All of them build one function, `qualify_slice_candidate`, in one module, one stage at a time. Tasks 17 and 18 each add a few lines of logic. Merge them into two tasks:\n  - Pre-sandbox checks and reuse (Task 15).\n  - Sandbox stages, repeats, case construction and harness-error wrapping (Tasks 16\u201319), with one or two test files.\n- **Tasks 31\u201334:** these are four tasks and four test files for `plan_judge`, the bound, the cap, the lock and resume, all in `diff_judge_runner.py`. Merge 31 with 32 (plan), and 33 with 34 (bound, cap, lock, resume).\n- **Task 42:** it bundles gates, a line-count check, a design update and the DEVLOG. This is acceptable but near the upper limit.",
+   "location": "project-documents/user/tasks/426-tasks.slice-cases.md:167-191"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Steps dictate implementation detail the slice does not require",
+   "description": "- **Task 3:** it names private helpers (`_spent`), the `asyncio.wait_for` mechanism and a file-split trigger.\n- **Task 28:** it spells out how the prompt loader reads `data_dir().joinpath(\"replay\", \"pairwise-judge.md\")`.\n- **Task 20:** the result-line wording is spelled out at length.\n- **Fix:** keep the behavior and the success checks (call count, log levels, hash identity). Drop the mechanism wording and let the implementer read `judging.py` and `replay/judge.py`.",
+   "location": "project-documents/user/tasks/426-tasks.slice-cases.md:80"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "\"Load tests\" have no NFR behind them, are not in `tests/load/`, and have no CI wiring",
+   "description": "- **No NFR:** the slice design states no performance or concurrency NFR, so no load test is required.\n- **Extra tests:** the context summary adds two anyway:\n  - Task 24's eight concurrent `invoke` calls.\n  - Task 33's 200-pair slow-dispatcher plan (lines 222-223 and 275-276).\n  - Neither traces to a success criterion.\n- **Placement:** they sit in `tests/benchmark/` rather than `tests/load/`, and no task wires CI to gate on them.\n- **Fix:** either drop the 200-pair and 8-concurrency cases, or relabel them as ordinary unit tests so the \"load test\" claim goes away.\n- **Keep:** the hung-dispatcher-cut-at-`timeout_s` assertion in Task 33. It traces to the failure-mode criterion.",
+   "location": "project-documents/user/tasks/426-tasks.slice-cases.md:53"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Some Task 6 fixture shapes are never consumed, and one fixture-driven criterion is only met with doubles",
+   "description": "- **Unused builders:** Task 6 builds repos for \"a slice whose every test changed\" and \"regression selection would be empty\". No later task names them. Task 18's `no_regression_signal` test uses adapter and sandbox doubles.\n- **Unnamed fixtures:** Task 15's `no_code_change` and `no_*_at_fork` tests do not say which Task 6 repo each uses.\n- **Criterion gap:** the criterion \"Fixture slices produce each rejection: \u2026 a docs-only slice, and an empty regression selection\" is therefore only partly tied to the fixtures.\n- **Fix:** name the Task 6 repo each qualification test consumes, or drop the unused builders. For the empty-selection case, add one test that runs the real selection logic over the fixture, or accept doubles and delete the builder.\n- **Minor:** the normalize criterion describes one diff with every dropped kind plus a rename and a binary. Task 7's synthetic tests cover each case separately. One combined case would match the criterion literally.",
+   "location": "project-documents/user/tasks/426-tasks.slice-cases.md:105"
+  },
+  {
+   "i": 5,
+   "severity": "NOTE",
+   "title": "Commit markers and ordering around Task 1",
+   "description": "The Task 1 marker sits mid-task. The design correction is committed to the target, and the slice branch is created after it. This is consistent with the rule that planning work commits to the target. The remaining markers fall after tested units (after Tasks 2, 3, 4, 5, 6, 7, 9, 12, 14, 19, 22, 25, 30, 35, 39 and 40). The markers after Tasks 23, 26 and 41 are conditional. That is fine.",
+   "location": "project-documents/user/tasks/426-tasks.slice-cases.md:66"
+  }
+ ]
+}

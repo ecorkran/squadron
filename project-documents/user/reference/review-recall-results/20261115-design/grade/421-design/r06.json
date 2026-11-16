@@ -1,0 +1,96 @@
+{
+ "review": "r06",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "FAIL",
+   "title": "Scrubbed environment is merged over the harness environment, so the allowlist does not hold",
+   "description": "The slice says the existing `ProcessRunner` `env` parameter \"already lets every child process get the scrubbed environment.\" It does not replace the environment. The runner merges the mapping over the harness's `os.environ`, and its own comment says this is deliberate so `gh` keeps its config. Any variable the allowlist omits still reaches the child: `GH_TOKEN`, `GITHUB_TOKEN`, `SSH_AUTH_SOCK`, `CLAUDE_CONFIG_DIR`, `CODEX_HOME`, `VIRTUAL_ENV`. `PATH` and `HOME` are overridden, so those parts of D7 work. The SDK sentence at line 174 has the same flaw, since the SDK merge starts from the inherited environment. The architecture requires the producer to run \"without GitHub credentials\" (`420-arch.model-benchmark.md:46`), and the plan's 421 criterion and this slice's success criterion at line 309 both fail as written.\n\nFix: add an explicit replace mode for scrubbed runs, opt-in, and keep the merge as the default for other callers. Put it in \"Interfaces Required\" and D7. Make the integration test at line 317 plant `GH_TOKEN` in the harness environment before starting the real child, then assert it is absent.",
+   "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:64"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Work referenced to 426 and 427 is not assigned to them in the plan",
+   "description": "Line 48 excludes \"cf registration of benchmark sandboxes (426).\" D4 (line 144) and line 291 repeat this. The plan's 426 is slice cases and mentions no cf registration, so no plan entry owns it. Either assign it (line 291 implies 424) or state that environment resolution needs no cf project and drop the reference.\n\nLine 293 says 426 and 427 consume \"case records with `kind=slice`.\" The plan's 427 is planted-defect cases, which the architecture treats separately (\"Reviewer recall runs separately,\" arch line 97). D1 (line 125) closes `CaseKind` to `fix | slice`. 427 needs the sandbox and suite runner, not slice-case records. Narrow that consumer line, or state how planted-defect cases will be represented.",
+   "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:48"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Case-set key departs from the plan, and the record id can collide across projects",
+   "description": "The plan's 421 entry says case and case-set records are \"keyed on `ProjectId`\", and the architecture requires store records to be keyed on it (arch line 65). D2 keys the set by name and cites 422's possible pooling. The plan makes the pooling decision from 422's measured yield, not here. The record id `caseset-<sha256(name)[:12]>-v<version>` also has no project component. Two projects that each name a set \"smoke\" share one version chain, and `write_case_set` compares against the other project's latest version.\n\nFix: keep the `ProjectId` key as the plan says, and add pooled sets when the yield report calls for them. If the name-keyed design stays, state the global name rule and include the project in the id. Settle this before 422 writes sets.",
+   "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:130-134"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Suite runner has no handling for a missing or unparseable result file when pytest exits zero",
+   "description": "D10 raises `SuiteRunError` for a missing or unparseable JSONL only \"with a non-zero pytest exit.\" With exit zero, a plugin that failed to write, or an `all_tests()` run with no requested node list to mark `not_run`, comes back as an empty result that reads as a pass. The architecture treats silent failure paths as bugs (\"Absent is not zero,\" arch line 67), so the sentence \"never comes back as an empty pass\" is not true as written.\n\nFix: require the result file on every exit code. The plugin writes a start line and an end line, so a missing end line is an error, and a run that collects zero tests still writes a distinguishable summary. Add a test where the plugin fails to load and pytest exits zero.",
+   "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:209"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Auth carryover exposes the user's real token file to the producer, and a missing source is undefined",
+   "description": "Carried files are symlinks to the user's real credential files. Code the producer runs can read them, and a write through the link changes the user's token. The architecture says the producer runs with \"the agent's config directories pointed away from the user's\" (arch line 46). This slice carries the agent's auth in on purpose but does not name it as an exception or accept the write exposure. The PM should make that trade-off explicitly.\n\nThe `sdk` entry says \"when it exists,\" but `openai-oauth` has no such rule. If `~/.codex/auth.json` is missing, the link dangles, and the slice does not say whether the grant fails before the producer starts or the probe reports it.\n\nFix: state the exception and the exposure, and make a missing source an explicit error with a reason.",
+   "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:178-181"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Patch-target detection depends on `unittest.mock` internals validated only on Python 3.13",
+   "description": "D10 (line 207) reads the private `_patch` object's target from the innermost frame, and D11 says this was \"checked on Python 3.13.\" Historical commits pin other Python versions, and the environment identity records `interpreter_version`, so the classifier will run where those internals differ. The architecture says an undecidable check excludes the case and never admits it (arch line 105). The slice does not say what happens when the target cannot be read.\n\nFix: state that an unreadable patch target classifies as `other_exception`, which excludes the case. Add fixture tests per supported interpreter, or classify from public exception text.",
+   "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:215"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "Auth probes spend model dollars with no stated bound or cap",
+   "description": "The auth check dispatches one model call per distinct profile through the agent path. The architecture requires spend to be visible before dispatch and a benchmark to refuse to start without a per-pipeline cap and a run-level cap (arch lines 42 and 119). The slice gives no dollar bound for the probes and does not say whether the caps apply. State a bound (one minimal prompt, capped by `pipeline.max_cost_usd`), or state that the cap rule does not cover probes and why.",
+   "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:182-184"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "Slice task text stays inline in every case record, against the record-size rule",
+   "description": "The architecture keeps records small because the store reads every file on every query (arch lines 65 and 129). D3 keeps tens of KB of slice-case task text inline and calls that \"acceptable\" without a measured size or count. Task text is also part of content identity, so the sidecar mechanism the architecture uses for diffs would fit. Move task text to a sidecar, or state a measured bound on per-query read size.",
+   "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:140"
+  },
+  {
+   "i": 8,
+   "severity": "CONCERN",
+   "title": "Several mechanisms go beyond what the 421 plan entry needs",
+   "description": "Candidates to cut or defer:\n- `sq benchmark sandbox` and walkthrough steps 2, 4 and 5 (lines 254-256, 335-352). The plan's 421 criteria do not require a sandbox command. Fixture tests and the returned identity meet them, and the slice itself says 422 brings the first user-facing command (line 42). Keep `sq benchmark auth-check`, since the PM needs its answer.\n- `identity_digest` (line 159) hashes fields that are already stored. 422 can compare the fields. Cut it unless 422 needs a single key.\n- `xfailed` and `xpassed` outcomes (line 221). Nothing in the fairness check or the classification reads them. Drop them unless pytest output needs mapping.",
+   "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:254-256"
+  },
+  {
+   "i": 9,
+   "severity": "NOTE",
+   "title": "`EnvironmentIdentity` reuses a name 400 already uses for a different model",
+   "description": "D6 says this is a new model, not 400's `EnvironmentIdentity`. Two classes with one name and different fields are easy to import by mistake in 422 and 425, which both key on it. A distinct name such as `BenchmarkEnvironmentIdentity` would prevent that.",
+   "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:161"
+  },
+  {
+   "i": 10,
+   "severity": "NOTE",
+   "title": "The 420 dependency is not used by 421",
+   "description": "The frontmatter (line 6) and the prerequisite text say 420 \"must land first,\" but line 57 also says 421 \"reads nothing from 420.\" The plan lists [420] for 421 too. The ordering reason belongs to the slices that compare configs by effort. This is an over-constraint, not an architectural violation.",
+   "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:57"
+  },
+  {
+   "i": 11,
+   "severity": "NOTE",
+   "title": "`local` is listed among API-key profiles, but its profile declares no key variable",
+   "description": "The existing profile definitions give `local`, `sdk` and `openai-oauth` no `api_key_env`. Line 181 says the API-key profiles, `local` included, pass their variable through. `local` has none, so its grant is empty. Remove `local` from that list or say its grant is empty.",
+   "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:181"
+  },
+  {
+   "i": 12,
+   "severity": "NOTE",
+   "title": "`other_exception` goes beyond the three kinds the plan names",
+   "description": "The plan names three classifications. D11 adds a fifth and gives a reason: 422 can exclude undecidable cases instead of guessing. The addition looks justified. It is recorded here so the PM accepts the change knowingly.",
+   "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:219"
+  }
+ ]
+}

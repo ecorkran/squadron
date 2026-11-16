@@ -1,0 +1,47 @@
+{
+ "review": "r17",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Structured-output score shape assigned to this slice is silently dropped",
+   "description": "Three documents say this slice must deliver a structured-output score:\n- **Slice plan:** one of 302's success criteria reads \"The score-with-rationale shape is enforced by the template's structured output.\"\n- **Architecture:** Technical Considerations (b) commits to \"a structured-output constraint for the score field *and* a score-with-rationale prompt shape.\"\n- **Slice 300:** its section on what the parser recognizes says the richer structured-output shape (a JSON object with a `score` key) is \"deliberately not committed here \u2026 302 will extend the extraction and add its own parser test for that variant.\" The parser's own docstring repeats that this is slice 302's job.\n\nThis design does none of that. It keeps the plain `score:` line, makes `## Rationale` \"prose scaffolding \u2026 not a new parser target,\" and says \"no parser change needed\" (lines 93-95, 180-183, 263-265). It never mentions the handoff from 300. As written, nothing enforces the rationale. The model can skip it or write it after the number and the result still parses and gates the same way.\n\nFix: either (a) design the structured-output variant and its parser test, or (b) state openly that the line shape is enough, explain why, and update the slice plan's success criterion and slice 300's pointer. If you take (b), record it as a deliberate deferral (for example, a Future Work entry) so the gap doesn't fall between slices.",
+   "location": "project-documents/user/slices/302-slice.design-phase-judge-templates.md:152-183"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Failure-mode table is wrong about a missing `arch_file` and skips two failure modes the architecture names",
+   "description": "The row \"`SliceInfo` missing `arch_file`/`design_file`\" says the unresolved key \"stays absent from `inputs`\" and is then caught by the required-input check, giving `UNKNOWN`. That only holds if the source function returns `None`. The design file source does turn an empty value into `None`. The arch file source this slice reuses passes the value straight through, and `SliceInfo.arch_file` is a plain string, not an optional one. So a slice with no arch doc would set `against` to an empty string. The required-input check would pass, and the judge would score a slice against nothing instead of returning `UNKNOWN`. The planned failure-mode test (lines 303-305) would only catch this if it uses an empty `arch_file`.\n\nThe architecture's list of failure modes also includes \"missing/unreadable ground-truth file\" (the path resolves but the file isn't there) and \"injected ground truth exceeding the cap.\" The table has no row for either. Both are inherited behaviour, but the table claims to make the mapping explicit \"for these specific paths,\" so they should be listed with their inherited handling.\n\nFix: correct the row for the empty-`arch_file` case. Either handle the empty value explicitly or record the actual outcome. Add the two missing rows.",
+   "location": "project-documents/user/slices/302-slice.design-phase-judge-templates.md:394-400"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Concrete numbers in the prompt-shape example would anchor the judge's score",
+   "description": "The architecture names \"anchoring on the prompt\" as a known way LLM scores go wrong, and it adopts score-with-rationale specifically to reduce it. The output-shape example here uses real values (`score: 82`, `alignment: 85`, `scope: 80`). The design never says these must stay out of the system prompt. The project's CLAUDE.md warns about the same thing in its \"Hallucination traps\" rule: put a concrete example next to a value the model has to produce, and the model reaches for the example. An implementer copying this block into the YAML would plant an anchor around 80. That is also right next to both pass floors (78 and 82).\n\nFix: state that the system prompt must describe the output shape with placeholders such as `<0-100>` and `<criterion-name>`, never with sample numbers.",
+   "location": "project-documents/user/slices/302-slice.design-phase-judge-templates.md:161-178"
+  },
+  {
+   "i": 3,
+   "severity": "NOTE",
+   "title": "Data-flow example uses the wrong pass floor for `judge.slice-vs-arch`",
+   "description": "The example shows `score=82 \u2265 pass_floor(78)` for `judge.slice-vs-arch`. The threshold table (line 226) and walkthrough step 1 (line 326) both set that template's `pass_floor` to 82. 78 belongs to `judge.tasks-vs-slice`. The outcome happens to match (82 \u2265 82 is still PASS), but the example misstates the value. Change it to 82.",
+   "location": "project-documents/user/slices/302-slice.design-phase-judge-templates.md:146"
+  },
+  {
+   "i": 4,
+   "severity": "NOTE",
+   "title": "Criterion names and how they roll up into the score are not defined",
+   "description": "The prompt asks for a justification per criterion, then for the criteria to be rolled up into the top-level `score:`. The design never names the criterion keys for either template, and never says how the roll-up works (the model's own judgment or a stated formula). If the keys aren't fixed, the model will make up different ones from run to run, and the `criteria` map won't be comparable across runs. The architecture reserves that map partly so the calibration initiative (320) can use it later. Either fix a small set of keys per template, or say plainly that criterion keys are free-form and advisory.",
+   "location": "project-documents/user/slices/302-slice.design-phase-judge-templates.md:154-159"
+  },
+  {
+   "i": 5,
+   "severity": "NOTE",
+   "title": "Step 3 CLI invocation is left unconfirmed",
+   "description": "Success criterion 3 and walkthrough step 3 rely on a `sq review slice-vs-arch \u2026 --template` command whose form is \"to be confirmed during implementation.\" The intent is clear, and the pipeline-step path in criterion 4 covers the same ground. Pinning the command now would make criterion 3 directly checkable.",
+   "location": "project-documents/user/slices/302-slice.design-phase-judge-templates.md:376-379"
+  }
+ ]
+}

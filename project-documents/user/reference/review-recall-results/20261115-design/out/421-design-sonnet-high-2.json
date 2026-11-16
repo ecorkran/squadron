@@ -1,0 +1,171 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "A not-collected node id likely aborts the whole pytest run, which contradicts D10/D11",
+      "description": "D11 makes a requested node id that was never collected a `collection_error`, and the success criteria include a fixture test for it. D10 passes the node ids to pytest on the command line and says a missing or unparseable JSONL with a non-zero exit raises `SuiteRunError`.\n\nAs I understand pytest, a nonexistent `file::name` node id is a usage error (exit 4, \"not found\"). pytest then runs nothing, so the plugin's collection and test hooks may never write a line. The result is that:\n- A request containing one absent id fails every node in that request.\n- Under D10 as written that surfaces as `SuiteRunError`, not as a per-node `collection_error`.\n- 422's test-first check at the parent is the main caller. It will hit this often, because a fix's new test usually does not exist at the parent.\n\nThe document also says nothing about a non-timeout abnormal exit (interpreter crash, OOM kill) that leaves a partial JSONL. Only timeouts map the remaining nodes to `not_run`.\n\nFix: specify how absent ids are resolved. Options are a `--collect-only` pre-pass, filtering in `pytest_collection_modifyitems` by node id, or running each id separately. Also state the partial-JSONL rule for abnormal exits. Add a fixture test that mixes present and absent ids in one request and asserts per-node results.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md#D10 \u2014 Suite runner: an injected pytest reporter plugin"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "\"422 can run a chosen node id at the parent with no further harness work\" overclaims, because hidden-test injection is deferred to 425",
+      "description": "The slice plan has 422's qualification run the parent's test-first check. For a fix case the hidden test and any added `conftest.py` fixtures do not exist in the parent tree, because the fix added them. The slice excludes \"hidden-test injection (425)\" and says 425 adds it to the adapter seam. 422 comes before 425, so one of two things must happen:\n- 422 builds its own injection, which 425 later duplicates or replaces, or\n- the integration requirement is false as written.\n\nThe Technical Scope and Provides sections do not say who owns the minimal \"place these test files and fixtures into a tree\" capability. It is simpler than 425's version, since the producer tree is empty and nothing can clash.\n\nFix: either put a minimal `inject_files` primitive on `BenchmarkAdapter` in 421 and have 425 extend it, or reword the 421\u2192422 interface to say 422 owns the minimal injection and 425 reuses it. Name the owner explicitly.",
+      "file_ref": null,
+      "category": "integration",
+      "raw_category": null,
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md#Integration Requirements"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Symlinked real credentials need a cleanup and write-through contract",
+      "description": "The architecture's principle is that the producer's config directories are \"pointed away from the user's\". D8 symlinks the user's real `~/.codex/auth.json` (and `.claude/.credentials.json`) into the scrubbed home. That is a deliberate choice, and the doc handles the replaced-symlink case. Two consequences are not addressed:\n\n1. **Cleanup and sweep.** `<id>.home/` is removed on exit and by the orphan sweep, which D4 says now also removes `.home` and `.out` siblings. The design never requires that removal unlinks symlinks rather than following them. A cleanup that followed them would delete the user's real auth file. The success criteria have no test for this.\n2. **Write-through.** Model-written code running in the sandbox can write or truncate the user's real token file through the link. The Risk section covers refresh-token rotation but not corruption.\n\nFix: add a cleanup contract (links are unlinked, targets are never touched) with a test that the real file survives both normal exit and the sweep. State the write-through exposure in Risks, and say whether read-only carryover is possible for providers that do not refresh in place.",
+      "file_ref": null,
+      "category": "security",
+      "raw_category": null,
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md#D8 \u2014 Auth carryover and the auth check"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`uv` on the producer's PATH weakens the \"installed later `sq` is unreachable\" principle",
+      "description": "The architecture wants a squadron case unable to run the later, installed `sq`. D7 keeps `sq` out of reach, but it symlinks `uv` onto `PATH`, so `uvx squadron` can fetch the published version. The doc acknowledges this in Special Considerations and hands it to 424's leak scan, which matches the architecture's \"recorded as no leak detected\" posture. No change is needed, but 424's design must pick this up.",
+      "file_ref": null,
+      "category": "scope",
+      "raw_category": null,
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md#D7 \u2014 Scrubbed producer environment: allowlist, redirected HOME"
+    },
+    {
+      "severity": "PASS",
+      "title": "Deviations from the architecture are explicit and justified",
+      "description": "Three deviations are each argued in the doc:\n- `reference_sha` is added to the case identity.\n- Case sets are keyed by name, not `ProjectId`. This fits the architecture's own pooled-fallback path, and I checked that `MetrologyRecord` has no envelope-level `project_id`, so the sibling payload works.\n- `other_exception` is added as a fifth `FailureKind`, and it fails closed by letting 422 exclude undecidable cases.\n\nThe record design follows the \"extend 320's store\" principle: optional sibling payloads, no migration, and a separate I/O module because `store.py` is already 606 lines.",
+      "file_ref": null,
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md#D1 \u2014 Case content identity and id"
+    },
+    {
+      "severity": "PASS",
+      "title": "Scope matches the slice plan entry, and the failure modes are mostly enumerated",
+      "description": "All five plan items are present: records, environment resolution with identity, the scrubbed environment with the auth check, and the adapter seam with the suite runner. Both open questions assigned to 421 (lockfile-less projects and the seam's shape beyond Python) are decided in D5 and D9. Failure handling is explicit for install failure and timeout, suite timeout, a missing JSONL, a missing `uv`, a hung auth probe, and a tampered case record. Every bounded call goes through `ProcessRunner` and the timeouts are config keys. The auth check runs first in the implementation order, which addresses the plan's High risk. The doc has no NFR targets to restate. The architecture's NFR is the cost cap, and the auth check's one-prompt spend is not a benchmark run.",
+      "file_ref": null,
+      "category": "scope",
+      "raw_category": null,
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md#Technical Scope"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "A not-collected node id likely aborts the whole pytest run, which contradicts D10/D11",
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md#D10 \u2014 Suite runner: an injected pytest reporter plugin",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "integration",
+      "raw_category": null,
+      "summary": "\"422 can run a chosen node id at the parent with no further harness work\" overclaims, because hidden-test injection is deferred to 425",
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md#Integration Requirements",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "security",
+      "raw_category": null,
+      "summary": "Symlinked real credentials need a cleanup and write-through contract",
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md#D8 \u2014 Auth carryover and the auth check",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "note",
+      "category": "scope",
+      "raw_category": null,
+      "summary": "`uv` on the producer's PATH weakens the \"installed later `sq` is unreachable\" principle",
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md#D7 \u2014 Scrubbed producer environment: allowlist, redirected HOME",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "pass",
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "summary": "Deviations from the architecture are explicit and justified",
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md#D1 \u2014 Case content identity and id",
+      "location_verified": null
+    },
+    {
+      "id": "F006",
+      "severity": "pass",
+      "category": "scope",
+      "raw_category": null,
+      "summary": "Scope matches the slice plan entry, and the failure modes are mostly enumerated",
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md#Technical Scope",
+      "location_verified": null
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md",
+    "against": "project-documents/user/architecture/420-arch.model-benchmark.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261115-design/wt/421-design"
+  },
+  "timestamp": "2026-11-16T07:18:57.125692",
+  "model": "claude-sonnet-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 6,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-sonnet-5-5",
+  "answering_models": [
+    "claude-sonnet-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 6,
+    "in_fences": 0,
+    "in_section": 6,
+    "surviving": 6
+  },
+  "effort": "high",
+  "profile": "sdk",
+  "turns": 7,
+  "prompt_tokens": 608015,
+  "cached_tokens": 485058,
+  "cache_write_tokens": 122945,
+  "completion_tokens": 10944,
+  "reasoning_tokens": null,
+  "duration_seconds": 92.22518195793964,
+  "cost_usd": 0.6505207000000001,
+  "cost_basis": "provider"
+}

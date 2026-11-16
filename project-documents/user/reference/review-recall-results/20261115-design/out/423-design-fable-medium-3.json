@@ -1,0 +1,207 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Production fix pipeline depends on the benchmark package for issue rendering",
+      "description": "The slice plan gives 423 \"Dependencies: none in this initiative\" and notes it \"can be built earlier\". The design declares `dependencies: [422]` (line 6) and takes `CodeHost.get_issue` plus the issue-text renderer `issue_freeze` from 422.\n\n- **Direction is inverted.** 422's design places `issue_freeze.py` under `src/squadron/benchmark/`. A production pipeline module (`pipeline/fix_issue.py`) would therefore import from the benchmark harness. The architecture's direction is the reverse: \"Replays run the production pipelines\", so the benchmark consumes production, and \"Measure, never gate\".\n- **Sequencing cost.** The live fetch path now waits on a High-risk, 4/5-effort keystone slice. The design contains this well (file mode needs nothing from 422, and Development Approach step 4 isolates the fetch), but the user-facing half of the slice's value is the fetched path.\n- **The reuse is thin.** With no cutoff (D3), the renderer is title, body and comments in order. The cutoff filter and the edited-after-fix rejection, which are the benchmark-specific parts, are unused here.\n\nSuggested fix: put the uncut renderer beside `IssueSnapshot` in `codehost/`, owned by whichever slice lands first, and have 422's `issue_freeze` layer the cutoff on top. `get_issue` is already in `codehost/`, so that part of the dependency is neutral. Either way, the slice plan's dependency line for 423 should be updated to match.",
+      "file_ref": null,
+      "category": "dependency-direction",
+      "raw_category": null,
+      "location": "project-documents/user/slices/423-slice.fix-pipeline.md:49"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Slice plan's MCP parity criterion is dropped without amending the plan",
+      "description": "The slice plan's success criterion for 423 is \"CLI, slash command and MCP give identical results.\" The design excludes MCP (Technical Scope, D9) and narrows the parity criterion to the CLI and `/sq:run`.\n\nThe stated reason holds: I found no MCP server in `src/`, so there is no MCP `run` surface for any pipeline. Declining to build the first one here is the proportionate choice. But the plan entry still assigns the criterion to this slice, so as written the slice cannot meet it. Amend the plan entry to drop the MCP clause, or record it there as future work, so the two documents agree.",
+      "file_ref": null,
+      "category": "scope",
+      "raw_category": null,
+      "location": "project-documents/user/slices/423-slice.fix-pipeline.md:43"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`--report-file` failure mode is not enumerated",
+      "description": "`sq _commit --report-file {tmp_path}` is a new I/O path that exists only in prompt-only mode. D4 lists the refusals for report content, but nothing says what happens when the session never writes the file, or it is unreadable or not UTF-8. D2 does enumerate these cases for `issue-file`. One sentence would close it, for example \"a missing or unreadable report file refuses with `fix_report`\". The parity test could then assert it.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/423-slice.fix-pipeline.md:197"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Report refusals become config-caused fails in replay",
+      "description": "A malformed or incomplete report commits nothing. Under the architecture's \"Absent is not zero\" rule, 424 would count that as \"committed nothing\", a fail for that config, even if the tree holds a correct fix that would pass the hidden test. This is consistent with measuring the production pipeline, since production would refuse too.\n\nIt does mean report-format compliance sits upstream of the objective grade. The design already records `failure_kind: fix_report` in run state. The \"Provides to 424\" section could say explicitly that 424 should carry that kind into the replay record, so reports can separate \"no usable fix\" from \"fix present, report refused\".",
+      "file_ref": null,
+      "category": "integration",
+      "raw_category": null,
+      "location": "project-documents/user/slices/423-slice.fix-pipeline.md:155"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Effort raised from 2/5 to 3/5, with cause stated",
+      "description": "The increase is attributed to prompt-only parity and the report contract. Both trace to plan criteria: slash-command parity, and \"a failing test \u2026 passing gates and one commit\". I found nothing to cut.\n\n- The two hidden commands are the minimum for parity, given that prompt-only mode refuses `prompt_files` and the guarded commit.\n- Squadron re-running the gates is correctly rejected (D4).\n- The recorded outputs (`issue_source`, `issue_text_sha256`, `start_head`) are each consumed by 424.",
+      "file_ref": null,
+      "category": "proportionality",
+      "raw_category": null,
+      "location": "project-documents/user/slices/423-slice.fix-pipeline.md:344"
+    },
+    {
+      "severity": "PASS",
+      "title": "Replay runs the production pipeline unchanged",
+      "description": "- **One step, no review.** `fix-context \u2192 dispatch \u2192 commit` gives 424 a single producer step with no embedded review to strip (D1).\n- **Same prompt in both modes.** Sandbox operation is two params (`issue-file`, `commit-to`) plus the existing `--io-dir`, not a second code path or prompt. This meets \"a copied step or prompt is not an option\".\n- **Prompt identity.** The prompt is one data file that feeds prompt identity (D8), which supports \"results stay comparable over time\".\n- **Scope.** Producer-only mode is correctly left to 424.",
+      "file_ref": null,
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/423-slice.fix-pipeline.md#technical-decisions"
+    },
+    {
+      "severity": "PASS",
+      "title": "Sandbox constraints from the architecture are met and testable",
+      "description": "- **No GitHub, no cf.** File mode constructs no `CodeHost`, and a test uses a factory that raises if called. `commit-to: current` makes no cf call (D5, D7). The success criterion runs with `cf` and `gh` absent from `PATH`.\n- **Clean-tree precondition.** 421 keeps `.venv/` out of git status through `.git/info/exclude`, so the clean-tree check and stage-all behave correctly in a sandbox.\n- **Cost cap.** Restated with its specific surfaces (`pipeline.max_cost_usd`, `--max-cost`, `failure_kind: cost_cap`) and a walkthrough step.",
+      "file_ref": null,
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/423-slice.fix-pipeline.md:248"
+    },
+    {
+      "severity": "PASS",
+      "title": "Failure modes on the fetch and file paths are explicit",
+      "description": "- **Fetch.** `get_issue` inherits the 30-second host timeout. Not-found, auth, transport and timeout each fail the action before any dispatch, with no retry and no file fallback.\n- **File.** Missing, empty, unreadable and non-UTF-8 files fail before any model call.\n- **Commit.** The agent-commits-during-dispatch case is caught by the HEAD check.\n- **Observability.** Refusals log at WARNING and host or git errors at ERROR. A unit test covers `HostCommandTimeoutError`.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/423-slice.fix-pipeline.md:136-137"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "dependency-direction",
+      "raw_category": null,
+      "summary": "Production fix pipeline depends on the benchmark package for issue rendering",
+      "location": "project-documents/user/slices/423-slice.fix-pipeline.md:49",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "scope",
+      "raw_category": null,
+      "summary": "Slice plan's MCP parity criterion is dropped without amending the plan",
+      "location": "project-documents/user/slices/423-slice.fix-pipeline.md:43",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "note",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "`--report-file` failure mode is not enumerated",
+      "location": "project-documents/user/slices/423-slice.fix-pipeline.md:197",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "note",
+      "category": "integration",
+      "raw_category": null,
+      "summary": "Report refusals become config-caused fails in replay",
+      "location": "project-documents/user/slices/423-slice.fix-pipeline.md:155",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "proportionality",
+      "raw_category": null,
+      "summary": "Effort raised from 2/5 to 3/5, with cause stated",
+      "location": "project-documents/user/slices/423-slice.fix-pipeline.md:344",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "pass",
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "summary": "Replay runs the production pipeline unchanged",
+      "location": "project-documents/user/slices/423-slice.fix-pipeline.md#technical-decisions",
+      "location_verified": null
+    },
+    {
+      "id": "F007",
+      "severity": "pass",
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "summary": "Sandbox constraints from the architecture are met and testable",
+      "location": "project-documents/user/slices/423-slice.fix-pipeline.md:248",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "pass",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "Failure modes on the fetch and file paths are explicit",
+      "location": "project-documents/user/slices/423-slice.fix-pipeline.md:136-137",
+      "location_verified": true
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/423-slice.fix-pipeline.md",
+    "against": "project-documents/user/architecture/420-arch.model-benchmark.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261115-design/wt/423-design"
+  },
+  "timestamp": "2026-11-16T07:21:36.475752",
+  "model": "claude-fable-5-2",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 9,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-fable-5-2",
+  "answering_models": [
+    "claude-fable-5-2"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 8,
+    "in_fences": 0,
+    "in_section": 8,
+    "surviving": 8
+  },
+  "effort": "medium",
+  "profile": "sdk",
+  "turns": 10,
+  "prompt_tokens": 374031,
+  "cached_tokens": 258233,
+  "cache_write_tokens": 115790,
+  "completion_tokens": 8811,
+  "reasoning_tokens": null,
+  "duration_seconds": 88.81082391599193,
+  "cost_usd": 2.2575612,
+  "cost_basis": "provider"
+}

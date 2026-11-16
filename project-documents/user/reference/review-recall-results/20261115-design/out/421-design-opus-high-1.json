@@ -1,0 +1,225 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "\"Project source\" includes test helpers, so they can wrongly pass the test-first check",
+      "description": "D11 defines project source as any file under the tree, outside `.venv`, that is not `test_*.py`, `*_test.py` or `conftest.py`. That makes helper modules such as `tests/helpers.py`, `tests/factories.py` and `tests/fixtures/*.py` count as project source, and the packages they live in count as project modules.\n\nTwo errors follow, and both point the wrong way for the architecture's fairness rule (\"an exception raised by project code (the crash the fix cures) qualifies\"):\n- An exception raised inside a test helper becomes `project_exception` (D11 step 4). 422 would accept that as a valid test-first failure.\n- An `AttributeError` on a test-helper module becomes `missing_symbol`.\n\nThere is also a gap in the other direction. A `ModuleNotFoundError` for a project submodule the fix added (`squadron.new_mod`) has no `__file__`, so step 2 cannot call it a project module. That case falls through to `other_exception`, which is the safe direction but makes the slice plan's \"import/missing-symbol\" category miss the most common case.\n\nDefine project source from what the project declares as its packages: the src-layout or `[tool.*]` package directories, or the top-level package names found at the start commit. Then exclude the test directories (pytest `testpaths`, or `tests/`) as a whole. Match `ModuleNotFoundError` on the top-level package name. Add a fixture test for an exception raised in a test helper.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:220"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "A network failure during install is recorded as a permanent lock failure",
+      "description": "`EnvironmentFailureReason` has `no_lockfile`, `lockfile_unsupported`, `lock_stale_or_unresolvable`, `install_timeout` and `installer_missing`. Nothing covers a network drop, a DNS failure or a registry 5xx in the middle of a download. Under D5's wording (\"a package that no longer downloads \u2026 fail[s]\") those become `lock_stale_or_unresolvable`.\n\nPer the architecture, \"a lockfile that no longer resolves disqualifies the case\", and 422 records that reason as an exclusion. A brief outage during qualification would therefore drop cases for good under a wrong reason, and the yield report would count them as unresolvable. That breaks \"Absent is not zero\": a harness failure must not look like a property of the case. This is the install path's \"peer disconnects mid-send\" failure, and it has no handling.\n\nAdd a separate reason (for example `install_network_error`), set from uv's fetch and connection errors. Do not let it count as disqualifying. Add a test for it in the failure-path tests at line 316.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:152"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Two suite-runner failure paths are unspecified",
+      "description": "D10 covers a timeout and a missing or unparseable JSONL file when pytest exits non-zero. Two cases are left open:\n1. **Truncated last line after a timeout.** When `ProcessRunner` kills the process group, the plugin may be halfway through a line. The design does not say whether that line is dropped or makes the whole file \"unparseable\". If the latter, a timeout raises `SuiteRunError` instead of returning `SuiteRun(timed_out=True)`, and that changes how the case counts.\n2. **Missing JSONL with exit 0.** This can happen if a project's conftest or a pytest-env setting drops the output-path variable. The design only handles a missing file when the exit is non-zero, so with `all_tests()` this comes back empty, which is the \"empty pass\" the same paragraph says must never happen.\n\nSpecify both: ignore an incomplete final line, and raise `SuiteRunError` for a missing JSONL file whatever the exit code. Add both to the failure-path tests at line 316.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:209"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Cf registration is assigned to 426, but 424 runs P6 first",
+      "description": "The Excluded list (line 48) assigns \"cf registration of benchmark sandboxes (426)\". Line 291 says 421 provides \"`HistoryFreeSandbox` for the cf registration 426 adds\" and lists this under 424.\n\nThe slice plan's 424 success criteria require producer-only `P6` to run the `implement` step. In 177's design, that is the step that needs the sandbox registered as a cf project. 424 comes before 426 in the keystone order, so registration is needed by 424, possibly by 423's sandbox run, and not first by 426. As written, 424's designer would find no owner for it.\n\nChange the attribution to 424, or to whichever slice first runs a cf-dependent pipeline in a `BenchmarkSandbox`. Make line 291 say plainly what 424 receives.",
+      "file_ref": null,
+      "category": "integration",
+      "raw_category": null,
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:291"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The sandbox root puts the store two directories up from the producer",
+      "description": "D4 places benchmark trees at `~/.config/squadron/benchmark/<id>/`. From the producer's working directory, the metrology store is then `../../metrology/`. The store holds case records with `reference_sha`, hidden node ids and, later, other configs' replay records. `../../replays/` and any kept sibling sandboxes are just as close.\n\nThe architecture's leak principle says squadron's config is pointed away from the user's (\"no store, no memory\"). The slice redirects `HOME` but then physically nests the producer inside the user's real squadron config directory. The doc defers this to 424's scan (\"a known leak path\"). But a scan matching the store's absolute path will miss relative reads unless it normalizes paths, and the doc does not pass that requirement on to 424.\n\nThe reason given for this location is only that it keeps the replay and benchmark sweeps apart. A root outside `~/.config/squadron/` does that equally well. Move the root, or if it stays, name relative-path normalization in Special Considerations as an explicit requirement for 424.",
+      "file_ref": null,
+      "category": "architecture",
+      "raw_category": null,
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:146"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Case sets are keyed by name, not `ProjectId`",
+      "description": "The architecture says new record types are \"keyed on `ProjectId`\". D2 keys case sets by name so that 422 can pool cases across projects, which the architecture's yield discussion anticipates. Each case still carries its own `project_id`. The deviation is deliberate and has a reason, but D2 does not mark it as a departure the way D1 does for `reference_sha`. Adding one line would let 422 and 425 see it without comparing the two documents.",
+      "file_ref": null,
+      "category": "architecture",
+      "raw_category": null,
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:134"
+    },
+    {
+      "severity": "PASS",
+      "title": "Case identity and versioning follow the architecture",
+      "description": "The id is derived from content, includes the exclusion list as the slice plan requires, and adds `reference_sha` with a stated reason. Tampered records are rejected, not shadowed. Case sets are append-only and versioned. Storage uses optional sibling payloads with no migration, which matches \"Cases are immutable and versioned\" and \"Extend 320's store, don't fork it\". D3's choice of a separate module with two public primitives keeps `store.py` from growing further without moving existing code.",
+      "file_ref": null,
+      "category": "architecture",
+      "raw_category": null,
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md#d1--case-content-identity-and-id"
+    },
+    {
+      "severity": "PASS",
+      "title": "The scrubbed environment is built from an allowlist, and the auth check is empirical",
+      "description": "Building from an allowlist, redirecting `HOME` once, setting `GIT_CONFIG_NOSYSTEM` against the macOS keychain helper, and building `PATH` without user tool installs together meet every leak requirement in the architecture for the producer environment. The auth check (D8) gives a definite yes or no with no fallback. It has a hang timeout and reports a replaced symlink. That matches the slice plan's \"a no is reported, not worked around\". The limit of the scrub (the network stays open, so a producer could install the published package) is stated and passed on to 424.",
+      "file_ref": null,
+      "category": "architecture",
+      "raw_category": null,
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md#d7--scrubbed-producer-environment-allowlist-redirected-home"
+    },
+    {
+      "severity": "PASS",
+      "title": "Seams and dependency direction",
+      "description": "`benchmark/` depends on `metrology/` and `replay/`, never the reverse, and CLI code reaches concrete adapters only through `registry.py`. `BenchmarkAdapter` is kept separate from 400's `LanguageAdapter` for a stated reason (different clients), and contains only what 421 needs. Extensions are explicitly left to 422 and 425. Extracting `HistoryFreeSandbox` by composition, not with a flag, keeps `sq replay` unchanged, and the existing replay tests are a success criterion.",
+      "file_ref": null,
+      "category": "architecture",
+      "raw_category": null,
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:97"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "\"Project source\" includes test helpers, so they can wrongly pass the test-first check",
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:220",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "A network failure during install is recorded as a permanent lock failure",
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:152",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "Two suite-runner failure paths are unspecified",
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:209",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "integration",
+      "raw_category": null,
+      "summary": "Cf registration is assigned to 426, but 424 runs P6 first",
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:291",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "architecture",
+      "raw_category": null,
+      "summary": "The sandbox root puts the store two directories up from the producer",
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:146",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "architecture",
+      "raw_category": null,
+      "summary": "Case sets are keyed by name, not `ProjectId`",
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:134",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "pass",
+      "category": "architecture",
+      "raw_category": null,
+      "summary": "Case identity and versioning follow the architecture",
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md#d1--case-content-identity-and-id",
+      "location_verified": null
+    },
+    {
+      "id": "F008",
+      "severity": "pass",
+      "category": "architecture",
+      "raw_category": null,
+      "summary": "The scrubbed environment is built from an allowlist, and the auth check is empirical",
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md#d7--scrubbed-producer-environment-allowlist-redirected-home",
+      "location_verified": null
+    },
+    {
+      "id": "F009",
+      "severity": "pass",
+      "category": "architecture",
+      "raw_category": null,
+      "summary": "Seams and dependency direction",
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:97",
+      "location_verified": true
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md",
+    "against": "project-documents/user/architecture/420-arch.model-benchmark.md",
+    "cwd": "/private/tmp/claude-501/-Users-manta-source-repos-manta-squadron/3e1bc1cd-e8c0-4d04-8eb6-68e1bced119f/scratchpad/design-recall/wt/421-design"
+  },
+  "timestamp": "2026-11-15T15:31:05.798070",
+  "model": "claude-opus-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 4,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-opus-5-5",
+  "answering_models": [
+    "claude-opus-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 9,
+    "in_fences": 0,
+    "in_section": 9,
+    "surviving": 9
+  },
+  "effort": "high",
+  "profile": "sdk",
+  "turns": 5,
+  "prompt_tokens": 326648,
+  "cached_tokens": 225710,
+  "cache_write_tokens": 100930,
+  "completion_tokens": 11571,
+  "reasoning_tokens": null,
+  "duration_seconds": 121.44511487497948,
+  "cost_usd": 1.0848049,
+  "cost_basis": "provider"
+}

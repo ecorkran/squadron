@@ -1,0 +1,61 @@
+{
+ "review": "r14",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Grading cap departs from the architecture's single run-level cap and is left unreconciled",
+   "description": "The architecture's design goal \"Spend is visible before it happens\" says a benchmark run states its bound before any dispatch and stops at its own cap, \"which covers grading and judging as well as the replays\". Its Cost section repeats this.\n\nD9 makes grading a separate command with a separate `--max-cost` and says \"the architecture's cost section should say so\". The consequences:\n- No bound printed before the first replay dispatch includes grading.\n- Total spend is the run cap plus the sum of every grade invocation's cap, which is unbounded across reruns and reviewers.\n- 424 is internally inconsistent on this: line 258 defers to 425 D9, while line 398 still says 425 extends `bench_plan` with grading terms.\n\nEither have `sq benchmark run` print a grading estimate in its bound (the store-observed per-review figure \u00d7 planned reviews), or amend the architecture goal and Cost section in the same change set. A \"should change\" note in the slice is not enough.",
+   "location": "project-documents/user/slices/425-slice.grading-and-paired-report.md:220-236"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Report row key contradicts 420's config identity rule and the slice's own Dependencies section",
+   "description": "D13 keys rows by `(alias, model, profile, effort_sent)`. Line 58 of the same document says rows group by 420 D6: `(model, profile, effort sent, tool_use, max_output_tokens)`.\n\n420 D6 makes the alias a display field and says its rule supersedes the architecture's tuple. Under D13's key:\n- Two aliases that sent the same thing become two rows, which is what 420's success criterion forbids.\n- Two configs that differ only in `tool_use` or `max_output_tokens` merge into one row.\n\nD13 should use the D6 identity and show aliases as a label. The \"no effort stamp counts by its failure class\" rule on line 58 also has no home in D13 or D16.",
+   "location": "project-documents/user/slices/425-slice.grading-and-paired-report.md:263"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Reviewer rules are claimed to be the start commit's but are read from the producer's tree, and `rules_hash` cannot be one value per benchmark",
+   "description": "D1 runs the review first, \"on the producer's commit exactly as written, before the grader changes anything\". D7 loads rules from \"the sandbox tree's own rules directory (the start commit's)\". At that step the tree is the producer's commit, so a producer that edits rules files changes what the grading reviewer is told. That is contrary to \"the producer cannot change the grade\" and to the architecture's \"fixed code-review config\".\n\nSeparately, `rules_hash` sits in `ReviewerRef`, which feeds the `GraderIdentity` digest that D10 says is \"one value for the whole benchmark\". Rules come from each case's start commit, so the hash differs per case, and per project in a pooled set. D13's \"latest grader identity\" and the `refgrade` and `implgrade` ids all depend on that digest.\n\nThe design should read rules through `TreeReader` at `start_sha` and move `rules_hash` onto the grade record beside `environment_digest`. The same question applies to \"the snapshot config read from the tree\" in D12.",
+   "location": "project-documents/user/slices/425-slice.grading-and-paired-report.md:208"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "A failed LLM review or snapshot removes the case from the objective comparison",
+   "description": "`review_failed`, `snapshot_failed` and `check_tool_mismatch` are harness absences. D13 excludes any case with a harness absence from every config, and D16 says \"nothing falls back to a partial grade\". Because the review is the first step in `grade_one`, one reviewer timeout on one sample means the hidden and regression suites never run for it. The case then leaves the pass-fraction and paired-bootstrap sections.\n\nThe architecture's \"Objective before opinion\" says LLM signals are reported beside the objective grade, \"never folded into them\". Its harness-absence examples are environment, grader timeout and leak, all of which invalidate the objective grade itself. A flaky reviewer endpoint shrinking n for the deterministic statistic couples the two.\n\nA lighter design keeps one record with the review, snapshot and check fields individually absent with a reason. The case would be excluded only from the report sections that need the missing signal. `reference_failed_grade` from a failed floor run (D8) has the same effect and should be limited to the review section.",
+   "location": "project-documents/user/slices/425-slice.grading-and-paired-report.md:296-311"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Reinstall failure is always charged to the config, including harness-caused failures",
+   "description": "D5 maps any failed `uv sync --locked` after a dependency change to `producer_env_unresolvable`, a config absence counted as a fail. The same call fails on harness causes: an `install_timeout_s` expiry, an index or network outage, or a hang.\n\nThe architecture's \"Absent is not zero\" requires those to drop the case from every config. 421's `EnvironmentResolutionError` already carries a `reason`. D5 should say which reasons are the producer's (lock inconsistent with `pyproject.toml`, unresolvable requirement) and send timeout and network reasons to a harness absence. The timeout that bounds the reinstall is not named either.",
+   "location": "project-documents/user/slices/425-slice.grading-and-paired-report.md:193-197"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "The slice creates a 427\u2192425 dependency the slice plan rules out",
+   "description": "The slice plan says 427 depends only on 421, \"does not depend on 424\u2013426 and can be built any time after 421\". This slice has 427 import `ReviewerRef`/`reviewer_key`, `review_tree_diff` and `bootstrap_mean_interval` from 425's modules \"and define no copies\". It also has 427 edit `review_flag` in `bench_report.py` to call 427's `latest_recall_for`.\n\nThat makes 427 unbuildable before 425 and puts a two-way coupling between the report and the recall store. Options:\n- Place the three shared pieces where neither slice owns the other: `ReviewerRef` is already in `metrology/benchmark_models.py`; the review call and bootstrap could sit beside it.\n- Have `review_flag` take a recall lookup by injection, so 427 registers a lookup and does not edit 425's module.\n- Otherwise, update the slice plan's 427 entry to add the 425 dependency.",
+   "location": "project-documents/user/slices/425-slice.grading-and-paired-report.md:465"
+  },
+  {
+   "i": 6,
+   "severity": "NOTE",
+   "title": "Rebuilding the tree in a fresh sandbox departs from \"in the same sandbox\"",
+   "description": "The architecture and the slice plan entry both say the grader runs \"in the same sandbox\". D1 rebuilds from `start_sha` plus the stored diff and cites 424, which documents this as a deliberate departure for disk cost. The `environment_changed` check covers the main risk. The slice should name the departure itself, as D9 does for the cap, and the architecture wording should be amended with it.",
+   "location": "project-documents/user/slices/425-slice.grading-and-paired-report.md:161-162"
+  },
+  {
+   "i": 7,
+   "severity": "NOTE",
+   "title": "Small internal inconsistencies",
+   "description": "- Technical Scope says `ContentSidecars` adds a `snapshots` kind; D11 and State Management add `nodes` as well.\n- `check_tool_mismatch` is deterministic per case, so it will drop the same cases on every grade run. It would be cheaper to detect at planning, before any review is paid for.\n- The grade lock is per benchmark, but `ReferenceGrade` is keyed per (case, grader, environment) across benchmarks. Two benchmarks sharing a case can pay for the same floor reviews concurrently.",
+   "location": "project-documents/user/slices/425-slice.grading-and-paired-report.md:249"
+  }
+ ]
+}

@@ -1,0 +1,189 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Environment-resolution failures can blame the case for harness faults",
+      "description": "The architecture's \"Absent is not zero\" principle says a failure the harness caused must not be charged to the case. A lockfile that no longer resolves does disqualify the case.\n\nThe slice maps 421's `EnvironmentResolutionError` to the case-blaming `CandidateRejection.environment_unresolved`, with the reason only in `detail`. That error can cover a network outage, a PyPI timeout or a hung install, as well as a lockfile that is genuinely unresolvable. Only suite timeouts, `SuiteRunError` and `CodeHostError` are routed to `harness_error`.\n\nA transient install failure would therefore be recorded as a rejection and counted in the yield report. It would also be reused on the next build, because only `harness_error` is excluded from reuse. That biases the yield low.\n\nThe design needs an explicit split. Resolution failures from the case's own content (a lockfile that does not resolve) become `environment_unresolved`. Install timeouts and network errors become `harness_error` and are never reused. This depends on 421's error carrying a discriminator, and the slice should state that dependency.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/422-slice.fix-case-qualification-and-yield-report-keystone.md#Patterns and Conventions"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Yield counts are undefined when a commit has records under several environments or rule versions",
+      "description": "The record id includes the environment digest. Both a changed environment (for example a new interpreter) and a bumped `FAIRNESS_RULE_VERSION` leave older records in the store: \"the store holds the latest per environment\".\n\nD12 says the yield report \"reads `FixQualification` records for the given projects\", but it does not say which record counts when a commit has several. Two consequences follow:\n- Candidates can be double-counted, or counted under a stale rule.\n- The success criterion \"number of records equals number of closing commits\" stops holding after any re-qualification.\n\nD12 needs to define the counted record per commit. For example, the latest record per `(project, commit)` at the current `rule_version`, with stale ones excluded or flagged. The success criterion should be stated against that definition.",
+      "file_ref": null,
+      "category": "data-model",
+      "raw_category": null,
+      "location": "project-documents/user/slices/422-slice.fix-case-qualification-and-yield-report-keystone.md#D10 \u2014 Qualification records"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Harness-failure handling is under-specified for the new I/O paths",
+      "description": "The design lists the harness failures it knows about and says they are logged at ERROR and recorded as `harness_error`. It does not say whether each one stops the build or only that candidate:\n- The `build` command exits 1 on \"a harness failure that stops the build (for example, `gh` missing)\". It never says which failures stop the build and which continue to the next candidate.\n- A per-issue `gh` timeout, auth failure or rate limit across ~50 candidates is not covered.\n- The boundary resolver imports arbitrary project packages. A hang, a `sys.exit` or an import-time crash is covered only by \"resolver import failure \u2192 `boundary_undecidable`\". There is no timeout, and \"resolver crash\" is tested only as `harness_error`. A crash that is really import-time failure of the project would then be mis-classified as a harness fault.\n- The `git show` and `git log` calls against the user's checkout have no stated failure handling.\n\nAdd a short failure table for the new I/O paths: `gh` issue fetch, install, resolver, trace and test runs, and git reads. Each row should give the timeout source, the recorded outcome, and whether the build continues or aborts. The tests for observable signals can then be written against it.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/422-slice.fix-case-qualification-and-yield-report-keystone.md#API Contracts"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Design carries surface area the slice plan does not assign to 422",
+      "description": "The 422 plan entry covers discovery, frozen text, hidden and superseded sets, the fairness rule, repeated qualification, records, and the yield report with separability. The design adds several things beyond that. These can be cut or deferred:\n- The `/sq:benchmark` slash command and `commands/sq/benchmark.md`. The plan does not assign it to 422, and the CLI already delivers every result.\n- `--json` on `yield`, `--keep`, and `--commit SHA \u2026` on `build`. They are debugging conveniences that nothing downstream consumes. Walkthrough step 6 uses `--json` only to read the case-set version, which `fix-cases show` or `build` output could print.\n- The \"Rejected:\" paragraphs in D1, D3, D6, D8 and D12. Several restate rejections the architecture already made (perturbation, per-case all-or-nothing) and could be one line each.\n- The `reference_is_pull_request` and `multiple_closing_commits` rejection machinery. Keep both only if the counts are expected to matter. The slice itself says the count \"shows whether it is worth adding\".\n\nThe core mechanisms (closure digests, the dual static and dynamic trace, patch interception) are required by the architecture's fairness rule and per-node sets, so they are proportionate.",
+      "file_ref": null,
+      "category": "proportionality",
+      "raw_category": null,
+      "location": "project-documents/user/slices/422-slice.fix-case-qualification-and-yield-report-keystone.md#Technical Scope"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The design says 421 is \"used unchanged\" but also extends 421 types",
+      "description": "Integration Requirements say 421's sandbox, records and suite runner \"are used unchanged\". The slice also adds `fix_qualification` to `MetrologyRecord`, new `BenchmarkRecordStore` methods, and a registration in 421's `benchmark/registry.py`. These are additive and match the sibling-payload pattern in the architecture, and the component list already states them. The sentence should be narrowed to \"no changes to existing behavior\" so it doesn't contradict the component list.",
+      "file_ref": null,
+      "category": "integration",
+      "raw_category": null,
+      "location": "project-documents/user/slices/422-slice.fix-case-qualification-and-yield-report-keystone.md#Integration Requirements"
+    },
+    {
+      "severity": "PASS",
+      "title": "Agent-auth check is correctly left to 421",
+      "description": "The architecture's anticipated-slices text places the auth check in the keystone. The slice plan moves it to 421, where the scrubbed environment is built. The slice states that it runs no producer and is unaffected by the answer. That matches the plan.",
+      "file_ref": null,
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/422-slice.fix-case-qualification-and-yield-report-keystone.md#Consumes from Other Slices"
+    },
+    {
+      "severity": "PASS",
+      "title": "Fairness rule, hidden and superseded sets, and record identity match the architecture",
+      "description": "- **Fairness checks:** D5, D6 and D7 implement the three checks as written. Test-first rejects collection errors and missing symbols. The boundary is read at the parent from packaging metadata. Patching is judged by the owner of the patched object. Anything undecidable is excluded.\n- **Hidden and superseded sets:** D3 sorts nodes by closure digest and records added `conftest.py` fixtures. These are the per-node sets the architecture requires.\n- **Case identity:** D9 makes `excluded_tests` part of the case id.\n- **Re-qualification and the reference check:** D10 re-qualifies on environment identity. D4 and D10 check the reference in the replay environment.\n- **Yield report:** D12 reports qualified and rejected counts by reason, plus the separability answer, which is what the plan's success criteria require.",
+      "file_ref": null,
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/422-slice.fix-case-qualification-and-yield-report-keystone.md#Technical Decisions"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "Environment-resolution failures can blame the case for harness faults",
+      "location": "project-documents/user/slices/422-slice.fix-case-qualification-and-yield-report-keystone.md#Patterns and Conventions",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "data-model",
+      "raw_category": null,
+      "summary": "Yield counts are undefined when a commit has records under several environments or rule versions",
+      "location": "project-documents/user/slices/422-slice.fix-case-qualification-and-yield-report-keystone.md#D10 \u2014 Qualification records",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "Harness-failure handling is under-specified for the new I/O paths",
+      "location": "project-documents/user/slices/422-slice.fix-case-qualification-and-yield-report-keystone.md#API Contracts",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "proportionality",
+      "raw_category": null,
+      "summary": "Design carries surface area the slice plan does not assign to 422",
+      "location": "project-documents/user/slices/422-slice.fix-case-qualification-and-yield-report-keystone.md#Technical Scope",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "integration",
+      "raw_category": null,
+      "summary": "The design says 421 is \"used unchanged\" but also extends 421 types",
+      "location": "project-documents/user/slices/422-slice.fix-case-qualification-and-yield-report-keystone.md#Integration Requirements",
+      "location_verified": null
+    },
+    {
+      "id": "F006",
+      "severity": "pass",
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "summary": "Agent-auth check is correctly left to 421",
+      "location": "project-documents/user/slices/422-slice.fix-case-qualification-and-yield-report-keystone.md#Consumes from Other Slices",
+      "location_verified": null
+    },
+    {
+      "id": "F007",
+      "severity": "pass",
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "summary": "Fairness rule, hidden and superseded sets, and record identity match the architecture",
+      "location": "project-documents/user/slices/422-slice.fix-case-qualification-and-yield-report-keystone.md#Technical Decisions",
+      "location_verified": null
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/422-slice.fix-case-qualification-and-yield-report-keystone.md",
+    "against": "project-documents/user/architecture/420-arch.model-benchmark.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261115-design/wt/422-design"
+  },
+  "timestamp": "2026-11-16T07:25:47.802928",
+  "model": "claude-sonnet-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 5,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-sonnet-5-5",
+  "answering_models": [
+    "claude-sonnet-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 7,
+    "in_fences": 0,
+    "in_section": 7,
+    "surviving": 7
+  },
+  "effort": "medium",
+  "profile": "sdk",
+  "turns": 6,
+  "prompt_tokens": 462249,
+  "cached_tokens": 354177,
+  "cache_write_tokens": 108062,
+  "completion_tokens": 6767,
+  "reasoning_tokens": null,
+  "duration_seconds": 61.22647679201327,
+  "cost_usd": 0.5361245,
+  "cost_basis": "provider"
+}

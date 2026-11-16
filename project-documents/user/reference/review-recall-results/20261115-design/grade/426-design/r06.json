@@ -1,0 +1,26 @@
+{
+ "review": "r06",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "The document contradicts itself about editing 424 and 425",
+   "description": "Line 42 says \"No edits to 424 or 425\", and D17 (line 312) says \"No change to 425\". Other parts of the document say otherwise:\n- Line 321 and line 426 widen 424's `CaseDrop.reason`. In 424 (line 369) this field is `CandidateRejection | str`, so adding `SliceCandidateRejection` is a change to 424's model. The change is needed, because otherwise a slice rejection reads back as a plain `str`.\n- `bench_report.py` (line 87) is a 425 module. This slice adds per-kind grouping and a new pairwise section to it.\n- Line 451 says `tests/benchmark/` passes \"except where D8 routes re-qualification and D17 extracts the interval\". That wording is left over from an older version. 424 D5 (line 208) already provides `requalify` on the seam, and 425 D14 (line 278) already provides `bootstrap_mean_interval`, so nothing is extracted or rerouted.\n\nSomeone breaking this into tasks cannot tell which upstream tests should stay unchanged. Fix: replace line 42 with an exact list of additive changes to upstream code (`CaseDrop.reason`, `bench_report` grouping, `yield_report` rows, `ScrubbedEnvironment.with_tools`, the 177 extractions). Remove the leftover exception from line 451, and say which existing tests change because of the `CaseDrop` widening, if any.",
+   "location": "project-documents/user/slices/426-slice.slice-cases.md:42"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "The win share is undefined when a case has no usable pairs",
+   "description": "D17 defines `w(c)` as A's win share over the sample-matched pairs in a case, leaving out inconsistent and invalid pairs. If every A-vs-B pair in a case is inconsistent or invalid, the share divides by zero. The document does not say whether that case is left out of the `d(c)` vector (and counted), or whether something else happens. The project rule forbids silent fallback values, so the behaviour should be written down. Fix: state that such a case is left out of that pair's vector and counted on the report's count line. Add it to the hand-computed tests (line 452).",
+   "location": "project-documents/user/slices/426-slice.slice-cases.md:310"
+  },
+  {
+   "i": 9,
+   "severity": "NOTE",
+   "title": "Timeouts for cf and git calls, and which harness failures stop the build",
+   "description": "- D6 (line 209) and D9 (line 232) both say how a timed-out `git` or `cf` call is handled, but neither names the bound or the config key that sets it. Saying whether these calls use `ProcessRunner`'s default bound would make the timeout case testable.\n- Line 338 says `build` exits 1 when \"a harness failure stops the build\". D6 records a harness failure per candidate as `harness_error` and moves on. One sentence saying which failures stop the whole build (for example, the store cannot be written) would resolve this.",
+   "location": "project-documents/user/slices/426-slice.slice-cases.md:232"
+  }
+ ]
+}

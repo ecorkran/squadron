@@ -1,0 +1,207 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Grading is taken out of the run-level cap, which departs from the architecture's cost principle",
+      "description": "The architecture says a benchmark \"states its upper bound in dollars before any dispatch and stops at its own cap, which covers grading and judging as well as the replays.\" It also says the bound includes \"grading and judging estimated from observed costs.\" D9 instead makes `grade` a separate command with its own `--max-cost`. The `run` bound therefore leaves out grading entirely. The slice admits the departure (\"This departs from the architecture\") and says the architecture's cost section and 424's sentence about extending the bound \"should change.\" Nothing in the slice makes that happen, and the architecture stays unamended.\n\nThe result is that a benchmark has no single pre-dispatch dollar figure. Total spend is the run cap plus an open-ended number of grade invocations. Reviewer changes and `--retry-harness` can each trigger a new grade run.\n\nThe design-goal text cannot be reconciled with D9 as written. Either:\n- add an architecture amendment as a named task, or\n- have `run` print an advisory grading estimate beside its own bound, built from the same per-review figure D9 already defines.",
+      "file_ref": null,
+      "category": "architectural-alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/425-slice.grading-and-paired-report.md#D9 \u2014 Caps, bound and resume for grading"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The report's row key contradicts the architecture's identity rule within the slice itself",
+      "description": "The Dependencies section says rows group by 420's D6 identity: model, profile, effort sent, `tool_use` and `max_output_tokens`. D13 keys rows on `(alias, model, profile, effort_sent)`. That key drops `tool_use` and `max_output_tokens` and adds `alias`. Two replays that differed on `tool_use` or output-token limit would be merged into one row, or kept apart only by the prompt-identity split. This breaks the architecture's \"results stay comparable\" goal. It would also let a config that changed the wire behavior pass for a different config's samples. Pick one key and state it once.",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/slices/425-slice.grading-and-paired-report.md:58 and #D13 \u2014 Report contents and order"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Spend and cap behavior for a partially completed reference floor is unspecified",
+      "description": "D8 says any failed floor run fails the reference. It also says a cap hit between floor runs \"writes no reference record, and a rerun grades it again.\" It does not say whether the discarded floor reviews' cost counts toward `spent`, toward the reported grading cost, or toward the stored max-observed per-review figure. Two requirements go unmet:\n- **Cap and bound accuracy.** A rerun repays for those reviews. Under a small cap, for example the walkthrough's step 6 value of `--max-cost 0.30` against 3 floor reviews, a case can never complete. The bound printed at plan time also assumes a clean run.\n- **Observable failures.** The failure-mode rule requires each failure to be observable. D8 gives no log level or signal for \"floor aborted at run i of R.\"\n\nState that the spend counts and what is logged. Consider holding floor-run outcomes until all R runs succeed, then writing the record once.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/425-slice.grading-and-paired-report.md#D8 \u2014 Reference grade, baseline and review noise floor"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The design is heavier than the slice must deliver",
+      "description": "The slice has 16 decisions, 3 record types, 3 sidecar kinds, 13 new or changed modules and an effort rating of 4/5. Several pieces can be cut or deferred without losing the required fix-case path: grade, then a paired report, then a measured sample count.\n- **`ContentSidecars(kind)` generalization (D11).** Adding one `SnapshotSidecars` class, or storing the node list inline, meets the need. The node-id list is a sidecar only because grade records are meant to stay under 16 KB. That limit is itself self-imposed.\n- **Separate environment and grader digests (D10).** `refgrade-\u2026-<env digest[:8]>` and `implgrade-\u2026` ids, plus the D1 equality check, restate what the replay's environment digest already provides.\n- **`--keep` and `--case` flags.** Both exist for the walkthrough's step 7 inspection and are not needed for correctness. `--json` on `report` and the `PairVerdict` enum could be reduced to the report model's field.\n- **Report section 6.** The count of replays scanned under an older `LEAK_RULES_VERSION` restates 424's data.\n- **`GradeResult` baseline fields.** The baseline lint and type totals appear on both `ReferenceGrade` and the `SnapshotRef` it already carries.\n- **D15 variance decomposition with per-pair `PairEstimate`.** The architecture asks for a measured sample count. A simple \"cases needed at target difference\" from the observed variance of `d(c)`, without `\u03c3\u00b2_w` and `\u03c3\u00b2_b` bookkeeping, would meet it. At n=5 and k=3 the slice itself calls the estimate \"off by a large factor.\"\n\nCut or defer the sidecar generalization, the id and digest split, the extra flags and the decomposition. Keep the pieces the architecture names: hidden injection, section-wise tool-config restoration, the reference baseline and floor, the paired bootstrap, and the case-drop rules.",
+      "file_ref": null,
+      "category": "proportionality",
+      "raw_category": null,
+      "location": "project-documents/user/slices/425-slice.grading-and-paired-report.md#Technical Scope"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The grader rebuilds the tree in a fresh sandbox instead of grading in the replay's sandbox",
+      "description": "The architecture says the grade \"runs after the producer finishes, in the same sandbox.\" D1 rebuilds from `start_sha` plus the stored diff and compares environment digests. This is a reasonable resolution, since 424 already ends the replay sandbox and sidecars the diff. The `environment_changed` absence covers the reproducibility gap. No change is needed. Cite 424 as the source of this decision, not only \"as 424 states.\"",
+      "file_ref": null,
+      "category": "architectural-alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/425-slice.grading-and-paired-report.md#D1 \u2014 The grade order inside one sandbox"
+    },
+    {
+      "severity": "PASS",
+      "title": "Layering, dependency direction and integration points are sound",
+      "description": "- `paired_stats` is pure.\n- `grade_runner` reaches language details only through the `GradingAdapter` registry.\n- Prerequisites (421, 422, 424, 400, 320, 300) flow in one direction.\n- 427 consumes `ReviewerRef`, `review_tree_diff`, `bootstrap_mean_interval` and `review_flag` as single definitions.\n- 426 can reuse `grade_one` with an empty hidden set.\n- The changes to prerequisite modules (`measure_snapshot`, `is_within_floor(float)`, `ContentSidecars`) are scoped with existing tests required to pass unchanged.",
+      "file_ref": null,
+      "category": "architectural-alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/425-slice.grading-and-paired-report.md#Architecture"
+    },
+    {
+      "severity": "PASS",
+      "title": "Architectural principles for grading, absences and the report are implemented faithfully",
+      "description": "- Tool config is restored by section.\n- Producer-new tests are a separate signal.\n- Edits and suppressions are counted and never honored.\n- Reinstall is recorded.\n- Config and harness absences match the architecture's classification, and every absence in D16 has a class and a test double.\n- The paired bootstrap runs over cases with the architecture's threshold behavior.\n- The report has no composite field, and the slice requires a test for that.\n- LLM review signals use 320's floor, and pass rates do not.\n- The unmeasured-reviewer flag is placed so 427 can remove it by changing one function.",
+      "file_ref": null,
+      "category": "architectural-alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/425-slice.grading-and-paired-report.md#D2, D4\u2013D6, D14, D16"
+    },
+    {
+      "severity": "PASS",
+      "title": "The review call's failure modes are explicit and observable",
+      "description": "- The grading review runs under `asyncio.wait_for` with `benchmark.review_timeout_s`.\n- A raised error, a timeout or an empty `UNKNOWN` verdict becomes the `review_failed` absence, logged at ERROR with the error text.\n- A suite timeout, a `SuiteRunError`, a snapshot failure, a diff-apply failure and a missing reference each have a named absence.\n- A killed grade writes no record, so a rerun repeats that subject.\n\nThe one gap is the cost accounting for partial floor runs, covered above.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/425-slice.grading-and-paired-report.md#D7, D16"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "architectural-alignment",
+      "raw_category": null,
+      "summary": "Grading is taken out of the run-level cap, which departs from the architecture's cost principle",
+      "location": "project-documents/user/slices/425-slice.grading-and-paired-report.md#D9 \u2014 Caps, bound and resume for grading",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "The report's row key contradicts the architecture's identity rule within the slice itself",
+      "location": "project-documents/user/slices/425-slice.grading-and-paired-report.md:58 and #D13 \u2014 Report contents and order",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "Spend and cap behavior for a partially completed reference floor is unspecified",
+      "location": "project-documents/user/slices/425-slice.grading-and-paired-report.md#D8 \u2014 Reference grade, baseline and review noise floor",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "proportionality",
+      "raw_category": null,
+      "summary": "The design is heavier than the slice must deliver",
+      "location": "project-documents/user/slices/425-slice.grading-and-paired-report.md#Technical Scope",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "architectural-alignment",
+      "raw_category": null,
+      "summary": "The grader rebuilds the tree in a fresh sandbox instead of grading in the replay's sandbox",
+      "location": "project-documents/user/slices/425-slice.grading-and-paired-report.md#D1 \u2014 The grade order inside one sandbox",
+      "location_verified": null
+    },
+    {
+      "id": "F006",
+      "severity": "pass",
+      "category": "architectural-alignment",
+      "raw_category": null,
+      "summary": "Layering, dependency direction and integration points are sound",
+      "location": "project-documents/user/slices/425-slice.grading-and-paired-report.md#Architecture",
+      "location_verified": null
+    },
+    {
+      "id": "F007",
+      "severity": "pass",
+      "category": "architectural-alignment",
+      "raw_category": null,
+      "summary": "Architectural principles for grading, absences and the report are implemented faithfully",
+      "location": "project-documents/user/slices/425-slice.grading-and-paired-report.md#D2, D4\u2013D6, D14, D16",
+      "location_verified": null
+    },
+    {
+      "id": "F008",
+      "severity": "pass",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "The review call's failure modes are explicit and observable",
+      "location": "project-documents/user/slices/425-slice.grading-and-paired-report.md#D7, D16",
+      "location_verified": null
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/425-slice.grading-and-paired-report.md",
+    "against": "project-documents/user/architecture/420-arch.model-benchmark.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261115-design/wt/425-design"
+  },
+  "timestamp": "2026-11-16T07:25:48.856155",
+  "model": "claude-sonnet-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 2,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-sonnet-5-5",
+  "answering_models": [
+    "claude-sonnet-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 8,
+    "in_fences": 0,
+    "in_section": 8,
+    "surviving": 8
+  },
+  "effort": "medium",
+  "profile": "sdk",
+  "turns": 3,
+  "prompt_tokens": 139008,
+  "cached_tokens": 139004,
+  "cache_write_tokens": 0,
+  "completion_tokens": 6123,
+  "reasoning_tokens": null,
+  "duration_seconds": 50.69404508383013,
+  "cost_usd": 0.0759062,
+  "cost_basis": "provider"
+}

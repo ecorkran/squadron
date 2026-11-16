@@ -1,0 +1,40 @@
+{
+ "review": "r07",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "The slice says it doesn't edit 424 or 425, but it does in several places",
+   "description": "Line 42 says \"No edits to 424 or 425\", and D17 (line 312) says \"No change to 425\". Other parts of the same doc change both:\n- **424's `CaseDrop` model:** line 321 and line 426 widen `CaseDrop.reason` to accept `SliceCandidateRejection`. The model is defined in 424 as `CandidateRejection | str` (424-slice:369).\n- **424's runner behavior:** D8 (line 226) changes it, because a set with slice cases now plans instead of refusing.\n- **425's `bench_report.py`:** it gets per-kind grouping, a renamed pass column, a dropped hidden column and a new pairwise section (lines 87, 306\u2013313).\n- **Contradiction with line 451:** it expects `tests/benchmark/` to change \"where \u2026 D17 extracts the interval\". D17 says the interval already exists in 425 (425-slice:278) and nothing is extracted.\n\n**Fix:** change the line-42 claim to list the actual edits: the `CaseDrop.reason` type, the per-kind grouping in `bench_report`, and the 424 planning change. Then fix line 451 so it doesn't mention an extraction that doesn't happen. Readers of 424 and 425 need to know which of those slices' contracts change.",
+   "location": "project-documents/user/slices/426-slice.slice-cases.md:42"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "The leak-scan rules for slice replays are not specified",
+   "description": "424's `LeakRules` (424 D7) needs two inputs that slice cases don't obviously have:\n- **The code-host repository:** 424 takes it from \"the case's issue ref\". A slice case has no issue ref. `CaseProvenance.source_ref` is `slice:<index>@<sha>` (D6).\n- **The distribution name:** 424 reads it from the start commit's `pyproject.toml`. That probably works unchanged, but the doc doesn't say.\n\nThe doc only covers leak paths for the cf install location (D9 spike). It never says how the git and code-host rule is built for a slice case. If the rule is built with no repository, `gh`/URL fetches of the project's own repo are not detected. A fetch of the reference branch is the most direct leak a slice case has.\n\nThe architecture principle \"The answer stays out of reach\" makes leak detection a responsibility of this component. Slice cases also add a new route to the answer: the branch tip still exists on the remote.\n\n**Fix:** state where `SliceCaseRunner` gets the code-host repository (for example from the checkout's `origin` remote at build time, stored on the case). If it can't be found, the case should get `scan_unavailable` or be refused at planning. A rule that silently matches nothing is not acceptable.",
+   "location": "project-documents/user/slices/426-slice.slice-cases.md#d9--cf-registration-inside-the-scrubbed-home"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "cf registration has no stated timeout or `ProducerOutcome`",
+   "description": "D9 says \"A failed or timed-out cf step is a harness absence (424 D10)\", but leaves two things open:\n- **No timeout:** it names no bound, config key or constant for the three `cf` subprocess calls.\n- **No outcome row:** 424's `ProducerOutcome` table has no row for \"cf registration failed\". It is unclear whether the failure maps to `environment_failed` or to a new value.\n\nThat leaves the hang case implicit and the recorded outcome open. The review-code rule requires each failure mode on a new I/O path to be explicit and observable.\n\n**Fix:** name the bound. Reusing whatever `ReplaySandbox._register_with_cf` already uses is fine, as long as it is stated. Then name the outcome (for example `environment_failed`, with the cf step in `failure_detail`).",
+   "location": "project-documents/user/slices/426-slice.slice-cases.md:232"
+  },
+  {
+   "i": 3,
+   "severity": "NOTE",
+   "title": "The reference is the branch tip, not the landing commit",
+   "description": "The architecture's Envisioned State says \"the landing commit is the reference\". D2 uses `tip_sha` instead, because `fork..after` on a merge landing pulls in unrelated target work. That keeps the intent of \"Compare configs on identical work\", and the design states its reasoning. The architecture text should be updated to match.",
+   "location": "project-documents/user/slices/426-slice.slice-cases.md:176-181"
+  },
+  {
+   "i": 4,
+   "severity": "NOTE",
+   "title": "Normalized diffs share the `diffs` sidecar kind with raw replay diffs",
+   "description": "Normalized judge input is stored with `ContentSidecars(\"diffs\")`, so it sits in `<store>/sidecars/diffs/` next to 424's raw replay diffs, with the same `.diff` extension. Content addressing makes this safe. However, a separate kind (for example `judge_inputs`) would cost one constant. It would also stop anyone reading the sidecar directory from taking a normalized diff for a real one.",
+   "location": "project-documents/user/slices/426-slice.slice-cases.md:165"
+  }
+ ]
+}

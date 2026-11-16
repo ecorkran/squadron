@@ -1,0 +1,47 @@
+{
+ "review": "r01",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "In replay, the producer's own report decides whether a commit happens, so its claims affect the grade",
+   "description": "D4 has the commit action refuse to commit in three cases:\n- the agent's self-reported `failed_before_change` is not `true`\n- any reported gate has a non-zero `exit_code`\n- `failing_tests` or `gates` is empty\n\nUnder 424, the replay stops at the producer's committed tree. The architecture also says \"a failure the config caused (the producer \u2026 committed nothing) is a fail for that config\" (arch:67) and \"A producer's claim that tests pass is never evidence\" (arch:48). Together these give the wrong incentive:\n- A producer that honestly reports a failing lint gate commits nothing and is scored as a fail.\n- A producer that over-reports gets a commit and is graded on its merits.\n\nSo the self-report gates the benchmark outcome, and it rewards dishonest reports over honest ones. The slice says \"425 grades on its own and does not trust the report\" (line 235). That is true of grading, but this check runs before grading.\n\nFix: keep the production refusal. Then state either of these:\n- (a) Under replay, report defects other than `blocked` are recorded but do not stop the commit. This needs a mode signal; `commit-to: current` is already there and could carry it.\n- (b) The behaviour is intended, with an explicit note that 424/425 count a `fix_report` refusal as a harness-classified outcome, not a config fail.\n\nEither way, record the decision so 424 and 425 don't each make it differently.",
+   "location": "project-documents/user/slices/423-slice.fix-pipeline.md:155-158"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Drops the slice plan's MCP parity criterion without updating the plan",
+   "description": "The slice plan entry for 423 requires \"CLI, slash command and MCP give identical results\" (420-slices.model-benchmark.md:87). The slice excludes MCP and narrows parity to the CLI and `/sq:run` (D9).\n\nThe reasoning holds up. Squadron has no MCP server: `src/squadron/server/daemon.py` serves HTTP/UDS through uvicorn, not MCP. But removing a criterion the plan assigned to this slice still has to be visible in the plan. Fix: amend the 423 entry in the slice plan to drop the MCP criterion, or point it to a future issue, so later slices and reviews don't treat it as owed.",
+   "location": "project-documents/user/slices/423-slice.fix-pipeline.md:43"
+  },
+  {
+   "i": 2,
+   "severity": "NOTE",
+   "title": "Adds a dependency on 422 that the slice plan says does not exist",
+   "description": "The slice plan says 423 has \"no dependencies in this initiative \u2026 it can be built earlier\" (420-slices:88, 166). The slice declares `dependencies: [422]` for `CodeHost.get_issue` and the renderer with an optional cutoff.\n\n422 does provide exactly that:\n- `get_issue(locator, number) -> IssueSnapshot` (422:138)\n- \"With no cutoff (423's live fix) it renders \u2026 every comment\" (422:139)\n\nSo the integration point matches. The slice also limits the risk: file mode needs nothing from 422, and the fetched source is built last (step 4). Still, the plan's ordering note is now wrong, and 422 is the plan's High-risk slice. Update the plan entry's Dependencies line to name the partial dependency.",
+   "location": "project-documents/user/slices/423-slice.fix-pipeline.md:6"
+  },
+  {
+   "i": 3,
+   "severity": "NOTE",
+   "title": "Two failure modes in the prompt-only commit path are not listed",
+   "description": "`sq _commit --report-file {tmp_path}` relies on the session writing the report file. The doc does not say what happens if:\n- the file is missing, empty or not JSON\n- `git commit` itself fails, for example a pre-commit hook rejects it, which matters because squadron runs ruff in its hook\n\nThe likely answer for the first is \"the same `fix_report` refusal as no JSON object\". The likely answer for the second is \"whatever CommitAction already does\". Each could be stated in one line.",
+   "location": "project-documents/user/slices/423-slice.fix-pipeline.md:197"
+  },
+  {
+   "i": 4,
+   "severity": "NOTE",
+   "title": "`IssueSource.github` names a host even though access goes through the `CodeHost` abstraction",
+   "description": "The fetched path goes through `CodeHost`, but the recorded source value is `github`. Only one host exists today (422:366), so this costs nothing now. `fetched` (or the host's own name) would keep the record honest if another host is added.",
+   "location": "project-documents/user/slices/423-slice.fix-pipeline.md:140"
+  },
+  {
+   "i": 5,
+   "severity": "NOTE",
+   "title": "Walkthrough step 2 hard-codes `main` instead of the target",
+   "description": "`git checkout main` assumes the target is `main`. D5 and the project rules read it from `git.integration_branch`. Use the resolved target, as step 3 implicitly does.",
+   "location": "project-documents/user/slices/423-slice.fix-pipeline.md:288"
+  }
+ ]
+}

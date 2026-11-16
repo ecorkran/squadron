@@ -1,0 +1,40 @@
+{
+ "review": "r10",
+ "findings": [
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Failure outcomes are not classified as config-caused or harness-caused for 424 and 425",
+   "description": "- **The rule.** The architecture's \"Absent is not zero\" principle (arch line 67) says a config-caused failure counts as a fail for that config. A harness-caused failure drops the case from every config's comparison.\n- **What the slice provides.** Only `FailureKind.FIX_REPORT` is new. It covers report defects and `blocked`. Every other refusal is described as `ActionResult(success=False)` with a message. Those refusals are a dirty tree, a wrong branch, a missing or empty issue file, a `CodeHostError` and \"HEAD moved\".\n- **Why that is not enough.** 424 consumes this output and has to sort each failure into one of two buckets. It needs more than message text to do that:\n  - A missing frozen file or a dirty tree is harness-caused.\n  - A report with `failed_before_change: false`, a `blocked` report, or a HEAD moved by an agent commit is producer-caused (\"committed nothing\").\n  - The slice never states that mapping.\n- **Mid-run state.** A refused report leaves uncommitted changes in the tree and no commit. The slice does not say that 424 should treat this as \"producer committed nothing\" and not grade the leftover tree.\n- **Fix.** Give each refusal a distinct failure kind, or a `caused_by` field with two values. State in Provides-to-424 which kinds are config-caused and which are harness-caused.",
+   "location": "project-documents/user/slices/423-slice.fix-pipeline.md:155-156, 203, 234-235"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "The clean-tree precondition and stage-everything commit are not reconciled with 421's installed sandbox",
+   "description": "- **The conflict.** D5 refuses any dirty tree, using `changed_paths`, which excludes ignored files. D5 also stages every changed and untracked path at commit time. 421 installs the project's dependencies in the sandbox at the start commit, before the producer runs. That install can leave untracked or modified files:\n  - `*.egg-info`\n  - a `.venv` that is not gitignored\n  - a regenerated lockfile\n- **If the install leaves files.** `fix-context` would refuse every such case, and the benchmark would record a harness failure. Or, if the files are ignored, they would be correct to leave out. If they are not ignored, they would end up in the fix commit and pollute the diff that 425 grades.\n- **What the slice covers.** The walkthrough (step 4) uses a plain clone with no install, so this path is never exercised. The slice does not say who owns the post-install baseline.\n- **Fix.** State that the precondition is measured against the post-environment-resolution tree. For example, record the baseline changed-path set in `fix-context` and stage only paths that differ from it. Or state that 421 guarantees a clean tree after install. Add a sandbox-with-install case to the parity or executor test.",
+   "location": "project-documents/user/slices/423-slice.fix-pipeline.md:165-167, 309-317, 348"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Departures from the slice plan entry are not recorded against the plan",
+   "description": "- **MCP parity dropped.** The plan's success criterion is \"CLI, slash command and MCP give identical results\" (slice plan line 87). The slice excludes MCP (Technical Scope line 43, D9). The reason it gives is credible: squadron has no MCP server for any pipeline. But this is dropped assigned scope, and only the slice records it. The plan still promises the criterion. Amend the plan entry, or have the PM accept the deviation explicitly, so 424 and later readers do not rely on it.\n- **New dependency on 422.** The plan says 423 has \"Dependencies: none in this initiative\" and \"can be built earlier\" (plan lines 88, 166). The slice frontmatter lists `[422]`, and the fetched mode needs `CodeHost.get_issue` and an issue-text renderer with an optional cutoff. 422's plan entry mentions only frozen issue text, not those two items. The dependency is unconfirmed. If 422 does not deliver them, step 4 of Implementation Notes is blocked. Either add them to 422's plan entry, or isolate the fetched path (step 4) so file mode and the sandbox path can ship without it.\n- **Effort.** The slice raises effort from 2/5 to 3/5 and says so (line 344). That is acceptable, but update the plan with it.",
+   "location": "project-documents/user/slices/423-slice.fix-pipeline.md:6, 43, 344"
+  },
+  {
+   "i": 4,
+   "severity": "NOTE",
+   "title": "Prompt-only mode adds two hidden commands and a temp-file handoff",
+   "description": "- The plan does assign slash-command parity, so D9 is in scope.\n- The mechanism is the heaviest part of the slice:\n  - `sq _fix-prompt`\n  - `sq _commit --subject fix` with `--report-file`\n  - a `start_head` read at render time\n  - a dedicated parity test\n- Implementation step 5 already isolates it, so it can slip without blocking 424.\n- A smaller option for the `commit` render, if cost matters: reuse the existing `sq _commit` argument shape and pass the report on stdin.",
+   "location": "project-documents/user/slices/423-slice.fix-pipeline.md:193-198"
+  },
+  {
+   "i": 5,
+   "severity": "NOTE",
+   "title": "Failure modes of the new `_commit` and report-file I/O are only partly enumerated",
+   "description": "- **Missing or unreadable report file.** The `--report-file` for `sq _commit` is not covered. An empty file falls under \"no JSON object\", but a missing or unreadable path is not named.\n- **Commit failure.** The slice does not say what happens if `git commit` itself fails, for example a pre-commit hook rejects the staged tree. It also does not say whether the changes stay staged afterward, as the D4 text promises for report refusals.\n- **Observable signals.** Each failure should log at WARNING or higher, and at least one test should assert the signal. The Patterns and Conventions section states the logging rule generally, but these two paths are not tied to it.\n- The dispatch's own hang or timeout behavior is inherited unchanged from the executor and the cost cap, which is reasonable.",
+   "location": "project-documents/user/slices/423-slice.fix-pipeline.md:197, 228"
+  }
+ ]
+}

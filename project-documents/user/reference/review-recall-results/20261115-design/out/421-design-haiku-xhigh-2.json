@@ -1,0 +1,351 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Suite runner failure modes are incomplete and not all observable",
+      "description": "D10 says a missing or unparseable JSONL \"never comes back as an empty pass,\" but the raise rule is scoped to a non-zero pytest exit. Two paths are unhandled: exit 0 with no JSONL, and a JSONL whose last line was cut off when the run was killed. Line 388 says a pytest without the required hooks \"fails with `SuiteRunError`,\" but the doc gives no mechanism for that. A run where the hooks are never called can exit 0 with no JSONL, which is the unhandled case above. The timeout path returns `SuiteRun(timed_out=True)` and names no log, but the review rules require each failure mode to be observable at WARNING or higher. Specify that exit 0 with missing or unparseable output raises `SuiteRunError`, that a truncated final line is discarded and counted, that a timeout logs at WARNING, and how hook incompatibility is detected explicitly (for example, a sentinel line the plugin writes at session start).",
+      "file_ref": null,
+      "category": "failure-mode",
+      "raw_category": null,
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:209"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "A harness crash leaves live children writing into directories the sweep deletes",
+      "description": "D12 says \"Nothing new is needed for orphans,\" because `ProcessRunner` kills the process group on timeout. That covers timeouts only. If the `sq` process is killed mid-install or mid-suite, `uv` and pytest keep running, and the next run's orphan sweep (line 118) can delete the tree under them. Verification step 7 (line 356) checks that the earlier directories are swept, not that their children are gone. Specify how the owner's process group is recorded (for example, in the `.lock` file) and how the sweep either kills that group or refuses to sweep while it is alive. Add a test that kills the harness mid-install and asserts no child survives.",
+      "file_ref": null,
+      "category": "failure-mode",
+      "raw_category": null,
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:226"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The auth check reports harness faults as \"no\"",
+      "description": "The plan requires \"a definite yes or no ... A no is reported, not worked around\" (420-slices.model-benchmark.md:49). Line 184 makes every non-success a \"no.\" A missing or non-executable installed `sq`, an alias the seeded config cannot resolve, or a failed scrub build would all appear as \"no,\" with stderr. The remedy in line 186 is a PM decision about provider carryover, so a harness misconfiguration would send the PM to change auth for a provider that works. Split the result into `yes`, `no` (the probe ran and the provider refused or returned an empty response) and `error` (the probe could not run). `error` should exit non-zero and be reported separately. A timeout stays `no`, as specified.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:183-184"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Case sets are keyed by name, contradicting the architecture and plan",
+      "description": "Architecture line 65 says new record types are \"keyed on `ProjectId`,\" and the plan's 421 entry says the same (420-slices.model-benchmark.md:40). D2 keys `CaseSet` by name so that 422 \"may pool cases from several projects.\" The plan leaves pooling to 422's yield report (420-slices.model-benchmark.md:66, 170), so this design commits to an outcome the plan says should be measured. Either keep `ProjectId` on the set and let 422 decide pooling, or amend the architecture and plan to record that case sets are cross-project. Also, the record id `caseset-<sha256(name)[:12]>-v<version>` makes the name a global key, so two projects that pick the same set name collide.",
+      "file_ref": null,
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:134"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "PATH brings user tool installs back in through symlinks",
+      "description": "Architecture line 46 says the producer's PATH \"leaves out the user's tool installs.\" The plan's 421 entry says \"no user tool installs\" (420-slices.model-benchmark.md:42, 48). D7 symlinks `git` and `uv` from the harness PATH into `<id>.home/bin`, so those installs are reachable from the producer's PATH. The success criterion at line 309 passes only because the entry sits under the sandbox home. Keeping `uv` is defensible, since the project's instructions tell agents to `uv run` and removing it would change the producer's prompt behavior. But that makes this an architecture decision for the PM, and the architecture sentence needs amending. The doc is also silent on what happens when `git` or `uv` is missing from the harness PATH. An omitted tool must raise an explicit error, not be skipped.",
+      "file_ref": null,
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:168"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Test-first classification is narrower than the architecture's rule",
+      "description": "Architecture line 53 disqualifies a fix test at the parent if there is \"no `ImportError`\" at all. D11 classifies an ImportError as `missing_symbol` only when it names a project module. An ImportError that names a third-party module and is raised from project source falls through to `project_exception` (line 217), which qualifies. Example: the fix added a dependency to `pyproject.toml`, the parent lacks it, and a project module's import fails. That is an environment gap the fix introduced, not a crash the fix cured. Either classify every ImportError or ModuleNotFoundError as `missing_symbol`, as the architecture reads, or amend the architecture with the narrower rule and its reason.",
+      "file_ref": null,
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:215-217"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`list_cases` silently drops tampered records",
+      "description": "D1 makes `get_case` raise on a tampered record but has `list_cases` skip it with the store's WARNING. The two read paths then disagree about whether a bad record exists. The yield report in 422 reads cases through `list_cases`, so a hand-edited case silently leaves the population, and a log line is the only trace. The plan says \"No candidate is silently dropped\" (420-slices.model-benchmark.md:73), and the project rule is to fail explicitly. Make `list_cases` raise as `get_case` does, or return the skipped ids with the cases so callers must report them.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:127"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`EnvironmentIdentity` collides with 400's model of the same name",
+      "description": "D6 says the new model \"is not 400's `EnvironmentIdentity`,\" and both keep `lockfile_sha256`. Line 292 says 425 receives \"`EnvironmentIdentity` as part of the grader identity,\" and 425 also consumes 400's snapshot. Two classes with one name will be imported side by side in the same code path. 400's task breakdown already defines `EnvironmentIdentity` (lockfile path, lockfile SHA-256, interpreter version). Rename the 421 model to say what it is, such as `BenchmarkEnvironmentIdentity`, before 422 and 424 use it.",
+      "file_ref": null,
+      "category": "naming",
+      "raw_category": null,
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:161"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The sandbox's public surface and the adapter's environment contract are undefined",
+      "description": "Architecture line 117 says that in a replay \"the target is the sandbox's own branch,\" so fix-pipeline commits land on a branch the replay reads. The Provides list hands `BenchmarkSandbox` to 422, 424 and 425 but never says what they read from it: tree path, branch, output directory, scrubbed home, environment, or `keep()`. D4 spells out `ReplaySandbox`'s surface (line 144), but `BenchmarkSandbox`'s is missing. Separately, `SandboxContext` carries the scrubbed `env` into `resolve_environment`, while D5 (line 155) runs install under the harness environment. The protocol (lines 194\u2013202) does not say the adapter must ignore `ctx.env` during install. Name the `BenchmarkSandbox` attributes, and state which environment each adapter method uses.",
+      "file_ref": null,
+      "category": "integration",
+      "raw_category": null,
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:288-293"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The architecture's record-size constraint is not restated with a target",
+      "description": "Architecture line 65 says records stay coarse \"because the store reads every file on every query,\" and line 129 says records \"stay small.\" This slice writes case records that carry slice-case task text, and D3 keeps that text inline, calling tens of KB \"acceptable\" with no bound. Restate the constraint with a target: a maximum record size, the measured size of the largest existing slice design plus task file, and what happens above the bound (refuse the write, or move the text to a sidecar). Without a number the decision cannot be checked.",
+      "file_ref": null,
+      "category": "nfr",
+      "raw_category": null,
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:140"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Mock patch targets are detected through a private attribute of `unittest.mock`",
+      "description": "The plugin recovers the patch target from `self` in the innermost `unittest/mock.py` frame, which is a private `_patch` object. D11 says this was checked only on Python 3.13. The runner runs under the start commit's interpreter, so the same case can classify differently on another version. Qualification is keyed on interpreter version (D6), so a mismatch triggers re-qualification, but the classification is undefined on untested versions. Name the Python and pytest versions the classification supports, fail explicitly on any other version, and check at runtime that the private attribute exists. Alternatively, have 422 detect `mock.patch` targets statically from the test source, which needs no runtime introspection. The doc should choose one and say why.",
+      "file_ref": null,
+      "category": "fragility",
+      "raw_category": null,
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:207"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Overweight: a second CLI surface and restated conventions",
+      "description": "The plan's 421 entry names no CLI, and its criteria are checked by tests. `sq benchmark sandbox REV [--suite] [--node] [--keep]` adds a user-facing command with its own output format. The doc already defers the `/sq:benchmark` slash command to 422 for the same reason (line 42). Keep `sq benchmark auth-check`, which the plan needs so the PM sees the answer, and move `sandbox` to 424, the first slice that runs sandboxes for a user. Walkthrough steps 2, 4, 5 and 7 can become integration tests. Also cut \"Patterns and Conventions\" (lines 234\u2013238), which restates the project's error and enum rules.",
+      "file_ref": null,
+      "category": "proportionality",
+      "raw_category": null,
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:254-256"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The dependency on 420 is listed, but the body says 421 reads nothing from it",
+      "description": "The frontmatter (line 6) and the plan (420-slices.model-benchmark.md:51) both list 420. Line 57 says 420 \"must land first,\" then that 421 \"reads nothing from 420.\" The reason given, that later slices compare configs by effort sent, is an ordering constraint on 422 and later, not on 421. State it as ordering only and drop it from 421's dependencies, or name what 421 needs from 420.",
+      "file_ref": null,
+      "category": "dependency",
+      "raw_category": null,
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:57"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Identity fields go beyond the architecture's list; amend the architecture to match",
+      "description": "Architecture line 63 lists the identity as start commit, task text, hidden and superseded tests, and grader commands. D1 adds `project_id`, `kind`, `reference_sha`, `hidden_fixtures` and `excluded_tests`. D1 justifies `reference_sha` in the text, and `excluded_tests` follows the keystone's rule that the exclusion list is part of identity, so the additions are sound. Record them in the architecture and the plan (420-slices.model-benchmark.md:40) so later readers do not take the design as a departure.",
+      "file_ref": null,
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:125-126"
+    },
+    {
+      "severity": "PASS",
+      "title": "Dependency directions match the architecture",
+      "description": "`benchmark/` depends on `metrology/` and `replay/sandbox.py`, neither depends back, and the CLI reaches concrete adapters only through `registry.py`. The `metrology/` additions are record models and store I/O with no import from `benchmark/`, which matches the extend-don't-fork rule (architecture line 65).",
+      "file_ref": null,
+      "category": "dependency",
+      "raw_category": null,
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:97"
+    },
+    {
+      "severity": "PASS",
+      "title": "Install-path failure modes are enumerated with reasons",
+      "description": "D5 lists the install failures (timeout, missing installer, stale or unresolvable lock, unsupported lockfile, no lockfile). Each carries a reason from `EnvironmentFailureReason` and uv's stderr, and nothing retries without the lock. Success criterion 316 requires a test per path. The suite runner and the auth probe should follow this pattern, as the findings above describe.",
+      "file_ref": null,
+      "category": "failure-mode",
+      "raw_category": null,
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:152"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "failure-mode",
+      "raw_category": null,
+      "summary": "Suite runner failure modes are incomplete and not all observable",
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:209",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "failure-mode",
+      "raw_category": null,
+      "summary": "A harness crash leaves live children writing into directories the sweep deletes",
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:226",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "The auth check reports harness faults as \"no\"",
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:183-184",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "summary": "Case sets are keyed by name, contradicting the architecture and plan",
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:134",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "summary": "PATH brings user tool installs back in through symlinks",
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:168",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "summary": "Test-first classification is narrower than the architecture's rule",
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:215-217",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "`list_cases` silently drops tampered records",
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:127",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "concern",
+      "category": "naming",
+      "raw_category": null,
+      "summary": "`EnvironmentIdentity` collides with 400's model of the same name",
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:161",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "concern",
+      "category": "integration",
+      "raw_category": null,
+      "summary": "The sandbox's public surface and the adapter's environment contract are undefined",
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:288-293",
+      "location_verified": true
+    },
+    {
+      "id": "F010",
+      "severity": "concern",
+      "category": "nfr",
+      "raw_category": null,
+      "summary": "The architecture's record-size constraint is not restated with a target",
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:140",
+      "location_verified": true
+    },
+    {
+      "id": "F011",
+      "severity": "concern",
+      "category": "fragility",
+      "raw_category": null,
+      "summary": "Mock patch targets are detected through a private attribute of `unittest.mock`",
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:207",
+      "location_verified": true
+    },
+    {
+      "id": "F012",
+      "severity": "concern",
+      "category": "proportionality",
+      "raw_category": null,
+      "summary": "Overweight: a second CLI surface and restated conventions",
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:254-256",
+      "location_verified": true
+    },
+    {
+      "id": "F013",
+      "severity": "note",
+      "category": "dependency",
+      "raw_category": null,
+      "summary": "The dependency on 420 is listed, but the body says 421 reads nothing from it",
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:57",
+      "location_verified": true
+    },
+    {
+      "id": "F014",
+      "severity": "note",
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "summary": "Identity fields go beyond the architecture's list; amend the architecture to match",
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:125-126",
+      "location_verified": true
+    },
+    {
+      "id": "F015",
+      "severity": "pass",
+      "category": "dependency",
+      "raw_category": null,
+      "summary": "Dependency directions match the architecture",
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:97",
+      "location_verified": true
+    },
+    {
+      "id": "F016",
+      "severity": "pass",
+      "category": "failure-mode",
+      "raw_category": null,
+      "summary": "Install-path failure modes are enumerated with reasons",
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:152",
+      "location_verified": true
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md",
+    "against": "project-documents/user/architecture/420-arch.model-benchmark.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261115-design/wt/421-design"
+  },
+  "timestamp": "2026-11-16T07:12:43.570887",
+  "model": "claude-haiku-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 7,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-haiku-5-5",
+  "answering_models": [
+    "claude-haiku-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 16,
+    "in_fences": 0,
+    "in_section": 16,
+    "surviving": 16
+  },
+  "effort": "xhigh",
+  "profile": "sdk",
+  "turns": 8,
+  "prompt_tokens": 773906,
+  "cached_tokens": 582870,
+  "cache_write_tokens": 191024,
+  "completion_tokens": 85094,
+  "reasoning_tokens": null,
+  "duration_seconds": 381.0840462918859,
+  "cost_usd": 0.41471048,
+  "cost_basis": "provider"
+}

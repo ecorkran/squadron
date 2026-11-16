@@ -1,0 +1,207 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Commit markers are written as checkbox tasks, not plain `**Commit**:` lines",
+      "description": "Every commit point (2C, 3C, 5C, 6C, 8C, 9C, 11C, 13C, 14C, 15C) is written as `- [ ] **Task 2C: Commit** \u2014 ...`. The project rule is that markers are plain `**Commit**:` lines and never checkboxes. A parser or implementer looking for `**Commit**:` markers will find none. It would then fall back to committing after every top-level task, which loses the intended grouping (for example, Tasks 4/4T/5/5T committed as one unit). The checkbox form also makes the commit a trackable task that `task-checker` would tick. Rewrite each as a plain line, such as `**Commit**: feat(core): add adoption.state config key and state helpers`. The placements themselves are good. Each sits after a tested, building state.",
+      "file_ref": null,
+      "category": "task-format",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:78"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Task 15C is a notes-only commit",
+      "description": "Task 15 mostly runs checks and records outcomes \"under this task\". Task 15C (`docs: record slice 261 verification walkthrough`) would therefore usually contain only notes and check-offs. The rule is never to make a commit that only checks boxes or only adds notes. Drop the marker so the notes and check-offs ride with the last real commit (13C or 14C), or fold the Task 15 notes into the Task 14 commit. Defect fixes already get their own typed commits per Task 15's last bullet.",
+      "file_ref": null,
+      "category": "task-format",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:269"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "No task covers the \"`context_build` / `cf build` surface the `AdoptionError`\" criterion end to end",
+      "description": "The slice's Functional Requirements say that with a guide missing the profile or prompt, `cf build` exits non-zero with the `AdoptionError` message and `context_build` returns it as an error. The tasks only cover pieces of this:\n- Task 10T tests the integrator rethrow.\n- Task 12 fixture 12 tests that the pipeline rejects.\n- Task 15's manual walkthrough step 4 covers `cf build` once.\n- No automated assertion shows `context_build` returns an error result.\n\nTask 11 already edits `contextTools.test.ts`. Add one case there where the mocked pipeline rejects with `AdoptionError` and the tool result is an error carrying the message. Add the same to `build.test.ts` for the non-zero exit.",
+      "file_ref": null,
+      "category": "coverage-gap",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:220-222"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Task 15 baseline step hard-codes `main` and omits setup for the temporary worktree",
+      "description": "Task 0 resolves the target through `git.integration_branch`, but Task 15 builds `/tmp/before.md` from `main`. If an integration branch is set, `main` is not the pre-slice state, so the byte-identical comparison would be against the wrong baseline. Name the target (read the same way as Task 0) instead of `main`. The step also says only \"a temporary `git worktree add` \u2026 built there\". A fresh worktree has no `dist` and no installed dependencies, so the task should say to run install and `pnpm -r build` there. It should also say how `cfl build` resolves the project from that path. The slice design's version (\"in this repo, on main before the slice\") avoids this.",
+      "file_ref": null,
+      "category": "verification",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:262"
+    },
+    {
+      "severity": "NOTE",
+      "title": "No load test or CI wiring task for the sub-second detection target",
+      "description": "D2 states a performance target of under one second. The slice explicitly decides that \"tests assert the caps, not timings\". The task file's Context Summary records the same reasoning and notes that the `tests/load/` tier is a Python rule. I found no `tests/load/` directory in this repo. Task 3T asserts the early-exit cap and the `MAX_WALK_ENTRIES` cap, which bound the worst case. This is an accepted, documented omission, so a load test and CI gate would add scope the slice rejected.",
+      "file_ref": null,
+      "category": "nfr-coverage",
+      "raw_category": null,
+      "location": "project-documents/user/slices/261-slice.detection-and-adoption-state.md:167"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`measureSourceVolume` barrel export is deferred to Task 5",
+      "description": "Task 3 creates `sourceVolume.ts`, but its `detection/index.ts` export is added later in Task 5's \"Export \u2026 `measureSourceVolume` and `SourceVolume`\" bullet. Nothing breaks, because `node.ts` already re-exports `./detection/index.js` and the tests can import the file directly. Still, the export belongs with the file's creation, so moving it into Task 3 avoids a reader wondering why the file was left unexported for two tasks.",
+      "file_ref": null,
+      "category": "sequencing",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:119"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Task 6 deviates from D6's \"reuse `resolveInitiativePlanPath`\" for a stated reason",
+      "description": "D6 says to reuse `resolveInitiativePlanPath`. The task instead extracts `INITIATIVE_PLAN_FILE_PATTERN` and reads the directory itself. The Context Summary explains why: `resolveInitiativePlanPath` swallows `readdir` errors, which conflicts with D6's \"other read errors throw\". The regex is still defined once, and the existing behavior is preserved and covered by the \"tests pass unchanged\" criterion. This is reasonable and in scope.",
+      "file_ref": null,
+      "category": "design-alignment",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:134"
+    },
+    {
+      "severity": "PASS",
+      "title": "Success-criteria coverage, sequencing and proportionality",
+      "description": "- **Coverage:** Each Functional Requirement maps to a task.\n  - Empty, scaffold, brownfield, shallow, monorepo, concept-only and planned fixtures are Task 12 fixtures 1\u20137.\n  - Resume, overrides, `--phase 2`, explicit instruction and `template_preview` are fixtures 8\u201313.\n  - Invalid-value rejection is Task 1T.\n  - The CLI/MCP parity test is Task 13.\n  - The \"planned projects byte-identical\" requirement is Task 15's walkthrough step 1.\n  - Every unit-test item in the slice's Technical Requirements has a matching \"T\" task.\n- **Sequencing:**\n  - The dependency chain runs state/contracts, then facts, then outcome and renderer, then resolver, then integrator, then pipeline callers, then integration tests. No cycles.\n  - The `ConfigKeys`/`ConfigManager` and `adoptionOutcome`/`sourceVolume` import cycles are called out and avoided (a shared constant location and `import type`).\n- **Proportionality:** The task count and detail fit a slice that spans core, CLI and MCP. It stays in a single file and has no gold-plated test tasks. Some resolver-level cases repeat in Task 12, but the slice design requires both the unit and the integration tiers.\n- **Scope:** I found no tasks without a source in the design.",
+      "file_ref": null,
+      "category": "coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "task-format",
+      "raw_category": null,
+      "summary": "Commit markers are written as checkbox tasks, not plain `**Commit**:` lines",
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:78",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "task-format",
+      "raw_category": null,
+      "summary": "Task 15C is a notes-only commit",
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:269",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "coverage-gap",
+      "raw_category": null,
+      "summary": "No task covers the \"`context_build` / `cf build` surface the `AdoptionError`\" criterion end to end",
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:220-222",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "verification",
+      "raw_category": null,
+      "summary": "Task 15 baseline step hard-codes `main` and omits setup for the temporary worktree",
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:262",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "nfr-coverage",
+      "raw_category": null,
+      "summary": "No load test or CI wiring task for the sub-second detection target",
+      "location": "project-documents/user/slices/261-slice.detection-and-adoption-state.md:167",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "sequencing",
+      "raw_category": null,
+      "summary": "`measureSourceVolume` barrel export is deferred to Task 5",
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:119",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "note",
+      "category": "design-alignment",
+      "raw_category": null,
+      "summary": "Task 6 deviates from D6's \"reuse `resolveInitiativePlanPath`\" for a stated reason",
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:134",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "pass",
+      "category": "coverage",
+      "raw_category": null,
+      "summary": "Success-criteria coverage, sequencing and proportionality",
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md",
+      "location_verified": null
+    }
+  ],
+  "template_name": "tasks",
+  "input_files": {
+    "input": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md",
+    "against": "project-documents/user/slices/261-slice.detection-and-adoption-state.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/context-forge-261-tasks"
+  },
+  "timestamp": "2026-11-16T10:18:56.030679",
+  "model": "claude-sonnet-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 6,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-sonnet-5-5",
+  "answering_models": [
+    "claude-sonnet-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 8,
+    "in_fences": 0,
+    "in_section": 8,
+    "surviving": 8
+  },
+  "effort": "high",
+  "profile": "sdk",
+  "turns": 7,
+  "prompt_tokens": 252622,
+  "cached_tokens": 140559,
+  "cache_write_tokens": 112057,
+  "completion_tokens": 10299,
+  "reasoning_tokens": null,
+  "duration_seconds": 78.90499137504958,
+  "cost_usd": 0.5660178,
+  "cost_basis": "provider"
+}

@@ -1,0 +1,33 @@
+{
+ "review": "r07",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "FAIL",
+   "title": "Discovery rejections and discovery harness errors are never saved as `SliceQualification` records",
+   "description": "The first Functional Requirement says `build` \"writes a `SliceQualification` for every slice index in it\u2026 Every rejected slice has a `SliceCandidateRejection` or `harness_error` with detail. None is silently dropped.\"\n\nNo task does this for discovery:\n- Task 13's `discover` only returns `multiple_landings`, `branch_contains_merges` and discovery `harness_error` entries in a `DiscoveryResult`.\n- Task 15 writes records only for candidates that `qualify_slice_candidate` sees.\n- Task 20 (line 196) prints one line per index but never writes a record for a discovery rejection.\n\nWhat breaks as a result:\n- Task 22 (line 207) builds the yield rows from stored `SliceQualification`s, so `multiple_landings` and `branch_contains_merges` can never show a count. The design's Mitigation Strategies names exactly these two as the rules to relax if they dominate the yield rows.\n- Task 22's test \"every rejection value is listed when nonzero\" cannot be met for those two values.\n- Task 20's test \"one line per index\" checks printed lines, not records, so it would not catch the gap.\n\nFix: add a bullet to Task 20, or to Task 13, that writes a `rejected` (or `harness_error`) `SliceQualification` with `start_environment=None` for each discovery outcome. The bullet must also say which `landing_after_sha` goes into the record id when a slice has more than one landing, because D6's id requires a single landing. Task 20's test should then assert that a stored record exists for each index in the record. Task 13 should also say whether a discovery `harness_error` stops the build, as Task 20 says a qualification harness error does.",
+   "location": "project-documents/user/tasks/426-tasks.slice-cases.md:154-156"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Nothing brings 421\u2013425 onto the slice branch after the precondition gate",
+   "description": "Task 1 creates `426-slice.slice-cases` from the target while 421\u2013425 are unimplemented (frontmatter `projectState`). Tasks 2\u20137 are committed on that branch. Task 8 (line 122) then greps `src/squadron` on the same branch and writes `BLOCKED:` if anything is missing. When 421\u2013425 later land on the target, no step brings them onto the slice branch, so Task 8 will keep failing on resume unless the implementer improvises.\n\nConflicts are also likely on that refresh:\n- Task 7 creates `src/squadron/benchmark/` and Task 6 creates `tests/benchmark/` before 421 creates them.\n- Task 5 edits `config/keys.py`, which 421, 422 and 425 also edit (line 98 says so).\n\nFix: add a first bullet to Task 8: \"merge the target into the slice branch. If it conflicts, abort, write `BLOCKED:` with the conflicting paths, and stop.\" The project's git rules allow a clean refresh from the target.",
+   "location": "project-documents/user/tasks/426-tasks.slice-cases.md:68-69"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Task 15 does not say how `slice_qualification_for` gets its lookup key from a case",
+   "description": "`slice_qualification_for(store, case, environment)` must look up the record by (project, index, landing, fork digest). Task 25 calls it with a `BenchmarkCase`. According to Task 18 and D6, the landing sha on a case exists only inside the provenance string `source_ref = \"slice:<index>@<landing_after_sha>\"`. The task does not say where the index and landing come from. A junior implementer will most likely parse `source_ref`, which uses a provenance label as logical structure and goes against the project's rule on fragile labels.\n\nFix: name the source of each key field. One option is to look up by `case_id` (stored on `SliceQualification`) through `list_slice_qualifications`. Another is to add explicit fields if 421's `BenchmarkCase` already has them.",
+   "location": "project-documents/user/tasks/426-tasks.slice-cases.md:168"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Too many tasks for the work: qualification and judge-runner are split finer than needed, and two load tests trace to no requirement",
+   "description": "The file has 42 tasks. Some of the splits add test files and tasks without adding coverage:\n- **Tasks 15\u201319:** five tasks and five test files for the stages of one function, `qualify_slice_candidate`, all committed together at line 193. Merge them into two tasks with one test file each: pre-sandbox checks plus reuse, and the sandbox stages (sets, repeats, the case, harness errors).\n- **Tasks 31\u201332** (lines 264\u2013272): both build `plan_judge`. Merge them into one task.\n- **Task 24's eight-concurrent-`invoke` test** (line 223) and **Task 33's 200-pair test** (line 276): the slice design states no NFR, and these trace to no success criterion. They also sit in `tests/benchmark/`, not `tests/load/`, and have no CI-gating task, so calling them load tests sets off that rule for no benefit.\n  - In Task 33, keep the hung-dispatcher case (it covers the failure-mode rule) and drop the 200-pair scale.\n  - Drop the concurrency test, or keep it as an ordinary test only if 424 actually runs `invoke` calls concurrently.",
+   "location": "project-documents/user/tasks/426-tasks.slice-cases.md:167-191"
+  }
+ ]
+}

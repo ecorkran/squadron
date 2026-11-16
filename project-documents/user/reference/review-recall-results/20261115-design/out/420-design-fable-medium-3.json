@@ -1,0 +1,207 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Enumeration guard would not have caught the defects this audit found",
+      "description": "D7 enumerates `AgentConfig(` constructions and `open_pipeline_session` calls. By the design's own inventory, three of the four defects were not at such sites:\n- **Path 8 (replay judge):** called `one_shot_dispatch_with_telemetry` without passing effort.\n- **Path 7 (findings-addressed judge):** called `run_review_with_profile` with a model resolved by `resolve`, which drops effort.\n- **Path 11 (`_dispatch-run`):** the renderer omitted the flag.\n\nIn each case the `AgentConfig` is built inside a shared helper that takes effort as an optional argument. A new caller that omits effort passes D7 unchanged, so the Value claim at line 25 (\"A new dispatch path cannot ship without a decision about effort\") does not hold. That leaves the slice plan's \"every path that can send effort sends it\" unprotected for the paths 421\u2013427 will add, such as the grading review, the benchmark runner and the diff judge.\n\nFix by making `effort` a required keyword argument on the shared helpers (`one_shot_dispatch*`, `run_review_with_profile`, `capture_summary_via_profile*`). A new caller must then pass a value or an explicit `None`. This is lighter than widening the AST table to helper call sites, and it may make most of D7's classification table unnecessary.",
+      "file_ref": null,
+      "category": "integration-contract",
+      "raw_category": null,
+      "location": "project-documents/user/slices/420-slice.effort-audit-across-dispatch-paths.md:149-152"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Config identity is \"provided\" to later slices but ships as a private, per-consumer rule",
+      "description": "The slice plan entry says 420 \"provides effort-sent on usage records and in config identity. All later slices read it.\" D6 instead defines identity as a private `config_identity` tuple in `replay/report.py`, and line 162 says \"this slice ships no shared identity type\" and that later slices re-apply the rule. Two problems follow:\n\n- **Two definitions inside this slice.** Replay groups on `(model, profile, effort_sent, tool_use, max_output_tokens)`. `sq stats producers` keeps `ProducerKey(model, profile, effort, reviewer)` with no `tool_use` or `max_output_tokens`. The design argues those two fields \"change what is sent\", yet stats will merge configs that replay splits.\n- **The architecture is superseded only in prose.** Line 162 overrides the architecture's \"config (alias, model, profile, effort sent)\", but the architecture is not updated. 424 and 425 will each re-derive identity from whichever document their author reads.\n\nThis puts the architecture goal \"Results stay comparable over time\" at risk, because it depends on one meaning of \"config\". Either expose one identity function or type that replay, stats and later record types all call, or state why stats is exempt. Add a task to update the architecture's identity tuple.",
+      "file_ref": null,
+      "category": "integration-contract",
+      "raw_category": null,
+      "location": "project-documents/user/slices/420-slice.effort-audit-across-dispatch-paths.md:142-147"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Reader collapses \"unknown\" into \"not sent\"",
+      "description": "D1 defines `null`/`None` as \"nothing went on the wire\". `action_effort_sent` also returns `None` when the key is absent and no usage record exists, and it trusts `usage.effort` on old records. That misreads two populations as \"backend default\":\n\n- **Pre-slice failed runs with no telemetry.** This is the same misattribution D5 calls \"a stand-in\" for new runs.\n- **Pre-slice compaction records.** Their `usage.effort` is the hard-coded `None` that D2 identifies as wrong.\n\nThe new optional `ProducerConfigRef.tool_use` and `max_output_tokens` have the same problem. `None` on an old record means \"not captured\", but as part of identity it either splits a config from its own post-slice runs or merges it with aliases that set neither. The design does not say which.\n\nThis conflicts with the architecture's \"Absent is not zero\" and the project's no-silent-fallback rule. It does not need a new stored marker, so D1 can stand. The reader can return a distinct \"unknown\" result for records with neither source, and reports can show those in their own row or exclude and count them. The design should also state how old `None` identity fields group.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/420-slice.effort-audit-across-dispatch-paths.md:138"
+    },
+    {
+      "severity": "NOTE",
+      "title": "\"Sends and records\" guarantee is broader than the inventory supports",
+      "description": "The Provides section guarantees that \"every alias-resolving dispatch path \u2026 sends and records effort\". The inventory shows three alias-resolving paths that send but write no record: path 7 (findings-addressed judge) and paths 10 and 11 (prompt-only `_summary-run` and `_dispatch-run`). None is on the benchmark's path, since 424 strips the review loop and replays do not use prompt-only mode, so nothing is unmet. Reword the guarantee to \"sends; records wherever the path writes a record\" so later slices do not rely on it.",
+      "file_ref": null,
+      "category": "documentation",
+      "raw_category": null,
+      "location": "project-documents/user/slices/420-slice.effort-audit-across-dispatch-paths.md:163"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Per-path tests assert `AgentConfig.effort`, not the provider request",
+      "description": "The design defines \"sends\" as reaching the provider request (line 58), but the per-path tests stop at `config.effort`. That is acceptable if 931's provider tests already cover the three wire mappings. The design should say so in one line, since the slice plan names OpenAI-compatible as a path to cover.",
+      "file_ref": null,
+      "category": "testing",
+      "raw_category": null,
+      "location": "project-documents/user/slices/420-slice.effort-audit-across-dispatch-paths.md:155"
+    },
+    {
+      "severity": "PASS",
+      "title": "Slice plan success criteria are all addressed",
+      "description": "- **Inventory:** present, with send and record status per path.\n- **Per-path tests:** specified for paths 1\u201312.\n- **\"Not sent\" test:** the capability gate is tested with a fake `applies_effort=False` provider.\n- **Identity on effort sent:** D6 merges rows that sent the same effort.\n\nNo assigned scope is dropped. The exclusions (paths with no alias, and the findings-addressed judge's usage recording as a 175 gap to be filed) are justified and consistent with the project's fix rules.",
+      "file_ref": null,
+      "category": "scope",
+      "raw_category": null,
+      "location": "project-documents/user/slices/420-slice.effort-audit-across-dispatch-paths.md:58-78"
+    },
+    {
+      "severity": "PASS",
+      "title": "Recording matches the architecture's \"not sent, not the alias's value\" rule",
+      "description": "D2 records the session's effort for compaction rather than the compact alias's. D5 stamps the value passed to the capture, so the stamp and `UsageRecord.effort` cannot disagree. The session-mismatch case records what was actually sent. The reader raises on an unrecognized stored value instead of defaulting.",
+      "file_ref": null,
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/420-slice.effort-audit-across-dispatch-paths.md:119-140"
+    },
+    {
+      "severity": "PASS",
+      "title": "Failure modes, dependencies and proportionality",
+      "description": "- **Failure modes:** the slice adds no new I/O path or message type. For existing paths, D5 lists failure before telemetry, subprocess death, cancellation and resolution failure, and says how each is counted.\n- **Dependencies:** they point only at completed work (931, 175, #216). No store record type or migration is added, consistent with \"Extend 320's store\".\n- **NFRs:** the architecture states none for this path.\n- **Size:** the mechanism count fits the 2/5 estimate. D5's stamp is justified by the missing usage record on failure, and the heavier alternative (a zero-spend `UsageRecord`) is rejected.",
+      "file_ref": null,
+      "category": "proportionality",
+      "raw_category": null,
+      "location": "project-documents/user/slices/420-slice.effort-audit-across-dispatch-paths.md"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "integration-contract",
+      "raw_category": null,
+      "summary": "Enumeration guard would not have caught the defects this audit found",
+      "location": "project-documents/user/slices/420-slice.effort-audit-across-dispatch-paths.md:149-152",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "integration-contract",
+      "raw_category": null,
+      "summary": "Config identity is \"provided\" to later slices but ships as a private, per-consumer rule",
+      "location": "project-documents/user/slices/420-slice.effort-audit-across-dispatch-paths.md:142-147",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "Reader collapses \"unknown\" into \"not sent\"",
+      "location": "project-documents/user/slices/420-slice.effort-audit-across-dispatch-paths.md:138",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "note",
+      "category": "documentation",
+      "raw_category": null,
+      "summary": "\"Sends and records\" guarantee is broader than the inventory supports",
+      "location": "project-documents/user/slices/420-slice.effort-audit-across-dispatch-paths.md:163",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "testing",
+      "raw_category": null,
+      "summary": "Per-path tests assert `AgentConfig.effort`, not the provider request",
+      "location": "project-documents/user/slices/420-slice.effort-audit-across-dispatch-paths.md:155",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "pass",
+      "category": "scope",
+      "raw_category": null,
+      "summary": "Slice plan success criteria are all addressed",
+      "location": "project-documents/user/slices/420-slice.effort-audit-across-dispatch-paths.md:58-78",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "pass",
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "summary": "Recording matches the architecture's \"not sent, not the alias's value\" rule",
+      "location": "project-documents/user/slices/420-slice.effort-audit-across-dispatch-paths.md:119-140",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "pass",
+      "category": "proportionality",
+      "raw_category": null,
+      "summary": "Failure modes, dependencies and proportionality",
+      "location": "project-documents/user/slices/420-slice.effort-audit-across-dispatch-paths.md",
+      "location_verified": null
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/420-slice.effort-audit-across-dispatch-paths.md",
+    "against": "project-documents/user/architecture/420-arch.model-benchmark.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261115-design/wt/420-design"
+  },
+  "timestamp": "2026-11-16T07:20:49.510177",
+  "model": "claude-fable-5-2",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 4,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-fable-5-2",
+  "answering_models": [
+    "claude-fable-5-2"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 8,
+    "in_fences": 0,
+    "in_section": 8,
+    "surviving": 8
+  },
+  "effort": "medium",
+  "profile": "sdk",
+  "turns": 5,
+  "prompt_tokens": 242226,
+  "cached_tokens": 139559,
+  "cache_write_tokens": 102661,
+  "completion_tokens": 7416,
+  "reasoning_tokens": null,
+  "duration_seconds": 77.04011166701093,
+  "cost_usd": 1.9679437000000002,
+  "cost_basis": "provider"
+}

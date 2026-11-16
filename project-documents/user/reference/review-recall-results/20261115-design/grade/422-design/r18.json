@@ -1,0 +1,75 @@
+{
+ "review": "r18",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "`FixQualification` in `metrology/` imports `EnvironmentIdentity` from `benchmark/`, which reverses 421's dependency direction",
+   "description": "The design puts `FixQualification` in `metrology/benchmark_models.py` (lines 80-81) with the field `environment: EnvironmentIdentity | None` (line 341). In 421, `EnvironmentIdentity` lives in `benchmark/adapter.py`. 421 also states that \"`benchmark/` depends on `metrology/` \u2026 Neither of those depends on `benchmark/`\" (421 slice, Component Structure). As written, `metrology` would import `benchmark`, which creates an import cycle. Line 395 says any change this slice needs from 421 \"is a 421 defect, fixed there\", so the doc should name the fix. Either move `EnvironmentIdentity` into `metrology/benchmark_models.py` as a 421 change, or have the record hold a metrology-side copy of the identity fields.",
+   "location": "project-documents/user/slices/422-slice.fix-case-qualification-and-yield-report-keystone.md:335-350"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Resolver crash is a case rejection in D6 but a `harness_error` in Technical Requirements",
+   "description": "D6 says \"A resolver import failure rejects it with `boundary_undecidable`\". That is a `CandidateRejection`, which blames the case. Line 389 requires a test asserting that a \"resolver crash\" produces `harness_error`. The Patterns list of harness failures (line 285) leaves the resolver out. The two outcomes count differently: the architecture's \"Absent is not zero\" rule separates harness-caused absences from case-caused ones. The doc should say which resolver failures are about the project (its packages fail to import, so `boundary_undecidable`) and which are about the harness (the script crashes, times out, or gives unparseable output, so `harness_error`).",
+   "location": "project-documents/user/slices/422-slice.fix-case-qualification-and-yield-report-keystone.md:185"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Several new I/O paths have no hang or timeout handling",
+   "description": "Only the test-first runs have a timeout outcome (line 177). The slice adds other subprocess and network paths, and none of them says what bounds it or what a hang records:\n- `gh` GraphQL `get_issue` (D2): no timeout stated.\n- `git log` and `git show` through `ProcessRunner`.\n- Collect-mode pytest runs at the parent and at the reference (Data Flow steps 5-6).\n- The boundary resolver.\n- The trace run (D6/D7).\n\nThese runs go through `FixCaseAdapter`, not `run_suite`, so 421's `benchmark.suite_timeout_s` does not apply to them unless the doc says it does. D2 also does not cover comment pagination: GraphQL connections are paged. If only the first page is fetched, comments before the cutoff are dropped without any signal, which breaks \"every comment created before the cutoff\" (line 140). The doc should state, for each path, the config key that bounds it and the outcome of a timeout (`harness_error` with detail), and that comments are fully paged or a truncated fetch becomes `harness_error`.",
+   "location": "project-documents/user/slices/422-slice.fix-case-qualification-and-yield-report-keystone.md#d5--test-first-check"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Re-qualification can produce a different case id, and the 424 contract does not cover that",
+   "description": "D9 says `excluded_tests` is part of the case id and that \"a different flaky set makes a different case\" (line 227). D10 has 424 re-run `qualify_candidate` in its own environment when the key does not match. That run can still qualify the candidate but with a different exclusion list. The result is a new `case_id` that is not in the case-set version 424 loaded. The contract (lines 242, 358, 394) covers only \"valid record\" and \"rejected record, drop it\". The architecture requires that every result reference \"the case and the set version it was run under\". The doc should define this third outcome: 424 drops the case with a named reason, or it runs the new case id and records the substitution. It should also say what `qualification_for` returns in that case.",
+   "location": "project-documents/user/slices/422-slice.fix-case-qualification-and-yield-report-keystone.md:242"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "One commit can end up with several records, which breaks the record-count invariant and the yield counts",
+   "description": "The record id includes the environment digest or `\"pre\"`, and \"the store holds the latest per environment\". So the same commit gets a second record when:\n- the interpreter or uv version changes, or\n- a rebuild rejects it before the sandbox. Discovery and issue freeze run again on every build, because reuse is checked only at step 4 (lines 104-107). An issue body edited after the first build therefore produces a `\"pre\"` `issue_edited_after_fix` record next to the existing qualified record.\n\nThis contradicts D2's \"the case is never fetched again\" (line 142). It also breaks the success criterion \"the number of records equals the number of closing commits\" (line 373). D12 (line 255) does not say how the yield report picks one record per commit. The doc should state:\n- whether a commit with an existing record skips re-fetching the issue,\n- how `yield` and `show` pick the authoritative record per commit (latest by `created_at`, or the current environment's), and\n- that the count invariant applies after that de-duplication.",
+   "location": "project-documents/user/slices/422-slice.fix-case-qualification-and-yield-report-keystone.md:240-241"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Patching an exported project class or instance by plain assignment or `setattr` is not detected, and the doc does not list it as a gap",
+   "description": "D7 intercepts `mock._patch` and `MonkeyPatch` only. Two cases get past it:\n- A test does `from pkg import ExportedClass` and then `ExportedClass.run = fake`, or calls `setattr(ExportedClass, ...)`, and restores the original in a fixture.\n- A test assigns to an attribute of an instance of a project class.\n\nIn both, the static reference passes because the class is in the allowed set, and neither patch API is called. The test is admitted even though it patches project code. That violates the architecture's \"Where a check cannot decide, the case is excluded with that reason, never admitted\". The D6 known-gaps list (line 194) does not mention this, although the doc says the trace \"never claims more than it sees\". Either detect it (for example, compare `__dict__` snapshots of project classes and modules before and after each test during the trace run, and treat any mutation as `patches_project_code`), or add it to the recorded gaps.",
+   "location": "project-documents/user/slices/422-slice.fix-case-qualification-and-yield-report-keystone.md:200-202"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "The issue renderer's no-cutoff mode serves 423, which is outside this slice",
+   "description": "D2 adds a rendering path with no cutoff and no edit check \"for 423's live fix\". The slice plan says 423 has \"no dependencies in this initiative\" and can be built earlier. This slice's frontmatter `interfaces: [424, 425, 426]` does not list 423. Designing a mode here for 423 means 423 has to depend on 422 without that dependency being declared. Cut the no-cutoff mode. 423 can add it, or reuse `get_issue` directly, when it is designed.",
+   "location": "project-documents/user/slices/422-slice.fix-case-qualification-and-yield-report-keystone.md:139"
+  },
+  {
+   "i": 7,
+   "severity": "NOTE",
+   "title": "`PythonFixCaseAdapter` will likely re-implement 421's pytest invocation",
+   "description": "Collect mode and the trace run start pytest with a plugin injected from outside the tree. That is the same scrubbed environment, plugin `PYTHONPATH`, output directory, JSONL read, timeout and `SuiteRunError` handling as 421 D10. D13 forbids importing `PythonBenchmarkAdapter`. A shared lower-level \"run pytest with plugin X\" helper in 421's module, used by both adapters, would avoid two copies that drift apart. Line 395 already routes changes like this through 421.",
+   "location": "project-documents/user/slices/422-slice.fix-case-qualification-and-yield-report-keystone.md:269"
+  },
+  {
+   "i": 8,
+   "severity": "NOTE",
+   "title": "The analytic separability bound leans toward \"enough cases\"",
+   "description": "The bound counts only sampling variance within each case. Real case-to-case variation in the true difference makes the actual MDD larger, so \"enough\" may be optimistic, and that answer decides the initiative's order. The doc says so and 425 replaces the bound, so this is acceptable. It would help if the report printed n next to the threshold, so a borderline \"enough\" is visible.",
+   "location": "project-documents/user/slices/422-slice.fix-case-qualification-and-yield-report-keystone.md:256-260"
+  },
+  {
+   "i": 9,
+   "severity": "NOTE",
+   "title": "There is no limit on how many tests can be excluded as failing at the reference",
+   "description": "In a partly broken sandbox, most of the suite could go on `excluded_tests` while the case still qualifies. The regression signal would then be nearly empty, and the yield report would not show it. Consider adding a count of excluded tests per case to the yield report.",
+   "location": "project-documents/user/slices/422-slice.fix-case-qualification-and-yield-report-keystone.md:226"
+  }
+ ]
+}

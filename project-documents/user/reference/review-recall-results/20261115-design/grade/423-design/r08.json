@@ -1,0 +1,40 @@
+{
+ "review": "r08",
+ "findings": [
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Dependency on 422 contradicts the slice plan",
+   "description": "The slice declares `dependencies: [422]`. It also makes 422 own \"a renderer whose cutoff is optional\" and `CodeHost.get_issue` (Prerequisites, Consumes from Other Slices). The slice plan's notes say \"The fix pipeline (423) has no dependencies in this initiative\u2026 it can be built earlier.\" Step 4 of the implementation plan also blocks on 422's deliverables. The design therefore sets a new requirement on 422's interface and changes the ordering flexibility the plan wants. The plan says 422's yield report may reorder what follows 423. Fixing this means one of two things:\n- Resolve the plan conflict. Either amend the plan entry to list 422 for fetched mode only, or fetch through the existing host client without 422's renderer.\n- Record the optional-cutoff renderer requirement in 422's design.",
+   "location": "project-documents/user/slices/423-slice.fix-pipeline.md:6"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Plan success criterion \"CLI, slash command and MCP give identical results\" is dropped",
+   "description": "The 423 entry in the slice plan lists MCP parity as a success criterion. The slice excludes it (Technical Scope, D9) because squadron has no MCP server for any pipeline. The reasoning is sound, but the plan assigned this scope and the design drops it unilaterally. Amend the plan entry, or flag the divergence for the plan owner. Otherwise a reviewer checking against the plan sees an unmet criterion.",
+   "location": "project-documents/user/slices/423-slice.fix-pipeline.md:43"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Failure modes of new I/O paths are only partly enumerated",
+   "description": "Issue fetch (D2) and report parsing (D4) have explicit handling. These paths do not:\n- **`sq _commit --report-file`:** a missing, unreadable, empty or non-UTF-8 temp file has no stated refusal. This is the slash-command path where the session writes the file itself.\n- **Git failure after staging:** the commit step can fail on a pre-commit hook rejection or a `git add`/`git commit` error. Nothing says whether the tree is left staged, or how that failure is surfaced and logged.\n- **Dispatch hang or timeout:** only the cost cap is covered (`cost_cap`). The design does not say which existing dispatch timeout applies, or what `failure_kind` a hung agent produces.\n- **Fetched issue with an empty body or text:** the frozen-file path rejects empty text, but the fetch path does not say whether the same check applies.\n\nEach of these should name the failure kind, state that it is logged at WARNING or above, and have a test asserting that signal. The project's failure-mode rule requires this.",
+   "location": "project-documents/user/slices/423-slice.fix-pipeline.md#D9 / #D5"
+  },
+  {
+   "i": 4,
+   "severity": "NOTE",
+   "title": "Proportionality: cuttable items if effort needs trimming",
+   "description": "Effort grew from 2/5 to 3/5. Prompt-only parity is plan-assigned through the slash-command criterion, so it stays. Possible cuts if scope needs trimming:\n- `issue_text_sha256` is recorded only so 424 \"can check\" the frozen text. No named requirement in 424 or 425 calls for it.\n- `failed_before_change` and `gates` are self-reported, and the design admits they are unverifiable. The shape checks guard against malformed reports, not dishonest ones, so keep them minimal.",
+   "location": "project-documents/user/slices/423-slice.fix-pipeline.md#D4"
+  },
+  {
+   "i": 5,
+   "severity": "NOTE",
+   "title": "`IssueSource` names two different things",
+   "description": "The Component Structure describes `fix_issue.py` as holding \"IssueSource: parse the issue ref, fetch or read the text\". The Patterns section defines `IssueSource` as a StrEnum (`file`, `github`). Rename one of them, for example to `IssueTextLoader` and `IssueSourceKind`, before implementation.",
+   "location": "project-documents/user/slices/423-slice.fix-pipeline.md:73"
+  }
+ ]
+}

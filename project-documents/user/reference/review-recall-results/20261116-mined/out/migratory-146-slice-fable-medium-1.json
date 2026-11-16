@@ -1,0 +1,225 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Bounds sync-back uploads positions only, so reflect/soft velocity changes never reach the GPU",
+      "description": "`apply_bounds_policy()` is passed both `positions` and `velocities`, but the only sync-back path is `notify_positions_modified()` \u2192 `upload_positions()`. Assuming REFLECT and SOFT mutate the velocities they are handed, the GPU state keeps the pre-bounds velocity. A reflected agent would then head back out of bounds every tick and be re-clamped on the host, pinning it to the wall.\n\n- **Plan requirement unmet:** the plan entry assigns \"bounds policy (sync-back \u2026 for wrap/reflect/soft)\" to this slice; only WRAP is covered correctly.\n- **Not caught by the tests:** A4 checks only \"finite, in-bounds\" on downloaded arrays, and test 7 covers WRAP only.\n- **Fix:** sync velocities as well for REFLECT/SOFT (for example a single `notify_state_modified(positions, velocities)`), and add a reflect test asserting the velocity sign after the bounce.\n- **Doc mismatch:** the `step()` snippet at lines 185-191 omits the `notify_positions_modified()` call the prose describes.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:203-227"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Spawn/despawn sync is under-specified and conflicts with the dirty-positions mechanism",
+      "description": "The plan assigns \"spawn/despawn (re-upload changed agent state)\" to this slice. Four gaps leave it unmet:\n\n- **Source of truth:** on the GPU path nothing in the design writes tick results back to `entity_manager.state`. `sync_from_entity_manager()` would then re-upload stale CPU state, resetting every agent to its last-synced position on any spawn. The design must say whether results are written back each tick or how the sync merges new agents with live GPU state.\n- **Field capacity:** `setup_from_server()` sizes fields from `entity_manager.count` at startup. The design does not say how a larger count fits (pre-allocate to a maximum capacity, or reallocate). Line 382 itself notes a second `qd.init()` is undefined behaviour, so reallocation is not free.\n- **Stale pending upload:** with a non-OPEN policy, `_pending_positions` from the previous tick has the old count. `sync_from_entity_manager()` runs first, then `step()` uploads the stale array over the fresh state. The sync must clear the dirty flag.\n- **Change detection:** comparing counts misses a despawn plus spawn in the same tick. A mutation flag or version counter set by the spawn/despawn operations is more reliable, and avoids putting \"last tick\" bookkeeping on `EntityManager`.\n\nTest 6 only asserts \"does not raise\", which would pass with all four defects present.",
+      "file_ref": null,
+      "category": "under-specification",
+      "raw_category": null,
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:176-201"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`_select_arch()` selects by OS, not by GPU detection, contradicting A7 and the plan",
+      "description": "The plan entry and A7 say \"if neither is detected it warns and falls back to `qd.cpu`\". The function returns `qd.cuda` for any Linux host and `qd.metal` for any Darwin host; the fallback fires only on other platforms.\n\n- **Consequence:** per line 382, a Linux host without a CUDA driver makes `qd.init()` raise and the server exit. Because `quadrants` is the default, every CUDA-less Linux box or CI runner fails to start on the default config.\n- **Fix:** either catch the specific init failure and retry on `qd.cpu` with the WARNING, or probe availability before selecting. Reword the log message, which currently claims \"No supported GPU detected\" on a path that never checks.\n- **Missing test:** A7 has no corresponding test in \u00a7Testing.\n- **Minor inconsistency:** line 252 says `arch` returns `\"cuda\"` or `\"metal\"`; line 224 includes `\"cpu\"`.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:98-117"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Tier 2 gate configuration is unspecified and the default may not meet it",
+      "description": "The NFR is correctly restated (\u226560 TPS at N=50k on CUDA, A6). The gate test does not state `subdivision_factor`, bounds policy or workload density.\n\n- **Default S=1:** the plan records 38 TPS at N=50k for slice 145, with the target reached only after slices 148 and 149 (149 used S=3). The design defaults to `subdivision_factor: 1`, so the default production config may miss the gate.\n- **Added transfers:** production adds per-tick velocity and profile-index downloads, plus a position upload on non-OPEN policies. Slice 145's design point was a single position download.\n- **Fix:** pin the gate's S, bounds policy and density, and either default S to the validated value or state that Tier 2 requires S=3.",
+      "file_ref": null,
+      "category": "nfr",
+      "raw_category": null,
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:318-320"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Production-to-bench dependency is only partly removed",
+      "description": "Moving `GpuAgentState` to `migratory.gpu` is the right direction. But `GpuSimulationDriver.step()` also calls `build_spatial_hash`, `fused_force_integrate_kernel` and `TickResult.from_quadrants_fields`, and `_select_arch()` is \"updated from the bench backend version\". The design does not say where these live.\n\n- **Kernels:** if they remain under `bench/backends/`, `migratory_server` still imports from the bench harness, which is the hidden dependency line 383 claims to eliminate. State their module, and move them to `migratory.gpu` if needed.\n- **`_select_arch()`:** say whether it is shared (which changes bench behaviour, contrary to the out-of-scope statement) or a production-only copy.\n- **Self-contradiction:** the table lists `quadrants_fused_backend.py` as changed, then line 301 says it is not.",
+      "file_ref": null,
+      "category": "dependency-direction",
+      "raw_category": null,
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:294-301"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Test plan and walkthrough contradict the design",
+      "description": "- **Line 307:** \"All tests are CPU-only\" is followed by \"skip if GPU not available\" and \"tests run on Metal/CUDA\". State which substrate CI uses; `qd.cpu` would let tests 5-8 run everywhere.\n- **Process isolation:** line 382 requires subprocess isolation because a second `qd.init()` is undefined, but tests 5-8 each call `setup()` with no isolation strategy.\n- **Coverage of A4:** it claims all four bounds policies; only WRAP has a test.\n- **Stale walkthrough:** \"CPU default (no GPU)\" (lines 358-362) says removing the `compute:` block yields the CPU path, but the default is `quadrants`. Step 5 at line 351 says \"Restore `backend: cpu`\" for the same reason.",
+      "file_ref": null,
+      "category": "testing",
+      "raw_category": null,
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:305-362"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Precision and Metal claims diverge from the slice plan's record",
+      "description": "The design says f32 GPU fields were \"established in slices 143\u2013145\". The plan's substrate notes say slice 145 uses f64 `_ti` kernels on CUDA and lists \"Metal not targeted\" for 145. A2's golden-path demo is on Metal, so confirm the fused kernel actually runs there and state the precision per arch. Otherwise A2 rests on an unverified substrate.",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:150"
+    },
+    {
+      "severity": "PASS",
+      "title": "Scope, boundaries and proportionality match the plan entry",
+      "description": "The config block, the `GpuSimulationDriver` owning lifecycle, the unchanged world-server call site and preserved `TickResult` contract (A3), and the host-side bounds choice over a GPU kernel all match the plan entry. Out-of-scope items align with plan 300 and Future Work. The mechanism count fits effort 3; nothing needs cutting.",
+      "file_ref": null,
+      "category": "alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:24-41"
+    },
+    {
+      "severity": "PASS",
+      "title": "Startup and fatal-GPU failure handling is explicit",
+      "description": "Invalid config fails at parse time before the port binds. `qd.init()` and allocation failures propagate and exit at startup. A mid-session GPU failure is declared process-fatal with restart as the recovery unit. `finalize()` is safe after a partial setup.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:382"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Bounds sync-back uploads positions only, so reflect/soft velocity changes never reach the GPU",
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:203-227",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "under-specification",
+      "raw_category": null,
+      "summary": "Spawn/despawn sync is under-specified and conflicts with the dirty-positions mechanism",
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:176-201",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "`_select_arch()` selects by OS, not by GPU detection, contradicting A7 and the plan",
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:98-117",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "nfr",
+      "raw_category": null,
+      "summary": "Tier 2 gate configuration is unspecified and the default may not meet it",
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:318-320",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "dependency-direction",
+      "raw_category": null,
+      "summary": "Production-to-bench dependency is only partly removed",
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:294-301",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "testing",
+      "raw_category": null,
+      "summary": "Test plan and walkthrough contradict the design",
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:305-362",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "note",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "Precision and Metal claims diverge from the slice plan's record",
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:150",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "pass",
+      "category": "alignment",
+      "raw_category": null,
+      "summary": "Scope, boundaries and proportionality match the plan entry",
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:24-41",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "pass",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "Startup and fatal-GPU failure handling is explicit",
+      "location": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md:382",
+      "location_verified": true
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/146-slice.production-engine-gpu-adoption.md",
+    "against": "project-documents/user/architecture/140-slices.simulation-scaling.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/migratory-146-slice"
+  },
+  "timestamp": "2026-11-16T09:16:19.958177",
+  "model": "claude-fable-5-2",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 2,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-fable-5-2",
+  "answering_models": [
+    "claude-fable-5-2"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 9,
+    "in_fences": 0,
+    "in_section": 9,
+    "surviving": 9
+  },
+  "effort": "medium",
+  "profile": "sdk",
+  "turns": 3,
+  "prompt_tokens": 115684,
+  "cached_tokens": 14268,
+  "cache_write_tokens": 101412,
+  "completion_tokens": 6404,
+  "reasoning_tokens": null,
+  "duration_seconds": 66.73962258314714,
+  "cost_usd": 1.8822174,
+  "cost_basis": "provider"
+}

@@ -1,0 +1,261 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "PASS",
+      "title": "Success-criteria coverage is complete",
+      "description": "Each criterion maps to a task:\n- **Body citing the design, task items and review:** Tasks 7, 8, 9 and 11.\n- **Ancestor review excluded:** 8.2, which has the load-bearing case.\n- **Integration-branch refuse/use:** 5.1 and 5.2.\n- **Missing push / sha behind:** Task 6.\n- **Presence check with zero writes:** 12.2 and 13.2.\n- **Title rules:** 10a.\n- **Dry-run equality:** 13.2.\n- **Identity refusal:** 13.2.\n- **Live creation:** 16.2.\n- **Timeouts at all five call sites:** Task 14.\n- **Import boundary:** 15.1.\n- **Parser tested on a real task file:** 2.2.\n- **`summary_oneshot` docstring plus its test:** 15.2.\n- **Lint and pyright gate:** 16.1.\n\nNo task falls outside the slice's scope.",
+      "file_ref": null,
+      "category": "traceability",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md"
+    },
+    {
+      "severity": "PASS",
+      "title": "Sequencing, dependencies and test-with pattern",
+      "description": "The order matches the LLD's \"Implementation Notes \u2192 Order\":\n- The two parsers come first. The git helpers come before input gathering, which needs them.\n- Task 10 (composer) comes before 10a (title), which reuses it.\n- The command (13) comes after all its parts, and the failure matrix (14) after the command.\n\nThere are no circular dependencies, and each implementation subtask is followed directly by its test subtask. The file has no `**Commit**:` markers, which is acceptable. The slice restates no NFR, so no load test or CI-gating task is needed.",
+      "file_ref": null,
+      "category": "sequencing",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Provider-failure criterion is asserted where \"creates nothing\" can't be observed",
+      "description": "**The criterion.** The technical success criterion reads: \"A provider failure during composition exits non-zero, logs at ERROR, and creates nothing.\"\n\n**Where it is tested.** Task 10.2 tests this in `tests/pr/test_body.py` against a fake provider. That file has no fake process runner, so there is no host write to count. \"Exits non-zero\" and \"creates nothing\" are things the command does, not the composer. Neither 13.2 nor the Task 14 matrix includes a provider failure.\n\n**Where the exit is raised.** Task 10.1 also says the exception \"become[s] a non-zero exit\" inside `pr/body.py`. That reads as `pr/` raising `typer.Exit`, which goes against D6: the command owns exit codes, and `pr/` holds the logic.\n\n**Fix:**\n- In 10.1, the composer logs with `logger.exception` and raises a named composition error.\n- 10.2 asserts that error and the ERROR log.\n- Add a case to 13.2 or 14 where the faked composer raises. It asserts exit 1 and zero `open_pull_request` calls on the fake runner.",
+      "file_ref": null,
+      "category": "testing",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:221-227"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Task 13.2 misses several assertions the success criteria require",
+      "description": "These command-level criteria have no matching assertion:\n- **Title in dry-run equality.** The criterion covers \"`--dry-run` title and body\", but 13.2 checks only the body.\n- **How equality is checked.** The LLD's Testing section says the test checks that the bound object is passed to both paths, \"rather than comparing two separately composed strings\". 13.2's wording, \"equals the body the next real run sends\", invites exactly the two-run comparison the design rules out.\n- **Unplanned repository, end to end.** \"Creation succeeds\" is never asserted at the command level. 11.2 tests only the body, and 16.2 step 4 is only a dry run.\n- **Printed base source.** \"The printed source says so\" (integration branch) is not asserted. 5.2 checks the returned `BaseSelection`, not the stderr output.\n- **Identity refusal reason.** The criterion says the refusal \"names the reason\". 13.2 asserts only exit 1 and no write.\n\nAdd these to 13.2's case list.",
+      "file_ref": null,
+      "category": "testing",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:308-311"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Success criterion contradicts D2 on the push command; the task correctly follows D2",
+      "description": "The success criterion says a sha mismatch fails \"with the same command\". D2 names two different commands: `git push -u` when the branch is missing, and `git push` when it is behind. Task 6.2 asserts \"the two refusals name different commands\", which matches D2. Fix the criterion wording when 16.3 rewrites the LLD, so the code review doesn't flag it as a mismatch.",
+      "file_ref": null,
+      "category": "traceability",
+      "raw_category": null,
+      "location": "project-documents/user/slices/385-slice.create-a-pr-with-a-good-message.md:545-546"
+    },
+    {
+      "severity": "NOTE",
+      "title": "No task produces `local_sha`",
+      "description": "`check_head_pushed` takes `local_sha` (6.1), but Task 3 adds only `current_branch` and `commits_in_range`. The only existing helper is the private `_resolve_rev`. A junior implementer may call that private function or write a one-off `rev-parse` in the command. Either add a public `head_sha(cwd)` to 3.1, or say in 13.1 where the value comes from.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "src/squadron/review/git_utils.py:339"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`GIT_QUERY_TIMEOUT_SECONDS` is defined twice",
+      "description": "The constant is defined in both `codehost/refs.py:28` and `codehost/remotes.py:29`. Tasks 6.1 and 14.1 say to use \"the constant codehost/refs.py and codehost/remotes.py use\" but don't say which one to import. Name one, so the test in 6.2/14.1 checks the same object the implementation uses.",
+      "file_ref": null,
+      "category": "clarity",
+      "raw_category": null,
+      "location": "src/squadron/codehost/refs.py:28"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Wrong cross-references in Tasks 1 and 2",
+      "description": "Task 1 says it is \"needed by Task 9\", and Task 2 (line 55) says \"Needed by Tasks 9 and 10\". Both parsers are actually used by Task 7 (input gathering), and Task 9 only copies their output. Fix the references so nobody reads Task 9 as their caller.",
+      "file_ref": null,
+      "category": "clarity",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:37"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Task 5.1's \"do not degrade\" heading reads as self-contradictory",
+      "description": "The bullet's heading says not to degrade an unreachable `cf` to a default base. The next sentence says that when `cf` is unavailable, the chain proceeds to the host default. The intent, per D1, is two things: don't hard-code `main` the way `resolve_diff_base` does, and treat an unreachable `cf` as \"key unset\". Reword the heading to say that, so a junior implementer doesn't add a refusal for an unreachable `cf`.",
+      "file_ref": null,
+      "category": "clarity",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:122"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Merge listed as a task item",
+      "description": "The worktree's CLAUDE.md allows merging the slice branch when it is done. The squadron root CLAUDE.md says never to write a merge as a task item; merging is a Phase 7 action after code review. The item does put the merge after code review and targets `squadron-pr`, not `main`, so it is safe either way. Pick one convention for this file.",
+      "file_ref": null,
+      "category": "process",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:373"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Task 4.2 partly repeats 4.1",
+      "description": "4.2's second bullet (\"existing `sq pr show` tests still pass\") is the same check as 4.1's success line. Keep only the `resolve_locator` per-target-form assertion in 4.2, or merge the two subtasks. Otherwise the task count and detail fit a slice that adds a seven-module package, a command and a host write.",
+      "file_ref": null,
+      "category": "proportionality",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:102-105"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "pass",
+      "category": "traceability",
+      "raw_category": null,
+      "summary": "Success-criteria coverage is complete",
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "pass",
+      "category": "sequencing",
+      "raw_category": null,
+      "summary": "Sequencing, dependencies and test-with pattern",
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "testing",
+      "raw_category": null,
+      "summary": "Provider-failure criterion is asserted where \"creates nothing\" can't be observed",
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:221-227",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "testing",
+      "raw_category": null,
+      "summary": "Task 13.2 misses several assertions the success criteria require",
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:308-311",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "traceability",
+      "raw_category": null,
+      "summary": "Success criterion contradicts D2 on the push command; the task correctly follows D2",
+      "location": "project-documents/user/slices/385-slice.create-a-pr-with-a-good-message.md:545-546",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "No task produces `local_sha`",
+      "location": "src/squadron/review/git_utils.py:339",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "note",
+      "category": "clarity",
+      "raw_category": null,
+      "summary": "`GIT_QUERY_TIMEOUT_SECONDS` is defined twice",
+      "location": "src/squadron/codehost/refs.py:28",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "note",
+      "category": "clarity",
+      "raw_category": null,
+      "summary": "Wrong cross-references in Tasks 1 and 2",
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:37",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "note",
+      "category": "clarity",
+      "raw_category": null,
+      "summary": "Task 5.1's \"do not degrade\" heading reads as self-contradictory",
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:122",
+      "location_verified": true
+    },
+    {
+      "id": "F010",
+      "severity": "note",
+      "category": "process",
+      "raw_category": null,
+      "summary": "Merge listed as a task item",
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:373",
+      "location_verified": true
+    },
+    {
+      "id": "F011",
+      "severity": "note",
+      "category": "proportionality",
+      "raw_category": null,
+      "summary": "Task 4.2 partly repeats 4.1",
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:102-105",
+      "location_verified": true
+    }
+  ],
+  "template_name": "tasks",
+  "input_files": {
+    "input": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md",
+    "against": "project-documents/user/slices/385-slice.create-a-pr-with-a-good-message.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/squadron-385-tasks"
+  },
+  "timestamp": "2026-11-16T10:07:53.108598",
+  "model": "claude-opus-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 5,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-opus-5-5",
+  "answering_models": [
+    "claude-opus-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 11,
+    "in_fences": 0,
+    "in_section": 11,
+    "surviving": 11
+  },
+  "effort": "high",
+  "profile": "sdk",
+  "turns": 6,
+  "prompt_tokens": 466232,
+  "cached_tokens": 370812,
+  "cache_write_tokens": 95408,
+  "completion_tokens": 8282,
+  "reasoning_tokens": null,
+  "duration_seconds": 87.08427362516522,
+  "cost_usd": 1.0037553000000001,
+  "cost_basis": "provider"
+}

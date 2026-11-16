@@ -1,0 +1,261 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "`ensureCheckout()` routed through `detect()` adds an unbounded network call to every read command",
+      "description": "Task 17 tells the implementer to take checkout state from `detector.detect()` and not call `checkSyncStatus()` directly. `detect()` always runs `fetchLatestVersion()`, a `git ls-remote --tags` against the guide source (called at lines 82 and 89), and `gitExec` has no timeout.\n\n- **Effect:** once Tasks 20 and 22 wire `ensureCheckout()` in, every `cf build`, `cf prompt`, `context_build` and `prompt_*` call makes a remote round trip, including the in-sync, tarball and not-installed cases. `build.ts` and `contextTools.ts` do not call `detect()` today.\n- **Requirement unmet:** the slice's \"Hang and timeout class\" paragraph says a blackholed connection \"is not tolerable inside `cf build` or an MCP tool call\". D10 bounds only the `init()` fetch, so this hang is reintroduced one call earlier.\n- **Not caught by tests:** Tasks 12, 18, 21 and 23 use local fixtures. They would also reach the default GitHub source from the test suite unless the fixture's bare repo is passed as `source`, which Task 9 does not say.\n- **Fix:** have Task 17 use a detection path that skips the remote lookup (method detection plus `checkSyncStatus(operationPath)`, as the design's data-flow diagram shows, or a `detect()` option). Add an assertion in Task 18 that no `ls-remote` runs, and have Task 9 state the `source` the fixtures pass.",
+      "file_ref": null,
+      "category": "design-conformance",
+      "raw_category": null,
+      "location": "packages/core/src/guides/GuideDetector.ts:164-175"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Task 13 relies on a `/timed out/i` pattern that does not exist",
+      "description": "Task 13 says the timeout message will get remediation text because \"the `/timed out/i` pattern already matches\". `NETWORK_ERROR_PATTERNS` contains `/connection timed out/i` and `/etimedout/i` only. A message such as \"git \u2026 timed out after 60 seconds\" matches neither, so `withNetworkErrorHint` returns it unchanged and Task 14's assertion on `GUIDE_OFFLINE_REMEDIATION` fails. Task 13 needs an explicit step to add a pattern; its \"existing tests pass unchanged\" criterion still holds.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/core/src/guides/gitExec.ts:20-30"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Timeout ownership between Task 15 and Task 17 is contradictory and untested",
+      "description": "Task 15 first gives `init(operationPath)` a built-in `GUIDE_INIT_TIMEOUT_MS`, then says the timeout is an `init()` option so `sync()` stays unbounded. Task 17 calls `SubmoduleStrategy.init(operationPath)` with no option. Read literally, the auto-init path can end up unbounded, which is the opposite of D10. Neither Task 16 nor Task 18 asserts that the auto-init call passes a timeout or that `sync()` does not. State the signature once and add one assertion for each side.",
+      "file_ref": null,
+      "category": "task-clarity",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/925-tasks.guide-install-robustness.md:227-263"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Task 11 makes `detect()` throw, with no test and no account of existing callers",
+      "description": "The design puts the `'error'` \u2192 throw branch in `ensureCheckout()`; Task 11 moves it into `detect()`.\n\n- **Wider blast radius:** `detect()` is also called by `install()`, `update()`, `uninstall()`, `syncWorktrees()`, `status()` and `setup-ide.ts:106`. A submodule install where `git submodule status` fails would now break `cf guides info` and uninstall, not just read commands.\n- **Existing tests:** the task file itself notes `GuideDetector.test.ts` mocks the filesystem. Its submodule cases will hit the new git call, and Task 11 has no step to update them.\n- **Untested branch:** neither Task 12 nor Task 18 covers the error path, so the criterion \"`ensureCheckout()` for each branch of the state machine\" is one branch short.\n\nKeep the throw in `ensureCheckout()`, or add the error test and the existing-test update to Tasks 11\u201312.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "packages/core/src/guides/GuideDetector.ts:149-162"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Omitted `--strategy` path and config-sourced alias warning are under-specified",
+      "description": "- **Omitted flag:** Task 26 says to pass `normalizeGuideMethod(opts.strategy)` into `guidesInstallAction`, and Task 7 says the same for `cf guides install`. With no flag, `opts.strategy` is undefined and Task 1 defines the function to throw on anything non-canonical. Both tasks should say to normalize only when the flag is present and otherwise fall through to `resolveStrategy()`. Task 27 has no no-flag case.\n- **Config alias warning:** the criterion \"shared config has `guide.git_strategy: manual` installs as tarball with the same warning\" is tested only at core level in Task 6(b). Task 8 has no CLI test that the stderr line appears for the config path. Task 7 does not say whether MCP `guide_install` adds a notice for a config-sourced alias, which D5 requires at that boundary.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/925-tasks.guide-install-robustness.md:130-154"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "MCP zod enum re-spells `manual`, contradicting the technical criterion and Task 32's own grep",
+      "description": "Task 7 hard-codes `['submodule', 'clone', 'tarball', 'manual']` in the `guide_install` schema and accepts \"the MCP enum entry\" in its grep. The slice's technical criterion, and Task 32's final check, is \"no `'manual'` literal outside the alias table and enum\" (the `ConfigKeys` enum). Build the zod enum from the core exports (`GuideMethod` values plus `GUIDE_METHOD_DEPRECATED_ALIASES` keys). Likewise have a single core helper produce the deprecation text, since Tasks 7 and 26 currently format it at three sites.",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "packages/mcp-server/src/tools/guideTools.ts:100-103"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Commit instructions sit inside checkboxes; Task 32 carries a PM gate and merge reference",
+      "description": "- **Commit markers:** commit points are well placed, each after a tested implementation/test pair, but they are written as trailing text inside \"Success criteria\" checkbox items. They should be plain `**Commit**:` lines outside the checkboxes.\n- **Task 32:** its success criteria include \"PM reviews before merge to `main`\" and a version-bump remark. A wait-on-PM step and a merge reference do not belong in task success criteria; remove both and end the task at the final commit.",
+      "file_ref": null,
+      "category": "process-format",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/925-tasks.guide-install-robustness.md:425-426"
+    },
+    {
+      "severity": "NOTE",
+      "title": "A few tasks could be merged",
+      "description": "Thirty-two tasks is heavy but defensible for three issues across three packages. Task 10 cannot be verified on its own (its criterion is \"typecheck passes once Task 11 populates the field\"), so fold it into Task 11. Tasks 28 and 29 are small enough to be one task. Not blocking.",
+      "file_ref": null,
+      "category": "proportionality",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/925-tasks.guide-install-robustness.md:176-195"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Call-site enumeration checked against source",
+      "description": "- **MCP:** Task 22 names two sites without the grep D3 asks for, but `contextTools.ts:57` and `:98` are the only hits in `packages/mcp-server/src`, and line 98 serves both `prompt_list` and `prompt_get`. Task 23 tests only `context_build`.\n- **CLI:** Task 20's grep will also surface `phaseShorthand.ts:22`, which reads the prompt file and is not in the task's explicit list. The \"cover every hit\" instruction handles it; naming it would remove the guesswork.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "packages/cli/src/utils/phaseShorthand.ts:22"
+    },
+    {
+      "severity": "PASS",
+      "title": "Success-criteria coverage and sequencing",
+      "description": "- **Coverage:** all ten functional criteria, the technical criteria and the verification walkthrough trace to tasks. I found no scope creep; the `gitExec` timeout tasks trace to D10.\n- **Sequencing:** the order follows the design's suggested order, dependencies are respected, and each implementation task is followed directly by its test task.\n- **Config failure path:** `ConfigManager`'s `readToml` rethrows parse errors, so removing the catches in Task 5 does deliver the malformed-config criterion.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/925-tasks.guide-install-robustness.md"
+    },
+    {
+      "severity": "PASS",
+      "title": "No NFR, so no load test or CI gating task required",
+      "description": "The slice restates no NFR (review note F006, \"no action\"), so the absence of a `tests/load/` task and CI wiring is correct.",
+      "file_ref": null,
+      "category": "nfr",
+      "raw_category": null,
+      "location": "project-documents/user/slices/925-slice.guide-install-robustness.md:247"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "design-conformance",
+      "raw_category": null,
+      "summary": "`ensureCheckout()` routed through `detect()` adds an unbounded network call to every read command",
+      "location": "packages/core/src/guides/GuideDetector.ts:164-175",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Task 13 relies on a `/timed out/i` pattern that does not exist",
+      "location": "packages/core/src/guides/gitExec.ts:20-30",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "task-clarity",
+      "raw_category": null,
+      "summary": "Timeout ownership between Task 15 and Task 17 is contradictory and untested",
+      "location": "project-documents/user/tasks/925-tasks.guide-install-robustness.md:227-263",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "Task 11 makes `detect()` throw, with no test and no account of existing callers",
+      "location": "packages/core/src/guides/GuideDetector.ts:149-162",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "Omitted `--strategy` path and config-sourced alias warning are under-specified",
+      "location": "project-documents/user/tasks/925-tasks.guide-install-robustness.md:130-154",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "MCP zod enum re-spells `manual`, contradicting the technical criterion and Task 32's own grep",
+      "location": "packages/mcp-server/src/tools/guideTools.ts:100-103",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "concern",
+      "category": "process-format",
+      "raw_category": null,
+      "summary": "Commit instructions sit inside checkboxes; Task 32 carries a PM gate and merge reference",
+      "location": "project-documents/user/tasks/925-tasks.guide-install-robustness.md:425-426",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "note",
+      "category": "proportionality",
+      "raw_category": null,
+      "summary": "A few tasks could be merged",
+      "location": "project-documents/user/tasks/925-tasks.guide-install-robustness.md:176-195",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "note",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "Call-site enumeration checked against source",
+      "location": "packages/cli/src/utils/phaseShorthand.ts:22",
+      "location_verified": true
+    },
+    {
+      "id": "F010",
+      "severity": "pass",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "Success-criteria coverage and sequencing",
+      "location": "project-documents/user/tasks/925-tasks.guide-install-robustness.md",
+      "location_verified": null
+    },
+    {
+      "id": "F011",
+      "severity": "pass",
+      "category": "nfr",
+      "raw_category": null,
+      "summary": "No NFR, so no load test or CI gating task required",
+      "location": "project-documents/user/slices/925-slice.guide-install-robustness.md:247",
+      "location_verified": true
+    }
+  ],
+  "template_name": "tasks",
+  "input_files": {
+    "input": "project-documents/user/tasks/925-tasks.guide-install-robustness.md",
+    "against": "project-documents/user/slices/925-slice.guide-install-robustness.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/context-forge-925-tasks"
+  },
+  "timestamp": "2026-11-16T09:15:13.259711",
+  "model": "claude-fable-5-2",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 9,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-fable-5-2",
+  "answering_models": [
+    "claude-fable-5-2"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 11,
+    "in_fences": 0,
+    "in_section": 11,
+    "surviving": 11
+  },
+  "effort": "medium",
+  "profile": "sdk",
+  "turns": 10,
+  "prompt_tokens": 363855,
+  "cached_tokens": 231308,
+  "cache_write_tokens": 132537,
+  "completion_tokens": 12515,
+  "reasoning_tokens": null,
+  "duration_seconds": 124.71493891719729,
+  "cost_usd": 2.6681273,
+  "cost_basis": "provider"
+}

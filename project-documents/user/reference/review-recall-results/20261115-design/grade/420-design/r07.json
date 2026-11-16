@@ -1,0 +1,33 @@
+{
+ "review": "r07",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "The D6 identity rule is private, but 421\u2013427 are expected to group by it with no extra work",
+   "description": "- D6 puts the identity rule in \"a private `config_identity` in `replay/report.py`\" (line 146). The key is `(model, profile, effort_sent, tool_use, max_output_tokens)`.\n- Line 162 says \"this slice ships no shared identity type\", so later slices \"apply the rule to their own record types\".\n- The Integration Requirement (line 186) promises that \"421\u2013427 can read a config's effort from `action_effort_sent` and group by the D6 rule, with no further effort work.\"\n\nThese cannot both hold. Every consuming slice would have to rebuild the five-field key, including the non-obvious `tool_use` and `max_output_tokens`, and copy those two fields onto its own config record. The slice plan entry says this slice \"Provides effort-sent ... in config identity. All later slices read it\", which means a reusable contract. The project's DRY rule says the same.\n\nThe lightest fix is to make the key a small public function over a `ProducerConfigRef`-shaped input, for example in `metrology/replay_models.py`, and have `replay/report.py` call it. If shared code is not wanted, the slice should drop the \"no further effort work\" claim. It should then say plainly that 424 and 425 must carry `tool_use` and `max_output_tokens` and rebuild the key themselves.",
+   "location": "project-documents/user/slices/420-slice.effort-audit-across-dispatch-paths.md:160-162"
+  },
+  {
+   "i": 1,
+   "severity": "NOTE",
+   "title": "Narrowing the architecture's identity rule is justified, but the architecture document still says the old thing",
+   "description": "- The narrowing itself is sound. The architecture's goal at `420-arch.model-benchmark.md:40` says \"config (alias, model, profile, effort sent)\". D6 removes the alias from that key.\n- The architecture supports this elsewhere. Line 99 says two rows only \"when the effort really differed on the wire\", and the slice plan's success criterion requires merging same-effort aliases.\n- Adding `tool_use` and `max_output_tokens` is a necessary consequence, not scope creep. Without them, removing the alias would merge configs that send different requests.\n\nWhat is missing: the slice says it \"supersedes\" the architecture (line 162) but never says to update the architecture document. Designers of 424 and 425 will read the old rule there. This needs a one-line edit to the architecture's Design Goals, not a design change.",
+   "location": "project-documents/user/slices/420-slice.effort-audit-across-dispatch-paths.md:142-147"
+  },
+  {
+   "i": 2,
+   "severity": "NOTE",
+   "title": "The \"Components changed\" list leaves out the `sq review resolve` entry point",
+   "description": "D3 (line 127) says `review/resolution.py` (`sq review resolve`) \"resolves the same way\". It also says `judge_residue_core` gains an `effort` parameter. A functional requirement (line 174) covers both entry points. But the Components changed list names only `pipeline/actions/findings_addressed/judge.py`. The task breakdown is usually built from that list, so `review/resolution.py` should be added to it.",
+   "location": "project-documents/user/slices/420-slice.effort-audit-across-dispatch-paths.md:82-91"
+  },
+  {
+   "i": 3,
+   "severity": "NOTE",
+   "title": "The findings-addressed judge's effort goes up while its spend is still not recorded",
+   "description": "D3 makes path 7 send the alias's effort. That can raise the judge's cost, and its spend is still missing from `pipeline.max_cost_usd` (947). The design states this, mentions it in the CHANGELOG (line 183), and files the missing usage record as a 175 issue. That is a proportionate choice. The architecture's producer-only replay strips the embedded review, so this path should not run inside benchmark runs, and the benchmark's spend-cap goal is not affected. The issue should still be filed while this slice is being built, not left for later.",
+   "location": "project-documents/user/slices/420-slice.effort-audit-across-dispatch-paths.md:231-232"
+  }
+ ]
+}

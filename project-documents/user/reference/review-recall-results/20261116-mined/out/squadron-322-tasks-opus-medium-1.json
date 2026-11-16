@@ -1,0 +1,297 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "Residual-offer selection relies on a result-discovery surface that does not exist, and its fallback cannot meet the non-empty-offers criterion",
+      "description": "T13 tells the implementer to \"reuse 320's existing result-discovery surface\". If there isn't one, it says to \"scope this task to the store-recorded samples only and note the gap\". No such surface exists in `src/squadron/metrology/`. The only review-file lookup is `capture.resolve_target` (`src/squadron/metrology/capture.py:95`), which globs `{index}-review.*` for a single index. It cannot list every judge result for a `JudgeConfigId`. Store-recorded samples are by definition already sampled, so the fallback always returns zero offers. That breaks the slice success criterion \"a graduated config with unsampled results yields a non-empty offer set\" and T14's non-empty test. Lapse detection also needs the current judge results, so it breaks too. The gap can be checked now, so settle it in planning rather than mid-task. Have T13 specify the scan: glob the reviews dir, call `derive_judge_config_id` on each file, drop files already referenced by a `SampleVerdict.result_ref`, and match on the exact `JudgeConfigId`. Name `resolve_store_dir`/the reviews dir as the root, and remove the fallback.",
+      "file_ref": null,
+      "category": "dependencies",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:201"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Direction-band precedence in T7 contradicts itself",
+      "description": "The numbered list puts `n < floor \u2192 INSUFFICIENT_EVIDENCE` first and `TIGHTEN` fourth. The bullets right after it say TIGHTEN must be reachable when `n < floor`. If a junior implementer follows the numbered order, they ship exactly the bug T8 tests for. Rewrite the list in its real order: (1) `match_rate <= tighten_rate` \u2192 TIGHTEN, (2) `n < floor` \u2192 INSUFFICIENT_EVIDENCE, (3) unversioned \u2192 INSUFFICIENT_EVIDENCE, (4) `match_rate >= graduate_rate` \u2192 GRADUATE, (5) HOLD. Also say whether an unversioned cell with a low match rate returns TIGHTEN. Neither the design table nor the task decides this, and T8 should pin it down.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:115-121"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Malformed `judge:` block failure mode is neither implemented nor tested",
+      "description": "The design's Failure Modes table wants a malformed judge block (non-numeric floor) to be \"flagged, not silently defaulted\", with a WARNING that names the template. `resolve_thresholds` (`src/squadron/pipeline/actions/judge.py:54-57`) calls `float(...)` on the raw value, so a non-numeric floor raises `ValueError`. It does not fall back. T7 only handles the unregistered-template case, yet its success line says \"never raises\". The Coverage Check says the malformed case is \"exercised in T8\", but T8 has no such test. Add a narrow `except ValueError` to T7 that logs a WARNING and marks the target unresolvable or flagged, and add the matching case to T8.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:122-123"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The runtime-drawn-model limitation and its `--json` presence are not covered",
+      "description": "Success criterion 4 requires the runtime-drawn-model limitation (180 pool: the threshold cannot track the drawn model) to be \"stated where the recommendation is produced (asserted: the note is present in output, including `--json`)\". T9's `model_dimension_note` only covers the \"template paired with this model / choose together\" text and leaves out the pool limitation. T16 checks that `--json` parses back to the model, but not that the note is non-empty in the JSON. Add the limitation text to T9's note content, and add a T16 assertion that every `cells[*].target.model_dimension_note` in the `--json` output is non-empty.",
+      "file_ref": null,
+      "category": "coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:147"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`GraduatedConfig` placement creates a circular import with `models.py`",
+      "description": "T3 puts `GraduatedConfig` in `calibration_models.py`, and it imports `JudgeConfigId` from `models.py` (`src/squadron/metrology/models.py:67`). T11 then adds `graduated_config: GraduatedConfig | None` to `MetrologyRecord` in `models.py`, so `models.py` must import from `calibration_models.py`. That is a cycle, and in Pydantic it won't survive a plain `TYPE_CHECKING` guard without `model_rebuild`. Decide where the type lives now. The simplest option is to define `GraduatedConfig` (and the `EvidenceSnapshot` it embeds) in `models.py` and re-export it from `calibration_models.py`.",
+      "file_ref": null,
+      "category": "architecture",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:174-175"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Graduate idempotence depends on an update path T11 does not provide",
+      "description": "T15 requires re-graduating to \"update its evidence snapshot in place (one record, not two)\". T11's `write_graduation` returns \"a generated record id\", and the store names files by id (`store.py:100-101`). A second write therefore produces a second file. T11 offers no update or overwrite operation, and `find_graduation` returns a `GraduatedConfig` without its record id. Either derive the record id deterministically from `(JudgeConfigId, artifact_level)` so an atomic overwrite gives idempotence, or have `find_graduation` return the id along with the config. Specify this in T11 so T15 and T16 aren't left to work it out.",
+      "file_ref": null,
+      "category": "sequencing",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:176"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Pruned-review-file handling is tested in T14 but not specified in T13",
+      "description": "The failure-mode row \"referenced review file gone since graduation \u2192 skip, count, WARNING naming the path\" appears only as a T14 test bullet. T13's implementation steps and success criteria never mention it, and the return type `list[OfferTarget]` has nowhere to put a count. The lapse signal has the same problem: T13 leaves open how the lapse is reported (\"return enough information (or have the CLI re-derive it \u2026)\"). Choose one return shape now, for example a small `OfferSelection` with `offers`, `lapsed`, `exhausted` and `pruned_count`. T14 and T15 can then assert against a concrete contract.",
+      "file_ref": null,
+      "category": "coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:198-206"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Commit markers after every task, including untested implementation",
+      "description": "All 17 tasks end with a `**Commit:**` marker. Implementation tasks (T1, T3, T5, T7, T9, T11, T13, T15) commit before their tests exist, so commits don't land at tested points. The impl/test split also doubles the task count for an effort-3/5 slice. Merge each implementation task with its test task (T1+T2, T3+T4, \u2026, T15+T16), keeping one commit per merged pair. That gives 8 tested commits plus T17.",
+      "file_ref": null,
+      "category": "process",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:39"
+    },
+    {
+      "severity": "NOTE",
+      "title": "CLI \"no evidence\" and \"no offers due\" lines are only partly specified",
+      "description": "The design wants `recommend` on an empty store to print a \"no evidence\" line that still states `floor_applied`, and `offers` to print an explanatory line when an exhausted config has nothing due. T15 only specifies the lapsed-graduation line. Add both lines to T15 and add one assertion each to T16.",
+      "file_ref": null,
+      "category": "coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:229-231"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Config-key defaults and rate consistency are unspecified",
+      "description": "T5 and T6 say \"with defaults\" but give no values, and the design doesn't either. A junior implementer would have to make them up. Also nothing checks that `tighten_match_rate < graduate_match_rate` or that the rates fall in [0, 1]. Without that check the bands can overlap silently. State the defaults, and consider one fail-fast check where the keys are read.",
+      "file_ref": null,
+      "category": "config",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:90-95"
+    },
+    {
+      "severity": "NOTE",
+      "title": "T2 fixtures assume `_template_content_hash` takes a template object",
+      "description": "`_template_content_hash(template_name: str)` (`identity.py:298`) looks templates up through `get_template`, so it cannot be called on `ReviewTemplate` fixtures directly. Tell the implementer to patch `squadron.review.templates.get_template`, or register fixture templates, so the hash tests don't stall on this.",
+      "file_ref": null,
+      "category": "testability",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:46-47"
+    },
+    {
+      "severity": "PASS",
+      "title": "Hash narrowing sequenced first with both-direction regression coverage",
+      "description": "T1 and T2 target the right function (`identity.py:298-323`) and leave `derive_result_ref` untouched. The regression is tested through `derive_judge_config_id` in both directions, which matches the design's suggested order and success criterion 7.",
+      "file_ref": null,
+      "category": "sequencing",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:31-52"
+    },
+    {
+      "severity": "PASS",
+      "title": "Version-scoped graduation, no-mutation discipline and graduate refusal are covered",
+      "description": "`GraduatedConfig` carries the full `JudgeConfigId`, and T12 tests matching on differing hashes. No-mutation byte snapshots appear at both the unit layer (T10) and the CLI layer (T16). The graduate refusal and the record-count check are in T16. The Typer-free core test is present. No NFR is restated, so no load-test or CI-gate task is needed.",
+      "file_ref": null,
+      "category": "coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:157-252"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "dependencies",
+      "raw_category": null,
+      "summary": "Residual-offer selection relies on a result-discovery surface that does not exist, and its fallback cannot meet the non-empty-offers criterion",
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:201",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Direction-band precedence in T7 contradicts itself",
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:115-121",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "Malformed `judge:` block failure mode is neither implemented nor tested",
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:122-123",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "coverage",
+      "raw_category": null,
+      "summary": "The runtime-drawn-model limitation and its `--json` presence are not covered",
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:147",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "architecture",
+      "raw_category": null,
+      "summary": "`GraduatedConfig` placement creates a circular import with `models.py`",
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:174-175",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "sequencing",
+      "raw_category": null,
+      "summary": "Graduate idempotence depends on an update path T11 does not provide",
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:176",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "concern",
+      "category": "coverage",
+      "raw_category": null,
+      "summary": "Pruned-review-file handling is tested in T14 but not specified in T13",
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:198-206",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "concern",
+      "category": "process",
+      "raw_category": null,
+      "summary": "Commit markers after every task, including untested implementation",
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:39",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "note",
+      "category": "coverage",
+      "raw_category": null,
+      "summary": "CLI \"no evidence\" and \"no offers due\" lines are only partly specified",
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:229-231",
+      "location_verified": true
+    },
+    {
+      "id": "F010",
+      "severity": "note",
+      "category": "config",
+      "raw_category": null,
+      "summary": "Config-key defaults and rate consistency are unspecified",
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:90-95",
+      "location_verified": true
+    },
+    {
+      "id": "F011",
+      "severity": "note",
+      "category": "testability",
+      "raw_category": null,
+      "summary": "T2 fixtures assume `_template_content_hash` takes a template object",
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:46-47",
+      "location_verified": true
+    },
+    {
+      "id": "F012",
+      "severity": "pass",
+      "category": "sequencing",
+      "raw_category": null,
+      "summary": "Hash narrowing sequenced first with both-direction regression coverage",
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:31-52",
+      "location_verified": true
+    },
+    {
+      "id": "F013",
+      "severity": "pass",
+      "category": "coverage",
+      "raw_category": null,
+      "summary": "Version-scoped graduation, no-mutation discipline and graduate refusal are covered",
+      "location": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md:157-252",
+      "location_verified": true
+    }
+  ],
+  "template_name": "tasks",
+  "input_files": {
+    "input": "project-documents/user/tasks/322-tasks.calibration-to-threshold-feedback.md",
+    "against": "project-documents/user/slices/322-slice.calibration-to-threshold-feedback.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/squadron-322-tasks"
+  },
+  "timestamp": "2026-11-16T09:20:30.608632",
+  "model": "claude-opus-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 8,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-opus-5-5",
+  "answering_models": [
+    "claude-opus-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 13,
+    "in_fences": 0,
+    "in_section": 13,
+    "surviving": 13
+  },
+  "effort": "medium",
+  "profile": "sdk",
+  "turns": 9,
+  "prompt_tokens": 470773,
+  "cached_tokens": 356974,
+  "cache_write_tokens": 113787,
+  "completion_tokens": 7855,
+  "reasoning_tokens": null,
+  "duration_seconds": 83.18887012498453,
+  "cost_usd": 1.1393012000000002,
+  "cost_basis": "provider"
+}

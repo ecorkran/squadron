@@ -1,0 +1,47 @@
+{
+ "review": "r05",
+ "findings": [
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Resume re-runs the paused round, which contradicts D1's \"next round\" rationale",
+   "description": "D1 rationale 2 says a human choosing `Continue` means \"the next round, not the next step\". D3 and the Success Criteria resume at the *recorded* iteration, so a loop paused at round 2 restarts at round 2. D3 also says \"everything inside a round is untouched\", so round 2's dispatch and review run again. That has two consequences the slice never addresses:\n- The `on-concerns` checkpoint that caused the pause can fire again on the re-run. The human's resolution is discarded, and the run can pause repeatedly on the same round.\n- Round N's work is repeated, and the `max:` accounting is unclear. Does the re-run of round N count against the budget, or is it the same round?\n\nDecide and state which of these the slice intends: (a) re-run round N deliberately, with the checkpoint-refire behavior documented and tested, or (b) resume at N+1 after a `Continue` resolution. Align the D1 rationale, the `max:` paragraph and the Success Criteria with that choice. The slice delivers a resume contract, so this has to be settled in the design.",
+   "location": "project-documents/user/slices/915-slice.loop-checkpoint-pause-resume-correctness.md#D1 / D3 / Success Criteria"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Failure modes of the new resume-coordinate read are not enumerated",
+   "description": "`resume_iteration_for` and `start_iteration` are new inputs read from persisted state. The slice doesn't say what happens in these cases:\n- The recorded `iteration` is 0 or missing for a paused loop step. D3 says \"clamped to >= 1\", which is a silent fallback.\n- The pipeline definition changed between pause and resume, so `start_iteration > max`. `range(start_iteration, max+1)` is then empty, the loop runs zero rounds and exits as if complete. That is the same silent-abandonment class this slice exists to fix.\n- `completed_steps` holds several entries for the same step name (paused, then re-run). The slice doesn't say which entry `resume_iteration_for` returns.\n\nEach case needs an explicit outcome, such as a fail-fast error, plus an observable signal and a test. The Success Criteria only require a test for the pause WARNING.",
+   "location": "project-documents/user/slices/915-slice.loop-checkpoint-pause-resume-correctness.md#D3"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "FAILED-status inclusion widens scope beyond #48 and leaves loop re-entry unspecified",
+   "description": "D2 adds `FAILED` to the resumable set. It justifies this by symmetry, not by the reported bug. The Risk section admits it changes resume for every pipeline: runs that said \"nothing to resume\" will now offer to re-run failed steps. That is a user-visible behavior change outside the issue. It also doesn't say whether a failed loop re-enters at its failed round via `start_from_iteration`, or how that interacts with `max:`. Either defer `FAILED` to its own fix, or specify and test the failed-loop re-entry behavior.",
+   "location": "project-documents/user/slices/915-slice.loop-checkpoint-pause-resume-correctness.md#D2"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Pause-time WARNING contradicts the fix and is a heavier signal than needed",
+   "description": "After Parts A and B, a checkpoint pause inside a loop is a normal resumable state, not an abandonment. A WARNING reading \"rounds not run\" on every such pause is misleading noise. D4 argues it \"stays correct even if D1 changes\", but it describes the pre-fix bug. Part C's title (\"the abandonment is observable\") no longer describes the design either. Cut the pause-time WARNING, or reword it as an INFO line stating the loop is paused at round N and resumable. Keep the resume-time INFO. The genuinely silent paths are the ones in the failure-mode finding above (empty range, bad coordinate), so put the WARNING-level signals there.",
+   "location": "project-documents/user/slices/915-slice.loop-checkpoint-pause-resume-correctness.md#D4"
+  },
+  {
+   "i": 5,
+   "severity": "NOTE",
+   "title": "Document length exceeds what the slice needs",
+   "description": "D1 gives four rationale points plus a rejected alternative, and D2 has two rejected-alternative blocks. The Verification Walkthrough and Known Limitation are also detailed. A 2/5 fix doesn't need all of that. D1's rationale could be shortened to its deciding points. The walkthrough could be compressed to a pointer at the tests, since it is explicitly a draft. This is not blocking.",
+   "location": "project-documents/user/slices/915-slice.loop-checkpoint-pause-resume-correctness.md#Verified Current Behavior"
+  },
+  {
+   "i": 6,
+   "severity": "NOTE",
+   "title": "Both resume paths in run.py should share one lookup",
+   "description": "The explicit `--resume` and implicit paused-run paths both need `first_unfinished_step` and `resume_iteration_for`. Have both call one helper that returns the step and iteration together, so the two are never read inconsistently. This also keeps the pair from drifting across the two call sites.",
+   "location": "project-documents/user/slices/915-slice.loop-checkpoint-pause-resume-correctness.md#Component Structure"
+  }
+ ]
+}

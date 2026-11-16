@@ -1,0 +1,189 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "PASS",
+      "title": "Success criteria 1\u201314 all trace to tasks",
+      "description": "The criteria map to tasks as follows:\n- **Enum, field, loader (1\u20134):** tasks 1.1\u20131.3, tested in 1.4.\n- **Round-trip (5):** the test in 1.4.\n- **`OPEN`, `WRAP`, `REFLECT` behavior (6\u20139):** tasks 2.1\u20132.2, tested in 2.3.\n- **`step()` wiring and integration (10\u201311):** tasks 3.1\u20133.2 and 3.4.\n- **Shipped configs (12):** tasks 4.1\u20134.2.\n- **Full suite (13):** tasks 3.5 and 5.1.\n- **Manual verification (14):** task 5.2.\n\nThe log line in 3.3 traces to the slice's Verification Walkthrough step 4. Section order is correct: config, then enforcement module, then wiring, then defaults. Test tasks follow their implementation tasks. There are no merge or push tasks. The slice states no NFR, so no load test or CI gating task is needed.",
+      "file_ref": null,
+      "category": "coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Frontmatter already says `status: complete` with every box unchecked",
+      "description": "The task file and the slice design (`313-slice.world-bounds-policy.md:10`) both carry `status: complete`. Every checkbox is unchecked, and task 5.3 is the step that sets this status. A reader or tool that trusts the frontmatter would treat the slice as finished and skip it. Reset both to the pre-implementation status and let 5.3 flip them.",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:9"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Task 5.2 steps 5\u20137 need a human watching a viewer, so a junior AI can't complete them",
+      "description": "Steps 5\u20137 say to connect the Three.js viewer and watch for agents wrapping, bouncing or drifting. An AI implementer cannot observe that. It also edits `config/test.yaml` three times (`reflect`, `open`, then restore), which risks committing a stray policy. Replace steps 5\u20137 with an objective, scriptable check, such as a short WebSocket client or a `SimulationManager` run that asserts position bounds per policy. Keep the visual viewer check as an optional extra. Task 3.4's integration tests already cover most of this behavior.",
+      "file_ref": null,
+      "category": "completability",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:295-308"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Redundant full-suite runs, and the Section 4 commit has no test run before it",
+      "description": "The full suite runs in 3.5, again in 5.1, and again as walkthrough step 2 in 5.2. Section 4 is two one-line YAML edits split into tasks 4.1 and 4.2 with its own commit at 4.3. That commit is checked only by a `python -c` load, not by `pytest`. Switching both shipped configs to `wrap` could change any test that loads them. The first suite run after that change is 5.1, which comes after the commit.\n- Merge 4.1 and 4.2 into one task.\n- Run `pytest` before that commit, or fold the YAML edits into the Section 3 commit.\n- Drop the duplicate run in 5.1 or in walkthrough step 2.",
+      "file_ref": null,
+      "category": "proportionality",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:238-293"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`WRAP` can return exactly `width` for a tiny negative overshoot, and no test covers it",
+      "description": "Criterion 7 requires every position to land in the half-open `[0, width)`. Task 2.2 says `np.mod` produces values in `[0, width)`. In floating point, `np.mod(-1e-17, 100.0)` rounds to `100.0`, which is outside the interval. The wrap tests in 2.3 (lines 155\u2013161) use only integer-valued positions, so this case is untested. Add a small-negative-overshoot test and say how it is handled (for example, re-wrap values that equal `width` to `0`). Otherwise criterion 7 can silently fail.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:130-134"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Test list and steps are heavier than the criteria need",
+      "description": "Task 2.3 lists about 18 tests. The parametrized \"all three policies dispatch and don't raise\" test (line 171) adds nothing beyond the per-policy tests and traces to no criterion. `test_reflect_clamps_top_edge` and `test_reflect_clamps_bottom_edge` are described only as \"analogous\". Fold them into one parametrized axis test. Tasks 2.2 and 3.2 also dictate implementation detail the slice does not require, including the `out=` arguments, the mask construction, and the exact `data.get(\"policy\", None)` call in 1.3. State the required behavior and let the implementer choose the code.",
+      "file_ref": null,
+      "category": "proportionality",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:145-174"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The round-trip test checks less than criterion 5 states",
+      "description": "Criterion 5 says reloading the emitted YAML produces an equal `ServerConfig`. Task 1.4's test asserts only that the policy matches. Asserting full equality is cheap and matches the criterion.",
+      "file_ref": null,
+      "category": "coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:88"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "pass",
+      "category": "coverage",
+      "raw_category": null,
+      "summary": "Success criteria 1\u201314 all trace to tasks",
+      "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "Frontmatter already says `status: complete` with every box unchecked",
+      "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:9",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "completability",
+      "raw_category": null,
+      "summary": "Task 5.2 steps 5\u20137 need a human watching a viewer, so a junior AI can't complete them",
+      "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:295-308",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "proportionality",
+      "raw_category": null,
+      "summary": "Redundant full-suite runs, and the Section 4 commit has no test run before it",
+      "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:238-293",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "`WRAP` can return exactly `width` for a tiny negative overshoot, and no test covers it",
+      "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:130-134",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "proportionality",
+      "raw_category": null,
+      "summary": "Test list and steps are heavier than the criteria need",
+      "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:145-174",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "note",
+      "category": "coverage",
+      "raw_category": null,
+      "summary": "The round-trip test checks less than criterion 5 states",
+      "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:88",
+      "location_verified": true
+    }
+  ],
+  "template_name": "tasks",
+  "input_files": {
+    "input": "project-documents/user/tasks/313-tasks.world-bounds-policy.md",
+    "against": "project-documents/user/slices/313-slice.world-bounds-policy.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/migratory-313-tasks"
+  },
+  "timestamp": "2026-11-16T09:01:59.348248",
+  "model": "claude-sonnet-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 2,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-sonnet-5-5",
+  "answering_models": [
+    "claude-sonnet-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 7,
+    "in_fences": 0,
+    "in_section": 7,
+    "surviving": 7
+  },
+  "effort": "medium",
+  "profile": "sdk",
+  "turns": 3,
+  "prompt_tokens": 110003,
+  "cached_tokens": 8990,
+  "cache_write_tokens": 101009,
+  "completion_tokens": 5368,
+  "reasoning_tokens": null,
+  "duration_seconds": 44.69266445795074,
+  "cost_usd": 0.45911450000000004,
+  "cost_basis": "provider"
+}

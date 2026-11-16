@@ -1,0 +1,224 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Merge-base range depends on a base ref the design never fetches, and the multi-remote rule rejects fork workflows",
+      "description": "\"Base semantics\" requires merge-base-to-head \"so the review matches what the host displays.\" The design only fetches the **head** (\"Fetching without checkout\", \"head ref present in the local repository\"). The base is whatever the operator's local ref happens to be. A stale local `main`, a shallow clone, or a clone missing the base branch all give a different range than the host shows, or no range at all. The failure list includes \"base moved since resolution\", but merge-base semantics make that case a non-event. The case that matters is \"local base is stale or absent\", and it is not listed.\n\nEither the adapter fetches the base into a namespaced ref as well, or the design says why a local base is acceptable. It should also say how a missing merge-base fails (shallow history).\n\nThe target grammar says resolution \"must fail loudly when the repository has \u2026 more than one [host remote]\". Fork workflows (`origin` plus `upstream`, both on the host) are the normal case for enterprise and open-source contributors. This rule turns them into hard errors. It also bakes in a single remote, while fork PRs have a head repo that differs from the base repo. The record has `owner/repository` but no distinct head repo or remote. The design needs a remote-selection rule (`--remote`, or defer to `gh`'s default-repo resolution). Fork PRs also need their own handling: head fetched via the host's PR ref on the *base* repo's remote.",
+      "file_ref": null,
+      "category": "feasibility",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#Technical Considerations"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "\"Never mutates the operator's checkout\" is not met, and the scratch worktree is an untrusted-input boundary the design does not treat as one",
+      "description": "Three problems:\n\n1. **The no-mutation claim is overstated.** Design Goals promise squadron \"never \u2026 mutates the operator's working tree.\" But `git worktree add` writes `.git/worktrees/*` metadata into the operator's repository, and the namespaced fetch writes refs. Both are cheap and defensible, but they are mutations. A crash or SIGINT leaves stale worktree entries behind. The document defers \"concurrency \u2026 disk use, and cleanup on failure\" to \"slice-level questions\". Cleanup is what the headline guarantee depends on, so it is a load-bearing decision. At minimum the architecture should fix the ownership model (location, naming, pruning of orphans, detached HEAD, and who removes it on interrupt).\n\n2. **Which tree is the \"project\" is unspecified.** The review runs with the scratch worktree as its working directory. \"Rules loading resolves from the project's rules directory\", and the persistence and `cf` lookups are relative to the project. If those resolve against the scratch tree, the **PR author's** `project-documents/` and rules are loaded as the reviewer's instructions. That is attacker-controlled content, and it also contradicts the \"template's rules only\" degradation described for unplanned repos. The design must say that rules, persistence, and `cf` resolve from the operator's repo root, and only file reads by tools come from the PR tree.\n\n3. **The tool jail was built for a trusted tree.** The \"Related Work\" list reuses 916's jail roots and the 266/267 read-only tools \"unchanged\". A PR head can contain symlinks pointing outside the worktree (to `~/.ssh`, `.env`, and so on). Tool-enabled reads of third-party trees need an explicit symlink-escape check. Reusing the jail \"unchanged\" is an assumption, not a verified property.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#Architectural Principles"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Untrusted PR text flows into a comment posted under the operator's identity, and the mitigation is only delimiters",
+      "description": "\"Prompt inputs from the PR\" admits that title, body, linked issues, and threads are untrusted third-party text. The mitigation is \"clearly delimited data \u2026 never as instructions\". Delimiters are spoofable and do not bind a model. The risk is higher here because the model may have file-reading tools, and the output is written to the PR under the operator's credentials. A crafted PR body can steer the verdict, suppress findings, or make the model emit `@mentions`, links, or markdown that appears to come from the operator.\n\nNothing in \"Posting is a separate, explicit write\" covers sanitizing the rendered comment. It should cover neutralizing mentions, constraining or escaping links, and separating model-authored prose from deterministic fields (verdict, sha). Dry-run (printing what would be sent) is the only control the document names, and the operator may not read it.\n\nThe design also feeds *unresolved prior-reviewer threads* to the reviewer. That gives any thread author a channel to bias findings, and this is not discussed.",
+      "file_ref": null,
+      "category": "antipattern",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#Technical Considerations"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`sq pr create` is weakly coupled to the rest, under-specified, and is the main candidate to cut or defer",
+      "description": "The Overview says the three capabilities \"share one new boundary and nothing else.\" The Constraint says \"no PR is ever required.\" Capability 3 is also the one with the most unresolved design:\n\n- **Traceability is stated but not enforced.** The goal is \"nothing is asserted that no input supports.\" Composition is \"a one-shot model call.\" Sections like \"how it was verified\" and \"known gaps\" are not derivable from commits. No mechanism checks the prose against its inputs. This is \"step 3: magic happens\" for the stated key property.\n- **\"Latest saved review\" has no lookup key.** Reviews are saved under slice or PR keys. At `sq pr create` time no PR exists, so no PR-keyed review exists. For non-slice branches (the unplanned-repo case the initiative targets), `sq review code --diff` is, per Current State, not persistable. The document does not say how the review is found.\n- **Pushing is unaddressed.** `gh pr create` needs the branch on the remote. The document does not say whether squadron pushes, refuses, or errors. Push is outward-facing, and the project's git rules restrict agent pushes.\n- **The base branch is undefined outside a planned project.** The integration-branch rule requires `cf`. \"PR targets the configured integration branch\u2026 never `main`\" says nothing for repos without `cf`. The existing \"no silent fallbacks\" principle means this must be an explicit error or flag.\n- **The parseable body contract has no consumer design.** \"A stable section structure that \u2026 `sq review pr` itself can parse \u2026 for claimed verification\" contradicts the rule that the PR body is untrusted data, \"never as instructions.\" Nothing specifies what the review engine does with parsed claims.\n\nProportionality: this capability brings a model call, a body-section contract, push and base-branch policy, and a review-lookup mechanism. Capability 1 delivers the stated motivation (slice 916's PR-centric review). Move `sq pr create` to its own initiative once `sq review pr` has proven the adapter. Alternatively, cut it down to a deterministic, no-model template (commit list, slice link, review provenance), which meets the traceability goal for free.",
+      "file_ref": null,
+      "category": "antipattern",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#Envisioned State"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "PR-keyed persistence: key collisions, per-head versioning, and \"apply unchanged\" are asserted, not designed",
+      "description": "The document says archiving, digest, and integrity checks \"from the 900-band review work apply unchanged.\" It also says (Current State, Technical Considerations) that the naming convention, frontmatter contract, and directory all assume a slice index. Those two statements conflict, and the document does not reconcile them. In the worktree, `SliceInfo` is index-keyed, and the integer index is what existing artifact lookup and archiving key on.\n\nOpen questions this leaves unanswered:\n\n- **Name collisions.** Does the PR-keyed name include host and owner? In a shared \"squadron data directory\", `#123` from two repos collides.\n- **Re-reviews.** What happens on a second review of the same PR at a different head sha: overwrite, version, or archive? Posting depends on \"the saved review\" and its head sha, so this matters.\n- **No save location.** If no data directory is configured and there is no `project-documents/`, does `--post` still work? Posting depends on the saved review, but save can be unavailable in exactly the unplanned-repo case. It is unclear whether post reads from the saved file or from the in-memory result.\n- **917 dependency.** The document sequences persistence \"after 916 and 917 land\" and also claims behavior from 917 as already given. 917's seam changes should be confirmed, not assumed.",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#Envisioned State"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The adapter protocol is asserted to be host-neutral, but its first operations are GitHub-shaped and its execution model is unspecified",
+      "description": "- **Threads need GraphQL.** \"Unresolved review threads\" is not available from `gh pr view --json` in a stable form. Resolution status needs `gh api graphql` with pagination. That is a materially different cost and failure surface from the other operations, and the design lists it as an ordinary prompt input. It is also a cut candidate: the review works without it, and it carries the injection concern above.\n- **Leakage is likely.** The protocol is meant not to \"leak `gh`-specific shapes\", but the head fetch relies on a host-specific PR ref convention. Ref namespacing and operator identity (a `gh`-login concept) are also host-specific. Which parts of the protocol are the host-neutral contract, and which are the GitHub implementation's private detail, should be stated.\n- **Sync or async is not stated.** The review path is async (`run_review_with_profile`), while the existing git helpers (`run_git`) are blocking subprocess calls. The protocol should say whether it is sync or async. It should also say how the subprocess runner is injected, so that failure-mode tests (hang, timeout) can run without monkeypatching. The project's own Failure-Mode Enumeration rule requires timeouts to be explicit, and the document names no timeout for `gh`.\n- **`gh` version drift.** `--json` field sets and flags vary by `gh` version, and the doctor check covers presence and auth but not a minimum version.\n- **The `owner/repo#n` grammar has no host component.** GHES or enterprise targets are expressible only as full URLs, which sits oddly with the \"enterprise repositories\" motivation.",
+      "file_ref": null,
+      "category": "technology",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#Technical Considerations"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Idempotent posting has unresolved mechanics and a stale-head race",
+      "description": "\"A later invocation \u2026 updates or supersedes rather than stacking\" is two different behaviors, and the design picks neither. The details that decide the design are missing:\n\n- **How the prior comment is found.** The marker is not specified (a hidden HTML marker, a login match, or both). Finding it needs paginated comment listing. A different operator reviewing the same PR cannot edit the first operator's comment, so the result is a second comment anyway.\n- **Edit overwrites history.** An in-place update destroys the earlier review's content.\n- **Size limits.** Host comment-size limits are not addressed. A large review or large findings set can be rejected, and \"post rejected\" is lumped into one failure.\n- **Stale-head check.** \"A review posted against a PR whose head has since moved must say so\" needs a re-resolve of the head at post time. There is still a window between that check and the write. The design does not say whether a moved head blocks, warns, or merely annotates.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#Technical Considerations"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Interface-parity principle commits to scope the document says is deferred",
+      "description": "\"Interface parity\" says the `/sq:review` command \"and any later pipeline input accept identically.\" Scope says \"no pipeline actions\", and Envisioned State says a pipeline input is \"a later decision.\" The principle is harmless as written, but it constrains the CLI argument design today (no interactive prompts, fully serializable target) without saying so.\n\nThe sixth slice (slash commands, README, and a live run against a real PR) is also the only place real-host behavior (fork PRs, GHES, pagination, size limits) is validated. It sits last, after the design has been built around assumptions about it. Move at least one live read-only run into the keystone slice.",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#Architectural Principles"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The enumerated failure modes omit cases that a PR review hits regularly",
+      "description": "\"Failure modes are enumerated and observable\" lists seven items. Cases not listed:\n\n- a PR too large for the model context (many files; does the existing truncation discipline apply, and does it mark the review as partial?)\n- a closed or merged PR (is the head still fetchable, and is review allowed?)\n- a draft PR\n- a head force-pushed during the review\n- a deleted fork\n- scratch-worktree creation or cleanup failure\n- SIGINT mid-review\n- host rate limiting\n\nEach should map to a named error, or be explicitly declared out of scope, as the Failure-Mode Enumeration rule requires.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#Architectural Principles"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "feasibility",
+      "raw_category": null,
+      "summary": "Merge-base range depends on a base ref the design never fetches, and the multi-remote rule rejects fork workflows",
+      "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#Technical Considerations",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "\"Never mutates the operator's checkout\" is not met, and the scratch worktree is an untrusted-input boundary the design does not treat as one",
+      "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#Architectural Principles",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "antipattern",
+      "raw_category": null,
+      "summary": "Untrusted PR text flows into a comment posted under the operator's identity, and the mitigation is only delimiters",
+      "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#Technical Considerations",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "antipattern",
+      "raw_category": null,
+      "summary": "`sq pr create` is weakly coupled to the rest, under-specified, and is the main candidate to cut or defer",
+      "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#Envisioned State",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "PR-keyed persistence: key collisions, per-head versioning, and \"apply unchanged\" are asserted, not designed",
+      "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#Envisioned State",
+      "location_verified": null
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "technology",
+      "raw_category": null,
+      "summary": "The adapter protocol is asserted to be host-neutral, but its first operations are GitHub-shaped and its execution model is unspecified",
+      "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#Technical Considerations",
+      "location_verified": null
+    },
+    {
+      "id": "F007",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "Idempotent posting has unresolved mechanics and a stale-head race",
+      "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#Technical Considerations",
+      "location_verified": null
+    },
+    {
+      "id": "F008",
+      "severity": "note",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "Interface-parity principle commits to scope the document says is deferred",
+      "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#Architectural Principles",
+      "location_verified": null
+    },
+    {
+      "id": "F009",
+      "severity": "note",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "The enumerated failure modes omit cases that a PR review hits regularly",
+      "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#Architectural Principles",
+      "location_verified": null
+    }
+  ],
+  "template_name": "arch",
+  "input_files": {
+    "input": "project-documents/user/architecture/380-arch.pull-request-workflow.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/squadron-380-arch"
+  },
+  "timestamp": "2026-11-16T10:17:01.791643",
+  "model": "claude-sonnet-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 6,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-sonnet-5-5",
+  "answering_models": [
+    "claude-sonnet-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 9,
+    "in_fences": 0,
+    "in_section": 9,
+    "surviving": 9
+  },
+  "effort": "high",
+  "profile": "sdk",
+  "turns": 7,
+  "prompt_tokens": 367647,
+  "cached_tokens": 285746,
+  "cache_write_tokens": 81891,
+  "completion_tokens": 10223,
+  "reasoning_tokens": null,
+  "duration_seconds": 86.55648279096931,
+  "cost_usd": 0.45902440000000005,
+  "cost_basis": "provider"
+}

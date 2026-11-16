@@ -1,0 +1,225 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Qualification does not run the reference under the grader's conditions",
+      "description": "The architecture requires that \"a case enters the set only if the original work passes its own grade in the sandbox environment\". D5 qualifies by running the tip's suite on the tip's tree. The grade (425 D1) runs something different: the start commit's test-side files restored over the subject's source.\n\nFor fix cases the two agree, because 422 rejects candidates with test data or support changes. D5 lifts that rejection for slice cases (\"Data and support changes in the tests are not rejected\") and cites the grader's restore step as the reason, but qualification never applies that restore.\n\nThe consequence is a slice whose reference changed an existing test data file read by an unchanged test:\n- It qualifies, because the test passes at the tip with the new data.\n- It is replayed under every config and sample.\n- It is only then dropped at grading as `reference_failed_grade` (D10, line 240), after the replay spend.\n- 425 describes that reason as \"the grade environment no longer matches qualification\", which misstates the cause here.\n\nFix: run the D5 repeat step on the tip's source with start-commit test-side files restored, which is the selection and tree the grader uses. Alternatively keep 422's rejection for changes to existing test-side non-test files. Either way, add a qualification rejection reason so the yield rows count it.",
+      "file_ref": null,
+      "category": "architectural-alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/426-slice.slice-cases.md:195-202"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Contradictory statements about edits to 421, 422, 424 and 425",
+      "description": "Line 42 says \"No edits to 424 or 425\". The rest of the document disagrees:\n- **424:** line 321 widens 424's `CaseDrop.reason`, and line 426 repeats it.\n- **425:** D17 (line 306) restructures 425's `bench_report` into per-kind sections.\n- **Stale test exception:** line 451 allows `tests/benchmark/` changes \"where D8 routes re-qualification and D17 extracts the interval\". Both already exist upstream: 424 D5 provides `CaseKindRunner.requalify`, and 425 D14 provides `bootstrap_mean_interval`. D8 and D17 themselves say no change is needed.\n- **421 and 422:** `ScrubbedEnvironment.with_tools` (421) and the yield rows (422) are also upstream edits, listed only under Integration Points.\n\nA task breakdown written from this cannot tell which upstream modules and tests may change. Replace line 42 with the actual edit list (`with_tools`, yield rows, `CaseDrop.reason`, `bench_report` grouping) and delete the stale exception on line 451.",
+      "file_ref": null,
+      "category": "under-specification",
+      "raw_category": null,
+      "location": "project-documents/user/slices/426-slice.slice-cases.md:42"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Judging has its own cap, not the architecture's single run-level cap",
+      "description": "The architecture says the run-level cap \"covers grading and judging as well as the replays\" and that the bound before any dispatch includes judging. D16 gives `judge` its own required `--max-cost` and its own bound. This follows the split already made in 424 D8 and 425 D9, so it is inherited and not new here. The spend NFR is restated with specifics: bound before the first call, cap checked per call, exit 2.\n\nOne refinement: the sample output says \"at most $3.88\", but the per-call figure is the largest observed cost, which is an estimate. Judge cost scales with prompt length, and D14 already builds every prompt before the bound prints. Either label the figure as an estimate, as 425 does, or scale it by prompt size.",
+      "file_ref": null,
+      "category": "nfr",
+      "raw_category": null,
+      "location": "project-documents/user/slices/426-slice.slice-cases.md:287-298"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Reference is the branch tip, not the landing commit",
+      "description": "The architecture and slice plan name \"the landing commit\" as the reference. D2 uses `tip_sha`, because `fork..after` on a merge landing includes unrelated target work. The deviation is deliberate, reasoned and consistent with \"compare configs on identical work\". The architecture wording could be updated to match.",
+      "file_ref": null,
+      "category": "architectural-alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/426-slice.slice-cases.md:176-181"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Two failure paths have no stated handling",
+      "description": "- **`cf` missing from the harness `PATH`:** it is listed as an external prerequisite (line 62), and `with_tools` resolves it there. The design does not say whether its absence is a planning refusal or a per-replay harness absence. A planning refusal fits \"fail explicitly\" and avoids one harness absence per replay.\n- **Judging cases grading already dropped:** D15 excludes those cases only at report time, so `judge` can pay for pairs that never appear. Skipping cases with a recorded grade drop, when grade records exist, removes that spend.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/426-slice.slice-cases.md:234"
+    },
+    {
+      "severity": "PASS",
+      "title": "Scope matches the slice plan entry",
+      "description": "All plan items are present: cases from 403 slice ranges with recorded rejections, an empty hidden set, a superseded set from the reference, environment-keyed qualification, producer-only `P6` replay, normalization, the pairwise judge with Bradley-Terry, the reference line, the over-size rule and separate tables.\n\nAdditions are small and justified: the `uv.lock` drop, and the paired interval on win shares, which the architecture's \"paired intervals\" principle supports. Nothing is deferred that the plan assigns, and I found nothing worth cutting. The 3/5 effort label looks low for ten new modules and two commands, but it is the plan's figure.",
+      "file_ref": null,
+      "category": "scope",
+      "raw_category": null,
+      "location": "project-documents/user/slices/426-slice.slice-cases.md:30-50"
+    },
+    {
+      "severity": "PASS",
+      "title": "Architectural principles respected",
+      "description": "- **Objective before opinion:** the pairwise section never adjusts the grade, and no composite is computed (D17).\n- **Reference:** it is a contestant but never ranked.\n- **Absent is not zero:** config absences forfeit and harness absences drop the case (D15).\n- **No silent truncation:** over-size cases are excluded whole and counted (D14).\n- **Leak containment:** the judge has no tools, and cf registration lives in the scrubbed home with a spike that checks leak-scan coverage first (D9).\n- **Production pipeline:** replays run `P6 --producer-only` with no copied prompt (D8).\n- **Store:** new records are optional sibling payloads with diffs in sidecars.\n- **Language access:** only through 422's adapter registry (D7).",
+      "file_ref": null,
+      "category": "architectural-alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/426-slice.slice-cases.md:255-313"
+    },
+    {
+      "severity": "PASS",
+      "title": "Integration points match upstream designs",
+      "description": "Each consumed interface exists upstream as described:\n- 424's `CaseKindRunner` with `requalify`, and its planning refusal for kinds with no runner.\n- 425's `grade_one` with an empty hidden set, `bootstrap_mean_interval`, and the per-kind report table reserved for 426.\n- 422's `test_sets` and repeat-and-exclude step, reserved for 426.\n- 421's `CaseKind.SLICE` and `HARNESS_TOOL_ALLOWLIST`.\n\nThe move of cf registration from 424 to 426 is recorded in 424. The case-building part depends only on 421, 422 and 403, so the plan's option to move it ahead of 424 still holds.",
+      "file_ref": null,
+      "category": "integration",
+      "raw_category": null,
+      "location": "project-documents/user/slices/426-slice.slice-cases.md:412-428"
+    },
+    {
+      "severity": "PASS",
+      "title": "Failure modes for new I/O paths are enumerated and observable",
+      "description": "- **`git` calls:** a failed or timed-out call in discovery or qualification is logged at ERROR and recorded as `harness_error` (D6).\n- **cf steps:** a failed or timed-out step is a harness absence with stderr, not charged to the config (D9).\n- **Judge calls:** bounded by `metrology.judge_timeout_s`; a failed pair is unrecorded, logged at ERROR, counted and retried on rerun (D15).\n- **Missing `tip_sha`:** `judge` refuses and names the case and sha.\n\nSuccess criteria require a test asserting each signal (line 443).",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/426-slice.slice-cases.md:204-210"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "architectural-alignment",
+      "raw_category": null,
+      "summary": "Qualification does not run the reference under the grader's conditions",
+      "location": "project-documents/user/slices/426-slice.slice-cases.md:195-202",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "under-specification",
+      "raw_category": null,
+      "summary": "Contradictory statements about edits to 421, 422, 424 and 425",
+      "location": "project-documents/user/slices/426-slice.slice-cases.md:42",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "note",
+      "category": "nfr",
+      "raw_category": null,
+      "summary": "Judging has its own cap, not the architecture's single run-level cap",
+      "location": "project-documents/user/slices/426-slice.slice-cases.md:287-298",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "note",
+      "category": "architectural-alignment",
+      "raw_category": null,
+      "summary": "Reference is the branch tip, not the landing commit",
+      "location": "project-documents/user/slices/426-slice.slice-cases.md:176-181",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "Two failure paths have no stated handling",
+      "location": "project-documents/user/slices/426-slice.slice-cases.md:234",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "pass",
+      "category": "scope",
+      "raw_category": null,
+      "summary": "Scope matches the slice plan entry",
+      "location": "project-documents/user/slices/426-slice.slice-cases.md:30-50",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "pass",
+      "category": "architectural-alignment",
+      "raw_category": null,
+      "summary": "Architectural principles respected",
+      "location": "project-documents/user/slices/426-slice.slice-cases.md:255-313",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "pass",
+      "category": "integration",
+      "raw_category": null,
+      "summary": "Integration points match upstream designs",
+      "location": "project-documents/user/slices/426-slice.slice-cases.md:412-428",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "pass",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "Failure modes for new I/O paths are enumerated and observable",
+      "location": "project-documents/user/slices/426-slice.slice-cases.md:204-210",
+      "location_verified": true
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/426-slice.slice-cases.md",
+    "against": "project-documents/user/architecture/420-arch.model-benchmark.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261115-design/wt/426-design"
+  },
+  "timestamp": "2026-11-16T07:22:29.052743",
+  "model": "claude-fable-5-2",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 10,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-fable-5-2",
+  "answering_models": [
+    "claude-fable-5-2"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 9,
+    "in_fences": 0,
+    "in_section": 9,
+    "surviving": 9
+  },
+  "effort": "medium",
+  "profile": "sdk",
+  "turns": 11,
+  "prompt_tokens": 403770,
+  "cached_tokens": 273770,
+  "cache_write_tokens": 129992,
+  "completion_tokens": 12856,
+  "reasoning_tokens": null,
+  "duration_seconds": 134.6525430001784,
+  "cost_usd": 2.6496969000000004,
+  "cost_basis": "provider"
+}

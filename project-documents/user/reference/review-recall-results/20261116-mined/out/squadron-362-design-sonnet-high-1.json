@@ -1,0 +1,189 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Edge-endpoint resolution contradicts the read discipline and has no stated mechanism",
+      "description": "Section 6 says function- and class-level edge endpoints \"are resolved to their owning file's layer rather than dropped\". This conflicts with three things the design states or inherits:\n- The architecture's read discipline says function- and class-level nodes are not read (360-arch, \"Read discipline\").\n- 361 states \"Function- and class-level nodes are never read.\"\n- This slice's own success criterion 9 and walkthrough step 7 require that no function- or class-level node is read.\n\nThe mechanism is also missing. The Verified graph facts show that only `file`, `config` and `pipeline` nodes carry `filePath`, so function and class nodes have no owning-file field to look up. The remaining options are parsing the type-prefixed `id` (`function:path:name`) or following `contains` edges. The design names neither, and ID parsing adds a hidden dependency on upstream ID syntax, which the preflight does not validate. Paths containing `:` would break it.\n\nTwo further inconsistencies in the same paragraph:\n- Section 6 counts \"inter-layer `imports` and `depends_on`\", then says a `calls` edge also counts as an inter-layer signal.\n- `edges[].direction` is listed under Interfaces Required as used \"for dependency ordering\", but no ordering rule uses it. \"Ties by `weight`\" does not say whether `weight` is summed, averaged or maximized across edges.\n\nFix: choose one mechanism and state it. Either resolve endpoints through ID prefix or `contains` edges, with an explicit carve-out from the \"never read a function/class node\" rule that is limited to ID and edge data. Or restrict section 6 to file-level endpoints and drop the `calls` claim. Then fix the edge-type list, the tie-break aggregation, and the unused `direction` entry.",
+      "file_ref": null,
+      "category": "architectural-boundary",
+      "raw_category": null,
+      "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:215-220"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The file-level selector is defined three different ways, and the departure from the architecture's nine-type list is unrecorded",
+      "description": "Correction 2 gives three definitions of \"file-level\":\n- The heading defines it as \"carries a `filePath`\".\n- The Fix text calls the selector \"an explicit type allow-list\".\n- The jq filter given is an exclusion, `type != \"function\" and type != \"class\"`, and the next paragraph says it is \"stated as an exclusion rather than an allow-list deliberately\".\n\nThe architecture enumerates nine file-level types. The exclusion filter replaces that list, and the slice says the change \"is not an escalation\" without saying so against the architecture. The exclusion filter admits any other node type in an upstream release, such as a non-file concept or domain node. It then relies on the \"survives the filter but has no `filePath` \u2192 drift\" rule to catch it. That rule is only stated in one sentence, and the section 7 reconciliation with `analyzedFiles` would report a mismatch rather than a clean drift message.\n\nFix: pick one definition and use it in the heading, the selector, and success criterion 5. Record explicitly that this refines the architecture's enumerated list and why, so slices 363 and 364 inherit one rule. Say what the skill does when a drift node is found: report it and exclude it, or stop.",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:143-165"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Failure modes for the three new file reads, and for the layer-membership assumption, are not enumerated",
+      "description": "Section 7 introduces reads of `meta.json` `analyzedFiles`, `config.json` and `.understandignore`. Its single fallback, `[GAP: ...]` naming the unreadable file, covers only absent or unreadable files. These cases are not handled:\n- `config.json` or `meta.json` exists but is not valid JSON. `jq` will error.\n- `meta.json` exists but `analyzedFiles` is missing or non-numeric.\n- `.understandignore` is absent. Is that a gap or \"no ignore file\"? The design reasons carefully about absent optional `config.json` keys but does not apply that reasoning to the file itself.\n\nSection 6 also depends on \"every file-level node belongs to exactly one layer\", described as \"(verified)\". It was verified on one graph (the design's own Risk section says so). The sum of 238 does not prove uniqueness, and no runtime check or handling is given for a file-level node in zero layers or in more than one. The Correction 1 cross-check covers only `nodeIds` entries that do not resolve to a file. Without handling, edges are mis-attributed silently.\n\nFix: add a short failure-mode row for each new read: malformed, missing key, and absent-versus-unreadable. Add a runtime layer-membership check (zero or multiple layers \u2192 reported discrepancy). Add matching scratch-copy cases to the walkthrough, since step 5 currently tests only the removal of `meta.json`.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:180,222-235"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The mapping 363 reuses omits `tour[].nodeIds`",
+      "description": "The architecture's interview table sources Solution Approach from \"`layers[]`, `tour[]` node ordering\", and the architecture says the tour is read \"as structured data with node IDs\". This slice's mapping row 5 lists only `order`, `title` and `description` for the tour, and the Interfaces Required table likewise omits `nodeIds`. The Provides section nevertheless tells 363 that \"layers and tour feed Solution Approach\". Without `nodeIds`, 363 cannot relate tour steps to files or layers and would have to extend the mapping, which defeats \"reused verbatim\". The plan also names tour ordering as the signal for which components matter most.\n\nFix: add `tour[].nodeIds` to row 5, resolved to layer or file path. Alternatively, state explicitly that it is deferred to 363 and why.",
+      "file_ref": null,
+      "category": "integration",
+      "raw_category": null,
+      "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:178,299-301"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Some scope could be trimmed",
+      "description": "- **Project identity section.** The plan's 362 entry does not list it. The design justifies it as supplying slice 363's Initial Technical Direction, so it could be deferred to 363. It is cheap, so it can stay if 363 is likely to land soon.\n- **`config.json` reporting.** It adds little value, since the only observed content is `outputLanguage`. It could be dropped from section 7, with the file still read-only per the architecture.\n- **Verified graph facts and walkthrough numbers.** These restate measurements already in Correction 1 and in the walkthrough. Keep one copy.",
+      "file_ref": null,
+      "category": "proportionality",
+      "raw_category": null,
+      "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:195-198,228-235"
+    },
+    {
+      "severity": "PASS",
+      "title": "Alignment with architecture and slice plan",
+      "description": "The design is markdown-only inside `commands/analysis/understand.md`, with no `src/squadron/` change. This matches the architecture's \"no Python\" and \"consume, do not re-implement\" principles. Dependency direction is correct: 362 consumes 361 and provides to 363 and 364, with no dependency on 365. Every section resolves to sourced content or a gap marker, which carries the architecture's derive-never-invent rule. The design delivers the plan's required hotspots, entry points, layers and dependency observations, and it records the two decisions the plan assigned to this slice: reuse of `analyze-codebase-prompt.md`, and `[INFERRED]` governance. The `[INFERRED]` decision is consistent with the architecture's open question. The prior-art document is retained and gets only a cross-reference line, as the architecture requires.",
+      "file_ref": null,
+      "category": "architectural-alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md#Technical Scope"
+    },
+    {
+      "severity": "PASS",
+      "title": "Correction 1 is safe by construction",
+      "description": "The correction counts `nodeIds | length` directly and keeps the cross-check that every entry resolves to a node carrying `filePath`. A function or class member is reported as upstream drift, not silently filtered. This is consistent with the architecture's \"every file is assigned to exactly one layer\" statement and its loud-failure principle for contract drift. The walkthrough step 1 pre-check gives the implementer a stop condition if the three measured numbers disagree.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:119-141"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "architectural-boundary",
+      "raw_category": null,
+      "summary": "Edge-endpoint resolution contradicts the read discipline and has no stated mechanism",
+      "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:215-220",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "The file-level selector is defined three different ways, and the departure from the architecture's nine-type list is unrecorded",
+      "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:143-165",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "Failure modes for the three new file reads, and for the layer-membership assumption, are not enumerated",
+      "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:180,222-235",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "integration",
+      "raw_category": null,
+      "summary": "The mapping 363 reuses omits `tour[].nodeIds`",
+      "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:178,299-301",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "proportionality",
+      "raw_category": null,
+      "summary": "Some scope could be trimmed",
+      "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:195-198,228-235",
+      "location_verified": null
+    },
+    {
+      "id": "F006",
+      "severity": "pass",
+      "category": "architectural-alignment",
+      "raw_category": null,
+      "summary": "Alignment with architecture and slice plan",
+      "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md#Technical Scope",
+      "location_verified": null
+    },
+    {
+      "id": "F007",
+      "severity": "pass",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "Correction 1 is safe by construction",
+      "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:119-141",
+      "location_verified": true
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md",
+    "against": "project-documents/user/architecture/360-slices.document-intelligence.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/squadron-362-design"
+  },
+  "timestamp": "2026-11-16T10:15:01.428790",
+  "model": "claude-sonnet-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 9,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-sonnet-5-5",
+  "answering_models": [
+    "claude-sonnet-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 7,
+    "in_fences": 0,
+    "in_section": 7,
+    "surviving": 7
+  },
+  "effort": "high",
+  "profile": "sdk",
+  "turns": 10,
+  "prompt_tokens": 652233,
+  "cached_tokens": 545228,
+  "cache_write_tokens": 106991,
+  "completion_tokens": 9834,
+  "reasoning_tokens": null,
+  "duration_seconds": 79.9277459171135,
+  "cost_usd": 0.5813322999999999,
+  "cost_basis": "provider"
+}

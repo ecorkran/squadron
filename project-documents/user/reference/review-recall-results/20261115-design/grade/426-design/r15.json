@@ -1,0 +1,40 @@
+{
+ "review": "r15",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "\"No edits to 424 or 425\" contradicts the rest of the document, and some text is left over from an earlier revision",
+   "description": "Line 42 says this slice makes no edits to 424 or 425. Other parts of the same document say it edits both:\n- **425's `bench_report.py`:** it gains per-kind grouping and the pairwise section (lines 87 and 427, D17).\n- **424's `CaseDrop.reason`:** it is widened to accept `SliceCandidateRejection` (lines 321 and 426).\n- **`tests/benchmark/`:** line 451 says these tests pass unchanged \"except where D8 routes re-qualification and D17 extracts the interval.\"\n\nLine 451 also conflicts with the decisions themselves. D8 (line 225) uses the `requalify` seam 424 already has; 424 D208 confirms that `replay_one` calls only `runner.requalify`, so `bench_runner.py` needs no change. D17 (line 312) says `bootstrap_mean_interval` already exists in 425 (425 D14) and that 425 is not changed. So nothing in D8 or D17 changes routing or extracts an interval. Line 451 looks left over from an earlier draft.\n\nA task writer reading these lines could plan edits that aren't needed, or skip edits that are. To fix:\n- Change line 42 to list the real touch points: `bench_report` grouping and the pairwise section, `CaseDrop.reason` widening, and `yield_report` rows.\n- Change line 451 to name the tests that actually change: report tests for the per-kind tables, and `CaseDrop` model tests.",
+   "location": "project-documents/user/slices/426-slice.slice-cases.md:42"
+  },
+  {
+   "i": 3,
+   "severity": "NOTE",
+   "title": "The reference is the slice branch tip, not the landing commit the architecture names",
+   "description": "The architecture's Envisioned State says \"the landing commit is the reference.\" D2 uses `tip_sha` instead, and rejects slices whose branch contains merges. The reason given is sound: on a merge landing, `fork..after` also contains unrelated work from the target. This is a justified refinement, not a violation. The architecture could be updated to match.",
+   "location": "project-documents/user/slices/426-slice.slice-cases.md:176-181"
+  },
+  {
+   "i": 4,
+   "severity": "NOTE",
+   "title": "The judge can spend calls on cases already dropped at grading",
+   "description": "D15 removes cases dropped at grading (`reference_failed_grade`, grading harness absences) only at report time. `sq benchmark judge` looks only at replay harness absences before it dispatches, so those cases still get judge calls. The calls show in the printed bound, so spend stays visible, but the money buys nothing. If grade records exist when `judge` runs, it could skip those cases cheaply.",
+   "location": "project-documents/user/slices/426-slice.slice-cases.md:279-285"
+  },
+  {
+   "i": 5,
+   "severity": "NOTE",
+   "title": "The judge cap uses 425's per-command caps, not one run-level cap",
+   "description": "The architecture says one run-level cap \"covers all of it\": replays, grading and judging. D16 follows 425's pattern instead, with a separate required `--max-cost` for each command. Line 148 calls it the \"run cap\", and the bound example says \"capped at run cap $8.00\" while showing the `--max-cost` value. That makes it unclear whether the slice means the cap stored on the `BenchmarkRun` or the flag. It is also unclear whether a resumed `judge` counts spend from earlier invocations. This comes from 425, so it isn't this slice's to fix, but the slice could use one term consistently.",
+   "location": "project-documents/user/slices/426-slice.slice-cases.md:287-298"
+  },
+  {
+   "i": 6,
+   "severity": "NOTE",
+   "title": "`--keep` on `slice-cases build` is not explained",
+   "description": "The CLI signature includes `--keep`, but nothing in the document says what it keeps. It probably means keeping qualification sandboxes, as in 422. Define it in one line or remove it.",
+   "location": "project-documents/user/slices/426-slice.slice-cases.md:336"
+  }
+ ]
+}

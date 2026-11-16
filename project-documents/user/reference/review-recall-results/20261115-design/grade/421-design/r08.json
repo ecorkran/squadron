@@ -1,0 +1,54 @@
+{
+ "review": "r08",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "422's test-first check needs hidden-test materialization that no slice before 425 owns",
+   "description": "The Integration Requirements say 422 \"can build a sandbox at any commit of a uv project, run a chosen node id at the parent, and read its `FailureKind` with no further harness work.\"\n- For a fix case, the hidden test is added by the fix. At the parent its node id does not exist, so the run classifies it as `collection_error` (\"requested node id was not collected\", D11).\n- To apply the architecture's test-first rule, the reference's version of the test file, and any `conftest.py` fixtures the fix added, must first be placed into the parent tree.\n- The Excluded list assigns \"hidden-test injection\" to 425, and D9 says 425 adds it. But 422 runs before 425, and the slice plan's 422 entry does not mention it.\n- So the claim is false for the keystone consumer, and the adapter seam shape in D9 leaves no place for the missing step.\n\nName the owner. Either 421 provides a minimal \"materialize these paths from this commit into the tree\" operation, or 422's entry explicitly takes it. Then correct the Integration Requirement and the \"Provides to 422\" bullet to match.",
+   "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:322"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Suite-runner failure modes beyond timeout and missing JSONL are unspecified or unobservable",
+   "description": "D10 covers two cases:\n- A timeout returns `SuiteRun(timed_out=True)`, and requested nodes without results are `not_run`.\n- A missing or unparseable JSONL file with a non-zero exit raises `SuiteRunError`.\n\nThese cases are not covered:\n- **Abnormal exit with partial output.** pytest segfaults, is OOM-killed, or a test calls `os._exit`, and the JSONL is truncated but parseable. This is neither a timeout nor a missing file.\n- **`all_tests()` selection.** The requested node set is not known, so \"every requested node without a result is `not_run`\" cannot be computed. A crashed full-suite run can return a partial result that looks complete. This is the \"absent is not zero\" failure the architecture warns about.\n- **Timeout visibility.** The timeout comes back as a returned value, with no stated log at WARNING or above. The failure-mode rule requires each failure mode to be observable and asserted by a test.\n- **Missing carryover source.** D8 says the `sdk` carryover file is carried \"when it exists\", and nothing says what happens when the `openai-oauth` source file is absent. The probe would likely report a \"no\", but the grant step itself should fail explicitly, not skip.\n\nState the handling for each: an abnormal exit is a `SuiteRunError` or an explicit `crashed` flag, a timeout logs at WARNING, and a missing grant source raises. Add a test for each signal.",
+   "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:209"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "`uv` on the producer's `PATH`, with the network open, weakens the leak boundary the architecture sets",
+   "description": "The architecture says `PATH` \"leaves out the user's tool installs, so a squadron case cannot run the installed, later `sq`.\"\n- D7 puts a symlink to the harness's `uv` on `PATH` so that agents can `uv run`. With the network open, that also makes `uvx --from squadron sq` and `uv tool install squadron` trivial.\n- The published later version of the project is then reachable, which is the leak the principle exists to prevent.\n- Special Considerations (line 387) acknowledges this and defers to 424's scan.\n- But the architecture's scan list (leak paths, `git`/`gh` against other repos) and the slice plan's 424 entry do not include installs of the project's own package. The deferral has no named receiver.\n\nEither record the new scan rule in 424's plan entry now, or decide the `uv` tradeoff in this slice, for example by constraining `uv` invocations. As written, the slice satisfies its criterion \"installed `sq` cannot be reached\" literally while the architecture's intent is not met.",
+   "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:168"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Undeclared coupling to 400",
+   "description": "Frontmatter `dependencies` and the Prerequisites list omit 400, but the design depends on it in several ways:\n- It consumes `SourceLanguage` from `metrology/snapshot_models.py` (line 67).\n- It deliberately mirrors 400's registry keying.\n- It shapes `.venv` and `uv.lock` placement to satisfy 400's adapter expectations (D5).\n- It reuses 400's `lockfile_sha256` field name (D6).\n\nD6 also defines a second class named `EnvironmentIdentity` with different fields from 400's. Two same-named models in one codebase invite wrong imports and ambiguous serialization.\n\nDeclare 400 as a dependency, and rename the new model, for example `GraderEnvironmentIdentity`.",
+   "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:6"
+  },
+  {
+   "i": 4,
+   "severity": "NOTE",
+   "title": "`reference_sha` in the case identity departs from the architecture's identity list",
+   "description": "The design adds `reference_sha`, `project_id` and `kind` to the identity. The architecture and the slice plan list only start commit, task text, hidden and superseded sets, exclusion list and grader commands. The reasoning is sound, because hidden test source is read from the reference at grading time. But the parent documents are now inconsistent with this slice, and 422 and 426 will read the architecture's list. Amend the architecture and the slice plan entry, or add a note there.",
+   "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:126"
+  },
+  {
+   "i": 5,
+   "severity": "NOTE",
+   "title": "Symlinked credentials are writable by the producer",
+   "description": "Symlinking the user's real auth files lets model-written code overwrite or corrupt the user's actual login, not only read it. The architecture accepts P6-level trust, and D8 already detects replacement of the symlink. Consider also recording the carried file's hash before and after each probe, so in-place modification through the link is reported too.",
+   "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:178"
+  },
+  {
+   "i": 6,
+   "severity": "NOTE",
+   "title": "Proportionality and minor under-specification",
+   "description": "The slice is heavy for 3/5 effort. Everything in it traces to the plan or to a named risk, so no scope needs cutting. It could be trimmed in these places:\n- The 7-step walkthrough largely restates Success Criteria and Technical Requirements.\n- `list_case_sets` has no named consumer.\n- The post-probe symlink check could be report-only.\n\nTwo smaller items:\n- **Orphan sweep.** The benchmark sweep, which removes the `.home` and `.out` siblings, is described in State Management and D4. But nothing says who invokes it. Walkthrough step 7 implies it runs on the next `BenchmarkSandbox` entry, so state that.\n- **Record size.** Inlining slice-case `task_text` of tens of KB sits uneasily with the architecture's coarse-record rule (\"the store reads every file on every query\"). It is acceptable for now, but D3 should say when a sidecar becomes warranted.",
+   "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md#Verification Walkthrough"
+  }
+ ]
+}

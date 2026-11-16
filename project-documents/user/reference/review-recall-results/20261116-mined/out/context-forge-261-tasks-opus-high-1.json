@@ -1,0 +1,189 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Commit markers are checkbox tasks instead of plain `**Commit**:` lines",
+      "description": "Each commit point is written as a checklist item: `- [ ] **Task 2C: Commit** \u2014 ...`. The same pattern appears at lines 105, 131, 148, 178, 202, 225, 251, 257 and 269. Commit markers should be plain lines (`**Commit**: feat(core): ...`), never checkboxes. Three problems follow:\n- The commit cadence keys on `**Commit**:` markers, so these may not be recognized as markers at all.\n- A checkbox commit item can only be ticked after the commit is made. That leaves it unchecked in the commit, or forces a commit that only checks a box, which the project rules forbid.\n- It counts as a task, so task-checker will try to tick it.\n\nThe placement itself is fine. Each marker sits after a tested implementation pair, and none follows an untested task. Only the format needs to change: turn each `- [ ] **Task NC: Commit** \u2014 msg` into a plain `**Commit**: msg` line.",
+      "file_ref": null,
+      "category": "process",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:78"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Renderer tests don't cover every outcome kind",
+      "description": "The slice's Technical Requirements ask for `renderAdoptionFacts` tests covering \"every outcome\". Task 8 requires an exhaustive `switch` on `outcome.kind` with a `never` check (line 168), so the renderer must contain branches for `greenfield`, `already-planned` and `adoption-closed`. Task 8T only tests brownfield (capped), adoption-in-progress and `NOT_EVALUATED`. The other three branches are written but never run by any test. Fix: add one `it.each` over those three kinds in Task 8T, asserting each outcome bullet's text. Brownfield below the cap (`capped: false`) is also untested; add it to the same table.",
+      "file_ref": null,
+      "category": "test-coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:174"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`context_build` returning `AdoptionError` as an error result is only covered indirectly",
+      "description": "The success criterion \"`context_build` returns it as an error\" is covered in two places:\n- Task 10T checks that the integrator rethrows `AdoptionError`.\n- Task 12 #12 checks that the pipeline rejects.\n\nThe MCP handler already wraps `generateContext` in a `try` (`packages/mcp-server/src/tools/contextTools.ts:156`), so this most likely works without new code. Still, no task asserts the tool-level error result. One `contextTools.test.ts` case in Task 11 would close it: the mocked pipeline throws `AdoptionError`, and the test expects `isError` with the message. This is optional.",
+      "file_ref": null,
+      "category": "test-coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:213"
+    },
+    {
+      "severity": "PASS",
+      "title": "Functional requirements trace to tasks",
+      "description": "Every Functional Requirement has a matching Task 12 fixture:\n\n| Requirement | Task 12 fixture(s) |\n|---|---|\n| Empty, scaffold | #1\u20132 |\n| Brownfield, shallow clone | #3\u20134 |\n| Monorepo, including root CI | #5 |\n| Concept only plus code | #6 |\n| Planned project | #7 (Task 9T also asserts the walk never runs) |\n| Resume | #8 |\n| Overrides and re-detect | #9 (invalid values: Task 1T) |\n| `--phase 2`, explicit instruction | #10\u201311 |\n| Guide without the profile | #12 |\n| `template_preview` | #13 (wiring checked in Task 11) |\n\nThe Integration Requirements are covered too: `renderSquadronFact` is isolated for 262, the state helpers live in `adoption/`, and Task 15 step 1 checks the byte-identical planned prompt. The parity test is Task 13. All 5 walkthrough steps are in Task 15. No task falls outside the design's scope.",
+      "file_ref": null,
+      "category": "coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:229-244"
+    },
+    {
+      "severity": "PASS",
+      "title": "Sequencing and dependencies",
+      "description": "- `AdoptionError` (Task 2) comes before every detection task that throws it (Tasks 3 and 6).\n- `BROWNFIELD_MIN_SOURCE_LINES` is created in Task 3 and extended in Task 7, and the `import type` avoids a runtime import cycle.\n- The resolver (Task 9) follows all the facts it uses.\n- Task 10 adds the resolver as an optional parameter, so the build stays green before Task 11 makes the option required.\n\nEach test task directly follows its implementation task. There are no circular dependencies.",
+      "file_ref": null,
+      "category": "sequencing",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:45-269"
+    },
+    {
+      "severity": "PASS",
+      "title": "Proportionality and task size",
+      "description": "There are 16 implementation and verification tasks in one file, about right for a slice that spans a config key, four detection facts, outcome, renderer, resolver, integrator and pipeline. Each test list maps to a named unit-test requirement. Task 12 is large (13 fixtures), but they all come from the Integration Tests requirement and share one helper, so splitting it wouldn't help.",
+      "file_ref": null,
+      "category": "scope",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md"
+    },
+    {
+      "severity": "PASS",
+      "title": "No load-test task needed",
+      "description": "D2's sub-second target is explicitly checked by the cap tests (\"Tests assert the caps, not timings\"), and Task 3T covers both caps. The `tests/load/` rule appears only in `rules/python.md`, and this is a TypeScript repo, as the task file's context notes (line 38). Since no load test is required, no CI wiring task is needed either.",
+      "file_ref": null,
+      "category": "nfr",
+      "raw_category": null,
+      "location": "project-documents/ai-project-guide/project-guides/rules/python.md:57"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "process",
+      "raw_category": null,
+      "summary": "Commit markers are checkbox tasks instead of plain `**Commit**:` lines",
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:78",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "test-coverage",
+      "raw_category": null,
+      "summary": "Renderer tests don't cover every outcome kind",
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:174",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "note",
+      "category": "test-coverage",
+      "raw_category": null,
+      "summary": "`context_build` returning `AdoptionError` as an error result is only covered indirectly",
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:213",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "pass",
+      "category": "coverage",
+      "raw_category": null,
+      "summary": "Functional requirements trace to tasks",
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:229-244",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "pass",
+      "category": "sequencing",
+      "raw_category": null,
+      "summary": "Sequencing and dependencies",
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:45-269",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "pass",
+      "category": "scope",
+      "raw_category": null,
+      "summary": "Proportionality and task size",
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md",
+      "location_verified": null
+    },
+    {
+      "id": "F007",
+      "severity": "pass",
+      "category": "nfr",
+      "raw_category": null,
+      "summary": "No load-test task needed",
+      "location": "project-documents/ai-project-guide/project-guides/rules/python.md:57",
+      "location_verified": true
+    }
+  ],
+  "template_name": "tasks",
+  "input_files": {
+    "input": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md",
+    "against": "project-documents/user/slices/261-slice.detection-and-adoption-state.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/context-forge-261-tasks"
+  },
+  "timestamp": "2026-11-16T10:09:20.150346",
+  "model": "claude-opus-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 8,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-opus-5-5",
+  "answering_models": [
+    "claude-opus-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 7,
+    "in_fences": 0,
+    "in_section": 7,
+    "surviving": 7
+  },
+  "effort": "high",
+  "profile": "sdk",
+  "turns": 9,
+  "prompt_tokens": 496555,
+  "cached_tokens": 394748,
+  "cache_write_tokens": 101795,
+  "completion_tokens": 7795,
+  "reasoning_tokens": null,
+  "duration_seconds": 85.82400262495503,
+  "cost_usd": 1.0499895,
+  "cost_basis": "provider"
+}

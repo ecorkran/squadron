@@ -1,0 +1,333 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "PASS",
+      "title": "Task sequencing and test pairing hold",
+      "description": "Each task depends only on earlier tasks. `CONCEPT_PHASE` and `ADOPTION_STATES` (Task 1) come before `adoptionState` (2), which comes before the walk (3, which uses `AdoptionError` from 2). The outcome decision (7) uses a type import from 3, the renderer (8) needs 4, 5 and 7, and the resolver (9) needs everything before it. Every implementation task from 1 to 10 is followed by its `T` task, and Task 11 carries its tests inline.",
+      "file_ref": null,
+      "category": "sequencing",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:45"
+    },
+    {
+      "severity": "PASS",
+      "title": "Most success criteria map to a task",
+      "description": "Tasks 12 and 13 cover the 13 integration fixtures, the CLI/MCP parity test and the state-write ordering. Task 9T covers the selection table, the explicit-instruction path and the write failure. Tasks 3T, 5T, 6T and 7T cover the walk, history, planning-artifact and outcome criteria. Task 15 covers walkthrough steps 1\u20135. I found no task without a criterion. Task 1T's legacy-phase assertion traces to D4, and Task 14 traces to the README criterion.",
+      "file_ref": null,
+      "category": "coverage",
+      "raw_category": null,
+      "location": "project-documents/user/slices/261-slice.detection-and-adoption-state.md:319"
+    },
+    {
+      "severity": "PASS",
+      "title": "Referenced code paths and symbols resolve",
+      "description": "`gitExec` accepts `timeoutMs` and emits the `timed out after Ns` message (`gitExec.ts:24-26, 64, 97`), so Task 5's timeout and its mock are grounded. `node.ts:58` already re-exports `detection/`. `resolvePhaseValue` (`projectSchema.ts:157`), `PERMISSIVENESS_LEVELS`, `recognizeCi`, `isEnoent`, `pathPresent`, `MIN_GUIDE_VERSION`, the two parser classes, and the test and CLI/MCP files named in Tasks 1, 10, 11 and 13 all exist. `CONCEPT_PHASE` and the `adoption/` files are not yet present, as the plan expects.",
+      "file_ref": null,
+      "category": "verification",
+      "raw_category": null,
+      "location": "packages/core/src/guides/gitExec.ts:64"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Performance NFR has no verifying task",
+      "description": "The slice restates a performance target: detection adds under one second to a Phase 0 build (slice D2, line 167). The breakdown adds no timing or load task. Line 38 says the cap tests verify this target, but the caps bound directory entries and bytes read, not wall time, so they cannot show a sub-second result. The argument that `tests/load/` is a Python-only convention holds: `tests/load` appears only in `rules/python.md`. That justifies a different location, not skipping the check. Add a task that times `measureSourceVolume` on a generated tree at the caps, with a generous bound, in the repo's existing test location, and add a CI wiring task if that check gates merges.",
+      "file_ref": null,
+      "category": "nfr",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:38"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Integrator silently skips detection",
+      "description": "\"When the resolver and `project.projectPath` are set, call it\" means a build with a missing resolver or projectPath silently falls back to the Phase 0 concept prompt. That is the regression this slice exists to fix, and the project rules forbid silent fallbacks. The optional `null` default follows the permissiveness precedent (`ContextIntegrator.ts:88`), but the task should state the failure: the production composition root always passes a resolver (Task 11), and a Phase 0 build without a `projectPath` throws. Keep `null` only for explicit test doubles.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:206"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Walk imports a policy threshold, contradicting the slice's layering rule",
+      "description": "Task 3 has `detection/sourceVolume.ts` import `BROWNFIELD_MIN_SOURCE_LINES` from `adoption/adoptionOutcome.ts`. The slice says `detection/` is \"facts only, no policy\", and that thresholds live in `adoption/` (slice line 106). Task 7 then makes `adoptionOutcome.ts` import `SourceVolume` back, which is why the task needs `import type`. Pass the stop threshold in as an option, `measureSourceVolume(root, { stopAtLines, maxEntries })`, and have the resolver supply `BROWNFIELD_MIN_SOURCE_LINES` and `MAX_WALK_ENTRIES`. The cycle disappears, and Task 3T's entry-cap test (line 101) no longer has to create 20,001 files.",
+      "file_ref": null,
+      "category": "design-consistency",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:85"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`context_build` error surfacing is untested",
+      "description": "The slice requires that a guide without the profile or prompt makes `cf build` exit non-zero and makes `context_build` return the `AdoptionError` as an error. Task 10T only checks that the integrator rejects. Task 11's `contextTools.test.ts` assertions cover only the `persist` and `read-only` arguments. Walkthrough step 4 is CLI-only, and step 5 covers only the MCP happy path. Add a test where a mocked pipeline throws `AdoptionError` and `context_build` returns an error result carrying the message. Add the missing-profile case to walkthrough step 5.",
+      "file_ref": null,
+      "category": "coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:222"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Renderer tests skip three outcome kinds",
+      "description": "The slice's Technical Requirements say `renderAdoptionFacts` is tested for \"every outcome\". Task 8T covers brownfield, adoption-in-progress and `NOT_EVALUATED`. It omits already-planned, greenfield and adoption-closed. The resolver only renders selected outcomes, but the exhaustive `never` check makes all five kinds reachable from the type. Add one case per missing kind.",
+      "file_ref": null,
+      "category": "coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:174"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`readHistory` catches every failure",
+      "description": "\"Any failure of either call \u2192 unknown\" is a catch-all. The project rule requires a specific exception handled with a reason, or a logged re-raise. The inline comment covers the whole catch, not a specific exception. Check how `gitExec` reports a timeout and a non-zero exit, catch only those cases, and let anything else propagate. Narrow the caught value with `instanceof Error` before reading `.message`, as the TypeScript rules require for `unknown` catch bindings.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:118"
+    },
+    {
+      "severity": "NOTE",
+      "title": "D6 deviation is justified but the slice still says \"reuse\"",
+      "description": "Task 6 extracts the filename pattern instead of reusing `resolveInitiativePlanPath`, which slice D6 (line 213) still asks for. The reason holds: the helper's catch at line 27 returns null for every error, which conflicts with D6's \"other read errors throw\". Task 6's Context Summary (line 36) records the decision. Amend D6's text so the design and the task agree.",
+      "file_ref": null,
+      "category": "design-consistency",
+      "raw_category": null,
+      "location": "packages/core/src/introspection/ArtifactIntrospector.ts:27"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Commit points are checkbox items, not markers",
+      "description": "The file has no `**Commit**:` markers, which is allowed. Its checkbox commit items are placed on tested points (2C after 2T, 5C after 4 and 5T, 11C after 10T, 13C after 12), so the cadence is right. If you adopt markers, write them as plain `**Commit**:` lines so they are not checked off as work items.",
+      "file_ref": null,
+      "category": "format",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:78"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Task 14 is too small to stand alone",
+      "description": "Task 14 adds one README row and then has its own commit. Fold it into Task 13 or its commit. No other task needs merging.",
+      "file_ref": null,
+      "category": "granularity",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:253"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Task 12 bundles 13 scenarios at effort 3",
+      "description": "The scenarios come from the criteria, so the count is right. One long fixture task is harder to verify than two. Splitting at scenario 7 would give a midpoint commit. This is optional.",
+      "file_ref": null,
+      "category": "granularity",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:229"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Step 3 prescribes implementation the slice does not require",
+      "description": "The slice requires that symlinks are not followed and that the walk uses `fs/promises` (D2). It does not require `readdir` with `withFileTypes` and `lstat`, or a particular function split. Keep the requirement and drop the call sequence.",
+      "file_ref": null,
+      "category": "scope",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:86"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Some test paths are underspecified",
+      "description": "Task 9T names the guide fixture without a path. It is at `packages/core/tests/fixtures/test-project/project-documents/ai-project-guide/project-guides/prompt.ai-project.system.md`. Task 12 offers \"CoreServiceFactory.test.ts (or pipeline-integration.test.ts)\", but `pipeline-integration.test.ts` is at `packages/core/tests/`, not `tests/services/`. Give the exact paths.",
+      "file_ref": null,
+      "category": "verification",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:194"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "pass",
+      "category": "sequencing",
+      "raw_category": null,
+      "summary": "Task sequencing and test pairing hold",
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:45",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "pass",
+      "category": "coverage",
+      "raw_category": null,
+      "summary": "Most success criteria map to a task",
+      "location": "project-documents/user/slices/261-slice.detection-and-adoption-state.md:319",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "pass",
+      "category": "verification",
+      "raw_category": null,
+      "summary": "Referenced code paths and symbols resolve",
+      "location": "packages/core/src/guides/gitExec.ts:64",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "nfr",
+      "raw_category": null,
+      "summary": "Performance NFR has no verifying task",
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:38",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "Integrator silently skips detection",
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:206",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "design-consistency",
+      "raw_category": null,
+      "summary": "Walk imports a policy threshold, contradicting the slice's layering rule",
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:85",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "concern",
+      "category": "coverage",
+      "raw_category": null,
+      "summary": "`context_build` error surfacing is untested",
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:222",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "concern",
+      "category": "coverage",
+      "raw_category": null,
+      "summary": "Renderer tests skip three outcome kinds",
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:174",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "`readHistory` catches every failure",
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:118",
+      "location_verified": true
+    },
+    {
+      "id": "F010",
+      "severity": "note",
+      "category": "design-consistency",
+      "raw_category": null,
+      "summary": "D6 deviation is justified but the slice still says \"reuse\"",
+      "location": "packages/core/src/introspection/ArtifactIntrospector.ts:27",
+      "location_verified": true
+    },
+    {
+      "id": "F011",
+      "severity": "note",
+      "category": "format",
+      "raw_category": null,
+      "summary": "Commit points are checkbox items, not markers",
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:78",
+      "location_verified": true
+    },
+    {
+      "id": "F012",
+      "severity": "note",
+      "category": "granularity",
+      "raw_category": null,
+      "summary": "Task 14 is too small to stand alone",
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:253",
+      "location_verified": true
+    },
+    {
+      "id": "F013",
+      "severity": "note",
+      "category": "granularity",
+      "raw_category": null,
+      "summary": "Task 12 bundles 13 scenarios at effort 3",
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:229",
+      "location_verified": true
+    },
+    {
+      "id": "F014",
+      "severity": "note",
+      "category": "scope",
+      "raw_category": null,
+      "summary": "Step 3 prescribes implementation the slice does not require",
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:86",
+      "location_verified": true
+    },
+    {
+      "id": "F015",
+      "severity": "note",
+      "category": "verification",
+      "raw_category": null,
+      "summary": "Some test paths are underspecified",
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:194",
+      "location_verified": true
+    }
+  ],
+  "template_name": "tasks",
+  "input_files": {
+    "input": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md",
+    "against": "project-documents/user/slices/261-slice.detection-and-adoption-state.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/context-forge-261-tasks"
+  },
+  "timestamp": "2026-11-16T09:48:29.226683",
+  "model": "claude-haiku-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 18,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-haiku-5-5",
+  "answering_models": [
+    "claude-haiku-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 15,
+    "in_fences": 0,
+    "in_section": 15,
+    "surviving": 15
+  },
+  "effort": "xhigh",
+  "profile": "sdk",
+  "turns": 19,
+  "prompt_tokens": 931423,
+  "cached_tokens": 763605,
+  "cache_write_tokens": 167802,
+  "completion_tokens": 54554,
+  "reasoning_tokens": null,
+  "duration_seconds": 241.2437258749269,
+  "cost_usd": 0.26495667,
+  "cost_basis": "provider"
+}

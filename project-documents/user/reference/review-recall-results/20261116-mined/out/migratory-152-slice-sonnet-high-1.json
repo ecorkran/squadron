@@ -1,0 +1,225 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Slice redefines the exit criteria and drops scope the plan assigns to it",
+      "description": "The plan entry for (152) in `140-slices.simulation-scaling.md` assigns three things that the slice changes or drops:\n- **Gate baseline.** The plan says \"k-nearest TPS at N=200k within 20% of **k-first** TPS\". The slice compares against a new `radius_only` mode (criterion 4).\n- **No k-first regression.** The plan says \"no regression on k-first path\". The slice removes `k_first` entirely (Technical Scope 7).\n- **FRNN selection.** The plan says k-nearest via FRNN (collect-then-sort) \"becomes viable at scale\". The slice keeps the slice 150 heap and defers collect-then-sort to a follow-up (lines 75, 187-193).\n\nThese may be good decisions, since `k_first` early exit masks the cost. But the plan entry is the contract, and it was not updated. Either amend the plan entry (exit criteria, `radius_only`, `k_first` removal, FRNN deferral) before approval, or restore the plan's criteria. Without that, the slice can pass its own gate and still fail the plan's.",
+      "file_ref": null,
+      "category": "scope-alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md#Overview"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Performance gate is relative-only and does not restate the architecture NFR",
+      "description": "The architecture sets the end-state NFR of 60 TPS at tier targets. The slice plan sets Tier 3 at 250k on production-class hardware. The slice makes two related errors:\n- **Tier mislabel.** It calls N=200k \"the architecture's Tier 3 target\" (line 17). That figure is not in either document.\n- **Relative gate.** Criterion 4 is `k_nearest >= 0.8 \u00d7 radius_only` at 200k, with no absolute TPS floor. Both modes could run at a few TPS and the slice would still unblock the `k_nearest` default.\n\nThe 500k and 1M probes are explicitly \"not a hard gate\". State the absolute target this slice is working toward. Either add a TPS floor at 200k on the dev-class box, or say explicitly that no absolute floor applies and why. Fix the Tier 3 label.",
+      "file_ref": null,
+      "category": "nfr",
+      "raw_category": null,
+      "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md:358"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Gate workload parameters are unspecified, and the candidate-count figures conflict",
+      "description": "The `k_nearest` / `radius_only` ratio depends heavily on `query_radius`, `max_neighbors`, subdivision S and density. The slice cites x-fractal (`query_radius=128`, `max_neighbors=7`, ~160 candidates per agent). It also cites ~1400 candidates per agent at \"operational density\" (lines 19, 154). The `mid-flock-200k` workload, and the 500k and 1M entries, are never defined: no radius, cap, S or world size. Because the gate is a ratio between two modes on the same workload, an unspecified workload makes it unreproducible. Pin the workload parameters in the slice and reconcile the 160 and 1400 figures.",
+      "file_ref": null,
+      "category": "under-specification",
+      "raw_category": null,
+      "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md:27"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Landing sequence removes `k_first` before the gate, and the slice contradicts itself on deprecation",
+      "description": "Three passages disagree:\n- **Mitigation Strategies (line 433).** `k_first` stays \"still parsed, with a deprecation warning\" until the final commit.\n- **Technical Scope 7 and Technical Decisions (lines 67, 199).** `k_first` is \"removed entirely from the kernel\", raises `ConfigurationError`, and there is no silent migration.\n- **Development Approach steps 2 and 4 (lines 442-444).** Step 2 rewrites the inner loop with no `k_first` branch. The default stays `k_first` until step 4, after the gate.\n\nIf step 2 removes the kernel path, the default (`k_first`) points at a mode that no longer exists until step 4. If the gate fails, the fallbacks are the 88%-regression `k_nearest` or a revert. Pick one. Either keep the `k_first` specialization through the gate and remove it in the final commit, or move the removal and default flip into the same last commit and drop the deprecation language.",
+      "file_ref": null,
+      "category": "internal-consistency",
+      "raw_category": null,
+      "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md:433"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Boundary claim contradicts the scope: config and bench layers are touched, and the mode set is duplicated",
+      "description": "Component Structure says \"No file outside the GPU compute path is touched\" and the frontmatter says `interfaces: []`. Technical Scope 7 and \"Default `neighbor_mode` flip\" change `migratory_server.config.ComputeConfig`, `migratory.bench.workload.Workload`, `_NEIGHBOR_MODE_MAP`, the bench CLI (`--neighbor-mode radius_only`) and a `ConfigurationError` parse path. The accepted-values set and default live in both `config.py` and `workload.py` (line 349). That duplicates a comparison value across layers, which the project conventions prohibit. Correct the boundary statement. Define the mode enum, default and validation once in a shared location, and have both `ComputeConfig` and `Workload` reference it.",
+      "file_ref": null,
+      "category": "layer-boundaries",
+      "raw_category": null,
+      "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md:93"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Per-iteration inverse-permutation read is avoidable and adds to the bandwidth this slice exists to cut",
+      "description": "The slice calls `_coherent_to_original[kk] != i` \"the cheapest way\" to preserve self-exclusion. It adds one global read to every inner-loop iteration, roughly 160 to 1400 per agent. A lighter option meets the requirement: store `original_to_coherent[i]` (written in the reindex as `[orig] = kk`), read it once per agent, and compare `kk != i_c`. That removes the extra read from the hot loop. It also removes the need for the contingency in Risk 2 (shared-memory tiling of the permutation). The slice rejects only the \"walk coherent slots in the outer loop\" alternative. Evaluate this one before committing to the heavier design.",
+      "file_ref": null,
+      "category": "proportionality",
+      "raw_category": null,
+      "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md:159-165"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Overweight: reference narrative, extra workloads, and repeated FRNN follow-up text",
+      "description": "Items that can be cut or deferred:\n- **16M reference discussion (lines 36-44).** The \"Reference points\" section and the repeated 16M/80\u00d7 framing restate external material and a goal this slice does not deliver. One sentence is enough.\n- **FRNN follow-up text.** It appears in Technical Decisions (187-193), criterion 4, verification step 5 and Future Work. Keep it once.\n- **500k and 1M workloads.** Verification step 5 needs `mid-flock-500k` and `mid-flock-1M` workloads. \"Special Considerations\" budgets only `mid-flock-200k`. Either drop the probes, or run them ad hoc with parameter overrides rather than registering new workloads.\n- **`radius_only` exposure.** It is a new public config value that the plan does not assign. The gate needs it as a measurement yardstick, but nothing needs it in the server `ComputeConfig` yet. Consider exposing it only through the bench `Workload` until a consumer asks for it.",
+      "file_ref": null,
+      "category": "proportionality",
+      "raw_category": null,
+      "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md:36-44"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Stale and inconsistent statements to tidy",
+      "description": "- **Slice 150 status.** The slice says slice 150 is \"shipped on `main`\", but the slice plan still shows (150) as `[ ]`. Reconcile when the plan entry is amended.\n- **Sync handling.** State Management says `qd.sync()` is implicit at kernel boundaries in `graph=True` mode (line 146). The `build_spatial_hash` snippet adds an explicit `qd.sync()` (line 344). State which one holds.\n- **Metal status.** The architecture calls Metal a \"fully supported\" operating mode. The slice and plan treat it as best-effort. The slice's check that Metal runs `mid-flock` and `mid-flock-10k` without error satisfies both readings.",
+      "file_ref": null,
+      "category": "documentation",
+      "raw_category": null,
+      "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md:81"
+    },
+    {
+      "severity": "PASS",
+      "title": "Data flow, dependency direction and state ownership",
+      "description": "The reindex sits inside `build_spatial_hash`, so `run_fused_tick` and the world-server contract are unchanged. Coherent fields are tick-scoped scratch. Originals remain canonical, so the tick return contract and the slice 146 secondary-mutation paths are untouched. Memory cost is about 5.6 MB at 200k, well inside the architecture's memory budget. The slice depends only on (150) and the 143-149 pipeline, which matches the plan. The kernel has no host I/O of its own. The one new parse-time failure path (`k_first` \u2192 `ConfigurationError`) is explicit and fail-fast.",
+      "file_ref": null,
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md#State-Management"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "scope-alignment",
+      "raw_category": null,
+      "summary": "Slice redefines the exit criteria and drops scope the plan assigns to it",
+      "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md#Overview",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "nfr",
+      "raw_category": null,
+      "summary": "Performance gate is relative-only and does not restate the architecture NFR",
+      "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md:358",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "under-specification",
+      "raw_category": null,
+      "summary": "Gate workload parameters are unspecified, and the candidate-count figures conflict",
+      "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md:27",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "internal-consistency",
+      "raw_category": null,
+      "summary": "Landing sequence removes `k_first` before the gate, and the slice contradicts itself on deprecation",
+      "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md:433",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "layer-boundaries",
+      "raw_category": null,
+      "summary": "Boundary claim contradicts the scope: config and bench layers are touched, and the mode set is duplicated",
+      "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md:93",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "proportionality",
+      "raw_category": null,
+      "summary": "Per-iteration inverse-permutation read is avoidable and adds to the bandwidth this slice exists to cut",
+      "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md:159-165",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "concern",
+      "category": "proportionality",
+      "raw_category": null,
+      "summary": "Overweight: reference narrative, extra workloads, and repeated FRNN follow-up text",
+      "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md:36-44",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "note",
+      "category": "documentation",
+      "raw_category": null,
+      "summary": "Stale and inconsistent statements to tidy",
+      "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md:81",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "pass",
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "summary": "Data flow, dependency direction and state ownership",
+      "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md#State-Management",
+      "location_verified": null
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md",
+    "against": "project-documents/user/architecture/140-slices.simulation-scaling.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/migratory-152-slice"
+  },
+  "timestamp": "2026-11-16T10:22:16.035760",
+  "model": "claude-sonnet-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 6,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-sonnet-5-5",
+  "answering_models": [
+    "claude-sonnet-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 9,
+    "in_fences": 0,
+    "in_section": 9,
+    "surviving": 9
+  },
+  "effort": "high",
+  "profile": "sdk",
+  "turns": 7,
+  "prompt_tokens": 340679,
+  "cached_tokens": 233273,
+  "cache_write_tokens": 107398,
+  "completion_tokens": 8171,
+  "reasoning_tokens": null,
+  "duration_seconds": 71.89056900003925,
+  "cost_usd": 0.5352125000000001,
+  "cost_basis": "provider"
+}

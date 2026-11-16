@@ -1,0 +1,82 @@
+{
+ "review": "r01",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Load tests are outside the load tier and have no CI gate step",
+   "description": "Task 33 (line 276) calls its 200-pair, hung-dispatcher test a \"network-layer load test\", and Task 24 (line 223) calls its eight-way concurrency test a load test. Both are in `tests/benchmark/`, not `tests/load/`, and no task confirms CI gates them. The load-tier rule requires network, concurrency and environment-layer paths to have a `tests/load/` test that CI gates. Sibling slice 424 does this with an explicit confirm step (`424-tasks.producer-only-replay-runner.md:128`). CI runs a bare `uv run pytest` (`.github/workflows/ci.yml:38`), so these tests would still execute, but they should move to `tests/load/` with the confirm step added.",
+   "location": "project-documents/user/tasks/426-tasks.slice-cases.md:276"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "The environment load test asserts isolation, not a bound",
+   "description": "Task 24's concurrency test checks distinct scrubbed homes, no shared branch and no shared registry path. Those are functional checks. The load-tier rule says load tests assert latency, throughput or resource bounds. Add a bound, such as a wall-time limit for eight concurrent `invoke` calls, and keep the isolation assertions alongside it.",
+   "location": "project-documents/user/tasks/426-tasks.slice-cases.md:223"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Task 8's gate contradicts the context summary on renamed names",
+   "description": "The context summary (line 39) says that if a 421\u2013425 name differs, use the real one and record it in the DEVLOG. Task 8 says any missing name writes `BLOCKED:`. A renamed but present class would block under Task 8 and pass under line 39. Task 8 should state both cases: absent under any name means BLOCKED; present under another name means use it and record the mapping.",
+   "location": "project-documents/user/tasks/426-tasks.slice-cases.md:122"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Nothing refreshes the slice branch from the target after the gate",
+   "description": "Tasks 2\u20137 are committed on the slice branch, which is cut before 421\u2013425 exist. When the gate clears, Task 9 onward needs those modules, but no step refreshes the branch from the target. The likeliest conflict is Task 5: line 98 says 421, 422 and 425 add keys to the same `config/keys.py`. Add a step after the gate: refresh the slice branch from the target if it merges cleanly; if it conflicts, abort and ask the Project Manager.",
+   "location": "project-documents/user/tasks/426-tasks.slice-cases.md:122"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "The breakdown is overweight: 42 top-level tasks in one 343-line file",
+   "description": "Several groups of tasks change one module under one commit, so they split work without splitting risk. Merge candidates:\n- Tasks 15\u201319 (five stages of `qualify_slice_candidate`, one commit at line 193): merge 16+17 (sandboxes, sets, repeats) and 18+19 (case, errors) for three tasks.\n- Tasks 31\u201334 (four tasks in `diff_judge_runner.py`): merge 31+32 (plan) and 33+34 (bound, cap, lock, resume).\n- Task 40 (slash-command doc lines plus a sync test): fold into Task 35.\n- Task 6 is too large for one step. Its ten synthetic builders and the live `real_landings.json` capture (line 107) are different kinds of work. Split the live capture into its own task.",
+   "location": "project-documents/user/tasks/426-tasks.slice-cases.md"
+  },
+  {
+   "i": 5,
+   "severity": "NOTE",
+   "title": "Task 6 does not say which squadron slices to record",
+   "description": "\"Squadron's 400-initiative slices\" names no indices. A junior AI has to choose them, and the choice decides whether a two-parent and a fast-forward landing exist. Name the indices or state the selection rule.",
+   "location": "project-documents/user/tasks/426-tasks.slice-cases.md:107"
+  },
+  {
+   "i": 6,
+   "severity": "NOTE",
+   "title": "Task 1's commit subject is over the length guideline",
+   "description": "`docs: correct slice 426 design for judge_pair counting, fork plan files, registration branch, keep and over-size counts` is about 118 characters against the roughly 72-character guideline. Shorten the subject, for example `docs: correct slice 426 design gaps`, and put the detail in the body.",
+   "location": "project-documents/user/tasks/426-tasks.slice-cases.md:66"
+  },
+  {
+   "i": 7,
+   "severity": "NOTE",
+   "title": "Task 11's file placement conflicts with the design",
+   "description": "The design places `SliceCandidateRejection` in `benchmark_models.py` (`426-slice.slice-cases.md:321`). Task 11 allows a split into `metrology/slice_case_models.py` if the file would pass about 300 lines, and the context summary calls it \"the slice models module\". Pick one location now, or have the design name the split file.",
+   "location": "project-documents/user/tasks/426-tasks.slice-cases.md:141"
+  },
+  {
+   "i": 8,
+   "severity": "NOTE",
+   "title": "Task 8's precondition list omits CLI flags the live tasks depend on",
+   "description": "Tasks 23, 26 and 41 use `--max-cost-per-replay`, `--case`, `replay-show --diff`, `auth-check` and `--review-cost`. These appear in the 424 and 425 task files, so they are planned. Task 8 checks names only, so a flag missing at build time would surface during a live run. Add the flags to the gate's check.",
+   "location": "project-documents/user/tasks/426-tasks.slice-cases.md:122"
+  },
+  {
+   "i": 9,
+   "severity": "NOTE",
+   "title": "Sandbox coverage relies on 421's load test, which has no CI gate step",
+   "description": "The context summary (line 53) says sandbox and install paths are covered by 421's load test. 421 adds `tests/load/test_benchmark_sandbox_concurrency.py` but has no confirm-CI step, unlike 424. That coverage holds only if the test is actually gated in CI.",
+   "location": "project-documents/user/tasks/421-tasks.benchmark-sandbox-and-case-record.md:270"
+  },
+  {
+   "i": 10,
+   "severity": "NOTE",
+   "title": "The design's frontmatter omits two prerequisites",
+   "description": "`dependencies` lists 421, 422, 424 and 425. The design's Prerequisites also name 403 and 177. The task file's frontmatter lists all six, so only the design needs the fix.",
+   "location": "project-documents/user/slices/426-slice.slice-cases.md:6"
+  }
+ ]
+}

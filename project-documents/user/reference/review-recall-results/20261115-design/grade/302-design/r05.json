@@ -1,0 +1,54 @@
+{
+ "review": "r05",
+ "findings": [
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Structured-output constraint for the score field is dropped",
+   "description": "The architecture's Technical Considerations (b) commits the judge template to \"a structured-output constraint for the score field *and* a score-with-rationale prompt shape\". The slice implements only the second. It never mentions the structured-output constraint or says it was deferred or judged inapplicable to the lenient `score:` line parser. The slice plan assigns template authoring to this slice, so dropping a stated architectural mitigation silently is a gap. Either specify what constraint the templates carry (for example, an exact-format instruction for `score:` as an integer on its own line), or record an explicit deferral with a reason.",
+   "location": "project-documents/user/slices/302-slice.design-phase-judge-templates.md#score-with-rationale-prompt-shape"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Failure-mode table omits ground-truth read and injection-cap cases for these templates",
+   "description": "The architecture enumerates \"missing/unreadable ground-truth file\" and \"injected ground truth exceeding the cap\" as judge failure modes. Both apply here, and the cap case is more acute for `judge.slice-vs-arch`. That template injects a full slice design plus a full architecture doc into non-file-reading providers, and the architecture doc under review is itself ~125 lines of dense prose. The table covers only `SliceInfo` missing fields, which is the in-memory case. It does not cover:\n- a resolved path that is absent or unreadable on disk\n- injection over the cap\n\nIt also does not say whether each case maps to `UNKNOWN` with a WARNING+ log. Add these two rows with their handling, and add a test for the observable signal. The \"no silent pass\" restatement is otherwise good.",
+   "location": "project-documents/user/slices/302-slice.design-phase-judge-templates.md:394-400"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "No test that the documented output shape parses through the real parser",
+   "description": "The prompt shape puts a `## Rationale` block, with per-criterion lines such as `- alignment (85): \u2026`, before `score:` and `criteria:`. The slice asserts this fits the parser's lenient contract, but no listed test feeds that exact sample (or a realistic model output) through `_extract_score` / `_extract_criteria`. Rationale prose could contain a stray `score:`-like line, or the interleaved numbers could confuse extraction. The project's parsing rule requires fixtures in the real production format. Add a test that parses the slice's own sample output, with the Rationale block first, and asserts `score == 82.0`, the expected `criteria`, and the findings. The live-provider run mitigates this only after the fact.",
+   "location": "project-documents/user/slices/302-slice.design-phase-judge-templates.md:295-305"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "\"Avoid drift\" claim is undermined by the copy-the-criteria approach",
+   "description": "The slice says reusing the criteria \"avoids drift between what a human-reviewed `slice` template checks and what its judge counterpart checks\". The mechanism is to copy the criteria list into two new YAML files. That creates two copies that can drift apart, which is the opposite of the stated goal. It also adds a hidden coupling between each standard template and its judge twin. Either name the guard (for example, a test asserting the criteria sections of each template pair match), or drop the drift claim and accept the duplication explicitly. Also reconcile the Data Flow sample (lines 129-135), which omits the `## Rationale` block that the prompt-shape section requires.",
+   "location": "project-documents/user/slices/302-slice.design-phase-judge-templates.md:198-206"
+  },
+  {
+   "i": 5,
+   "severity": "NOTE",
+   "title": "Threshold defaults are not tied to the \"advisory until calibrated\" commitment",
+   "description": "The architecture says scores are advisory and gate conservatively until [320] calibrates a judge. The slice's differentiation by ground-truth strength is sound. However, a `pass_floor` of 78 on an uncalibrated judge can auto-pass. The slice gives no basis for 78/82/55/60 beyond the relative ordering. Say in one line that these are provisional and to be tuned from the first live runs, which the Mitigation section already hints at. No structural change is needed.",
+   "location": "project-documents/user/slices/302-slice.design-phase-judge-templates.md:218-234"
+  },
+  {
+   "i": 6,
+   "severity": "NOTE",
+   "title": "Registry change is a small departure from the architecture's \"authoring only\" framing",
+   "description": "The architecture says the connective work \"is therefore just authoring the judge templates and the threshold/escalation config\". The slice discovered that `TEMPLATE_INPUTS` needs two exact-name entries. The decision is well-justified and low-risk, and it is the right call. Consider noting it back to the architecture so later judge templates (`judge.code`, `judge.arch`) account for the registry step. The slice's \"recipe\" section already does this.",
+   "location": "project-documents/user/slices/302-slice.design-phase-judge-templates.md:51-57"
+  },
+  {
+   "i": 7,
+   "severity": "NOTE",
+   "title": "Proportionality: some content restates other work or duplicates required tests",
+   "description": "The design is otherwise right-sized. Two things could be trimmed:\n- Walkthrough steps 1 and 2 are inline Python scripts that duplicate the unit tests the Technical Requirements already mandate. Reduce them to a pointer to those tests.\n- Failure-mode rows 1, 2 and 5 are marked \"Not new\" and restate slice 300/301 handling. Collapse them into a single \"inherited, unchanged\" line.\n\nStep 3's CLI invocation is also internally inconsistent: it passes a positional `slice-vs-arch` together with `--template judge.slice-vs-arch`. The slice acknowledges this at lines 376-379, so confirm it at task time rather than leave it in the design.",
+   "location": "project-documents/user/slices/302-slice.design-phase-judge-templates.md:317-374"
+  }
+ ]
+}

@@ -1,0 +1,75 @@
+{
+ "review": "r06",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "FAIL",
+   "title": "Production pipeline would import the benchmark package",
+   "description": "The `IssueSource` module fetches the issue and calls the issue-text renderer (D3, line 144; integration, line 239). Slice 422 places that renderer, `issue_freeze`, in its `benchmark/` package (422, component structure, line 85). The architecture makes benchmarks consume production pipelines (arch line 61), so this inverts the direction: `sq run fix` would import benchmark code. Resolve it before either slice is built. Move the no-cutoff rendering into a production module beside `IssueSnapshot`. Keep the cutoff and `issue_edited_after_fix` in `benchmark/`. Then 422 imports from production and 423 imports nothing from benchmark.",
+   "location": "project-documents/user/slices/423-slice.fix-pipeline.md:71"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Fetch-mode dependency on 422 contradicts the plan's build order",
+   "description": "The plan entry says 423 has \"none in this initiative\" and \"can be built earlier\" (plan line 88; note at line 166). The design makes fetch mode depend on 422's `get_issue` and renderer (frontmatter line 6; line 49). File mode needs nothing from 422, so the plan's order holds only if fetch mode waits for 422. Either amend the plan entry or split the work so the file-mode pipeline ships first. The PM should choose.",
+   "location": "project-documents/user/slices/423-slice.fix-pipeline.md:49"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "MCP parity criterion dropped without a plan change",
+   "description": "The plan requires identical results across CLI, slash command and MCP (plan line 87). The design drops MCP (line 43; rejected at line 198) because no pipeline has an MCP `run` tool. That reasoning holds. The design's prompt-only parity (D9) covers the slash-command part, so that part is in scope and not creep. Removing a plan criterion is still a plan change. Amend plan entry 423, or keep MCP and track it as its own feature.",
+   "location": "project-documents/user/slices/423-slice.fix-pipeline.md:43"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Refusals lack the failure kinds 424 needs to classify them",
+   "description": "The architecture's \"absent is not zero\" rule says a producer-caused failure is a fail for that config, and a harness-caused one drops the case (arch line 67). The plan's 424 records each absence's kind (plan line 99). This design assigns kinds to only two outcomes, `fix_report` and `cost_cap` (line 77). Every other refusal is \"an `ActionResult(success=False)` with a message\" (line 203). That covers the dirty tree, wrong branch, missing or empty issue file, invalid ref, host error or timeout, HEAD moved (line 166), and commit-step git failures (lines 165\u2013167). As written, 424 cannot tell a missing issue file (harness, drop the case) from an agent that committed (producer, fail). Give each refusal a kind and mark which side it falls on. Also, 421 already defines a `FailureKind` for test outcomes (421 design, D11). This slice's `FailureKind` would share that name, so one should be renamed.",
+   "location": "project-documents/user/slices/423-slice.fix-pipeline.md:203"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Run identity omits instruction files and effort sent",
+   "description": "The architecture requires prompt identity to record \"the instruction files in effect,\" because the sandbox carries the start commit's project instructions (arch line 113). This design says the fix rule and gate commands come from those files (line 148), yet identity covers only the text of `fix.md`. The same prompt under different AGENTS.md or rules would count as the same config. The architecture also requires alias, model, profile and effort sent in each run's identity (arch line 99), and plan 420 says every later slice reads effort-sent from usage records (plan line 35). The recorded outputs (line 140) carry none of these. State that prompt identity covers the instruction files, and that the dispatch's usage record supplies the alias and effort.",
+   "location": "project-documents/user/slices/423-slice.fix-pipeline.md:191"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Walkthrough does not exercise the sandbox that 424 uses",
+   "description": "421 defines the scrubbed environment: `HOME` redirected, and `PATH` with no `~/.local/bin`, pipx or uv tool installs (421 design, D7, line 168). Walkthrough step 4 puts the installed `sq`'s own directory on `PATH` (line 313). That is the directory 421 excludes, and it may also contain `cf`, so the \"cf and gh absent\" criterion (line 248) is not guaranteed. The walkthrough also clones full history (line 311), while 421 uses a history-free sandbox, and it does not redirect `HOME`. Nothing here runs under the environment 424 uses (line 270). The plan orders 421 before 423 (plan line 21), so 421 will exist when this is built. Run step 4 through 421's sandbox and scrubbed environment. Also state where run state lives. If it is under squadron's config directory, it is written under the scrubbed `HOME` and removed on exit unless kept (421 line 118), so 424 must read it first.",
+   "location": "project-documents/user/slices/423-slice.fix-pipeline.md:309-317"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "Commit-path failure modes are not enumerated",
+   "description": "Fetch and frozen-file failures are well covered (see PASS). The commit path is not. A failure after `git add`, such as a pre-commit hook rejecting the commit or a locked index, is not addressed. The index stays staged, and the design does not say what the next `fix-context` run does or how the user recovers. The git calls behind the preconditions (`changed_paths`, `read_head`, `current_branch`, `read_integration_target`) have no stated bound or hang behavior. In prompt-only mode, `sq _commit --report-file` can meet a missing, empty or non-JSON file (line 197), with no stated outcome. Each needs an explicit behavior, a WARNING or ERROR log, and a test that asserts the signal.",
+   "location": "project-documents/user/slices/423-slice.fix-pipeline.md:165-167"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "Report contract is larger than the plan requires",
+   "description": "The plan asks for a fix, a passing test, passing gates and one commit (plan line 84). The design adds a five-field JSON report, a `blocked` exit, seven shape rules (lines 149\u2013156), and a second hidden command to carry the report in prompt-only mode (D9). Two checked fields, `failed_before_change` and `gates`, are self-reports that nothing verifies (line 327 admits this; arch line 48 says producer claims are never evidence). Their checks refuse a commit only when the agent honestly reports a failure, and they add parser surface. Effort already grew from the plan's 2/5 to 3/5 (line 344). Cut the contract to `summary`, `blocked`, and `failing_tests` as recorded text, plus the non-zero `exit_code` refusal, which is the one control with a use. Drop the `failed_before_change` refusal and the other `gates` shape rules, and record the rest in run state as reported.",
+   "location": "project-documents/user/slices/423-slice.fix-pipeline.md:149-156"
+  },
+  {
+   "i": 8,
+   "severity": "CONCERN",
+   "title": "Parser tests do not use a real reply",
+   "description": "AGENTS.md requires parser test fixtures to use the format production actually produces, and requires a real-world input test wherever bad input returns a default. Production input here is a model reply with prose and one JSON object, often fenced (line 149). The test list (line 261) names only \"every rejection, a valid report, a blocked report.\" Add a test fed by a captured real reply with prose around the object, and one with a fenced block.",
+   "location": "project-documents/user/slices/423-slice.fix-pipeline.md:261"
+  },
+  {
+   "i": 9,
+   "severity": "NOTE",
+   "title": "Fix-versus-feat choice is excluded by design",
+   "description": "AGENTS.md's fix rule says to decide the commit type before starting, and to commit feature-sized work as `feat:`. The architecture says the pipeline follows that rule (arch line 89). The design excludes the choice (line 42), so running `sq run fix` on a feature produces a `fix:` commit. That is acceptable if the caller owns the decision. Say so in the step's description and in the walkthrough.",
+   "location": "project-documents/user/slices/423-slice.fix-pipeline.md:42"
+  }
+ ]
+}

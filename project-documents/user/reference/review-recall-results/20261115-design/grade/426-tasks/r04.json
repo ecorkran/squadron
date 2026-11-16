@@ -1,0 +1,40 @@
+{
+ "review": "r04",
+ "findings": [
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Load tests are added without an NFR, outside `tests/load/`, with no CI gating",
+   "description": "The Context Summary says \"Load tests: two small ones\". These are the eight concurrent `invoke` calls in Task 24 (line 223) and the 200-pair slow-dispatcher plan in Task 33 (line 276).\n- The slice design restates no NFR, so no requirement calls for a load test.\n- Neither test lives in `tests/load/`, and no CI task gates on them. If they stay called load tests, that gap is unmet.\n- The 200-pair case adds nothing beyond the timeout and cap tests already in Task 33.\n- The concurrent-`invoke` case checks isolation that Task 24's argv, env and registration tests already cover.\n\nFix: drop the \"load test\" label and the 200-pair case. Keep one small isolation test in Task 24 only if you can name the success criterion it protects. Otherwise cut both.",
+   "location": "project-documents/user/tasks/426-tasks.slice-cases.md:53"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Tasks 15\u201319 are over-split for a single function",
+   "description": "`qualify_slice_candidate` is built across five tasks with five separate test files: `test_slice_qualify_checks`, `_sets`, `_repeats`, `_case` and `_errors`. Task 17 (repeats and exclusions) and Task 18 (empty-selection check plus case construction) are each only a few lines of logic. Task 19 re-wraps the stages Tasks 15\u201318 just wrote.\n\nSuggested merge:\n- **Task A:** pre-sandbox stage and reuse lookup (Task 15).\n- **Task B:** sandbox stage, test sets, repeats, exclusions, regression selection and case (Tasks 16\u201318), with one test file.\n- **Task C:** harness-error wrapping (Task 19), or fold it into B.\n\nThis cuts about two tasks and two test files without losing any assertion.",
+   "location": "project-documents/user/tasks/426-tasks.slice-cases.md:167-191"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Tasks 31\u201334 split one module across four tasks and four test files",
+   "description": "All four tasks edit `diff_judge_runner.py`: plan inputs and refusals (31), pairs and counts (32), bound and cap (33), lock, resume and over-size records (34). Each has its own test file, and the plan's counts and refusals are the same data under test.\n\nMerge 31+32 into \"plan\" and 33+34 into \"bound, cap, lock and resume\". That gives two tasks and two test files, and each task stays completable by a junior AI.",
+   "location": "project-documents/user/tasks/426-tasks.slice-cases.md:264-282"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Repeated file-split contingencies and implementation-dictating detail add weight",
+   "description": "The \"if the file would pass ~300 lines, put it in a sibling module\" instruction is repeated in Tasks 3 (line 80), 11 (line 141), 12 (line 147) and 36 (line 292). Task 42 already checks every touched file against the 300-line guideline and splits by concern.\n\nKeep the check in Task 42 and drop the four per-task contingencies. In the same spirit, the Context Summary restates about 12 design-gap bullets (lines 40\u201350), and Task 1 then copies them back into the design. Task 1 should carry the corrections, and the Context Summary should only point to it.\n\nThe task file is one document of about 340 lines with 42 tasks for an effort-3/5 slice. The merges suggested above bring it to about 36 tasks.",
+   "location": "project-documents/user/tasks/426-tasks.slice-cases.md:80"
+  },
+  {
+   "i": 6,
+   "severity": "NOTE",
+   "title": "Task 8 `BLOCKED:` gate is a valid dependency gate",
+   "description": "The `BLOCKED:` line in Task 8 and the one in Task 10 stop work on missing 421\u2013425 code or on a cf spike failure. They don't wait on PM approval, and the project rules allow them. Nothing to change.",
+   "location": "project-documents/user/tasks/426-tasks.slice-cases.md:122"
+  }
+ ]
+}

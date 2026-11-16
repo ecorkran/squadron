@@ -1,0 +1,207 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "PrInputs/PrFacts contract cannot feed the title and \"why\" prose",
+      "description": "Task 9's `PrFacts` carries the slice design *path*, the task items, and the review path, verdict and sha. Three consumers need more than that:\n- **Task 10a** needs the design's H1 to build the title.\n- **Task 11** needs design content to write \"Why\" prose. A path alone gives the model nothing to summarize, and D3 says it is \"given PrFacts only\".\n- **Task 8** reads only `reviewedSha`, but `PrFacts` also carries the review's verdict. No task says where the verdict is read.\n\nAlso, `PrInputs` is never defined. Task 7 builds the commit and slice halves of `gather_inputs` and Task 8 adds the review scan, but no task composes them into `gather_inputs -> PrInputs`.\n\nAdd the design text (or H1) and the review verdict to `PrInputs`/`PrFacts`. Assign the `gather_inputs` composition and the `PrInputs` dataclass to Task 7 or 8.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:197-202"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "No task provides the local head sha that Task 6 requires",
+      "description": "`check_head_pushed` takes `local_sha`, and Task 13 must supply it. Task 3 adds only `current_branch` and `commits_in_range`. `git_utils.py` has a private `_resolve_rev(ref, cwd)` (line 339), which returns `None` on failure. The task should either name a public local-sha helper or say to reuse `_resolve_rev`. If it does, a `None` result must raise rather than silently pass the \"behind\" check.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:138"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "body.py accumulates four tasks and will exceed the ~300-line guideline",
+      "description": "Tasks 10, 10a, 11 and 12 all write to `src/squadron/pr/body.py`. Together they add the model composer, title resolution (including H1 parsing and fallbacks), the section-definition table and `compose_body`, and the presence check. With their tests, that is likely over the file-size guideline and mixes several responsibilities. Split into separate modules, for example `composer.py`, `title.py` and `body.py` (sections plus check). Task 10 already names the composer as injectable, so the split costs little.",
+      "file_ref": null,
+      "category": "scope",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:216"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Task 16.4 lists a merge as a task item, against the project's git rules",
+      "description": "CLAUDE.md says to never write a merge or push as a task, sub-item or success criterion in a task file. Merging happens in Phase 7, after code review passes. Remove the \"Merge `385-slice...` into `squadron-pr`\" item.\n\nThe \"Ask the Project Manager how they want it run\" line is a PM-confirmation step with no named rule behind it. The project rules call such steps invalid, so reduce that item to \"code review is required\".",
+      "file_ref": null,
+      "category": "process",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:372-373"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Task 5 contradicts itself on an unreachable `cf`",
+      "description": "The bullet opens with \"Do not degrade an unreachable `cf` to a default base\" and then says that when `cf` is unavailable the chain proceeds to the host default. Task 5.2 and the design both intend the second behavior. A junior implementer could read the opening sentence as requiring a refusal. Reword it to \"an unreachable `cf` means the integration-branch term is absent; it does not substitute a guessed branch\".",
+      "file_ref": null,
+      "category": "clarity",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:122"
+    },
+    {
+      "severity": "NOTE",
+      "title": "\"First commit's subject\" is ambiguous given newest-first ordering",
+      "description": "Task 3 returns commits newest first. Task 10a's fallback uses \"the first commit's subject\", which a junior would read as `commits[0]`, the tip commit. Say which commit is meant: the tip or the oldest.",
+      "file_ref": null,
+      "category": "clarity",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:80"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Identity precondition has no implementing sub-item",
+      "description": "Task 13.1 orders \"identity, then pushed\" and Task 13.2 tests the refusal. No task states how the hostname for `identify_operator(hostname)` is obtained, or that the call is wired into `create`. A line in 13.1 would cover it, since the locator presumably carries the host.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:298"
+    },
+    {
+      "severity": "PASS",
+      "title": "Success-criteria coverage and test-with sequencing",
+      "description": "These design criteria map to tasks:\n- **Base selection and refusal:** Task 5.\n- **Push precondition:** Task 6.\n- **Merged-ancestor review exclusion:** Task 8.2.\n- **Five-section contract and presence check:** Tasks 11 and 12.\n- **Title rules:** Task 10a.\n- **Dry-run equality:** Task 13.2.\n- **Timeouts and failure matrix across five call sites:** Task 14.\n- **Provider failure:** Task 10.2.\n- **Import boundary:** Task 15.1.\n- **Docstring correction:** Task 15.2.\n- **Checkbox parser with a real-file fixture:** Task 2.2.\n- **Live evidence and zero pyright errors:** Task 16.\n\nEach implementation task is followed by its test task. The task order matches the design's order. The task file has no `**Commit**:` markers, which is acceptable. No NFR is restated in the slice, so no load-test or CI-wiring task is required.",
+      "file_ref": null,
+      "category": "coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "PrInputs/PrFacts contract cannot feed the title and \"why\" prose",
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:197-202",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "No task provides the local head sha that Task 6 requires",
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:138",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "scope",
+      "raw_category": null,
+      "summary": "body.py accumulates four tasks and will exceed the ~300-line guideline",
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:216",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "process",
+      "raw_category": null,
+      "summary": "Task 16.4 lists a merge as a task item, against the project's git rules",
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:372-373",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "clarity",
+      "raw_category": null,
+      "summary": "Task 5 contradicts itself on an unreachable `cf`",
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:122",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "clarity",
+      "raw_category": null,
+      "summary": "\"First commit's subject\" is ambiguous given newest-first ordering",
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:80",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "note",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "Identity precondition has no implementing sub-item",
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:298",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "pass",
+      "category": "coverage",
+      "raw_category": null,
+      "summary": "Success-criteria coverage and test-with sequencing",
+      "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md",
+      "location_verified": null
+    }
+  ],
+  "template_name": "tasks",
+  "input_files": {
+    "input": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md",
+    "against": "project-documents/user/slices/385-slice.create-a-pr-with-a-good-message.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/squadron-385-tasks"
+  },
+  "timestamp": "2026-11-16T09:27:32.644168",
+  "model": "claude-sonnet-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 4,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-sonnet-5-5",
+  "answering_models": [
+    "claude-sonnet-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 8,
+    "in_fences": 0,
+    "in_section": 8,
+    "surviving": 8
+  },
+  "effort": "medium",
+  "profile": "sdk",
+  "turns": 5,
+  "prompt_tokens": 351775,
+  "cached_tokens": 226009,
+  "cache_write_tokens": 125756,
+  "completion_tokens": 5653,
+  "reasoning_tokens": null,
+  "duration_seconds": 49.012928375042975,
+  "cost_usd": 0.5828773,
+  "cost_basis": "provider"
+}

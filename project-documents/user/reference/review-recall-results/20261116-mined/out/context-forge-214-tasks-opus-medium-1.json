@@ -1,0 +1,189 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Commit markers are checkbox tasks, not plain `**Commit**:` lines",
+      "description": "Tasks 2C, 3C, 4C, 5C and 6C (lines 71, 94, 117, 126, 134) are written as `- [ ] **Task NC: Commit** \u2014 ...`. Commit markers should be plain lines (`**Commit**: feat(core): ...`), never checkboxes. A checkbox commit task also causes a real problem. The workflow is implement, then task-checker, then commit. A commit can't contain the check-off of its own commit task, so the box either stays unchecked or needs a separate commit that only checks boxes, which the rules forbid. The placement is right: each marker sits at a tested point. Only the format needs to change. Turn each one into a plain `**Commit**: <message>` line under the task group it closes. Keep the \"only if files changed\" wording on 5C and 6C as plain text.",
+      "file_ref": null,
+      "category": "task-structure",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md:71"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Some exit-2 cases are not tested at command level",
+      "description": "The functional criterion lists six exit-2 cases: no args, a missing file, a non-regular file, an unreadable file, a missing or unreadable template, and a template with no required headings. Each must exit 2 with empty stdout, including under `--json`. Task 4T covers no args, a missing path, a valid file before a missing one, and a missing template. Task 3T covers a directory argument and a template with no markers, but only as a check on the core error type. Nothing tests an unreadable file or an unreadable template. Task 4 sends every `SliceDesignValidationError` through one `handleError(err, 2)` path, so the core-level type checks plus one CLI exit-2 test reasonably cover the rest. No new task is needed. Optionally, add the directory case to Task 4T's exit-2 list to cover \"non-regular\" end to end.",
+      "file_ref": null,
+      "category": "test-coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md:113"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Task 5C commit message assumes a docs-only change",
+      "description": "Task 5 tells the implementer to fix any unexplained `DIFF` as a bug and add a test for it. Task 5C's message is still fixed as `docs: record slice 214 parity sweep results`. If the sweep turns up a code fix, that commit would mix code and docs under a `docs:` prefix. Say that a code fix from the sweep gets its own commit with a `feat`/`fix` message before the docs commit.",
+      "file_ref": null,
+      "category": "sequencing",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md:122-126"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Task 0 stops when the integration branch is set",
+      "description": "Task 0 says to stop and ask the Project Manager if `git.integration_branch` is not empty, and it hard-codes `main` as the fork point. The branch rules already cover that case: fork from the configured target and merge back into it. The step should read the target and create the branch from it (`git checkout -b 214-slice.native-slice-design-validation {target}`), not stop. This only matters if the config changes before implementation.",
+      "file_ref": null,
+      "category": "process",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md:37-38"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Task 3 does not say whether template loading or preflight runs first",
+      "description": "The design's Data Flow loads the template first (step 2) and runs the file preflight second (step 3). Task 3 describes both but doesn't fix the order. The order decides which error appears when the template and a file argument are both bad. One clause like \"load the template, then preflight\" removes the ambiguity for a junior implementer.",
+      "file_ref": null,
+      "category": "clarity",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md:76-77"
+    },
+    {
+      "severity": "PASS",
+      "title": "Every success criterion maps to a task",
+      "description": "- PASS on the existing designs: Tasks 4T and 5.\n- FAIL with one missing line per section: Tasks 3T and 4T.\n- docType message: Tasks 3T and 4T, with the lenient quoting case in 3T.\n- Several files in order: Tasks 3T and 4T.\n- Exit-2 behaviour, including the valid-then-missing test and the `cf guides update` message: Task 4T.\n- JSON contract: Tasks 4 and 4T.\n- Worktree-aware template: Task 4T.\n- Normalization and matching unit tests: Task 2T.\n- Real-template test that checks `## Overview` and `### Verification Walkthrough`: Task 3T.\n- Command test against real designs: Task 4T.\n- Build, lint, full suite and file-size limits: Task 6.\n\nThe Integration Requirement (the guide repoints its references) is correctly left out of the tasks and recorded as a post-release action in the Context Summary. No task falls outside the slice's scope.",
+      "file_ref": null,
+      "category": "coverage",
+      "raw_category": null,
+      "location": "project-documents/user/slices/214-slice.native-slice-design-validation.md:164-186"
+    },
+    {
+      "severity": "PASS",
+      "title": "Order, sizing and test placement",
+      "description": "Dependencies run one way only: types.ts constant \u2192 pure validator \u2192 file layer, which uses the validator and `parseFrontmatter` \u2192 CLI, which uses the file layer and the constant \u2192 walkthrough and parity sweep \u2192 docs. There are no cycles. Each implementation task is immediately followed by its test task. Task sizes (effort 1\u20133) and the number of files fit a slice of about three new source files. Steps go into detail only where the design fixes behaviour (normalization rules, JSON shape, exit codes). The task file contains no merge or push step.",
+      "file_ref": null,
+      "category": "sequencing",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md:36-134"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "task-structure",
+      "raw_category": null,
+      "summary": "Commit markers are checkbox tasks, not plain `**Commit**:` lines",
+      "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md:71",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "note",
+      "category": "test-coverage",
+      "raw_category": null,
+      "summary": "Some exit-2 cases are not tested at command level",
+      "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md:113",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "note",
+      "category": "sequencing",
+      "raw_category": null,
+      "summary": "Task 5C commit message assumes a docs-only change",
+      "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md:122-126",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "note",
+      "category": "process",
+      "raw_category": null,
+      "summary": "Task 0 stops when the integration branch is set",
+      "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md:37-38",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "clarity",
+      "raw_category": null,
+      "summary": "Task 3 does not say whether template loading or preflight runs first",
+      "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md:76-77",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "pass",
+      "category": "coverage",
+      "raw_category": null,
+      "summary": "Every success criterion maps to a task",
+      "location": "project-documents/user/slices/214-slice.native-slice-design-validation.md:164-186",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "pass",
+      "category": "sequencing",
+      "raw_category": null,
+      "summary": "Order, sizing and test placement",
+      "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md:36-134",
+      "location_verified": true
+    }
+  ],
+  "template_name": "tasks",
+  "input_files": {
+    "input": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md",
+    "against": "project-documents/user/slices/214-slice.native-slice-design-validation.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/context-forge-214-tasks"
+  },
+  "timestamp": "2026-11-16T09:21:22.576806",
+  "model": "claude-opus-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 2,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-opus-5-5",
+  "answering_models": [
+    "claude-opus-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 7,
+    "in_fences": 0,
+    "in_section": 7,
+    "surviving": 7
+  },
+  "effort": "medium",
+  "profile": "sdk",
+  "turns": 3,
+  "prompt_tokens": 114936,
+  "cached_tokens": 29992,
+  "cache_write_tokens": 84940,
+  "completion_tokens": 4176,
+  "reasoning_tokens": null,
+  "duration_seconds": 50.90441895904951,
+  "cost_usd": 0.7697187000000001,
+  "cost_basis": "provider"
+}

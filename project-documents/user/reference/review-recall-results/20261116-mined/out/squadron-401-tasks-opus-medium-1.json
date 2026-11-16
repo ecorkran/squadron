@@ -1,0 +1,207 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "TypeScript `token_errors` includes `MemoryError`, which contradicts the slice's failure-mode table",
+      "description": "- **The conflict:** Task 14 makes the TypeScript tokenizer's `token_errors` `TypeScriptParseError` and `MemoryError`. This copies the length pipeline's error tuple (`src/squadron/metrology/snapshot/typescript_length.py:151`). But Task 10 and the slice's failure-mode table (row 2) say a `MemoryError` during the duplication pass makes `duplicated_lines` `tool_failed`. Task 11 tests exactly that.\n- **What happens as written:** in the TypeScript adapter, a `MemoryError` would be caught as a per-file error. The file goes into `unparsed_files` and the pass carries on, producing the kind of partial figure D3 forbids.\n- **The languages also disagree:** Python's tokenizer leaves `MemoryError` out of its token errors (Task 12), even though `_PARSE_ERRORS` at `python_adapter.py:81` includes it.\n- **Fix:** remove `MemoryError` from Task 14's `token_errors`. Add a Task 15 test showing that a `MemoryError` from the TypeScript tokenizer gives `tool_failed`.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:160"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`read_coverage`'s result type is described inconsistently across Tasks 19, 21 and 23",
+      "description": "- Task 19 returns \"a failure (not an exception)\", and Task 21 also produces failures (stat `OSError`).\n- But Task 21 then says \"The result is either a reading or an absence (reason, detail)\".\n- Task 23 handles three cases: an absence, a failure (sent to `tool_failed`) and a reading.\n- A junior implementer could fold failures into absences with a made-up reason, or drop the failure case.\n- **Fix:** state the result as reading | absence | failure in Task 21, and name the failure type once in Task 19.",
+      "file_ref": null,
+      "category": "interface-contract",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:218"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Commit markers are checkboxes, not plain `**Commit**:` lines",
+      "description": "- Every commit line (Tasks 2, 4, 6, 7, 9, 11, 13, 15, 17, 18, 20, 22, 24, 26, 27, 28, 29, 30) is written as `- [ ] Commit: ...`.\n- Commit markers must be plain `**Commit**: ...` lines. As checkboxes they get checked off like work items, and they invite a commit that only checks a box.\n- Where they sit is fine: each one comes at a tested, working point.",
+      "file_ref": null,
+      "category": "task-format",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:46"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The token-ceiling test doesn't check that the language's other metrics are unchanged",
+      "description": "- Success Criterion 10 and the Technical Requirement (\"assert both the signal and the outcome for each row\") include \"its other metrics are unchanged\".\n- Task 11 tests the ceiling only at the `duplication.py` level.\n- One adapter-level assertion would close this: lower the ceiling with `monkeypatch`, then check that function length and complexity are still present. It fits in Task 13 or Task 26.",
+      "file_ref": null,
+      "category": "test-coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:138"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Duplication's `unparsed_files` won't appear in the summary",
+      "description": "- Task 27 renders `duplicated_lines` with the generic \"N in M file(s)\" branch, and that branch never shows `unparsed_files`.\n- The API Contracts example doesn't show it either, so this isn't a gap against the slice. A tokenizer failure will only be visible in the JSON and the WARNING log.",
+      "file_ref": null,
+      "category": "rendering",
+      "raw_category": null,
+      "location": "src/squadron/metrology/snapshot/render.py:54-63"
+    },
+    {
+      "severity": "PASS",
+      "title": "Success criteria coverage",
+      "description": "| Criterion | Tasks |\n|---|---|\n| SC1 | 8, 9, 12\u201315, 26 |\n| SC2 | 9 |\n| SC3 | 4, 6 |\n| SC4 | 11, 15 |\n| SC5 | 22, 26 |\n| SC6 | 20, 24, walkthrough 4 |\n| SC7 | 20, 24 |\n| SC8 | 20, 24 |\n| SC9 | 17 |\n| SC10 | 11 |\n| SC11 | 26 |\n| SC12 | 7 |\n\n- **Technical requirements:** real Cobertura fixtures (18), every failure-mode row (9, 11, 13, 15, 20, 22), module size (30).\n- **Integration requirements:** contract freeze (25, 30), docs (28).\n- **Scope creep:** none. Every task traces to a decision (D1\u2013D6) or a criterion.",
+      "file_ref": null,
+      "category": "traceability",
+      "raw_category": null,
+      "location": "project-documents/user/slices/401-slice.complexity-duplication-and-coverage.md:260-291"
+    },
+    {
+      "severity": "PASS",
+      "title": "Prerequisites checked against the source",
+      "description": "- Task 2's premise is correct. `PythonAdapter.metrics = frozenset(SnapshotMetric)`, and `take.py:69` raises when the declared metrics don't match the returned ones. Narrowing the set before adding enum members is required, and the plan does it.\n- `_is_counted` (`typescript_length.py:110`), `_collect_functions` (`python_adapter.py:56`), `FIXTURE_ROOT_TOKEN` (`tests/metrology/snapshot/builders.py:28`) and `_spread` (`render.py:22`) all exist as the tasks assume.\n- Walkthrough steps 3\u20137 edit `.squadron.toml`, which is gitignored, so preflight's dirty-tree check won't trip.",
+      "file_ref": null,
+      "category": "sequencing",
+      "raw_category": null,
+      "location": "src/squadron/metrology/snapshot/python_adapter.py:105"
+    },
+    {
+      "severity": "PASS",
+      "title": "Proportionality and NFRs",
+      "description": "- **Size:** 30 tasks in one file is in proportion to four metrics, five new modules and two adapters. Task 10 (Effort 4) is the largest, but it's one cohesive module and splitting it wouldn't help.\n- **Load test:** the slice restates no architecture NFR. The memory figure in D3 is enforced by a constant and tested in Task 11, so no load-test or CI-gating task is needed.",
+      "file_ref": null,
+      "category": "proportionality",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "TypeScript `token_errors` includes `MemoryError`, which contradicts the slice's failure-mode table",
+      "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:160",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "interface-contract",
+      "raw_category": null,
+      "summary": "`read_coverage`'s result type is described inconsistently across Tasks 19, 21 and 23",
+      "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:218",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "task-format",
+      "raw_category": null,
+      "summary": "Commit markers are checkboxes, not plain `**Commit**:` lines",
+      "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:46",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "note",
+      "category": "test-coverage",
+      "raw_category": null,
+      "summary": "The token-ceiling test doesn't check that the language's other metrics are unchanged",
+      "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:138",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "rendering",
+      "raw_category": null,
+      "summary": "Duplication's `unparsed_files` won't appear in the summary",
+      "location": "src/squadron/metrology/snapshot/render.py:54-63",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "pass",
+      "category": "traceability",
+      "raw_category": null,
+      "summary": "Success criteria coverage",
+      "location": "project-documents/user/slices/401-slice.complexity-duplication-and-coverage.md:260-291",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "pass",
+      "category": "sequencing",
+      "raw_category": null,
+      "summary": "Prerequisites checked against the source",
+      "location": "src/squadron/metrology/snapshot/python_adapter.py:105",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "pass",
+      "category": "proportionality",
+      "raw_category": null,
+      "summary": "Proportionality and NFRs",
+      "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md",
+      "location_verified": null
+    }
+  ],
+  "template_name": "tasks",
+  "input_files": {
+    "input": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md",
+    "against": "project-documents/user/slices/401-slice.complexity-duplication-and-coverage.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/squadron-401-tasks"
+  },
+  "timestamp": "2026-11-16T09:18:06.227040",
+  "model": "claude-opus-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 8,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-opus-5-5",
+  "answering_models": [
+    "claude-opus-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 8,
+    "in_fences": 0,
+    "in_section": 8,
+    "surviving": 8
+  },
+  "effort": "medium",
+  "profile": "sdk",
+  "turns": 9,
+  "prompt_tokens": 597313,
+  "cached_tokens": 483454,
+  "cache_write_tokens": 113845,
+  "completion_tokens": 8105,
+  "reasoning_tokens": null,
+  "duration_seconds": 86.40456716599874,
+  "cost_usd": 1.1703407,
+  "cost_basis": "provider"
+}

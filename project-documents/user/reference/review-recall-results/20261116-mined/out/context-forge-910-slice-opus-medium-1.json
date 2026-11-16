@@ -1,0 +1,171 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "PASS",
+      "title": "Fits the maintenance architecture's scope and principles",
+      "description": "The architecture lists \"Pattern consolidation\" and \"Hard-coded values \u2192 configuration or constants\" as in scope. This slice does that work with one theme and clear success criteria, which matches the \"slice by theme\" and \"opportunistic but intentional\" principles. It changes no behavior and does not touch package boundaries, so dependencies still point inward to `types.ts`. Its size suits a mechanical sweep: it adds no new abstractions and leaves the `ConsistencyChecker.ts` split to a later slice.",
+      "file_ref": null,
+      "category": "alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md#overview"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "All three WorkflowNavigator sites are `SliceStatus.status` values, which TD-3 excludes",
+      "description": "The doc lists `WorkflowNavigator.ts` with 3 `=== 'complete'` checks to sweep (also lines 75, 90). In the source, all three belong to the workflow-position union, not `NormalizedStatus`:\n- `slice.status === 'complete'` at WorkflowNavigator.ts lines 312 and 345 is the same field that is compared to `'review-failed'` at line 302.\n- `return { ...base, status: 'complete', taskProgress }` at line 588 builds a `SliceStatus`.\n\nTD-3 (lines 104-106) says these must not be swept because doing so \"implies the two unions are related, which they aren't.\" The plan contradicts its own decision. The success criterion at line 135 makes it worse: it requires zero matches in \"the six swept files,\" so an implementer has to break TD-3 to meet it. The file already uses `STATUS.*` where the value really is `NormalizedStatus` (lines 319 and 577). **Fix:** move `WorkflowNavigator.ts` to Excluded under TD-3, and change the file count from 6 to 5.",
+      "file_ref": null,
+      "category": "scope",
+      "raw_category": null,
+      "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md:36"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "ConsistencyChecker's `detail.value` fix payloads are frontmatter write-back values, and the doc does not classify them",
+      "description": "About 14 of the ConsistencyChecker literals are fix payloads such as `detail: { key: 'status', value: 'in-progress' }` (ConsistencyChecker.ts lines 368, 384, 403, 480, 546, 728, 744, \u2026). These are values written back into a document's frontmatter `status` field. The doc describes all 36 sites as \"comparisons\" and does not say which vocabulary these values belong to. TD-2 says raw frontmatter tokens and `NormalizedStatus` are \"intentionally distinct vocabularies\" that must not be merged. Sweeping these payloads onto `STATUS.*` would officially make `NormalizedStatus` the frontmatter write vocabulary, and that is the very merge TD-2 rules out. **Fix:** state explicitly whether `detail.value` payloads are `NormalizedStatus`, and therefore swept, or frontmatter tokens, and therefore excluded or deferred. Give the reason either way.",
+      "file_ref": null,
+      "category": "scope",
+      "raw_category": null,
+      "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md:33"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Several site counts and descriptions don't match the source, and the grep-based success check would fail",
+      "description": "Problems found:\n- **`types.ts` count:** the doc says \"5 (of 8 total)\" for the `inferredStatus` union. Line 44 holds only 3 literals. The 8th literal is the `SliceStatus` `'complete'` at line 269, which is excluded.\n- **`statusNormalizer.ts` split:** the doc says 13 values plus 3 alias keys. The source has 14 value-side literals and 2 quoted keys (`'in-progress':` and `'not-started':`).\n- **`ProjectModelBuilder.ts`:** the doc calls `'unknown'` its \"one literal\" (lines 39, 50). The only match is `'not-started'` inside a comment at line 179, so the grep at lines 135 and 149 will count it.\n- **Comment matches:** ConsistencyChecker.ts line 514 has the literals in a comment (`// 'complete' | 'in-progress' | 'not-started'`). The zero-match criterion at line 135 will also catch this.\n- **Totals:** the before/after counts at lines 150-151 (~75 \u2192 4 + 3 + 4) mix line counts with occurrence counts. The `SliceStatus` contribution is 1, not 4.\n\nAs written, the Functional Requirements check (line 135) cannot pass even if the sweep is correct. **Fix:** redo the inventory per site. Exclude comment lines from the check, or require the comments to be updated too. Restate the expected after-count.",
+      "file_ref": null,
+      "category": "under-specification",
+      "raw_category": null,
+      "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md:33-41"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Relying on the existing test suite is acceptable but unverified for the touched paths",
+      "description": "The architecture requires that \"refactoring slices must have test coverage verifying preserved behavior.\" The doc uses the existing suite as the regression guard, which is reasonable for an identity-preserving change, since `STATUS.X === 'x'`. It does not confirm that the swept ConsistencyChecker rule functions are actually exercised by tests. The compile-time typo check at line 153 covers most of the risk, so no action is needed beyond a quick coverage check during task breakdown.",
+      "file_ref": null,
+      "category": "testing",
+      "raw_category": null,
+      "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md:85"
+    },
+    {
+      "severity": "PASS",
+      "title": "No new I/O paths, NFRs or integration contracts",
+      "description": "The slice adds no I/O, message types or public API changes. The `NormalizedStatus` value set is unchanged, so the CLI and MCP consumers are unaffected. Retyping `inferredStatus` to `NormalizedStatus` (TD-1) only widens the type, and grouping it with `taskFileParser.ts` as step 1 is the correct order. Failure-mode enumeration and NFR restatement do not apply.",
+      "file_ref": null,
+      "category": "integration",
+      "raw_category": null,
+      "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md#integration-points"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "pass",
+      "category": "alignment",
+      "raw_category": null,
+      "summary": "Fits the maintenance architecture's scope and principles",
+      "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md#overview",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "scope",
+      "raw_category": null,
+      "summary": "All three WorkflowNavigator sites are `SliceStatus.status` values, which TD-3 excludes",
+      "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md:36",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "scope",
+      "raw_category": null,
+      "summary": "ConsistencyChecker's `detail.value` fix payloads are frontmatter write-back values, and the doc does not classify them",
+      "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md:33",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "under-specification",
+      "raw_category": null,
+      "summary": "Several site counts and descriptions don't match the source, and the grep-based success check would fail",
+      "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md:33-41",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "testing",
+      "raw_category": null,
+      "summary": "Relying on the existing test suite is acceptable but unverified for the touched paths",
+      "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md:85",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "pass",
+      "category": "integration",
+      "raw_category": null,
+      "summary": "No new I/O paths, NFRs or integration contracts",
+      "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md#integration-points",
+      "location_verified": null
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md",
+    "against": "project-documents/user/architecture/900-arch.maintenance-and-refactoring.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/context-forge-910-slice"
+  },
+  "timestamp": "2026-11-16T09:22:18.924253",
+  "model": "claude-opus-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 11,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-opus-5-5",
+  "answering_models": [
+    "claude-opus-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 6,
+    "in_fences": 0,
+    "in_section": 6,
+    "surviving": 6
+  },
+  "effort": "medium",
+  "profile": "sdk",
+  "turns": 12,
+  "prompt_tokens": 462392,
+  "cached_tokens": 373650,
+  "cache_write_tokens": 88728,
+  "completion_tokens": 5417,
+  "reasoning_tokens": null,
+  "duration_seconds": 61.18059383309446,
+  "cost_usd": 0.8934080999999998,
+  "cost_basis": "provider"
+}

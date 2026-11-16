@@ -1,0 +1,89 @@
+{
+ "review": "r14",
+ "findings": [
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Config identity drops the alias from the architecture's stated key",
+   "description": "Architecture line 40 defines a result's config as `(alias, model, profile, effort sent)` and says reports compare only matching results. D6 removes the alias from the grouping key. Architecture line 99 supports the narrower reading (\"two rows only when the effort really differed on the wire\"), so the architecture contradicts itself. D6 says the architecture \"already implies\" the narrowing (line 147), but that holds only for line 99. Amend architecture line 40 with this decision, so 424\u2013427 do not build to the superseded key.",
+   "location": "project-documents/user/slices/420-slice.effort-audit-across-dispatch-paths.md:142-147"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Identity rule has no shared implementation, contrary to the plan",
+   "description": "The plan entry says this slice \"provides ... in config identity. All later slices read it\" (`420-slices.model-benchmark.md:35`). D6 instead gives replay a private `config_identity` and says \"this slice ships no shared identity type.\" Later slices will \"apply the rule to their own record types\" (line 162). Stats already keys on a different tuple, `ProducerKey(model, profile, effort, reviewer)` (line 144). The rule would then exist in two shapes now and a third in 425. Identity is what makes results comparable, so it should have one definition, imported by replay, stats, and 424\u2013427.",
+   "location": "project-documents/user/slices/420-slice.effort-audit-across-dispatch-paths.md:144-146"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "A missing effort stamp reads as \"not sent\"",
+   "description": "The D5 reader returns `None` when neither the stamp nor the usage record has an effort. D1 says `None` means nothing went on the wire. So \"unknown\" and \"not sent\" group together, which architecture line 67 (\"Absent is not zero\") and the project's no-silent-fallback rule both prohibit. Three specific gaps follow:\n- Line 137 says \"Nothing was sent in those runs\" for runs whose subprocess died or whose action was cancelled. Those runs may have dispatched before stopping. The design does not show that nothing was sent.\n- Line 116 says existing records \"keep their meaning.\" Pre-slice compaction records carry a hard-coded `None` (line 64), so the reader reports them as \"not sent\" though the turn ran at the session's effort.\n- The design does not say which identity row an unstamped run joins, or whether it is dropped. \"Counted by that class\" (line 137) is not a grouping rule.\n\nKeep `unknown` as its own result, counted separately by failure class. Log it at WARNING where it is read, and add a test for the absent case.",
+   "location": "project-documents/user/slices/420-slice.effort-audit-across-dispatch-paths.md:133-140"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "\"Effort sent\" is the value given to the capture, not the value on the wire",
+   "description": "Line 17 says a \"sonnet at high\" row means effort `high` was actually sent. Line 23 says a config's effort \"is what went on the wire.\" Architecture line 22 says runs record \"the effort actually sent.\" D5 stamps \"the one passed to the capture\" (line 136), and the per-path tests \"assert `config.effort`\" (line 155). Neither checks the request the provider adapter builds. The adapters translate effort differently: SDK `none` becomes `thinking: disabled`, Codex uses a per-turn reasoning-effort field, and OpenAI-compatible uses a top-level `reasoning_effort` (line 80). A dropped or changed value would still be recorded as \"sent.\" #216 is this kind of case: the session opened at a different effort than the step's alias set (line 46), and a test on the step's `config.effort` would have passed. Also, the plan names OpenAI-compatible as a dispatch path (`420-slices.model-benchmark.md:27`), but the inventory has no row or test for it. Add at least one test per adapter that asserts the request carries the effort the record states. State in D5 that the stamp is the capability-gated output of `note_effort_sent`, not the requested value.",
+   "location": "project-documents/user/slices/420-slice.effort-audit-across-dispatch-paths.md:136"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Findings-addressed judge sends effort but records none, and its spend stays outside the cap",
+   "description": "D3 makes this path send the judge alias's effort, which changes its cost and latency (line 183). But D5's stamp list (line 88) omits it, and it writes no UsageRecord (row 7, line 68), so no record carries the effort it ran at. Architecture line 22 requires every run to record effort. Its spend also sits outside `pipeline.max_cost_usd`, which architecture line 83 treats as bounding one pipeline run. Line 232 defers that gap to an issue. The project rules make a bug in code the slice changes part of the slice, and this slice changes this path's dispatch. Stamp `effort_sent` on this gate's action result. Bring its spend into the run's totals: D5 rejects only a UsageRecord with no spend (line 140), and this path has real spend. If you defer it, file the issue now and cite its number here.",
+   "location": "project-documents/user/slices/420-slice.effort-audit-across-dispatch-paths.md:85-88"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "Non-alias paths are described both as recording `null` and as recording nothing",
+   "description": "D1 says a path with no alias records `null`. The inventory says paths 13\u201315 (metrology audit, PR composer, daemon agents) record nothing (`Records: no`, lines 74\u201376), and line 37 excludes them. The plan requires a path that cannot send effort to \"record that it could not\" (`420-slices.model-benchmark.md:27`). Architecture line 22 says every run records effort or records that none was sent. For each excluded path, the design should say whether it writes any usage or run record. If it does, that record carries `null`. If it does not, the architecture should say its \"every run\" rule does not reach it.",
+   "location": "project-documents/user/slices/420-slice.effort-audit-across-dispatch-paths.md:113-115"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "Failure modes are not enumerated for paths that now send effort",
+   "description": "D3 and D4 add an effort parameter to the judge, the findings gate, and `_dispatch-run`, which sent none before. D5 adds a persisted key. The design gives no failure-mode list for any of them. Unanswered:\n1. What happens when the provider rejects a level the resolved model does not accept? The alias may be valid in configuration while the model refuses that level.\n2. Does the higher-effort gate have a timeout, and what happens on expiry?\n3. Is a rejection retried without effort? That would be a silent fallback under the project rules.\n\nEach case needs an explicit outcome on the action and a test asserting it. The parser's raise rule (line 139) also has no test in the success criteria.",
+   "location": "project-documents/user/slices/420-slice.effort-audit-across-dispatch-paths.md:124-131"
+  },
+  {
+   "i": 8,
+   "severity": "CONCERN",
+   "title": "Compaction record's model and profile are not specified",
+   "description": "D2 correctly says the summary turn runs on the session's client, whose effort is fixed at open. It says nothing about model or profile. The compact step names its model by alias (line 122). If the record keeps that alias's model and profile while carrying the session's effort, the identity pairs values that did not go on the wire together. That is the mismatch D6 exists to prevent. If the session's model is fixed too, as the design implies for effort, say so and test the recorded model and profile.",
+   "location": "project-documents/user/slices/420-slice.effort-audit-across-dispatch-paths.md:119-122"
+  },
+  {
+   "i": 9,
+   "severity": "CONCERN",
+   "title": "Two added identity fields split unchanged configs across the slice boundary and are not required",
+   "description": "D6 adds `tool_use` and `max_output_tokens` to the identity. The plan asks for effort only (`420-slices.model-benchmark.md:33`), and architecture line 40 does not name these fields. The new `ProducerConfigRef` fields default to `None` on old records (line 145). When the alias sets them, a pre-slice replay of an unchanged alias groups in a different row from the same alias run after this slice. Architecture line 40 would then have to flag that pair as non-matching, though the config did not change. Cut both fields from this slice. If one of them changes results, add it to the architecture's identity and give a backfill rule for `None`.",
+   "location": "project-documents/user/slices/420-slice.effort-audit-across-dispatch-paths.md:145"
+  },
+  {
+   "i": 10,
+   "severity": "CONCERN",
+   "title": "Verification does not show one test per path (1\u201312)",
+   "description": "Line 180 requires one test per sending path, 1\u201312. The walkthrough names four test files (lines 200\u2013201) and says they cover \"paths 1\u201312\" (line 203). Paths 7 (both entry points), 9 (`sq review`), 11 (the `_dispatch-run` option, as distinct from the renderer), and 12 (the replay and stats readers) have no named test. `test_effort_plumbing.py` may hold some of them, but the design does not say. Name the file and test for each path, or the claim cannot be checked.",
+   "location": "project-documents/user/slices/420-slice.effort-audit-across-dispatch-paths.md:198-203"
+  },
+  {
+   "i": 11,
+   "severity": "NOTE",
+   "title": "Frontmatter and dependency lists disagree with the body",
+   "description": "Frontmatter says `dependencies: []`, but the body lists 931 and 175 as prerequisites (line 45). Frontmatter `interfaces` omits 423, which the plan says reads effort identity (`420-slices.model-benchmark.md:35`). Architecture's dependency list (`420-arch.model-benchmark.md:8`) names neither 931 nor 175, though this slice relies on both. The plan's \"none in this initiative\" supports an empty initiative list, so this is informational. List external prerequisites in the frontmatter, and name 931 and 175 in the architecture.",
+   "location": "project-documents/user/slices/420-slice.effort-audit-across-dispatch-paths.md:6-7"
+  },
+  {
+   "i": 12,
+   "severity": "NOTE",
+   "title": "Effort estimate is low for the footprint",
+   "description": "Effort is given as 2/5. The Components changed list (lines 82\u201391) touches more than a dozen files and adds two helpers, a persisted key with a parser, and a new identity function. The defects justify the work, so no cut is required, but the estimate should match the footprint.",
+   "location": "project-documents/user/slices/420-slice.effort-audit-across-dispatch-paths.md:229"
+  }
+ ]
+}

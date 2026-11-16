@@ -1,0 +1,207 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "PASS",
+      "title": "Architectural alignment and layering",
+      "description": "The architecture says \"Squadron does not attempt to unify authentication\" and that each provider's credential resolution is self-contained (`100-arch.orchestration-v2.md:243`). The slice keeps to that. `InteractiveLogin` is an optional Protocol that only the Codex strategy implements. Squadron stores no credentials, and `~/.codex/auth.json` stays owned by the Codex runtime. D3 and D9 avoid widening `AuthStrategy` and avoid profile-name or auth-type string dispatch. The CLI depends on Protocols rather than on `providers/codex`. `notify` keeps Rich out of the provider layer.",
+      "file_ref": null,
+      "category": "architecture",
+      "raw_category": null,
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md#Relationship to the architecture's auth model"
+    },
+    {
+      "severity": "PASS",
+      "title": "Plan-entry scope is fully covered",
+      "description": "The Part A, B and C items in the slice plan entry (24, 129) all appear in Included: port, bundled-then-PATH runtime, extra, effort (#171), usage, install hint, doctor row, model-list marker, README, login, `--device-code`, logout, and email/plan in status. Nothing assigned to this slice is dropped. The Excluded list (`login_api_key`, streaming, a squadron token store) matches the plan.",
+      "file_ref": null,
+      "category": "scope",
+      "raw_category": null,
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md#Technical Scope"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Login and logout I/O paths have no enumerated failure modes, and parts of them are unbounded",
+      "description": "The Failure Modes table is titled \"Codex Turn\" and covers only turns, plus `account()` and the `wait()` timeout. `sq auth login` and `sq auth logout` are new I/O paths with their own hang, timeout and disconnect cases. The login and logout failure handling is spread across D7 and the Patterns bullet.\n- **Unbounded calls:** `codex.login_timeout_s` bounds only `handle.wait()`. Runtime spawn and `initialize` for login, the `login_chatgpt()` / `login_chatgpt_device_code()` calls that return the handle, and `AsyncCodex.logout()` have no timeout. A hung runtime start during `sq auth login` or `sq auth logout` blocks the CLI indefinitely.\n- **Failures with no handling:** the local callback listener failing to bind (port in use), and `webbrowser.open` failing or finding no browser. The runtime dying mid-`wait()` is also unlisted. Logout when not logged in or when the runtime fails to start is unaddressed, as is a partial logout where `auth.json` still exists afterwards.\n- **No test assertions:** the Technical Requirements test list has no rows for these paths, though it requires one test per turn-table row.\n\nAdd a login/logout failure table. Each row should give the bound, the observable signal (WARNING+ log or non-zero exit with message) and a test. Put the spawn, handle acquisition and `logout()` calls under an existing timeout key.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md#Failure Modes \u2014 Codex Turn"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Doctor row needs package version, but the shared `CodexRuntime` does not carry it",
+      "description": "D9 and Sub-part B require the doctor row to show the package version and runtime source. D9 says the detail comes from `CodexRuntime`, and that \"doctor contains no import probing or `shutil.which` of its own.\" But `CodexRuntime` is specified as `(source, path|None)` with no version field. Doctor has no sanctioned way to get the version except to probe it itself, which the design forbids. Extend `CodexRuntime` with the version, or state where version resolution lives. Without that, the one-source-of-truth claim for doctor does not hold.",
+      "file_ref": null,
+      "category": "under-specification",
+      "raw_category": null,
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md#D9"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Design is heavier than the slice needs in a few places",
+      "description": "Cuts that would not lose any plan-assigned scope:\n- **Timeout mechanisms:** three config keys plus a `--timeout` CLI override make four timeout mechanisms. `codex.login_timeout_s` and `--timeout` do the same job, so drop the flag. `codex.account_timeout_s` (30 s) could fold into one runtime-operation key that also covers the login and logout spawn gaps above.\n- **Restating prose:** \"Runtime startup cost\" argues at length for not setting a latency target. \"Relationship to the architecture's auth model\" re-justifies D3. Each could be one or two sentences.\n- **Duplicated verification:** the Verification Walkthrough largely repeats Functional Requirements and the Part A\u2013C task flow. Keep only the manual-only steps (browser and device-code flows, and the real-account smoke test).\n- **Test inventory:** the test list is exhaustive per row, which is fine. Keep it as the single place enumerating tests, rather than restating it in the Success Criteria and the failure table.",
+      "file_ref": null,
+      "category": "proportionality",
+      "raw_category": null,
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md#D7"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Dependency list differs from the plan entry",
+      "description": "The plan entry lists `Dependencies: [128]`. The slice frontmatter lists two slices, and the Prerequisites section adds slice 931 (`AgentConfig.effort`, `applies_effort`, `core/usage.py`). That dependency is real, because Part A's effort and usage work needs it, but the slice plan entry does not record it. Reconcile the two so the plan reflects the actual ordering constraint.",
+      "file_ref": null,
+      "category": "dependencies",
+      "raw_category": null,
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:6"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Version cap is both decided and undecided",
+      "description": "D1 specifies `openai-codex>=0.159.3,<1`. Special Considerations says the upper bound is undecided and left for the PM. Settle on one: either state the bound as the design's decision, or mark D1's bound as provisional.",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md#D1"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Ownership of browser launch is ambiguous",
+      "description": "The Login flow says `login_chatgpt()` \u2192 \"print `auth_url`, attempt `webbrowser.open`\", but `notify` is the only channel from provider to CLI. If `login.py` calls `webbrowser.open`, the provider layer is performing a UI side effect, which the `notify` design is meant to avoid. State whether the CLI opens the browser, for example via a second callback or by receiving the URL, or whether the strategy does.",
+      "file_ref": null,
+      "category": "boundaries",
+      "raw_category": null,
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md#Data Flow"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "pass",
+      "category": "architecture",
+      "raw_category": null,
+      "summary": "Architectural alignment and layering",
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md#Relationship to the architecture's auth model",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "pass",
+      "category": "scope",
+      "raw_category": null,
+      "summary": "Plan-entry scope is fully covered",
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md#Technical Scope",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "Login and logout I/O paths have no enumerated failure modes, and parts of them are unbounded",
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md#Failure Modes \u2014 Codex Turn",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "under-specification",
+      "raw_category": null,
+      "summary": "Doctor row needs package version, but the shared `CodexRuntime` does not carry it",
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md#D9",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "proportionality",
+      "raw_category": null,
+      "summary": "Design is heavier than the slice needs in a few places",
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md#D7",
+      "location_verified": null
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "dependencies",
+      "raw_category": null,
+      "summary": "Dependency list differs from the plan entry",
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:6",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "note",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "Version cap is both decided and undecided",
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md#D1",
+      "location_verified": null
+    },
+    {
+      "id": "F008",
+      "severity": "note",
+      "category": "boundaries",
+      "raw_category": null,
+      "summary": "Ownership of browser launch is ambiguous",
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md#Data Flow",
+      "location_verified": null
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md",
+    "against": "project-documents/user/architecture/100-slices.orchestration-v2.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/squadron-129-design"
+  },
+  "timestamp": "2026-11-16T10:14:18.506065",
+  "model": "claude-sonnet-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 5,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-sonnet-5-5",
+  "answering_models": [
+    "claude-sonnet-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 8,
+    "in_fences": 0,
+    "in_section": 8,
+    "surviving": 8
+  },
+  "effort": "high",
+  "profile": "sdk",
+  "turns": 6,
+  "prompt_tokens": 424038,
+  "cached_tokens": 327940,
+  "cache_write_tokens": 96088,
+  "completion_tokens": 6404,
+  "reasoning_tokens": null,
+  "duration_seconds": 54.693153667030856,
+  "cost_usd": 0.4818764,
+  "cost_basis": "provider"
+}

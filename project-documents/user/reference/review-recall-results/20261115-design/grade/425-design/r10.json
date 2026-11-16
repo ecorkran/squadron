@@ -1,0 +1,40 @@
+{
+ "review": "r10",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Grading spend is taken out of the run-level cap, so there is no single upfront bound",
+   "description": "Architecture design goal 5 says a benchmark \"states its upper bound in dollars before any dispatch and stops at its own cap, which covers grading and judging as well as the replays\". The Cost section also says the pre-dispatch bound includes grading estimated from observed costs. D9 makes grading a separate command with its own `--max-cost` and its own bound. Line 236 admits \"This departs from the architecture\" and says the architecture should be amended.\n\nTotal benchmark spend is now the run cap plus each grade invocation's cap, and no step states that total. `grade` can also be rerun under a new reviewer with a fresh cap, so the sum is open-ended. The separate command is defensible, since two caps and two lock scopes are real concerns. But the architecture is the parent document, and the slice cannot supersede it by saying so. The fix has two parts:\n- Amend the architecture's design goal and Cost section in the same change, so they say the cap is per command.\n- Have `sq benchmark run` (424) print an \"estimated grading cost to follow\" line, so the PM sees the full figure before the first dispatch. This would use the same per-review figure D9 already defines.",
+   "location": "project-documents/user/slices/425-slice.grading-and-paired-report.md:220-236"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Report row identity disagrees with the slice's own dependency statement",
+   "description": "Line 58 says report rows group by 420's D6 identity: \"model, profile, effort sent, `tool_use`, `max_output_tokens`\". D13 keys rows by `(alias, model, profile, effort_sent)` and leaves out `tool_use` and `max_output_tokens`. Two replays that differ in either field would be merged into one row, which the document says must never happen (\"Rows are never silently merged\"). The D13 warning only covers differing prompt identity.\n\nLine 58 also says a replay with no effort stamp is counted by failure class and never as a `None` row. The architecture says effort not sent is a recorded value, not a missing one. D13 does not say how \"effort legitimately not sent\" is keyed. Pick one key tuple, define it once as a constant, and state how \"not sent\" appears as a row value.",
+   "location": "project-documents/user/slices/425-slice.grading-and-paired-report.md:58 and :263"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "New I/O steps with no stated hang handling",
+   "description": "D16 maps every failure in the suite, review and snapshot steps to an absence class with ERROR logging. Several new I/O steps have no stated timeout or hang behavior:\n- **Reinstall (D5).** `uv sync --locked` runs against the network on producer-controlled dependencies. Only failure maps to `producer_env_unresolvable`. A hang has no timeout or class. If 421 already bounds it, say so. If not, a hang is neither a config absence nor a harness one, and it stalls the run under the grade lock.\n- **Git calls.** `git apply --binary`, `git show` and `git diff` run through `ProcessRunner`. No timeout is stated for any of them. Only `reference_unreadable` and `diff_apply_failed` cover a non-zero exit.\n- **Cap hit between floor runs (D8, D9).** This writes no reference record and discards up to two completed reviews, with no WARNING-level log or counter. The wasted spend is silent.\n\nName the bound for each step and its absence class, and log the discarded floor runs at WARNING.",
+   "location": "project-documents/user/slices/425-slice.grading-and-paired-report.md:193-197 and :293-312"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Persisting `SampleSizeEstimate` is more than the slice needs",
+   "description": "D15 calls the estimate \"a pure function of the grades, so it is recomputed, not appended\", and it is overwritten at every grade run. The document still adds a record type, a `MetrologyRecord` payload, `write_estimate`, `latest_estimate(case_set)` and a `RECORD_TYPE_*` constant to store it. `paired_stats` is already pure, and `grades_for(benchmark_id)` already exists. The report can call the estimate function directly. 422's `sq benchmark yield` can call it over the latest benchmark's grades for the case set. That removes one store record type, two store methods, the overwrite semantics, and a stale-estimate case (an estimate written before a `--retry-harness` deletion). Cut the persisted record and keep the function.\n\nSmaller cuts:\n- The \"Provides to Other Slices\" and \"Consumes\" sections restate decisions already made in D7, D11 and D14.\n- The D13 sample output block duplicates the section list above it.",
+   "location": "project-documents/user/slices/425-slice.grading-and-paired-report.md:282-291 and :447-458"
+  },
+  {
+   "i": 4,
+   "severity": "NOTE",
+   "title": "Grading in a rebuilt sandbox departs from the architecture's wording",
+   "description": "The architecture says the grade runs \"in the same sandbox\" after the producer finishes. D1 rebuilds from `start_sha` plus the stored diff and says the replay sandbox is \"never kept alive for grading\", citing 424. D9 flags its departure explicitly, but this one is not flagged. The environment-digest check is a sound control for the difference. Add this to the architecture amendment, so the principle text matches what the slice and 424 do.",
+   "location": "project-documents/user/slices/425-slice.grading-and-paired-report.md:161-162"
+  }
+ ]
+}

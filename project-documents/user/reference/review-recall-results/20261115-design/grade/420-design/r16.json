@@ -1,0 +1,40 @@
+{
+ "review": "r16",
+ "findings": [
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "D6 redefines the architecture's config identity and adds non-effort fields",
+   "description": "The architecture defines config identity as \"alias, model, profile, effort sent\" (Design Goals, \"Results stay comparable over time\"). D6 drops the alias and adds `tool_use` and `max_output_tokens` to the identity. The \"Provides\" section (line 162) says this supersedes the architecture. The slice plan only requires that runs differing \"only in the alias's effort label but sent the same effort count as one config.\" That requires dropping the alias. It does not require `tool_use` or `max_output_tokens`, which are not effort. D6 calls this a narrowing, but adding two identity fields widens it. A slice design should not override the parent architecture on its own, and 424, 425 and 426 key on that definition.\n- Amend the architecture's identity wording, or state it as a flagged deviation the architecture owner accepts.\n- Cut `tool_use` and `max_output_tokens` from this slice, along with the two new `ProducerConfigRef` fields and their `config_ref` wiring. Defer them to the slice that needs the stricter identity, unless a concrete benchmark failure justifies them now.",
+   "location": "project-documents/user/slices/420-slice.effort-audit-across-dispatch-paths.md:142-147"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "The identity rule has no shared owner, so it is already duplicated",
+   "description": "Stats already keys on `ProducerKey(model, profile, effort, reviewer)`. D6 adds a second, private `config_identity` in `replay/report.py`. \"Provides\" then says later slices \"apply the rule to their own record types; this slice ships no shared identity type.\" That is three or more copies of one rule across 420, 424 and 425, with nothing to keep them in step. The architecture says a report \"compares only results that match.\" A drifting identity breaks that comparison silently.\n- Name a single home for the identity rule, for example a function in `metrology` that stats and replay both call, and make 424 and 425 consume it.\n- Alternatively, state explicitly why `ProducerKey` and `config_identity` must differ.",
+   "location": "project-documents/user/slices/420-slice.effort-audit-across-dispatch-paths.md:144-146, 162"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "\"Provides\" guarantee is broader than the inventory delivers",
+   "description": "\"Provides\" promises that every alias-resolving dispatch path, \"including the grading review and the judge, sends and records effort.\" The inventory contradicts this:\n- Path 7 (findings-addressed judge) sends effort but writes no record (line 68, and Excluded at line 39).\n- Paths 10 and 11 write no record because the harness runs them.\n- D5 lists dispatch, summary, review and compact for the stamp. It does not list the findings-addressed gate's `ActionResult`.\n\nThe architecture says \"every run records the effort actually sent.\" A downstream slice reading line 163 would assume a record exists for path 7.\n- Narrow the guarantee to the paths that record.\n- Or stamp `effort_sent` on the findings-addressed gate's action result. That is a one-line addition that does not touch 175's usage gap.",
+   "location": "project-documents/user/slices/420-slice.effort-audit-across-dispatch-paths.md:163"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Design is heavy for effort 2/5; name what to cut or defer",
+   "description": "The design touches about 14 modules and adds these mechanisms:\n- a second recording channel (`stamp_effort_sent` and `action_effort_sent`);\n- a new `JudgeRef` field;\n- two new `ProducerConfigRef` fields;\n- `config_identity`;\n- an AST enumeration test over `AgentConfig(` and `open_pipeline_session` sites.\n\nItems that can be cut or deferred:\n- `tool_use` and `max_output_tokens` identity (see the D6 concern).\n- The AST enumeration test (D7). The slice plan asks for an inventory and a test per path, not a guard against future sites. A per-path test plus the inventory table meets the requirement. If the guard stays, keep it to the `AgentConfig(` check only.\n- The \"Providers\" paragraph and parts of the inventory prose restate slice 931 and add nothing to this slice's decisions.\n- Success criterion \"One test per sending path (1\u201312)\" includes path 12, which is a reader, not a sender. Reword it.",
+   "location": "project-documents/user/slices/420-slice.effort-audit-across-dispatch-paths.md:27-34, 82-91, 149-152"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "Failure handling for `action_effort_sent` on unrecognized values is unspecified at the aggregate level",
+   "description": "The reader parses persisted JSON and \"raises on an unrecognized value.\" It is a new read path over historical run state, used by `sq stats producers` and the replay report, which aggregate many runs. The design does not say whether one corrupt or legacy value aborts the whole report or is excluded and counted. Fail-fast is right per project rules. The architecture's \"Absent is not zero\" principle and the failure-mode rule require the outcome to be explicit and observable. Specify the behavior, for example abort with the run id in the error. Then add one test that asserts the signal.",
+   "location": "project-documents/user/slices/420-slice.effort-audit-across-dispatch-paths.md:139"
+  }
+ ]
+}

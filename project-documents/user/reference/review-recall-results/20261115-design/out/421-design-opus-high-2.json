@@ -1,0 +1,225 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "A temporary network failure during install gets the same reason as a lock that no longer resolves",
+      "description": "D5 says three things fail with `lock_stale_or_unresolvable`: a stale lock, \"a package that no longer downloads\", and a Python version that cannot be obtained. A network outage, DNS failure or index error during `uv sync` looks exactly like \"a package that no longer downloads\", so it gets that reason too.\n\nThis matters because of what the architecture does with the reason. It says \"a lockfile that no longer resolves disqualifies the case\" (420-arch, Technical Considerations \u203a The environment). 422 records every exclusion with its reason and counts it in the yield report. It only re-qualifies a case when the environment identity changes, and a retry after an outage has the same identity. So a passing outage would permanently disqualify cases and lower the measured yield, which is the number that decides 422's ordering.\n\nThe architecture also counts \"the environment did not resolve\" as harness-caused, which drops the case for every config. The harness cannot attribute a failure correctly unless a transient failure is told apart from a permanent one.\n\n**Fix:** Add a reason to `EnvironmentFailureReason` such as `install_network_error` (or `install_failed_transient`), decided from uv's exit code and stderr. Do not retry silently. Say in D5 that 422 should not treat it as a permanent disqualification. Add a fixture test for it next to the existing failure-path tests (line 316).",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:152"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Timeout with a cut-off JSONL line hits two contradictory rules",
+      "description": "D10 gives two rules:\n- A timeout returns `SuiteRun(timed_out=True)` with whatever lines were written.\n- A missing or unparseable JSONL file with a non-zero pytest exit raises `SuiteRunError`.\n\nOn timeout, `ProcessRunner` kills the whole process group (D12, line 226). That can leave the last line half-written, and the exit is non-zero. Both rules then apply, and the doc doesn't say which wins. The success criteria include a timeout fixture (line 311), so the result has to be pinned down.\n\nA second gap: the doc doesn't say what happens when pytest exits 0 but the JSONL file is missing (for example, the plugin loaded but never wrote). \"Never an empty pass\" suggests an error, but it isn't stated for that exit code.\n\n**Fix:** State that on timeout a truncated final line is dropped and logged at WARNING, and the result is still `timed_out=True`. State that a missing file raises `SuiteRunError` whatever the exit code.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:209"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Keying case sets by name instead of `ProjectId` departs from the architecture, with a reason given",
+      "description": "The architecture says new record types are \"keyed on `ProjectId`\" (Architectural Principles \u203a Extend 320's store). D2 keys `CaseSet` by name so that 422 can pool cases across projects, and each case keeps its own `project_id`. This works with the existing `MetrologyRecord` envelope, which has no required project field. The reason matches the architecture's own pooling option (Technical Considerations \u203a Fix-case yield). It is worth recording as a deliberate deviation so the architecture can be updated.",
+      "file_ref": null,
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:132-134"
+    },
+    {
+      "severity": "PASS",
+      "title": "Case identity matches the architecture, and the extra fields are justified",
+      "description": "The identity covers everything the architecture and slice plan require: start commit, task text, hidden and superseded sets, the exclusion list and grader commands. `reference_sha` is added and the doc calls out that the architecture's list leaves it out, with the reason. Provenance is kept out of the identity, and a hand-edited record is rejected when read instead of becoming a second case.",
+      "file_ref": null,
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:123-128"
+    },
+    {
+      "severity": "PASS",
+      "title": "The scrubbed environment does what the architecture's leak principle asks",
+      "description": "- The environment is built from an allowlist, so variables added later are absent unless named.\n- `HOME` is redirected, which moves squadron's and the agents' config directories with no store or memory.\n- `GIT_CONFIG_NOSYSTEM` turns off the macOS keychain credential helper.\n- `PATH` leaves out the user's tool installs, so the installed `sq` can't be reached.\n\nThe doc also names a limit openly: the network stays open, so a producer could install the published package (line 387). It passes that to 424's leak scan instead of claiming more than the scrub can do.",
+      "file_ref": null,
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:163-174"
+    },
+    {
+      "severity": "PASS",
+      "title": "The auth check runs first, and a \"no\" is reported, not worked around",
+      "description": "The check runs the real runtime rather than looking for files. It has a timeout, reports a replaced symlink, exits 1 on any \"no\", and never falls back to the unscrubbed environment. It is implementation step 1 (line 376), so the answer reaches the PM before 422 starts. This is the ordering the slice plan asks for.",
+      "file_ref": null,
+      "category": "risk",
+      "raw_category": null,
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:182-187"
+    },
+    {
+      "severity": "PASS",
+      "title": "Dependencies point the right way and the adapter seam is kept narrow",
+      "description": "- `benchmark/` depends on `metrology/` and `replay/`, never the reverse.\n- Concrete adapters are reached only through `registry.py`.\n- `BenchmarkAdapter` is kept separate from 400's `LanguageAdapter`, so no snapshot adapter has to stub execution methods (D9).\n- Methods for the fairness rule and hidden-test injection are left to 422 and 425.\n- `HistoryFreeSandbox` is pulled out of `ReplaySandbox` by composition, not a flag, and the replay tests must stay unchanged.",
+      "file_ref": null,
+      "category": "dependencies",
+      "raw_category": null,
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:97"
+    },
+    {
+      "severity": "PASS",
+      "title": "The interfaces match what later slices need",
+      "description": "- 422's test-first check gets per-node results, failure kinds, and `missing_symbol` detection for mock patch targets.\n- 425 gets `deselect` for the superseded and exclusion lists, and the in-tree `.venv` that 400's snapshot adapters measure.\n- 424 gets `CredentialGrant.for_profiles`.\n- `EnvironmentIdentity` includes the scrub spec version, so qualification records can be keyed on it.",
+      "file_ref": null,
+      "category": "integration",
+      "raw_category": null,
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:288-293"
+    },
+    {
+      "severity": "PASS",
+      "title": "Scope and size fit the slice",
+      "description": "Everything the slice plan assigns to 421 is present, and the later slices' work is listed as excluded. The fifth failure kind, `other_exception`, has a stated reason: it lets 422 exclude cases it can't decide. Timeouts are config keys, not inline values. The two CLI commands are verification tools the walkthrough uses. There is nothing to cut that would still meet the slice plan's success criteria. The architecture states no performance requirements for these paths, so there are none to repeat here.",
+      "file_ref": null,
+      "category": "proportionality",
+      "raw_category": null,
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:32-51"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "A temporary network failure during install gets the same reason as a lock that no longer resolves",
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:152",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "Timeout with a cut-off JSONL line hits two contradictory rules",
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:209",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "note",
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "summary": "Keying case sets by name instead of `ProjectId` departs from the architecture, with a reason given",
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:132-134",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "pass",
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "summary": "Case identity matches the architecture, and the extra fields are justified",
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:123-128",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "pass",
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "summary": "The scrubbed environment does what the architecture's leak principle asks",
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:163-174",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "pass",
+      "category": "risk",
+      "raw_category": null,
+      "summary": "The auth check runs first, and a \"no\" is reported, not worked around",
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:182-187",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "pass",
+      "category": "dependencies",
+      "raw_category": null,
+      "summary": "Dependencies point the right way and the adapter seam is kept narrow",
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:97",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "pass",
+      "category": "integration",
+      "raw_category": null,
+      "summary": "The interfaces match what later slices need",
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:288-293",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "pass",
+      "category": "proportionality",
+      "raw_category": null,
+      "summary": "Scope and size fit the slice",
+      "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:32-51",
+      "location_verified": true
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md",
+    "against": "project-documents/user/architecture/420-arch.model-benchmark.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261115-design/wt/421-design"
+  },
+  "timestamp": "2026-11-16T07:15:37.449274",
+  "model": "claude-opus-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 6,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-opus-5-5",
+  "answering_models": [
+    "claude-opus-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 9,
+    "in_fences": 0,
+    "in_section": 9,
+    "surviving": 9
+  },
+  "effort": "high",
+  "profile": "sdk",
+  "turns": 7,
+  "prompt_tokens": 600856,
+  "cached_tokens": 503638,
+  "cache_write_tokens": 97206,
+  "completion_tokens": 7927,
+  "reasoning_tokens": null,
+  "duration_seconds": 87.45412945793942,
+  "cost_usd": 1.037732,
+  "cost_basis": "provider"
+}

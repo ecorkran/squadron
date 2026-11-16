@@ -1,0 +1,54 @@
+{
+ "review": "r09",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "`FixQualification` in `metrology/` depends on `benchmark/`'s `EnvironmentIdentity`",
+   "description": "`FixQualification` goes in `metrology/benchmark_models.py`, and its schema has a field `environment: EnvironmentIdentity | None` (line 341). In 421, `EnvironmentIdentity` is defined in `benchmark/adapter.py` (421 component structure, lines 82-83). 421 also states that \"`benchmark/` depends on `metrology/` \u2026 Neither of those depends on `benchmark/`\" (421 line 97). As written, `metrology/` would have to import from `benchmark/`, which reverses the layering 421 set up.\n\nThe same problem applies to `HiddenTestVerdict` and the rejection enums if they refer to benchmark-layer types. The fix is to choose one of these and say which in the doc:\n- move `EnvironmentIdentity` into `metrology/benchmark_models.py`, as a 421 defect per this doc's own Integration Requirements, or\n- store only the identity digest and fields in the record, typed in `metrology/`.",
+   "location": "project-documents/user/slices/422-slice.fix-case-qualification-and-yield-report-keystone.md:80-82"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Resolver failure has two outcomes in the doc: `boundary_undecidable` and `harness_error`",
+   "description": "D6 says a resolver import failure rejects the candidate with `boundary_undecidable`, which counts against the case. The Technical Requirements (line 389) say a resolver crash must have a test that asserts `harness_error`, which drops the candidate without blaming it.\n\nThe doc never defines the line between \"import failure\" and \"crash\". A subprocess that exits non-zero, times out, or prints unparseable output could be read as either. This matters because line 285 says harness failures are \"never counted as a rejection reason that blames the case\". Define how each resolver exit maps to a result:\n- project import raised \u2192 `boundary_undecidable`\n- timeout, missing output, or a crash in the harness script \u2192 `harness_error`",
+   "location": "project-documents/user/slices/422-slice.fix-case-qualification-and-yield-report-keystone.md:185"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "No failure-mode handling for the trace plugin, collect mode and `gh` subprocesses",
+   "description": "This slice adds four new I/O paths:\n- the trace plugin's collect mode (step 5)\n- the trace run at the reference (step 6, D6/D7)\n- the resolver\n- the `gh` GraphQL call (D2)\n\nNone of them states which timeout bounds it. 421 declares only install, suite and auth-probe timeouts (421 D12), and the project forbids inline timeouts. None of them states what happens if it hangs, if its output file is missing or partial, or if the process is killed partway through. Collect mode is the clearest gap: `collection_failed` (D3) blames the case, but a crashed plugin or a missing digest file is a harness fault, and the doc doesn't separate the two.\n\nTo meet the architecture's \"Absent is not zero\" principle and the project's failure-mode rule, the doc should:\n- name the config key that bounds each path (reuse `benchmark.suite_timeout_s`, or add keys)\n- map hang, timeout and missing output to `harness_error`, and name the observable signal\n- state whether a `gh` timeout or rate limit is a `CodeHostError` handled by line 285",
+   "location": "project-documents/user/slices/422-slice.fix-case-qualification-and-yield-report-keystone.md#data-flow"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Unclear what a timeout means for the per-test verdict",
+   "description": "D5 maps `not_run` to `undecidable_failure_at_parent`, which rejects the test. It also says \"a timeout \u2026 records `harness_error` for the candidate\". But 421 D10 says a timed-out run returns `SuiteRun(timed_out=True)` and marks every unfinished node `not_run`. It does not raise.\n\nRead literally, the mapping rejects those nodes as unfair, while the following sentence treats the whole candidate as a harness error. The doc needs to say that `timed_out=True` is checked before the per-node mapping. It also needs to say how timeouts in the full-suite repeats at the reference (D9 step 7) are handled: does one timed-out repeat out of three make the candidate `harness_error`, or are its `not_run` nodes put on `excluded_tests`?",
+   "location": "project-documents/user/slices/422-slice.fix-case-qualification-and-yield-report-keystone.md:171-177"
+  },
+  {
+   "i": 4,
+   "severity": "NOTE",
+   "title": "421's registry is extended, though the doc says 421 is used unchanged",
+   "description": "D13 and line 98 register `PythonFixCaseAdapter` in 421's `benchmark/registry.py`, and the doc picks a separate `FixCaseAdapter` protocol. 421 D9 expected that \"422 adds fairness-rule methods\" to the seam. The separate protocol is well justified by ISP, and adding a registry entry is a reasonable extension. Line 395, however, says 421's pieces are \"used unchanged\". Rewording that line to cover the registry extension would avoid confusion when the work is reviewed.",
+   "location": "project-documents/user/slices/422-slice.fix-case-qualification-and-yield-report-keystone.md:98"
+  },
+  {
+   "i": 5,
+   "severity": "NOTE",
+   "title": "Interfaces frontmatter leaves out 423, which uses the cutoff-free renderer",
+   "description": "D2 (line 139) defines a mode of the renderer with no cutoff, described as \"423's live fix\". 423 is not in `interfaces:` and not in \"Provides to Other Slices\". It is a small addition and fits 423's need for issue text, but the contract should be listed so 423's design can rely on it.",
+   "location": "project-documents/user/slices/422-slice.fix-case-qualification-and-yield-report-keystone.md:7"
+  },
+  {
+   "i": 6,
+   "severity": "NOTE",
+   "title": "A change to a shared test helper sends many tests through the pipeline as hidden candidates",
+   "description": "Closure digests mark every test that reaches a changed test-side helper as \"hidden candidate and superseded\". Most of those tests will then be rejected as `passes_at_parent`, but every one of them leaves the regression count. That follows the architecture's definition of superseded, so it is not a defect. The yield report would read more clearly if it showed superseded counts per case, so a case with a large superseded set (and a weak regression signal) stands out.",
+   "location": "project-documents/user/slices/422-slice.fix-case-qualification-and-yield-report-keystone.md:147-152"
+  }
+ ]
+}

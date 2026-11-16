@@ -1,0 +1,207 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "\"No edits to 424 or 425\" contradicts the rest of the document",
+      "description": "Line 42 says this slice makes no edits to 424 or 425. Elsewhere the document says otherwise:\n- **424's model changes.** 424's `CaseDrop.reason` \"widens to accept `SliceCandidateRejection`\" (lines 321 and 426). `CaseDrop` is 424's model (424 slice, line 367).\n- **425's module changes.** `bench_report.py` is 425's module, and it gains per-kind grouping and the pairwise section (lines 87 and 427).\n- **The test criterion is stale.** Line 451 says `tests/benchmark/` passes unchanged \"except where D8 routes re-qualification and D17 extracts the interval\". But D8 routes through a seam 424 already provides. D17 (line 312) says the interval already exists in 425 and needs \"no change to 425\". So the exceptions name changes that no longer happen and leave out the ones that do.\n\nThe person writing the task breakdown can't tell which 424 and 425 files and tests are expected to change. Suggested fix:\n- Restate line 42 as: no changes to `bench_runner.py`, `grade_runner.py` or `paired_stats.py`; additive changes to `CaseDrop.reason` and `bench_report.py`.\n- Rewrite line 451 to name the tests those two changes touch.",
+      "file_ref": null,
+      "category": "integration",
+      "raw_category": null,
+      "location": "project-documents/user/slices/426-slice.slice-cases.md:42"
+    },
+    {
+      "severity": "NOTE",
+      "title": "No timeout source is named for cf steps or for the judge's git reads",
+      "description": "D6 and D9 handle \"a failed or timed-out\" `git` call or cf step as `harness_error` or a harness absence, logged at ERROR. That is the right handling. But the document doesn't say where the timeout comes from: an existing `ProcessRunner` bound, the value carried over from `ReplaySandbox`, or a new constant. On the judge path, a missing `tip_sha` refuses (line 149). A `git diff` on `--repo` that fails or hangs for any other reason isn't covered. One line naming the bound and the judge-side handling would close this.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/426-slice.slice-cases.md#d9--cf-registration-inside-the-scrubbed-home"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`build` exit 1 versus harness errors recorded per candidate",
+      "description": "D6 records harness failures per candidate as `harness_error`, which implies the build continues. The CLI contract says \"a harness failure stops the build\" and exits 1. The document should say which failures stop the build (for example, the store can't be written, or the repo is unreadable) and which are recorded per candidate. `--keep` is also listed without a description.",
+      "file_ref": null,
+      "category": "under-specification",
+      "raw_category": null,
+      "location": "project-documents/user/slices/426-slice.slice-cases.md:338"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Using `tip_sha` instead of the landing commit is a justified departure",
+      "description": "The architecture calls the landing commit the reference. D2 uses the branch tip instead, because `fork..after` on a merge landing pulls in unrelated work that reached the target. That serves the architecture's \"compare configs on identical work\" goal and is reasoned in the document. The same goes for adding `uv.lock` to the drop list (D11) and for a diff-specific judge prompt that keeps 177's verdict format and core (D12).",
+      "file_ref": null,
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/426-slice.slice-cases.md#d2--landing-and-reference-selection"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Judging can spend on cases that grading later drops",
+      "description": "Cases dropped at grading (`reference_failed_grade`, grade harness absences) are excluded from the pairwise section only at report time. When grades already exist, `judge` could skip those cases and leave them out of the bound. This is optional, and the cost stays within the stated cap either way.",
+      "file_ref": null,
+      "category": "cost",
+      "raw_category": null,
+      "location": "project-documents/user/slices/426-slice.slice-cases.md#d15--absences-in-judging"
+    },
+    {
+      "severity": "PASS",
+      "title": "Spend bound, cap and resume",
+      "description": "Judging requires `--max-cost`, prints a dollar bound (including one call of overshoot) before anything is dispatched, checks the cap before each call, keeps records when it stops, and resumes by record id. This restates the architecture's \"spend is visible before it happens\" requirement with concrete figures. The bound's arithmetic is consistent: 6 cases \u00d7 9 pairs = 54 pairs, minus 6 forfeits leaves 48 pairs, which is 96 calls.",
+      "file_ref": null,
+      "category": "cost",
+      "raw_category": null,
+      "location": "project-documents/user/slices/426-slice.slice-cases.md#d16--caps-bound-and-resume-for-judging"
+    },
+    {
+      "severity": "PASS",
+      "title": "Containment and leak boundaries kept",
+      "description": "- cf runs inside the scrubbed home, so the user's cf registry is never touched.\n- Only the slice runner gets `cf`, and the tool links stay out of `EnvironmentIdentity`.\n- The judge is text-only, so it can't read the checkout.\n- A first-step spike checks cf under the scrubbed home and checks that the leak-scan path list covers cf. A no is written as `BLOCKED:`.",
+      "file_ref": null,
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/426-slice.slice-cases.md#d9--cf-registration-inside-the-scrubbed-home"
+    },
+    {
+      "severity": "PASS",
+      "title": "Scope and proportionality",
+      "description": "Every item the slice plan assigns to this slice is covered: cases from slice ranges with rejection reasons, producer-only `P6` replays, separate report tables, normalized diffs, the reference line, and the oversized-diff rule. Fix-case judging, splicing repeat landings, and the bounded-view option are excluded with reasons. The new pieces are reuse or extraction (`CfRegistration`, `judge_pair`, 422's adapter, and 425's grader and interval), not parallel builds.",
+      "file_ref": null,
+      "category": "scope",
+      "raw_category": null,
+      "location": "project-documents/user/slices/426-slice.slice-cases.md#technical-scope"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "integration",
+      "raw_category": null,
+      "summary": "\"No edits to 424 or 425\" contradicts the rest of the document",
+      "location": "project-documents/user/slices/426-slice.slice-cases.md:42",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "note",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "No timeout source is named for cf steps or for the judge's git reads",
+      "location": "project-documents/user/slices/426-slice.slice-cases.md#d9--cf-registration-inside-the-scrubbed-home",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "note",
+      "category": "under-specification",
+      "raw_category": null,
+      "summary": "`build` exit 1 versus harness errors recorded per candidate",
+      "location": "project-documents/user/slices/426-slice.slice-cases.md:338",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "note",
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "summary": "Using `tip_sha` instead of the landing commit is a justified departure",
+      "location": "project-documents/user/slices/426-slice.slice-cases.md#d2--landing-and-reference-selection",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "cost",
+      "raw_category": null,
+      "summary": "Judging can spend on cases that grading later drops",
+      "location": "project-documents/user/slices/426-slice.slice-cases.md#d15--absences-in-judging",
+      "location_verified": null
+    },
+    {
+      "id": "F006",
+      "severity": "pass",
+      "category": "cost",
+      "raw_category": null,
+      "summary": "Spend bound, cap and resume",
+      "location": "project-documents/user/slices/426-slice.slice-cases.md#d16--caps-bound-and-resume-for-judging",
+      "location_verified": null
+    },
+    {
+      "id": "F007",
+      "severity": "pass",
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "summary": "Containment and leak boundaries kept",
+      "location": "project-documents/user/slices/426-slice.slice-cases.md#d9--cf-registration-inside-the-scrubbed-home",
+      "location_verified": null
+    },
+    {
+      "id": "F008",
+      "severity": "pass",
+      "category": "scope",
+      "raw_category": null,
+      "summary": "Scope and proportionality",
+      "location": "project-documents/user/slices/426-slice.slice-cases.md#technical-scope",
+      "location_verified": null
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/426-slice.slice-cases.md",
+    "against": "project-documents/user/architecture/420-arch.model-benchmark.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261115-design/wt/426-design"
+  },
+  "timestamp": "2026-11-16T07:24:43.459950",
+  "model": "claude-opus-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 6,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-opus-5-5",
+  "answering_models": [
+    "claude-opus-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 8,
+    "in_fences": 0,
+    "in_section": 8,
+    "surviving": 8
+  },
+  "effort": "medium",
+  "profile": "sdk",
+  "turns": 7,
+  "prompt_tokens": 365794,
+  "cached_tokens": 361059,
+  "cache_write_tokens": 4727,
+  "completion_tokens": 7277,
+  "reasoning_tokens": null,
+  "duration_seconds": 79.56861174991354,
+  "cost_usd": 0.2563667,
+  "cost_basis": "provider"
+}

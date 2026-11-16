@@ -1,0 +1,225 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Discovery-stage rejections never get a `SliceQualification` record, so yield rows can't count them",
+      "description": "The success criterion says the build \"writes a `SliceQualification` for every slice index in it\u2026 Every rejected slice has a `SliceCandidateRejection` or `harness_error` with detail.\"\n\n- Task 13 returns `multiple_landings`, `branch_contains_merges` and discovery `harness_error` only as entries in `DiscoveryResult`.\n- Task 15 writes records only for the pre-sandbox checks (task text and no-code).\n- Task 20 calls `qualify_slice_candidate` only for candidates. It never says the discovery rejections are written.\n- Task 22 counts yield rows from stored `SliceQualification`s. Two of the seven rejection values (`multiple_landings` and `branch_contains_merges`) can therefore never appear in yield. Yet the design's mitigation names exactly those two as the ones the PM will see counted.\n\nSeparately, a discovery `git` failure is not tied to Task 20's \"harness error stops the build\" rule.\n\n**Fix:** In Task 13 or Task 20, write a `rejected` or `harness_error` `SliceQualification` (with `start_environment=None`) for each discovery outcome. Say which landing supplies `landing_after_sha`, `fork_sha` and `tip_sha` for `multiple_landings`, since the record id needs a single landing. Add a test to Task 20 and Task 22 asserting that these records exist and are counted.",
+      "file_ref": null,
+      "category": "coverage-gap",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/426-tasks.slice-cases.md:154-156"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`judge` without `--max-cost` would exit 2, which means \"cap reached\"",
+      "description": "The command signature in Task 35 makes `--max-cost USD` required (no brackets). If it is declared as a required Typer option, Click rejects the missing option as a usage error with exit 2. That collides with the contract's \"2 run cap reached\".\n\nTask 35's tests expect \"exit 1 with the missing item named for each refusal of Task 31\", and Task 31's refusals include \"no run cap\". A junior implementer will hit either a failing test or an ambiguous exit code.\n\n**Fix:** Make `--max-cost` optional at the Typer level and refuse in `plan_judge` with exit 1. Add an explicit test that a missing `--max-cost` exits 1, not 2.",
+      "file_ref": null,
+      "category": "api-contract",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/426-tasks.slice-cases.md:285-286"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The \"pending\" count in the report has no test",
+      "description": "Task 38 renders \"failed pairs pending\" in the count line. Failed pairs leave no record, so pending has to be derived from planned pairs minus recorded judgments, and nothing says how. Task 38's tests cover over-size, harness-absent and the limit, but not pending. Add the derivation and one test case.",
+      "file_ref": null,
+      "category": "test-coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/426-tasks.slice-cases.md:302-303"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Two fixture builders aren't used by any test",
+      "description": "Task 6 builds \"a slice whose every test changed\" and \"one whose regression selection would be empty\". Task 18 tests `no_regression_signal` with doubles, so these repos are only exercised by the smoke test. Either drop the \"every test changed\" builder (it traces to no criterion), or say the double-based test is what satisfies the \"fixture slices produce each rejection\" criterion for that value.",
+      "file_ref": null,
+      "category": "proportionality",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/426-tasks.slice-cases.md:105"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Frontmatter on the packaged judge prompt may end up in the prompt text and its hash",
+      "description": "Task 28 asks for frontmatter \"per `file-naming-conventions`\" on `pairwise-diff-judge.md`, and loads it the way `judge_prompt()` loads 177's prompt. If that loader sends the file as-is, the frontmatter goes to the judge and into `JudgeRef.prompt_hash`. Tell the implementer to copy the format of 177's `replay/pairwise-judge.md` instead of requiring frontmatter.",
+      "file_ref": null,
+      "category": "implementation-detail",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/426-tasks.slice-cases.md:248"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The load tests aren't required by an NFR and need no CI wiring",
+      "description": "The slice design has no NFR, so no `tests/load/` task is required. The two \"load tests\" (8 concurrent `invoke` calls in Task 24, and a 200-pair plan with slow and hung dispatchers in Task 33) are ordinary pytest cases inside the unit test files. They run in the normal suite, so no separate CI gating task is needed. The hung-dispatcher case backs the failure-mode rule. The concurrent-invoke case is defensible only if 424 runs replays concurrently; drop it if it doesn't.",
+      "file_ref": null,
+      "category": "proportionality",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/426-tasks.slice-cases.md:223"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The real-landing fixtures only reach discovery",
+      "description": "The technical requirement says \"Qualification fixtures come from squadron's real `slice_ranges` landings\". Task 6 saves them, but only Task 13 (discovery) loads them; Tasks 15\u201319 use doubles. With sandboxes and adapters involved, that is a reasonable reading, but Task 42's DEVLOG entry should say so explicitly.",
+      "file_ref": null,
+      "category": "coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/426-tasks.slice-cases.md:107-108"
+    },
+    {
+      "severity": "PASS",
+      "title": "Success-criteria traceability",
+      "description": "Where each criterion is covered:\n- Case fields: Task 18\n- Rejection fixtures: Tasks 13, 14, 15 and 18\n- P6 replay with an unchanged cf project list: Tasks 24\u201326\n- Per-kind report tables: Task 36\n- Normalization (synthetic and a real fixture): Task 7\n- Reference line never ranked: Tasks 37\u201338\n- Over-size records and counts: Tasks 29, 34 and 38\n- Forfeits and harness-absent cases: Tasks 27 and 32\n- Failure-path signals: Tasks 13, 19, 24 and 31\n- Refusals, bound, cap and resume: Tasks 31 and 33\u201335\n- `tests/replay/` unchanged: Tasks 2\u20134\n- Hand-computed pairwise reduction: Task 37\n- Mixed fix-and-slice integration: Task 39\n- Yield rows: Task 22\n- Walkthrough steps 1\u20138: Tasks 23, 26 and 41",
+      "file_ref": null,
+      "category": "coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/426-tasks.slice-cases.md:58-343"
+    },
+    {
+      "severity": "PASS",
+      "title": "Sequencing and commit placement",
+      "description": "- The planning commits (the task file, then the design corrections) go to the target before the slice branch is created.\n- The precondition gate correctly stops with `BLOCKED:`.\n- The cf spike is the first task after the gate.\n- There are no circular dependencies.\n- Commit markers come after tested groups (qualification, build plus CLI plus yield, runner, judge core, judge runner plus CLI, report). The markers after the live-run fix tasks are explicitly skipped when nothing changed.\n- No task merges or pushes.",
+      "file_ref": null,
+      "category": "sequencing",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/426-tasks.slice-cases.md:60-125"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "coverage-gap",
+      "raw_category": null,
+      "summary": "Discovery-stage rejections never get a `SliceQualification` record, so yield rows can't count them",
+      "location": "project-documents/user/tasks/426-tasks.slice-cases.md:154-156",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "api-contract",
+      "raw_category": null,
+      "summary": "`judge` without `--max-cost` would exit 2, which means \"cap reached\"",
+      "location": "project-documents/user/tasks/426-tasks.slice-cases.md:285-286",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "note",
+      "category": "test-coverage",
+      "raw_category": null,
+      "summary": "The \"pending\" count in the report has no test",
+      "location": "project-documents/user/tasks/426-tasks.slice-cases.md:302-303",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "note",
+      "category": "proportionality",
+      "raw_category": null,
+      "summary": "Two fixture builders aren't used by any test",
+      "location": "project-documents/user/tasks/426-tasks.slice-cases.md:105",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "implementation-detail",
+      "raw_category": null,
+      "summary": "Frontmatter on the packaged judge prompt may end up in the prompt text and its hash",
+      "location": "project-documents/user/tasks/426-tasks.slice-cases.md:248",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "proportionality",
+      "raw_category": null,
+      "summary": "The load tests aren't required by an NFR and need no CI wiring",
+      "location": "project-documents/user/tasks/426-tasks.slice-cases.md:223",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "note",
+      "category": "coverage",
+      "raw_category": null,
+      "summary": "The real-landing fixtures only reach discovery",
+      "location": "project-documents/user/tasks/426-tasks.slice-cases.md:107-108",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "pass",
+      "category": "coverage",
+      "raw_category": null,
+      "summary": "Success-criteria traceability",
+      "location": "project-documents/user/tasks/426-tasks.slice-cases.md:58-343",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "pass",
+      "category": "sequencing",
+      "raw_category": null,
+      "summary": "Sequencing and commit placement",
+      "location": "project-documents/user/tasks/426-tasks.slice-cases.md:60-125",
+      "location_verified": true
+    }
+  ],
+  "template_name": "tasks",
+  "input_files": {
+    "input": "project-documents/user/tasks/426-tasks.slice-cases.md",
+    "against": "project-documents/user/slices/426-slice.slice-cases.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261115-design/wt/426-tasks"
+  },
+  "timestamp": "2026-11-16T07:24:40.865214",
+  "model": "claude-opus-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 2,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-opus-5-5",
+  "answering_models": [
+    "claude-opus-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 9,
+    "in_fences": 0,
+    "in_section": 9,
+    "surviving": 9
+  },
+  "effort": "medium",
+  "profile": "sdk",
+  "turns": 3,
+  "prompt_tokens": 152313,
+  "cached_tokens": 56480,
+  "cache_write_tokens": 95829,
+  "completion_tokens": 7371,
+  "reasoning_tokens": null,
+  "duration_seconds": 76.72179379104637,
+  "cost_usd": 0.9261337,
+  "cost_basis": "provider"
+}

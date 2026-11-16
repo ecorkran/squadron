@@ -1,0 +1,47 @@
+{
+ "review": "r02",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Config identity rule departs from the architecture without amending it",
+   "description": "The architecture defines identity in two places: Design Goals (\"config (alias, model, profile, effort sent)\") and Envisioned State. D6 drops the alias from the grouping key and adds `tool_use` and `max_output_tokens`. \"Provides to Other Slices\" says this \"supersedes\" the architecture. A slice doc should not override its parent architecture. Slices 421\u2013427 read the architecture first and would find the older rule. D6 does fall within the architecture's own statement that effort rows split \"only when the effort really differed on the wire\". The fix is to amend the architecture's identity wording, or to record the change as an architecture update with a pointer from this slice.",
+   "location": "project-documents/user/slices/420-slice.effort-audit-across-dispatch-paths.md#D6 \u2014 Config identity is what went on the wire; the alias is display"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Identity change goes beyond effort and is not shared",
+   "description": "The slice is an audit of effort. D6 adds `tool_use` and `max_output_tokens` to `ProducerConfigRef`, adds a private `config_identity` in `replay/report.py`, and changes the row and Bradley-Terry grouping. The slice plan's criterion requires only that aliases which sent the same effort merge, and that different efforts split. Neither new field is needed for that. The doc also says \"this slice ships no shared identity type\", so each later slice must rebuild the same tuple for its own record types. That duplicates logic and risks the identity rules drifting apart. Either cut D6 to model, profile and effort sent, or ship the identity as one shared definition that 424\u2013427 import.",
+   "location": "project-documents/user/slices/420-slice.effort-audit-across-dispatch-paths.md#D6 \u2014 Config identity is what went on the wire; the alias is display"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "The \"sends and records\" guarantee is wider than the inventory supports",
+   "description": "\"Provides to Other Slices\" promises that \"every alias-resolving dispatch path, including the grading review and the judge, sends and records effort.\" The inventory contradicts this in three places:\n- Path 7 (the findings-addressed judge) writes no record.\n- Paths 10 and 11 (prompt-only runs) write no record.\n- The replay judge records its effort only on `JudgeRef`.\n\nThe architecture requires that \"every run records the effort actually sent\". Rows for which no record is written still need a stated treatment. Restrict the guarantee to the paths that write records, and name the exceptions. Alternatively, say how a consumer should read a path-7 judgment, since 425's report may include judge-effort columns.",
+   "location": "project-documents/user/slices/420-slice.effort-audit-across-dispatch-paths.md#Provides to Other Slices"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Reader raising on an unrecognized stored effort has no stated handling in report paths",
+   "description": "`action_effort_sent` \"raises on an unrecognized value\". The same reader feeds `sq replay report` and `sq stats producers`, which scan the whole store. One corrupt or future-valued record would abort an entire report. Raising is consistent with fail-fast, but the design does not say whether the failure is surfaced per record (logged at WARNING+ with the record excluded and counted) or kills the report. The rules require each failure mode to be observable and tested. Name the handling and add one test that asserts the observable signal.",
+   "location": "project-documents/user/slices/420-slice.effort-audit-across-dispatch-paths.md#D5 \u2014 Effort sent is stamped on the action, not only on the usage record"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Design restates material owned elsewhere and is heavier than the slice needs",
+   "description": "The doc is rated 2/5 effort, but several parts could be cut:\n- The Providers paragraph restates the wire mappings from slice 931, which the doc itself says \"none of [them] change\".\n- Rows 13\u201317 are out-of-scope rows in the inventory table, and the Excluded section repeats them.\n- The Data Flow diagram repeats the D5 and D2 text.\n- A 17-row inventory plus a 12-path test matrix is the heaviest way to lock the audit. The D7 enumeration test already enforces classification of each `AgentConfig` site.\n\nCut the Providers paragraph, fold the out-of-scope rows into Excluded, and keep the table to the rows that change or need a test.",
+   "location": "project-documents/user/slices/420-slice.effort-audit-across-dispatch-paths.md#Component Structure"
+  },
+  {
+   "i": 5,
+   "severity": "NOTE",
+   "title": "Compaction records the session's effort, not the alias's, and that is consistent",
+   "description": "The architecture says \"sends the alias's effort when the alias carries it\". For compaction, D2 records the effort that actually went on the wire. This matches the architecture's \"as sent\" principle and the #216 constraint. No change is needed.",
+   "location": "project-documents/user/slices/420-slice.effort-audit-across-dispatch-paths.md#D2 \u2014 Compaction records the session's effort"
+  }
+ ]
+}

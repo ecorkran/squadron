@@ -1,0 +1,261 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Fix-report refusals make the producer's self-report decide whether a replay is graded",
+      "description": "D4 commits nothing when `gates` is empty, any `exit_code` is non-zero, or `failed_before_change` is not `true`. In production that is reasonable. In a replay it conflicts with two architecture principles:\n\n- **\"A producer's claim that tests pass is never evidence.\"** A config that honestly reports a failing gate gets no commit, which the architecture counts as a fail (\"committed nothing\"). A config that misreports gets a commit and is graded. The self-report therefore gates the grade.\n- **\"Absent is not zero.\"** Gate commands come from the project's instruction files at the start commit (D4, line 148). If those files name no gates, or a gate already fails at the parent, every config fails with `fix_report`. That is a harness- or case-caused failure charged to each config, where the architecture says such a case is dropped from every config's comparison.\n\nThe slice should state how `fix_report` refusals behave under `commit-to: current`, or what it exposes so 424 can classify them. Options are recording which defect fired in the run state so 424 can separate \"gate reported non-zero\" from \"malformed report\", or requiring 422 qualification to confirm the gates are runnable at the start commit. The Integration Points section currently says only that 425 \"does not trust the report\", which does not cover the no-commit case.",
+      "file_ref": null,
+      "category": "architectural-alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/423-slice.fix-pipeline.md:155"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Production pipeline depends on a benchmark-package module",
+      "description": "The fetched-issue path calls 422's issue-text renderer (`issue_freeze`), which 422 places in the `benchmark/` package beside discovery and qualification. `pipeline/fix_issue.py` would then import from the benchmark harness. The architecture's direction is the reverse: the benchmark replays production pipelines (\"Replays run the production pipelines\"), and production does not depend on the benchmark.\n\n`CodeHost.get_issue` is fine, since it lives in `codehost/`. The fix is to specify that the no-cutoff rendering lives in a neutral place (`codehost/` or `pipeline/`), with 422's cutoff and edited-after-fix logic layered on top in `benchmark/`. This needs a matching edit in 422.",
+      "file_ref": null,
+      "category": "dependency-direction",
+      "raw_category": null,
+      "location": "project-documents/user/slices/423-slice.fix-pipeline.md:49"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Slice plan's MCP parity criterion is dropped without updating the plan",
+      "description": "The slice plan entry for 423 lists \"CLI, slash command and MCP give identical results\" as a success criterion. The design excludes MCP (lines 43 and 198) and narrows parity to the CLI and `/sq:run`. The stated reason is that squadron has no MCP server for any pipeline, which is a sound reason not to build one here. It is still assigned scope removed in the slice document alone. The slice plan entry should be amended so the two agree, or the criterion will read as unmet at slice completion.",
+      "file_ref": null,
+      "category": "scope",
+      "raw_category": null,
+      "location": "project-documents/user/slices/423-slice.fix-pipeline.md:43"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Dependency on 422 contradicts the slice plan and its \"can be built earlier\" note",
+      "description": "The slice plan says 423 has \"Dependencies: none in this initiative\" and \"can be built earlier\". The frontmatter declares `dependencies: [422]`, and development step 4 needs 422's `get_issue` and renderer. 422 is the highest-effort, high-risk keystone, so the production fetch path \u2014 the user-facing value \u2014 is now blocked behind it.\n\nEither move `get_issue` and the plain renderer into this slice (which also resolves the dependency-direction finding above), or update the slice plan's dependency line and ordering note.",
+      "file_ref": null,
+      "category": "dependencies",
+      "raw_category": null,
+      "location": "project-documents/user/slices/423-slice.fix-pipeline.md:6"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`issue-file` resolved against the working directory collides with the clean-tree precondition",
+      "description": "Without `--io-dir`, the issue file resolves against the working directory. An untracked file in the tree makes `changed_paths` non-empty, so `fix-context` refuses the run as dirty (D5) unless the file is git-ignored. The 424 path uses `--io-dir` and is unaffected. Either require `--io-dir` with `issue-file`, or state the interaction. Whether absolute paths are accepted is also unstated.",
+      "file_ref": null,
+      "category": "under-specification",
+      "raw_category": null,
+      "location": "project-documents/user/slices/423-slice.fix-pipeline.md:136"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Effort raised from 2/5 to 3/5, mostly by prompt-only parity",
+      "description": "The increase is acknowledged and traces to the slice plan's parity criterion, so the hidden `sq _fix-prompt` command and the `sq _commit --subject fix` extension are justified. Nothing obvious can be cut. The report contract is the smallest mechanism that meets \"passing gates\" without a per-project gate config.",
+      "file_ref": null,
+      "category": "proportionality",
+      "raw_category": null,
+      "location": "project-documents/user/slices/423-slice.fix-pipeline.md:344"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Walkthrough step 4 does not guarantee `gh` and `cf` are off `PATH`",
+      "description": "`PATH` is set to the directory containing `sq` plus system directories. If `sq` shares a bin directory with `gh` or `cf` (a common tool-install layout), the step passes without proving the \"absent from `PATH`\" criterion. The unit test with a `CodeHost` factory that raises covers the `gh` half; the walkthrough should assert `command -v gh cf` fails under that `PATH`.",
+      "file_ref": null,
+      "category": "verification",
+      "raw_category": null,
+      "location": "project-documents/user/slices/423-slice.fix-pipeline.md:313"
+    },
+    {
+      "severity": "PASS",
+      "title": "Replay runs the production pipeline and prompt, not a benchmark copy",
+      "description": "One step, one prompt data file, and two params (`issue-file`, `commit-to`) cover both production and sandbox use. This matches \"Replays run the production pipelines\" and the \"fix pipeline in a sandbox\" consideration. The single producer step with no embedded review gives 424 nothing to strip. Recording `issue_text_sha256` and `issue_source` in the run state, and keeping the prompt text in prompt identity, supports \"Results stay comparable over time\".",
+      "file_ref": null,
+      "category": "architectural-alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/423-slice.fix-pipeline.md#technical-decisions"
+    },
+    {
+      "severity": "PASS",
+      "title": "Leak boundary respected",
+      "description": "File mode constructs no `CodeHost`, and D7 makes no cf or `gh` call under `issue-file` with `commit-to: current`. The prompt forbids fetching the issue. This is consistent with the architecture's rule that the producer runs without GitHub credentials and with issue text frozen into the case.",
+      "file_ref": null,
+      "category": "architectural-alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/423-slice.fix-pipeline.md:136"
+    },
+    {
+      "severity": "PASS",
+      "title": "Failure modes enumerated for the new I/O paths",
+      "description": "- **Issue fetch:** the 30-second timeout, not-found, auth and transport errors all fail before dispatch, with no retry and no fallback.\n- **Issue file:** missing, empty, unreadable and non-UTF-8 are each handled.\n- **Report parsing:** every defect maps to `failure_kind: fix_report`.\n- **Commit:** HEAD moved, wrong branch and nothing staged all refuse.\n- **Observability:** refusals log at WARNING and host or git errors at ERROR, and the test list includes the timeout case.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/423-slice.fix-pipeline.md:137"
+    },
+    {
+      "severity": "PASS",
+      "title": "Cost cap restated and unchanged",
+      "description": "The architecture's only quantitative constraint on this path is the per-pipeline cap. The slice restates `pipeline.max_cost_usd` and `--max-cost` with a success criterion and a walkthrough step, and does not alter the mechanism.",
+      "file_ref": null,
+      "category": "nfr",
+      "raw_category": null,
+      "location": "project-documents/user/slices/423-slice.fix-pipeline.md:252"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "architectural-alignment",
+      "raw_category": null,
+      "summary": "Fix-report refusals make the producer's self-report decide whether a replay is graded",
+      "location": "project-documents/user/slices/423-slice.fix-pipeline.md:155",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "dependency-direction",
+      "raw_category": null,
+      "summary": "Production pipeline depends on a benchmark-package module",
+      "location": "project-documents/user/slices/423-slice.fix-pipeline.md:49",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "scope",
+      "raw_category": null,
+      "summary": "Slice plan's MCP parity criterion is dropped without updating the plan",
+      "location": "project-documents/user/slices/423-slice.fix-pipeline.md:43",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "dependencies",
+      "raw_category": null,
+      "summary": "Dependency on 422 contradicts the slice plan and its \"can be built earlier\" note",
+      "location": "project-documents/user/slices/423-slice.fix-pipeline.md:6",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "under-specification",
+      "raw_category": null,
+      "summary": "`issue-file` resolved against the working directory collides with the clean-tree precondition",
+      "location": "project-documents/user/slices/423-slice.fix-pipeline.md:136",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "proportionality",
+      "raw_category": null,
+      "summary": "Effort raised from 2/5 to 3/5, mostly by prompt-only parity",
+      "location": "project-documents/user/slices/423-slice.fix-pipeline.md:344",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "note",
+      "category": "verification",
+      "raw_category": null,
+      "summary": "Walkthrough step 4 does not guarantee `gh` and `cf` are off `PATH`",
+      "location": "project-documents/user/slices/423-slice.fix-pipeline.md:313",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "pass",
+      "category": "architectural-alignment",
+      "raw_category": null,
+      "summary": "Replay runs the production pipeline and prompt, not a benchmark copy",
+      "location": "project-documents/user/slices/423-slice.fix-pipeline.md#technical-decisions",
+      "location_verified": null
+    },
+    {
+      "id": "F009",
+      "severity": "pass",
+      "category": "architectural-alignment",
+      "raw_category": null,
+      "summary": "Leak boundary respected",
+      "location": "project-documents/user/slices/423-slice.fix-pipeline.md:136",
+      "location_verified": true
+    },
+    {
+      "id": "F010",
+      "severity": "pass",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "Failure modes enumerated for the new I/O paths",
+      "location": "project-documents/user/slices/423-slice.fix-pipeline.md:137",
+      "location_verified": true
+    },
+    {
+      "id": "F011",
+      "severity": "pass",
+      "category": "nfr",
+      "raw_category": null,
+      "summary": "Cost cap restated and unchanged",
+      "location": "project-documents/user/slices/423-slice.fix-pipeline.md:252",
+      "location_verified": true
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/423-slice.fix-pipeline.md",
+    "against": "project-documents/user/architecture/420-arch.model-benchmark.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261115-design/wt/423-design"
+  },
+  "timestamp": "2026-11-16T07:02:42.184567",
+  "model": "claude-fable-5-2",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 9,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-fable-5-2",
+  "answering_models": [
+    "claude-fable-5-2"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 11,
+    "in_fences": 0,
+    "in_section": 11,
+    "surviving": 11
+  },
+  "effort": "medium",
+  "profile": "sdk",
+  "turns": 10,
+  "prompt_tokens": 374064,
+  "cached_tokens": 355624,
+  "cache_write_tokens": 18432,
+  "completion_tokens": 8846,
+  "reasoning_tokens": null,
+  "duration_seconds": 90.11206983285956,
+  "cost_usd": 0.7207114,
+  "cost_basis": "provider"
+}

@@ -1,0 +1,61 @@
+{
+ "review": "r01",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "`EnvironmentIdentity` lives in `benchmark/`, but store records must carry it",
+   "description": "The design places `EnvironmentIdentity` in `benchmark/adapter.py` (lines 82-83) and states that neither `metrology/` nor `replay/sandbox.py` depends on `benchmark/` (line 97). Line 119 then says 422's qualification records and 424's replay records carry it. Those are metrology store payloads, on the pattern of `metrology/benchmark_models.py`. So either `metrology/` imports from `benchmark/`, which breaks the stated direction, or 422 duplicates the model.\n\nFix: define `EnvironmentIdentity` in `metrology/benchmark_models.py` and have `benchmark/adapter.py` import it. This matters now because the architecture makes environment identity the qualification key and part of the grader identity.",
+   "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:119"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Case sets are not keyed on `ProjectId`, against the architecture and the slice plan",
+   "description": "The architecture's \"Extend 320's store\" principle and the 421 plan entry both say the new record types are keyed on `ProjectId`. D2 keys `CaseSet` by name only, with the id `caseset-<sha256(name)[:12]>-v<version>`. The reason given (422 may pool cases across projects) is sound, but the deviation is left unreconciled:\n\n- **Envelope:** the design does not say what the `MetrologyRecord` envelope's project field holds for a `case_set` record.\n- **Project-scoped reads:** it does not say how existing project-scoped store queries treat such a record.\n- **Name scope:** set names become global, so two projects that both use the same name share one version sequence.\n\nFix: either state the envelope and query behaviour here and record the deviation against the architecture, or key single-project sets on `ProjectId` and define the pooled case explicitly.",
+   "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:134"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Install failure reasons have no value for transient or other failures",
+   "description": "`EnvironmentFailureReason` has five values: `no_lockfile`, `lockfile_unsupported`, `lock_stale_or_unresolvable`, `install_timeout`, `installer_missing`. The install is a network I/O path, and several failures have no home:\n\n- registry unreachable or the network down;\n- a build-backend failure on historical code;\n- a full disk or any other non-zero `uv` exit.\n\nThe design does not say which reason these get. If they fall into `lock_stale_or_unresolvable`, a transient outage is recorded as a permanent lock problem. The architecture disqualifies a case whose lockfile no longer resolves, and 422's yield report counts exclusions per reason, so this would silently mis-exclude cases and skew yield.\n\nFix: add a distinct reason (for example `install_failed`) for non-zero exits that are not positively identified as lock problems, and state how the lock case is identified.",
+   "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:152"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "A suite run that dies mid-run can return as a short, clean result",
+   "description": "D10 handles two cases: a timeout (`timed_out=True`, missing nodes become `not_run`) and a missing or unparseable JSONL with a non-zero exit (`SuiteRunError`). It does not handle pytest dying partway with a parseable partial JSONL, such as an interpreter crash, an internal error or an interrupted session.\n\nFor `nodes(ids)` the gap is detectable, but the `not_run` rule is stated only for timeouts. For `all_tests()` there is no requested list, so a truncated run looks like a smaller suite. 425 counts regressions from exactly that mode, so a crash would hide regressions. The architecture's \"Absent is not zero\" principle requires this to surface as a harness-caused absence.\n\nFix:\n- Have the plugin write a session-finish line with the collected count and exit status.\n- Treat a JSONL without that line as `SuiteRunError`, or as an explicit incomplete flag.\n- Say which pytest exit codes are normal and which are errors.\n- Say that a truncated final line after a kill is tolerated.",
+   "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:209"
+  },
+  {
+   "i": 4,
+   "severity": "NOTE",
+   "title": "Slice 400 is a dependency but is not in frontmatter",
+   "description": "The design consumes `SourceLanguage` from `metrology/snapshot_models.py` (line 67), follows 400's registry keying, and relies on 400's `.venv` and `uv.lock` layout (line 154). The frontmatter `dependencies` lists only `[420, 177, 320]`. Add 400.",
+   "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:6"
+  },
+  {
+   "i": 5,
+   "severity": "NOTE",
+   "title": "`lockfile_path` must be tree-relative for the identity digest to be stable",
+   "description": "`identity_digest` hashes every other field, including `lockfile_path`. If that path is absolute it contains the sandbox id, so every sandbox gets a different digest. That would defeat the environment-keyed re-qualification 422 depends on. State that it is relative to the tree.",
+   "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:159"
+  },
+  {
+   "i": 6,
+   "severity": "NOTE",
+   "title": "A missing project module has no `__file__` to classify by",
+   "description": "A \"project module\" is defined as a module whose `__file__` is project source. `ModuleNotFoundError` for a module the fix added has a name but no file, and this is the most common missing-symbol case. As written it falls through to `other_exception`. 422 excludes both kinds, so the outcome is safe, but the yield report's reason is wrong. Define the match by package prefix against project source roots.",
+   "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:220"
+  },
+  {
+   "i": 7,
+   "severity": "NOTE",
+   "title": "Identity fields and failure kinds go beyond the parents' lists, with reasons",
+   "description": "D1 adds `reference_sha`, `project_id`, `kind` and `hidden_fixtures` to the architecture's content-identity list. D11 adds `other_exception`, and splits out `collection_error`, beyond the plan's three classes. Both are justified in the design and are stricter than the parents, so they are consistent with \"Cases are immutable\" and with \"where a check cannot decide, the case is excluded\". The architecture's identity list should be updated to match.",
+   "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:126"
+  }
+ ]
+}

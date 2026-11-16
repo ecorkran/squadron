@@ -1,0 +1,243 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Rebuild re-runs the issue freeze before the reuse check, so a qualified case can change or get a second record",
+      "description": "The data flow puts discovery and the issue freeze (steps 1\u20132) before the reuse check (step 4). Line 241 says the reuse check needs the post-install environment digest. So every `build` fetches every issue again and re-renders it.\n\nIf an issue body was edited after a case qualified, the next build rejects that commit with `issue_edited_after_fix` under a `\u2026-pre` record id. The earlier `\u2026-<env>` qualified record stays. The commit then has two records with opposite outcomes. This breaks three things:\n- Line 142 says \"the case is never fetched again\".\n- The architecture says \"Issue text is frozen into the case when it is created\".\n- Line 373 says \"the number of records equals the number of closing commits\".\n\nThe record-count rule also fails in a second way. The record id includes the environment digest (line 240), so a new interpreter or uv version adds a second record for the same commit.\n\n**Fix:**\n- Check for an existing qualified record or case for the commit before fetching the issue again, and reuse its `task_text`.\n- State which record `yield_report` and `fix-cases show` use when a commit has records under several environments, or under `pre` and an environment. For example: the latest by `created_at`, or only the current environment.\n- Restate the record-count rule as \"per environment\".",
+      "file_ref": null,
+      "category": "state-management",
+      "raw_category": null,
+      "location": "project-documents/user/slices/422-slice.fix-case-qualification-and-yield-report-keystone.md:104-113"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "What a timed-out suite run produces is ambiguous, and its nodes can be misread as test verdicts",
+      "description": "421 D10 says a timeout does not raise. It returns `SuiteRun(timed_out=True)` and marks every node without a result `not_run`.\n\nD5 maps `not_run` to `undecidable_failure_at_parent`, which is a test rejection. It also says \"A timeout \u2026 records `harness_error`\". The doc does not say which rule wins, so an implementation that maps per node will charge a harness timeout to the case.\n\nThe same gap affects D9's repeats (lines 222\u2013226). If one of the three reference runs times out, its nodes are `not_run`, they \"differ across runs\", and they get rejected or excluded as `flaky`. That also changes the case id.\n\n**Fix:** State that `SuiteRun.timed_out` is checked first, in both D5 and D9, and turns the whole candidate into `harness_error` before any per-node mapping. Add a test with a fixture timeout during the repeats.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/422-slice.fix-case-qualification-and-yield-report-keystone.md:171-177"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Failure handling for the trace, collect, resolver and `gh` paths is contradictory or missing",
+      "description": "The slice adds four I/O paths of its own:\n- the trace plugin's collect-mode pytest run;\n- the trace-mode pytest run;\n- the boundary resolver subprocess;\n- the `gh` GraphQL call.\n\nProblems:\n- **Resolver crash, contradictory.** D6 (line 185) rejects a resolver import failure with `boundary_undecidable`, a `CandidateRejection` that blames the case. Technical Requirements (line 389) says a \"resolver crash\" test asserts `harness_error`. The doc never separates \"the project's package fails to import\" (a fact about the case) from \"the resolver timed out or the interpreter crashed\" (a harness fault).\n- **No timeout bound.** None of the four paths names its bound. 421 D12 requires every bounded call to use a declared config key (\"No timeout is written inline\"). Collect and trace are not `run_suite`, so `benchmark.suite_timeout_s` does not obviously cover them. A hanging `gh` call has no stated bound either.\n- **Unreadable trace output.** The doc does not say what happens when the trace plugin's output file is missing or cannot be parsed. 421's runner raises `SuiteRunError` in that case. The trace path has no equivalent rule, so it risks the \"empty result read as pass\" failure that 421 explicitly avoided.\n\n**Fix:** For each of the four paths, state the timeout key, the outcome on a hang or timeout (`harness_error`), and the outcome on missing or corrupt output. Make D6 and the Technical Requirements agree on how resolver failures are split.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/422-slice.fix-case-qualification-and-yield-report-keystone.md:185"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Wrapping `_patch.__enter__`/`start` does not catch `patch.dict`, so a test that patches project code can qualify",
+      "description": "D7 says wrapping `unittest.mock._patch.__enter__` / `start` \"covers `patch`, `patch.object` and `patch.dict`\". It does not. In `unittest.mock`, `patch.dict` is the separate class `_patch_dict`, with its own `__enter__`, `start` and decorator path.\n\nAs written, `patch.dict(\"pkg.mod.REGISTRY\", \u2026)` on a project module's dict would not be intercepted. The test would pass D7 and be admitted. The architecture says a check that cannot decide must exclude (\"never admitted\"), and the slice plan's success criteria include a patched-internal test that fails the check.\n\n**Fix:**\n- Wrap `_patch_dict.__enter__` / `start` as well, and resolve its `in_dict` owner. When the target is a string, resolve it to the module that owns the dict.\n- Add a `patch.dict` case to the trace plugin's fixture tests (line 388 already promises \"each patch API\").",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "project-documents/user/slices/422-slice.fix-case-qualification-and-yield-report-keystone.md:200"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Hidden fixtures can depend on added conftest imports that the case never records for 425",
+      "description": "D3 accepts a `conftest.py` change made of \"added fixtures and added imports\". It records only the fixtures, as 421's `ConftestFixture` (conftest path and fixture name). Line 156 says \"425 injects only added fixtures\". An added fixture that uses a newly added import (`from pkg import Client`, `import responses`) will raise `NameError` when 425 injects it alone. That would fail correct replays, and the arch's \"Absent is not zero\" principle would charge that harness fault to the config.\n\n**Fix:** Pick one:\n- record the added imports alongside `hidden_fixtures` on the case (this changes the case identity, so coordinate the field with 421 D1);\n- state that 425 injects the fixture's added imports too, and name that in the contract under \"Provides to Other Slices\";\n- reject conftest changes whose added fixtures depend on added imports.",
+      "file_ref": null,
+      "category": "integration",
+      "raw_category": null,
+      "location": "project-documents/user/slices/422-slice.fix-case-qualification-and-yield-report-keystone.md:153-156"
+    },
+    {
+      "severity": "NOTE",
+      "title": "D5 mixes `NodeOutcome` and `FailureKind` values under \"FailureKind\"",
+      "description": "`passed`, `skipped`, `xfailed`, `xpassed`, `not_run` and `error` are 421's `NodeOutcome` values. `FailureKind` is set only for `failed`/`error` (421 D11). The mapping should say it switches on `outcome` first, then on `failure_kind`. \"`error` in setup or teardown\" should also name its `phase` source. This is wording only; the intent is clear.",
+      "file_ref": null,
+      "category": "interface-contract",
+      "raw_category": null,
+      "location": "project-documents/user/slices/422-slice.fix-case-qualification-and-yield-report-keystone.md:171-176"
+    },
+    {
+      "severity": "NOTE",
+      "title": "\"Used unchanged\" overstates it; this slice extends `registry.py` and `MetrologyRecord`",
+      "description": "The slice adds a `FixCaseAdapter` mapping to 421's `registry.py` (line 98) and a `fix_qualification` payload to `MetrologyRecord` (line 352). Both are extension points that 421 anticipated (421 D3, D9), so the dependency direction is correct. 421 D9 expected 422 to add fairness methods to the adapter seam. Using a separate `FixCaseAdapter` protocol instead is a justified ISP choice and is stated at line 284. Rewording line 395 to \"extends only the registry and record envelope; no change to sandbox, store primitives or suite runner\" would avoid a false \"421 defect\" reading.",
+      "file_ref": null,
+      "category": "dependencies",
+      "raw_category": null,
+      "location": "project-documents/user/slices/422-slice.fix-case-qualification-and-yield-report-keystone.md:395"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Walkthrough step 6 expects case-set data from `yield --json`, which D12 does not define",
+      "description": "D12 says the yield report aggregates `FixQualification` records. It does not mention case sets. Either add the case set name and version to the yield JSON, or have step 6 check the set some other way.",
+      "file_ref": null,
+      "category": "under-specification",
+      "raw_category": null,
+      "location": "project-documents/user/slices/422-slice.fix-case-qualification-and-yield-report-keystone.md:426"
+    },
+    {
+      "severity": "PASS",
+      "title": "Fairness rule and test-set design match the architecture's principles",
+      "description": "- **Test-first (D5):** maps 421's classification onto the arch's three-part rule.\n- **Packaging boundary (D6):** uses the boundary as it stood at the parent, through `[project.scripts]` and top-level `__all__`. It rejects static-only checks and perturbation, consistent with the architecture.\n- **No project patching (D7):** enforced, apart from the `patch.dict` gap above.\n- **Test sets (D3):** node-level hidden and superseded sets, including added conftest fixtures.\n- **Undecidable results** always exclude with a named reason.\n- **Repeats (D9):** run at both the reference and the parent, and exclusions feed the case id, as the slice plan requires.",
+      "file_ref": null,
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/422-slice.fix-case-qualification-and-yield-report-keystone.md#technical-decisions"
+    },
+    {
+      "severity": "PASS",
+      "title": "Scope, dependencies and proportionality fit the slice plan entry",
+      "description": "- Every success criterion in the slice plan entry is covered.\n- Injection (425), replay and the leak scan (424), and slice cases (426) are excluded.\n- The yield report's analytic bound is labelled as a stand-in, and its assumptions are spelled out (D12).\n- A cross-project pool command is explicitly deferred (D13).\n- `/sq:benchmark` is in scope because 421 deferred it to this slice.\n- No new dependencies and no per-project configuration.\n- The architecture states no latency or throughput NFR for this path, and this slice makes no LLM dispatch, so the cost-cap rules do not apply here.",
+      "file_ref": null,
+      "category": "proportionality",
+      "raw_category": null,
+      "location": "project-documents/user/slices/422-slice.fix-case-qualification-and-yield-report-keystone.md#technical-scope"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "state-management",
+      "raw_category": null,
+      "summary": "Rebuild re-runs the issue freeze before the reuse check, so a qualified case can change or get a second record",
+      "location": "project-documents/user/slices/422-slice.fix-case-qualification-and-yield-report-keystone.md:104-113",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "What a timed-out suite run produces is ambiguous, and its nodes can be misread as test verdicts",
+      "location": "project-documents/user/slices/422-slice.fix-case-qualification-and-yield-report-keystone.md:171-177",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "Failure handling for the trace, collect, resolver and `gh` paths is contradictory or missing",
+      "location": "project-documents/user/slices/422-slice.fix-case-qualification-and-yield-report-keystone.md:185",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Wrapping `_patch.__enter__`/`start` does not catch `patch.dict`, so a test that patches project code can qualify",
+      "location": "project-documents/user/slices/422-slice.fix-case-qualification-and-yield-report-keystone.md:200",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "integration",
+      "raw_category": null,
+      "summary": "Hidden fixtures can depend on added conftest imports that the case never records for 425",
+      "location": "project-documents/user/slices/422-slice.fix-case-qualification-and-yield-report-keystone.md:153-156",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "interface-contract",
+      "raw_category": null,
+      "summary": "D5 mixes `NodeOutcome` and `FailureKind` values under \"FailureKind\"",
+      "location": "project-documents/user/slices/422-slice.fix-case-qualification-and-yield-report-keystone.md:171-176",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "note",
+      "category": "dependencies",
+      "raw_category": null,
+      "summary": "\"Used unchanged\" overstates it; this slice extends `registry.py` and `MetrologyRecord`",
+      "location": "project-documents/user/slices/422-slice.fix-case-qualification-and-yield-report-keystone.md:395",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "note",
+      "category": "under-specification",
+      "raw_category": null,
+      "summary": "Walkthrough step 6 expects case-set data from `yield --json`, which D12 does not define",
+      "location": "project-documents/user/slices/422-slice.fix-case-qualification-and-yield-report-keystone.md:426",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "pass",
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "summary": "Fairness rule and test-set design match the architecture's principles",
+      "location": "project-documents/user/slices/422-slice.fix-case-qualification-and-yield-report-keystone.md#technical-decisions",
+      "location_verified": null
+    },
+    {
+      "id": "F010",
+      "severity": "pass",
+      "category": "proportionality",
+      "raw_category": null,
+      "summary": "Scope, dependencies and proportionality fit the slice plan entry",
+      "location": "project-documents/user/slices/422-slice.fix-case-qualification-and-yield-report-keystone.md#technical-scope",
+      "location_verified": null
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/422-slice.fix-case-qualification-and-yield-report-keystone.md",
+    "against": "project-documents/user/architecture/420-arch.model-benchmark.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261115-design/wt/422-design"
+  },
+  "timestamp": "2026-11-16T07:24:26.818786",
+  "model": "claude-opus-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 6,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-opus-5-5",
+  "answering_models": [
+    "claude-opus-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 10,
+    "in_fences": 0,
+    "in_section": 10,
+    "surviving": 10
+  },
+  "effort": "medium",
+  "profile": "sdk",
+  "turns": 7,
+  "prompt_tokens": 489335,
+  "cached_tokens": 391593,
+  "cache_write_tokens": 97732,
+  "completion_tokens": 9689,
+  "reasoning_tokens": null,
+  "duration_seconds": 106.02200258290395,
+  "cost_usd": 1.0547634000000001,
+  "cost_basis": "provider"
+}

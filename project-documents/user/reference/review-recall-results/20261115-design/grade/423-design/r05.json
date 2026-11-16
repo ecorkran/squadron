@@ -1,0 +1,47 @@
+{
+ "review": "r05",
+ "findings": [
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Production fetch path depends on benchmark-owned code, contradicting the slice plan",
+   "description": "The frontmatter has `dependencies: [422]`. Prerequisites (line 49) require 422's `CodeHost.get_issue` and the `issue_freeze` renderer. The slice plan entry says \"Dependencies: none in this initiative\" and \"can be built earlier.\"\n\nSlice 422 places the renderer at `benchmark/issue_freeze.py`. The production module `pipeline/fix_issue.py` would therefore import from the benchmark package. That makes a general-purpose feature depend on the benchmark component, which breaks the layering. It also blocks the user-facing fetched mode behind the highest-risk slice in the keystone path (422, risk High). The design adds a \"renders with no cutoff\" contract that 422 happens to honor, but nothing in the plan records it as a seam.\n\nFix one of these ways:\n- Move the issue-text renderer and `get_issue` into the `codehost/` layer, which is neutral. Then 422 and 423 both consume it.\n- Or amend the plan so the dependency is explicit, and drop the claim that the pipeline is useful on its own before 422.",
+   "location": "project-documents/user/slices/423-slice.fix-pipeline.md:6"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Plan success criterion \"CLI, slash command and MCP identical\" is dropped",
+   "description": "The plan's criterion for 423 includes MCP. The design excludes it because squadron has no MCP server for pipelines (D9). The reasoning looks sound, but it silently narrows plan-assigned scope. Record the change in the slice plan entry, or in a plan note, so the criterion is not left unmet on paper.",
+   "location": "project-documents/user/slices/423-slice.fix-pipeline.md:43"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Self-report gate can pre-empt objective grading and mischarge configs",
+   "description": "The architecture's principles are \"objective before opinion\" and \"a producer's claim that tests pass is never evidence.\" Its failure rule says \"committed nothing\" counts as a config failure. This design makes the commit conditional on shape checks of the agent's self-report. A defect there leaves a possibly correct fix uncommitted.\n- Checks that refuse the commit include `gates` empty, any non-zero exit code, `summary` starting with `fix:` or spanning multiple lines, and `failing_tests` empty.\n- A project with no gate commands always fails.\n- A pre-existing red gate always fails.\n- A formatting slip in the summary fails the run even when the code is correct.\n- Under the architecture's \"absent is not zero\" rule, each of these is charged to the config as a fail. That conflates prompt-following with fix quality, and 425 is explicitly meant to grade without trusting the report.\n\nThe project's own \"prefer lenient parsing\" rule applies here too, since stripping a `fix:` prefix is trivial. Options:\n- Make only `summary` and `blocked` gating.\n- Record the other fields without gating the commit.\n- Tolerate the summary prefix.\n\nAlso state which `failure_kind` values 424 and 425 must treat as config-caused (`fix_report`, `cost_cap`) and which as harness-caused. The design leaves that classification implicit.",
+   "location": "project-documents/user/slices/423-slice.fix-pipeline.md:146-158"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Design is heavier than the slice requires",
+   "description": "Effort is raised from 2/5 to 3/5. The added weight is not what the architecture needs. The architecture needs only `sq run fix` with a frozen file and `commit-to=current`. Cuttable or reducible scope:\n- The five-field report contract and its seven rejection kinds. They verify shape only. The design itself says nothing trusts them, and 425 re-grades. A minimal report of `summary` plus `blocked` meets the plan's criteria.\n- The `gates` list with exit codes. It restates what the agent's own project rules already enforce.\n- Two new hidden commands (`sq _fix-prompt`, `sq _commit --subject fix`), a start-HEAD-at-render mechanism and a parity test. The slash-command criterion is in the plan, so keep it. Reuse the existing prompt-only renderer, and do not build a parallel report-parsing path beyond what `sq _commit` already shares.\n- The `IssueSource` StrEnum and sha256 recording are small. They are justified only if 424 actually reads them.",
+   "location": "project-documents/user/slices/423-slice.fix-pipeline.md:344"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Failure modes for the commit step, report file and dirty tree are not enumerated",
+   "description": "The design handles the issue fetch (30s timeout), the file read and the cost cap well. These new or touched paths are not covered:\n- **Git commit failure.** A pre-commit hook rejection or git error after staging is not named. State whether the failure is logged and which `failure_kind` it gets, and what state the tree is left in. Projects in this workflow use pre-commit hooks.\n- **`sq _commit` report file.** A missing, unreadable or empty `--report-file` has no stated refusal.\n- **Dirty tree after a dispatch failure.** A dispatch crash or a `cost_cap` stop leaves the agent's changes in the tree, and the next run refuses on the dirty-tree precondition. D4 states this for `blocked` and report defects. Walkthrough step 5 says \"commits nothing\" and does not mention the leftover tree.\n- **Observability tests.** The architecture's review rule requires each failure mode to emit a WARNING or higher signal, and one test to assert it. The test list covers refusals but does not assert the log signal.",
+   "location": "project-documents/user/slices/423-slice.fix-pipeline.md#Patterns and Conventions"
+  },
+  {
+   "i": 6,
+   "severity": "NOTE",
+   "title": "Prompt identity claim depends on how the template is hashed",
+   "description": "D8 says 424 and 425 can tell prompt versions apart through `prompt_identity.py`. The assembled prompt contains the per-issue text, so identity must be computed from the template, or from the prompt with the issue text excluded. Otherwise each case would get a different identity. State which input is hashed so results stay comparable across cases.",
+   "location": "project-documents/user/slices/423-slice.fix-pipeline.md:191"
+  }
+ ]
+}

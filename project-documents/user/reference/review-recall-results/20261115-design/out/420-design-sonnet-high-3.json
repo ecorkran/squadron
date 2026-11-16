@@ -1,0 +1,189 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Config identity (D6) widens past what the slice plan and architecture require",
+      "description": "The slice plan's criterion is narrow: \"two runs that differ only in the alias's effort label but sent the same effort count as one config.\" D6 goes further:\n- It adds `tool_use` and `max_output_tokens` to the identity.\n- It adds two new optional fields on `ProducerConfigRef`.\n- It adds a private `config_identity` in `replay/report.py`.\n- It reworks the row and Bradley-Terry grouping keys.\n\nThe architecture's identity is \"(alias, model, profile, effort sent)\". D6 states that it \"narrows\" this, but it also adds two fields the architecture never names.\n\nThis is a 2/5, low-risk slice. Cutting the two extra fields gives a smaller D6. Identity would be `(model, profile, effort_sent)`, with the alias as a display field, which is what the plan's criterion needs. Whether `tool_use` and `max_output_tokens` belong in identity is a benchmark-wide decision. It should be made in the architecture or in 425, where the benchmark report is built, not slipped in here.\n\n`JudgeRef.effort_sent` (D3) is also borderline. If the judge's usage record already carries the effort, a second field that splits report tables is extra.",
+      "file_ref": null,
+      "category": "scope-creep",
+      "raw_category": null,
+      "location": "project-documents/user/slices/420-slice.effort-audit-across-dispatch-paths.md:142-147"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The identity rule is not a shared contract and already differs between the two readers",
+      "description": "The design says the D6 rule \"supersedes the architecture's grouping.\" It also says \"this slice ships no shared identity type\" and that later slices \"apply the rule to their own record types.\" That leaves three problems:\n- Slices 424\u2013427 each re-implement the identity, so drift is likely. The architecture's goal that \"results stay comparable over time\" depends on one identity.\n- `sq stats producers` keeps `ProducerKey(model, profile, effort, reviewer)` (line 144) without `tool_use` or `max_output_tokens`. Replay under D6 includes them. Within this one slice, two readers of the same config therefore use different identities.\n- A slice design changes the architecture's stated identity, but the architecture document is not updated. Consumers reading only the architecture will build the wrong key.\n\nEither keep identity at `(model, profile, effort_sent)` for every reader, or provide one shared function. Also note the override in the architecture.",
+      "file_ref": null,
+      "category": "integration",
+      "raw_category": null,
+      "location": "project-documents/user/slices/420-slice.effort-audit-across-dispatch-paths.md:160-163"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The enumeration test (D7) cannot catch the defect class this audit found",
+      "description": "The Value section claims \"a new dispatch path cannot ship without a decision about effort.\" The test classifies `AgentConfig(` construction sites and `open_pipeline_session` calls. The real defects were all callers that dropped `effort` when calling a shared helper:\n- Path 7 drops it at `resolver.resolve`.\n- Path 8 does not pass it to `one_shot_dispatch_with_telemetry`.\n- Path 11 emits `--model` without `--effort`.\n\nThe `AgentConfig` construction sites live inside those helpers, and they are already classified. A new caller that forgets `effort=` adds no new site, so the test passes and the claim is false.\n\nA lighter and stronger option is to make `effort` a required keyword on the shared dispatch helpers, with an explicit `None` for \"no alias\". A caller can then not omit it. That would let you shrink or drop the AST test and its classification table.",
+      "file_ref": null,
+      "category": "antipattern",
+      "raw_category": null,
+      "location": "project-documents/user/slices/420-slice.effort-audit-across-dispatch-paths.md:149-152"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "\"Records effort\" guarantee overstates what the slice delivers, and path 7 spend grows unrecorded",
+      "description": "\"Provides\" promises that \"every alias-resolving dispatch path, including the grading review and the judge, sends and records effort.\" The inventory contradicts this. Path 7 (the findings-addressed judge) writes no record at all. Paths 10 and 11 write none either, though the harness runs those. The architecture says \"every run records the effort actually sent.\" Either narrow the guarantee to the paths that write records, or state the exception to consumers.\n\nD3 also makes the findings-addressed judge run at the alias's effort, which raises its cost. Its `UsageRecord` is missing, so that spend is outside `pipeline.max_cost_usd` and run totals (line 232). The slice therefore increases spend the 947 cap and the architecture's \"spend is visible\" principle cannot see. The design defers this to an issue. At minimum it should name the interaction explicitly and say whether D3 for path 7 waits on that issue.",
+      "file_ref": null,
+      "category": "under-specification",
+      "raw_category": null,
+      "location": "project-documents/user/slices/420-slice.effort-audit-across-dispatch-paths.md:162-163"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Reader failure mode for an unrecognized `effort_sent` value is unhandled",
+      "description": "`action_effort_sent` \"raises on an unrecognized value rather than reading it as `None`.\" It is the single reader for replay outcome and `sq stats producers`, and both scan many persisted run files. As written, one bad or hand-edited record aborts the whole report. That is fail-fast, but nothing says where the error is caught, whether the record is skipped with a WARNING and counted, or whether the command should crash. State the handling at the two call sites. Also add one test that asserts the observable signal (log or count), per the project's failure-mode rule.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/420-slice.effort-audit-across-dispatch-paths.md:139"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Absent key and `None` both read as \"not sent\" for old failed runs",
+      "description": "Records that predate this slice and have no telemetry have no `effort_sent` key and no `usage.effort`. They read as `None` (\"not sent\"). They are really unknown. The architecture says \"absent is not zero.\" D5 handles new runs well, so this is only a historical limitation. A one-line statement that pre-slice failed runs land in the \"not sent\" row would be enough.",
+      "file_ref": null,
+      "category": "data-integrity",
+      "raw_category": null,
+      "location": "project-documents/user/slices/420-slice.effort-audit-across-dispatch-paths.md:109"
+    },
+    {
+      "severity": "PASS",
+      "title": "Inventory and per-path fixes align with the architecture and its consumers",
+      "description": "The 17-path inventory covers the paths that 424 (producer replay), 425 (grading review through `run_review_with_profile`) and 426\u2013427 (judge and reviewer runs) depend on. The exclusions are justified: paths 13\u201315 resolve no alias, and path 17 is run by the harness. The D1 `null` convention matches 175 D7 and 931, so there is no migration. D2 and D5 correctly refuse to substitute the alias's value, which satisfies the architecture's \"effort not sent is recorded as not sent, not as the alias's value.\" Dependency direction is correct: the slice consumes 931, 175 and #216 and changes none of them. A fake provider with `applies_effort=False` covers the plan's \"cannot send\" test requirement.",
+      "file_ref": null,
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/420-slice.effort-audit-across-dispatch-paths.md:58-91"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "scope-creep",
+      "raw_category": null,
+      "summary": "Config identity (D6) widens past what the slice plan and architecture require",
+      "location": "project-documents/user/slices/420-slice.effort-audit-across-dispatch-paths.md:142-147",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "integration",
+      "raw_category": null,
+      "summary": "The identity rule is not a shared contract and already differs between the two readers",
+      "location": "project-documents/user/slices/420-slice.effort-audit-across-dispatch-paths.md:160-163",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "antipattern",
+      "raw_category": null,
+      "summary": "The enumeration test (D7) cannot catch the defect class this audit found",
+      "location": "project-documents/user/slices/420-slice.effort-audit-across-dispatch-paths.md:149-152",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "under-specification",
+      "raw_category": null,
+      "summary": "\"Records effort\" guarantee overstates what the slice delivers, and path 7 spend grows unrecorded",
+      "location": "project-documents/user/slices/420-slice.effort-audit-across-dispatch-paths.md:162-163",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "Reader failure mode for an unrecognized `effort_sent` value is unhandled",
+      "location": "project-documents/user/slices/420-slice.effort-audit-across-dispatch-paths.md:139",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "data-integrity",
+      "raw_category": null,
+      "summary": "Absent key and `None` both read as \"not sent\" for old failed runs",
+      "location": "project-documents/user/slices/420-slice.effort-audit-across-dispatch-paths.md:109",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "pass",
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "summary": "Inventory and per-path fixes align with the architecture and its consumers",
+      "location": "project-documents/user/slices/420-slice.effort-audit-across-dispatch-paths.md:58-91",
+      "location_verified": true
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/420-slice.effort-audit-across-dispatch-paths.md",
+    "against": "project-documents/user/architecture/420-arch.model-benchmark.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261115-design/wt/420-design"
+  },
+  "timestamp": "2026-11-16T07:37:26.956945",
+  "model": "claude-sonnet-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 4,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-sonnet-5-5",
+  "answering_models": [
+    "claude-sonnet-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 7,
+    "in_fences": 0,
+    "in_section": 7,
+    "surviving": 7
+  },
+  "effort": "high",
+  "profile": "sdk",
+  "turns": 5,
+  "prompt_tokens": 334640,
+  "cached_tokens": 211792,
+  "cache_write_tokens": 122840,
+  "completion_tokens": 6871,
+  "reasoning_tokens": null,
+  "duration_seconds": 58.71397341694683,
+  "cost_usd": 0.5820331,
+  "cost_basis": "provider"
+}

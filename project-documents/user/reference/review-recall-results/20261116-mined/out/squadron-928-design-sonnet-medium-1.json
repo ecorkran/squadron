@@ -1,0 +1,207 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "PASS",
+      "title": "Plan's open questions are answered with recorded rationale",
+      "description": "The slice plan entry 928 (arch lines 453-457) leaves three questions open. All three are answered with reasons:\n- **Part A:** the choice between refusing a pack and a per-target declaration is settled in D2. The pack declares Codex content in an `agents/` directory, and nothing is auto-converted.\n- **Part B enumeration:** the commands that need the rule are chosen by a probe (D10), not by guesswork.\n- **`sq doctor`:** D11 decides there is no check for the rule and records why.\n\nThe rejected alternatives are stated, and the 3/5 effort revision is recorded in the plan.",
+      "file_ref": null,
+      "category": "alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md#D2"
+    },
+    {
+      "severity": "PASS",
+      "title": "Layering and dependency directions are correct",
+      "description": "`skills/` owns `PACK_LAYOUTS`, `remove_receipt_files` and the target tables. `cli/commands/skills.py`, `install.py` and `doctor_checks.py` consume them. This moves duplicated path derivation out of `skills list` and `check_skill_packs` (D6), and no `if target ==` branches stay in callers. It builds on 925's vocabulary without changing its meaning. The no-flag path is specified as byte-identical, and receipt names are chosen so old receipts still read (D5).",
+      "file_ref": null,
+      "category": "architecture",
+      "raw_category": null,
+      "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md#Component Structure"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Doctor, `skills list`, and the bundled-pack move are scope the plan entry does not assign",
+      "description": "The plan entry assigns three things: `skills install/uninstall --ide`, the documented approval rule, and the doctor-rule question (answer it and record why). The slice adds several more:\n- `--ide`/`--local` on `skills list`\n- per-target doctor skill-pack rows (D8), including a new WARN state\n- moving the bundled `analysis` skills and changing `bundle_subdirs`\n- hint sections in three agent skills (D12)\n- the `sq model list` fix\n\nThe overview presents list and doctor as part of #125, which is partly fair. But `PackLayout.installed_path` and the D8 doctor rows are the heaviest additions, and nothing in the plan requires them. Install and uninstall can ship without them, because Claude-only status reporting is today's behavior and is not a regression. Cut or defer:\n- **Doctor rows (D8) and `skills list --ide`:** move to a follow-up. This drops `installed_path`, the surface-by-target table, and the doctor tests.\n- **Bundled-pack move (D4):** keep only if the verification walkthrough needs the `analysis` pack to install for Codex. If so, say that this is the reason. The move touches `install-commands` fixtures and `bundled_skill_names`, which is wider than the stated goal.\n\nIf the PM wants these in the slice, update the plan entry to say so. The `sq model list` fix is small enough to commit separately under the fixes path.",
+      "file_ref": null,
+      "category": "scope-creep",
+      "raw_category": null,
+      "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md#Technical Scope"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Agents receipt suffix creates a new pack-vs-pack receipt collision that the exclusions do not cover",
+      "description": "D5 builds the receipt name as `<pack>` + `-agents` + `-local`. So a Claude machine install of a pack named `foo-agents` writes `foo-agents.toml`. That is the same file as the agents machine receipt for pack `foo`. Installing or uninstalling one would overwrite or delete the other's record, and `remove_receipt_files` would delete files based on the wrong receipt. The same applies to `-local`. The Excluded section only waives collisions \"with squadron's own receipt names or skill names\", described as pre-existing on the Claude path. This collision is new, because the suffix scheme introduces it. Either reject pack names ending in `-agents` or `-local` at `skills add` and install time, or put the target in a receipt field or subdirectory. State the choice in D5.",
+      "file_ref": null,
+      "category": "hidden-dependency",
+      "raw_category": null,
+      "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md#D5"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Failure modes for the new write path and receipt are not enumerated",
+      "description": "D3 covers validation failures well, with all violations reported and nothing written. The new I/O is the writing of skill directories into the shared `~/.agents/skills` root, followed by the receipt write. Four failure modes are not addressed:\n- **Failure mid-write:** a permission error, disk-full, or interrupt after some skill directories are written and before the receipt exists. The files are then unowned and cannot be removed by receipt-driven uninstall, which matters because #65 makes receipts the only authority. Nothing is said about rollback or cleanup.\n- **Receipt write fails** after files are written.\n- **Uninstall with no receipt, or a receipt pointing at missing files.** Containment is covered, but this case is not.\n- **Github-source clone hang or timeout** under `--ide codex`. This path is reused, but the slice's own D10 notes it is the one that hits the sandbox.\n\nThe project rules require each failure to be observable (WARNING or above) and covered by at least one test. The Technical Requirements test list has none of these. Add a short failure-mode table with the handling for each and a test for the mid-write case.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md#Data Flow"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`installed_path` glob can report another pack's skills as installed",
+      "description": "For agents prefix packs, status is \"first `root/p-*/SKILL.md`\". The agents root is shared with every other skill source, and D3 itself says directory names are the only tie to a pack. A pack with prefix `a`, or any unrelated skill named `p-something`, makes `list` and doctor report \"installed\" with no receipt. The slice's own pattern says receipts are the authority for what squadron owns (Patterns and Conventions, #65). Derive status from the receipt, or check that the receipt's recorded files exist. Fixing this is also cheaper if the `list`/doctor scope above is deferred.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md#Data Flow"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Subcommand list for the rule is deferred to implementation-time probing",
+      "description": "Several rows in the D10 table are \"confirm by probe\" or \"probe\", so the rule's alternatives and the README correction about `$sq-spawn` are not fixed by the design. The method is sound, and success criterion 8 verifies it with `codex execpolicy check`. The probe has to be run before the docs are written, as the Development Approach step order already says.",
+      "file_ref": null,
+      "category": "specification",
+      "raw_category": null,
+      "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md#D10"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Security statement for the rule is handled correctly",
+      "description": "The slice says the docs must state, in the same paragraph as the snippet, that a matching command runs outside the sandbox with no prompt. It names `decision = \"prompt\"` and project-scoped rules as alternatives. This is the right level of disclosure for a rule that authorizes more than network access.",
+      "file_ref": null,
+      "category": "security",
+      "raw_category": null,
+      "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md#Special Considerations"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "pass",
+      "category": "alignment",
+      "raw_category": null,
+      "summary": "Plan's open questions are answered with recorded rationale",
+      "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md#D2",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "pass",
+      "category": "architecture",
+      "raw_category": null,
+      "summary": "Layering and dependency directions are correct",
+      "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md#Component Structure",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "scope-creep",
+      "raw_category": null,
+      "summary": "Doctor, `skills list`, and the bundled-pack move are scope the plan entry does not assign",
+      "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md#Technical Scope",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "hidden-dependency",
+      "raw_category": null,
+      "summary": "Agents receipt suffix creates a new pack-vs-pack receipt collision that the exclusions do not cover",
+      "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md#D5",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "Failure modes for the new write path and receipt are not enumerated",
+      "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md#Data Flow",
+      "location_verified": null
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "`installed_path` glob can report another pack's skills as installed",
+      "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md#Data Flow",
+      "location_verified": null
+    },
+    {
+      "id": "F007",
+      "severity": "note",
+      "category": "specification",
+      "raw_category": null,
+      "summary": "Subcommand list for the rule is deferred to implementation-time probing",
+      "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md#D10",
+      "location_verified": null
+    },
+    {
+      "id": "F008",
+      "severity": "note",
+      "category": "security",
+      "raw_category": null,
+      "summary": "Security statement for the rule is handled correctly",
+      "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md#Special Considerations",
+      "location_verified": null
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md",
+    "against": "project-documents/user/architecture/900-slices.maintenance-and-refactoring.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/squadron-928-design"
+  },
+  "timestamp": "2026-11-16T09:26:17.229474",
+  "model": "claude-sonnet-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 4,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-sonnet-5-5",
+  "answering_models": [
+    "claude-sonnet-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 8,
+    "in_fences": 0,
+    "in_section": 8,
+    "surviving": 8
+  },
+  "effort": "medium",
+  "profile": "sdk",
+  "turns": 5,
+  "prompt_tokens": 350371,
+  "cached_tokens": 226871,
+  "cache_write_tokens": 123492,
+  "completion_tokens": 4828,
+  "reasoning_tokens": null,
+  "duration_seconds": 41.94208133290522,
+  "cost_usd": 0.5656192,
+  "cost_basis": "provider"
+}

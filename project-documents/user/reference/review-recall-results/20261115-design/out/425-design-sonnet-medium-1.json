@@ -1,0 +1,207 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Grading spend leaves the run-level cap, and the \"upper bound\" is not one",
+      "description": "- **Departure from the architecture.** The architecture says the run-level cap \"covers grading and judging as well as the replays\", and that the run states one dollar bound before any dispatch. D9 splits grading into its own command with its own cap and bound. The slice says so itself (\"This departs from the architecture\") and asks for the architecture's cost section to be amended.\n- **No amendment, and the plan entry is silent.** Neither the architecture nor the slice plan entry has been changed to allow this. The plan entry never mentions a separate grading cap. A benchmark's total spend is now bounded only by the sum of several invocations' caps, and no single figure states it. The architecture or plan amendment should be part of this slice's deliverables, not just a note.\n- **The bound is not an upper bound.** The sample output prints \"at most $15.18\". The per-review figure is the largest cost observed so far, or a user-supplied `--review-cost`. D9 admits \"No per-review cap exists\". A review costing more than the figure breaks the \"at most\" claim. Label the figure as an estimate in the printed output, or state the guarantee only for the cap check.\n- **Wasted spend between floor runs.** A cap hit between floor runs \"writes no reference record\". That throws away up to `review_floor_runs \u2212 1` paid reviews. The design should say how that waste is reported, or check the cap before starting a reference's whole floor set rather than before each review.",
+      "file_ref": null,
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/425-slice.grading-and-paired-report.md#D9 \u2014 Caps, bound and resume for grading"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "425 supplies code to 427, but the slice plan says 427 does not depend on it",
+      "description": "- **The conflict.** The slice provides `ReviewerRef`, `review_tree_diff`, `bootstrap_mean_interval` and `review_flag` to 427, and states that \"427 imports these and defines no copies\". The slice plan entry for 427 says its dependencies are `[421]` and that it \"does not depend on 424\u2013426 and can be built any time after 421\".\n- **What it breaks.** Following the slice plan, 427 could be built first and would have to duplicate these pieces. Following 425, 427 depends on 425 and loses its place in the plan.\n- **Fix.** Either record `[421, 425]` as 427's dependency in the plan, or move the shared pieces (the reviewer call and the bootstrap) to a lower layer that 427 can use independently. State which in this doc.",
+      "file_ref": null,
+      "category": "integration",
+      "raw_category": null,
+      "location": "project-documents/user/slices/425-slice.grading-and-paired-report.md#Provides to Other Slices"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Report row identity is stated two different ways",
+      "description": "- **The inconsistency.** The Dependencies section says rows group by 420's identity rule: model, profile, effort sent, `tool_use` and `max_output_tokens`. D13 keys rows by `(alias, model, profile, effort_sent)` and splits only on prompt identity.\n- **What it risks.** If D13 governs, two configs that differ only in `tool_use` or `max_output_tokens` merge into one row. D13 promises \"Rows are never silently merged\", so this is a bug in waiting. The paired comparison is only meaningful if the grouping key matches the config identity.\n- **Fix.** Pick one key, preferably the full 420 identity, and use it in D13, in `bench_report`, and in the pairing and estimate inputs.",
+      "file_ref": null,
+      "category": "under-specification",
+      "raw_category": null,
+      "location": "project-documents/user/slices/425-slice.grading-and-paired-report.md:58 and #D13 \u2014 Report contents and order"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Review and reinstall failure paths leave cost and timeout handling implicit",
+      "description": "- **Review timeout value.** `benchmark.review_timeout_s` is declared with no value or default. The project rules ban silent magic defaults, but a key needs a stated source of its value, or it must refuse when unset, the way `grading_review_model` does.\n- **Cost of a cancelled review.** A timed-out review is cancelled with `asyncio.wait_for`, and D7 does not say how its cost is counted. D9 counts `cost_usd=None` at the per-review figure, but it is unclear that a cancelled call reaches that path. A cancelled call may also leave a child process running. State both handling rules, because the cap check relies on them.\n- **Reinstall timeout.** D5 covers a failed `uv sync --locked` but not a hang. A producer-changed lock can stall resolution. Name the timeout that applies, probably 421's, and the absence it maps to. D16 has no row for it. That leaves `producer_env_unresolvable` (config) and `grader_timeout` (harness) as the two possible classes. They differ in whether the case is dropped, so the choice matters.\n- **What is already good.** D16 enumerates every other absence with its class and requires an ERROR log with a stderr tail for each. That meets the failure-mode rule for the rest of the pipeline.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/425-slice.grading-and-paired-report.md#D7 \u2014 The grading review"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The design is heavy and has two parts that could be cut or deferred",
+      "description": "- **Size.** The slice has nine new modules, three record types, sidecar generalization, edits to 320, 400 and 422 code, a plugin protocol, a CLI pair, slash-command mirrors and a seven-section report. The plan rates it 4/5 and the design is close to that. Most of the weight is required by the architecture, so only the clear cuts are named here.\n- **`SampleSizeEstimate` as a stored, overwritten record.** D15 says it is \"a pure function of the grades, so it is recomputed, not appended\". That makes the persisted record, `write_estimate` and `latest_estimate` a cache. The architecture needs only a measurement shown in the report and in `yield`. Computing on demand in the report, and having `yield` call the same pure function over `grades_for`, would remove a record type and an overwrite-in-an-append-store exception. If 422's `yield` cannot read grades without a heavy dependency, say so and keep the record.\n- **`review_flag` indirection.** A single-function seam serves 427 only, and 427 is not built yet. Inline the constant string until 427 exists, and let 427 introduce the seam. The plan's \"427 removes the flag\" is met either way.",
+      "file_ref": null,
+      "category": "proportionality",
+      "raw_category": null,
+      "location": "project-documents/user/slices/425-slice.grading-and-paired-report.md#Technical Scope"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Grading rebuilds the tree instead of using the producer's sandbox",
+      "description": "The architecture and the slice plan both say the grader runs \"in the same sandbox\" after the producer. D1 rebuilds from `start_sha` plus the stored diff, as 424's replay records require, and guards the difference with an environment-digest equality check (`environment_changed`). This is a sound adaptation. The architecture and plan wording should be updated to match, with the cost-cap change above.",
+      "file_ref": null,
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/425-slice.grading-and-paired-report.md#D1 \u2014 The grade order inside one sandbox"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Hidden-test clash handling differs from the architecture wording",
+      "description": "The architecture says a clashing hidden test \"is renamed, not overwritten\". D3 runs the hidden test in a sibling module, so both tests run under different module names, and it renames only the sibling file on a filename clash. Nothing is overwritten and every clash is recorded, so the intent holds. Update the architecture wording so a reader does not expect per-test renaming.",
+      "file_ref": null,
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/425-slice.grading-and-paired-report.md#D3 \u2014 Hidden-set injection: a sibling module per hidden test file"
+    },
+    {
+      "severity": "PASS",
+      "title": "Grading follows the architecture's separation and \"absent is not zero\" rules",
+      "description": "- **Grader vs. producer.** The pass is computed from hidden tests plus a regression run built from the start tree's node ids. Producer-new tests are reported but never enter the pass. Tool config is restored by section, with packaging tables following the producer. Edits and suppressions are counted and never honored.\n- **Absences.** Each absence has a class. Config-caused ones count as fails, harness-caused ones drop the case from every config, and both are counted in the report.\n- **Statistics and reporting.** The report keeps the per-case pass fraction as the unit, uses a paired bootstrap, and shows an interval spanning zero as \"not distinguishable\". No composite is computed. The LLM signals use 320's noise floor, and the reviewer is flagged as unmeasured until 427 supplies recall data.",
+      "file_ref": null,
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/425-slice.grading-and-paired-report.md#D2, D4, D6, D16"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "summary": "Grading spend leaves the run-level cap, and the \"upper bound\" is not one",
+      "location": "project-documents/user/slices/425-slice.grading-and-paired-report.md#D9 \u2014 Caps, bound and resume for grading",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "integration",
+      "raw_category": null,
+      "summary": "425 supplies code to 427, but the slice plan says 427 does not depend on it",
+      "location": "project-documents/user/slices/425-slice.grading-and-paired-report.md#Provides to Other Slices",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "under-specification",
+      "raw_category": null,
+      "summary": "Report row identity is stated two different ways",
+      "location": "project-documents/user/slices/425-slice.grading-and-paired-report.md:58 and #D13 \u2014 Report contents and order",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "Review and reinstall failure paths leave cost and timeout handling implicit",
+      "location": "project-documents/user/slices/425-slice.grading-and-paired-report.md#D7 \u2014 The grading review",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "proportionality",
+      "raw_category": null,
+      "summary": "The design is heavy and has two parts that could be cut or deferred",
+      "location": "project-documents/user/slices/425-slice.grading-and-paired-report.md#Technical Scope",
+      "location_verified": null
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "summary": "Grading rebuilds the tree instead of using the producer's sandbox",
+      "location": "project-documents/user/slices/425-slice.grading-and-paired-report.md#D1 \u2014 The grade order inside one sandbox",
+      "location_verified": null
+    },
+    {
+      "id": "F007",
+      "severity": "note",
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "summary": "Hidden-test clash handling differs from the architecture wording",
+      "location": "project-documents/user/slices/425-slice.grading-and-paired-report.md#D3 \u2014 Hidden-set injection: a sibling module per hidden test file",
+      "location_verified": null
+    },
+    {
+      "id": "F008",
+      "severity": "pass",
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "summary": "Grading follows the architecture's separation and \"absent is not zero\" rules",
+      "location": "project-documents/user/slices/425-slice.grading-and-paired-report.md#D2, D4, D6, D16",
+      "location_verified": null
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/425-slice.grading-and-paired-report.md",
+    "against": "project-documents/user/architecture/420-arch.model-benchmark.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261115-design/wt/425-design"
+  },
+  "timestamp": "2026-11-16T07:01:08.840829",
+  "model": "claude-sonnet-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 5,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-sonnet-5-5",
+  "answering_models": [
+    "claude-sonnet-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 8,
+    "in_fences": 0,
+    "in_section": 8,
+    "surviving": 8
+  },
+  "effort": "medium",
+  "profile": "sdk",
+  "turns": 6,
+  "prompt_tokens": 380758,
+  "cached_tokens": 238498,
+  "cache_write_tokens": 142252,
+  "completion_tokens": 9483,
+  "reasoning_tokens": null,
+  "duration_seconds": 83.33346345811151,
+  "cost_usd": 0.6884716000000001,
+  "cost_basis": "provider"
+}

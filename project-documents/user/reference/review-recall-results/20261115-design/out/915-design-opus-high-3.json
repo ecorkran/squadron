@@ -1,0 +1,225 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "D1's reasoning for re-entering the loop misreads how checkpoints work",
+      "description": "The slice plan requires the design to \"state and justify one answer\" to the re-enterability question (`900-slices\u2026md:192`). Two of D1's four reasons depend on a description of checkpoints that doesn't match the code:\n\n- **Reason 2 (lines 161-166)** says a human who chose `Continue` at an in-loop checkpoint gets overridden by the current behavior. That can't happen. In `_execute_step_once`, `ACCEPT` and `OVERRIDE` (there is no \"continue\" option) inject instructions and carry on inside the step and the loop (`executor.py:1026-1028`). A step returns `PAUSED` only when the human picks `EXIT` (`executor.py:1018-1025`), or when the session is non-interactive and the prompt silently defaults to `EXIT` (`executor.py:338-343`). So the bug never touches a human who said \"continue\".\n- **Reason 3 (lines 168-171)** says choosing `Exit` \"ends the run\" and stays available as the \"human takes over\" escape hatch, unaffected by re-entry. In fact `Exit` is the pause. It is the exact input this slice will turn into \"resume re-enters the loop\". Once the slice lands, a human who wants to take over from a paused loop has no way to say so; today that reading is the default.\n\nThe decision itself may still be right. In non-interactive runs, resuming is arguably the only \"continue\" signal there is. But the rationale has to be rewritten around the real triggers (`EXIT` and non-interactive default-exit). It should also state that \"human takes over\" will no longer be expressible, or else name how it can be expressed. The vocabulary also needs fixing: `checkpoint.py:106` offers `approve/revise/skip/abort`, while `CheckpointResolution` uses `accept/override/exit`. \"Continue\" appears in neither.",
+      "file_ref": null,
+      "category": "design-correctness",
+      "raw_category": null,
+      "location": "project-documents/user/slices/915-slice.loop-checkpoint-pause-resume-correctness.md:145-187"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Resuming at the paused round runs that round again, which contradicts \"resume does not grant extra rounds\"",
+      "description": "The round number is recorded when the checkpoint fires. In the `[dispatch, review, checkpoint]` shapes the design lists (lines 105-112), that is after round N's dispatch and review have already finished. D3 then restarts at `range(start_iteration, \u2026)` with `start_iteration = N`, so round N is dispatched and reviewed a second time. That is an extra round, against lines 181-182.\n\nThere is a worse case. A non-interactive run whose redo of round N again gets CONCERNS will default-exit and pause at N again. Every resume repeats round N and the loop never reaches `max:`. D1's own reason 2 says \"proceed \u2026 means the next round\" (line 165), which disagrees with the \"resume at round N\" rule. Pick one:\n- Resume at N+1. Exhaustion is then handled when N = max.\n- Or keep N, justify why the round is repeated, and explain how repeated pauses at the same round are bounded.",
+      "file_ref": null,
+      "category": "design-correctness",
+      "raw_category": null,
+      "location": "project-documents/user/slices/915-slice.loop-checkpoint-pause-resume-correctness.md:180-182"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Pauses from `on_exhaust: checkpoint` are not handled",
+      "description": "`_loop_exhaust_result` also returns `PAUSED`, with `iteration=max_iter` (`executor.py:1064-1073`). This pause goes through the same `_append_step` path, so it is recorded the same way. Under Part A, resume now returns to the exhausted loop instead of moving past it. Under Part B, `resume_iteration_for` returns `max` and the loop runs round `max` again. That is an extra round, and it changes what `on_exhaust: checkpoint` means today (\"all rounds used up, a human reviews, the run moves on\"). D4's WARNING would also report \"0 rounds not run\" for a pause that didn't come from a short-circuit.\n\nThe design needs to tell exhaustion pauses apart from in-body checkpoint pauses and say what resume does with each. One option is to record the cause, or to have `resume_iteration_for` treat `iteration == max` as exhausted. Whichever is chosen needs a test.",
+      "file_ref": null,
+      "category": "edge-cases",
+      "raw_category": null,
+      "location": "project-documents/user/slices/915-slice.loop-checkpoint-pause-resume-correctness.md#d3--part-b-one-resume-coordinate-threaded-to-the-loop-only"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`resume_iteration_for` doesn't say which record it reads when there are several",
+      "description": "`_append_step` always appends and never replaces (`state.py:304`). So a loop paused, resumed and paused again leaves several `StepState` entries with the same `step_name`. D2's set-based check handles that correctly. `resume_iteration_for` is only described as \"return the recorded `iteration` for a named step\", without saying it must take the latest entry. The design also doesn't cover three other cases:\n- No entry exists for the step.\n- The recorded iteration is greater than the current definition's `max` because the pipeline file was edited between pause and resume. `range(start, max+1)` would be empty and the loop would drop straight into the exhaustion branch without saying so.\n- The entry is a `FAILED` step. Should that re-enter at its round, or restart?\n\nEach of these needs a stated behavior and a test. Per the project's fail-fast rule, an out-of-range iteration should raise an error or at least log a WARNING, not quietly run zero rounds.",
+      "file_ref": null,
+      "category": "under-specification",
+      "raw_category": null,
+      "location": "project-documents/user/slices/915-slice.loop-checkpoint-pause-resume-correctness.md:287"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The Part C WARNING leaves out the single-action loop, which has the same silent short-circuit",
+      "description": "`_execute_loop_step` stops on an inner `PAUSED` just as silently (\"Checkpoint pause always stops the loop\", `executor.py:1135-1137`). Part B threads `start_iteration` through both functions (line 289). The component table, however, adds the WARNING only to `_execute_loop_body`. The functional requirement at lines 305-306 says \"a loop that short-circuits\", which covers both. The table and the test list (line 318) should name both sites. Alternatively, move the log to the one place both return paths pass through.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/915-slice.loop-checkpoint-pause-resume-correctness.md:290"
+    },
+    {
+      "severity": "NOTE",
+      "title": "D2's prose and its code sketch describe different checks",
+      "description": "The prose says \"present **and** in a terminal-complete status\", which is an allow-list. The sketch excludes `{PAUSED, FAILED}`, which is a deny-list. With today's four `ExecutionStatus` members (`executor.py:132-135`) both give the same result, with `SKIPPED` counted as complete. They will diverge if a status is added later. Choose one and state it.",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/slices/915-slice.loop-checkpoint-pause-resume-correctness.md:191-202"
+    },
+    {
+      "severity": "PASS",
+      "title": "Fits the maintenance initiative",
+      "description": "This is a bug fix too large for the standing-fixes slice, which is the kind of item `900-arch` scopes in (\"Bug fixes: Non-trivial bugs that don't belong to an active feature slice\"). It can be delivered on its own and sits after 910/911 as the slice plan requires. The parent architecture states no NFRs, so none need restating.",
+      "file_ref": null,
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/915-slice.loop-checkpoint-pause-resume-correctness.md"
+    },
+    {
+      "severity": "PASS",
+      "title": "Scope and size are proportionate",
+      "description": "The design covers exactly what the slice plan asks for: answer the open question, stop the skip, and make abandoned rounds visible. It rejects the configuration knob with a reason. It defers `each:`/`fan_out:` re-entry as a recorded limitation and doesn't quietly drop it. It adds no new persisted field. The A \u2192 C \u2192 B order, with A committed on its own, is a reasonable way to keep changes bisectable.",
+      "file_ref": null,
+      "category": "proportionality",
+      "raw_category": null,
+      "location": "project-documents/user/slices/915-slice.loop-checkpoint-pause-resume-correctness.md#technical-scope"
+    },
+    {
+      "severity": "PASS",
+      "title": "Claims about current behavior match the code",
+      "description": "I checked these against the source and they hold:\n- `on_step_complete` is called before the `PAUSED` check (`executor.py:769-772`).\n- `_append_step` appends unconditionally and stores `iteration` (`state.py:296-304`).\n- `first_unfinished_step` only checks whether a step is present (`state.py:438-446`).\n- The loop body returns early on `PAUSED` while keeping the iteration number (`executor.py:1283-1291`).",
+      "file_ref": null,
+      "category": "accuracy",
+      "raw_category": null,
+      "location": "project-documents/user/slices/915-slice.loop-checkpoint-pause-resume-correctness.md#verified-current-behavior"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "design-correctness",
+      "raw_category": null,
+      "summary": "D1's reasoning for re-entering the loop misreads how checkpoints work",
+      "location": "project-documents/user/slices/915-slice.loop-checkpoint-pause-resume-correctness.md:145-187",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "design-correctness",
+      "raw_category": null,
+      "summary": "Resuming at the paused round runs that round again, which contradicts \"resume does not grant extra rounds\"",
+      "location": "project-documents/user/slices/915-slice.loop-checkpoint-pause-resume-correctness.md:180-182",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "edge-cases",
+      "raw_category": null,
+      "summary": "Pauses from `on_exhaust: checkpoint` are not handled",
+      "location": "project-documents/user/slices/915-slice.loop-checkpoint-pause-resume-correctness.md#d3--part-b-one-resume-coordinate-threaded-to-the-loop-only",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "under-specification",
+      "raw_category": null,
+      "summary": "`resume_iteration_for` doesn't say which record it reads when there are several",
+      "location": "project-documents/user/slices/915-slice.loop-checkpoint-pause-resume-correctness.md:287",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "The Part C WARNING leaves out the single-action loop, which has the same silent short-circuit",
+      "location": "project-documents/user/slices/915-slice.loop-checkpoint-pause-resume-correctness.md:290",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "D2's prose and its code sketch describe different checks",
+      "location": "project-documents/user/slices/915-slice.loop-checkpoint-pause-resume-correctness.md:191-202",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "pass",
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "summary": "Fits the maintenance initiative",
+      "location": "project-documents/user/slices/915-slice.loop-checkpoint-pause-resume-correctness.md",
+      "location_verified": null
+    },
+    {
+      "id": "F008",
+      "severity": "pass",
+      "category": "proportionality",
+      "raw_category": null,
+      "summary": "Scope and size are proportionate",
+      "location": "project-documents/user/slices/915-slice.loop-checkpoint-pause-resume-correctness.md#technical-scope",
+      "location_verified": null
+    },
+    {
+      "id": "F009",
+      "severity": "pass",
+      "category": "accuracy",
+      "raw_category": null,
+      "summary": "Claims about current behavior match the code",
+      "location": "project-documents/user/slices/915-slice.loop-checkpoint-pause-resume-correctness.md#verified-current-behavior",
+      "location_verified": null
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/915-slice.loop-checkpoint-pause-resume-correctness.md",
+    "against": "project-documents/user/architecture/900-arch.maintenance-and-refactoring.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261115-design/wt/915-design"
+  },
+  "timestamp": "2026-11-16T07:36:56.456615",
+  "model": "claude-opus-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 13,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-opus-5-5",
+  "answering_models": [
+    "claude-opus-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 9,
+    "in_fences": 0,
+    "in_section": 9,
+    "surviving": 9
+  },
+  "effort": "high",
+  "profile": "sdk",
+  "turns": 14,
+  "prompt_tokens": 611659,
+  "cached_tokens": 587389,
+  "cache_write_tokens": 24254,
+  "completion_tokens": 8668,
+  "reasoning_tokens": null,
+  "duration_seconds": 93.50229083304293,
+  "cost_usd": 0.48541140000000005,
+  "cost_basis": "provider"
+}

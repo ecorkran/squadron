@@ -1,0 +1,243 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Grading cap departs from the architecture's spend design goal",
+      "description": "The architecture's design goal (420-arch \"Design Goals\", and \"Technical Considerations \u203a Cost\") says a benchmark run \"stops at its own cap, which covers grading and judging as well as the replays\". Its stated bound includes \"grading and judging estimated from observed costs\". D9 moves grading to a separate `sq benchmark grade` command with its own `--max-cost`. A benchmark's total spend then becomes the run cap plus every grade invocation's cap, with no ceiling on the total.\n\nD9 (line 236) and Integration Points (line 472) admit the departure and say the architecture and 424 \"should say so\". But the slice decides it while the parent still says the opposite. That breaks the \"spend is visible before it happens\" goal for the benchmark as a whole: running `grade` again under a new reviewer, or with `--retry-harness`, adds spend the run's bound never stated.\n\nEither update 420-arch's cost section and 424's \"425 extends the bound with grading costs\" sentence as part of this slice's commit, or have `grade` print the benchmark's cumulative grading spend next to its bound. Do the first at minimum, so the parent document stays authoritative.",
+      "file_ref": null,
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/425-slice.grading-and-paired-report.md:220-236"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "A failed reinstall is always charged to the config, including harness failures",
+      "description": "D5 and D16 (line 298) class every failed `uv sync --locked` after a dependency change as `producer_env_unresolvable`, a config absence that counts as a fail. The sync needs the network and the package index (420-arch \"The environment\"). A network outage, an index error, a corrupted uv cache or a timeout would therefore be charged to the config.\n\nThe architecture's \"Absent is not zero\" principle requires failures the harness caused (\"the environment did not resolve\") to drop the case for every config. Its failure-mode rule also requires the hang and timeout cases of each I/O path to be listed and handled. The slice gives the reinstall no timeout, and has no way to tell \"the producer's lock is inconsistent with its pyproject\" (a config fault, which `--locked` reports deterministically) from a transient fetch failure (a harness fault).\n\nSplit the outcome. Classify `--locked` resolution or consistency errors as `producer_env_unresolvable` (config), and network, index or timeout failures as a harness absence such as `environment_failed` or a new `reinstall_failed`. State the timeout that bounds the reinstall.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/425-slice.grading-and-paired-report.md:193-197"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The report's config-row identity contradicts itself",
+      "description": "Dependencies (line 58) says report rows group by 420's D6 identity rule: model, profile, effort sent, `tool_use` and `max_output_tokens`. D13 (line 263) keys rows by `(alias, model, profile, effort_sent)`. That drops `tool_use` and `max_output_tokens` and adds `alias`.\n\nThe architecture's comparability goal says a result names its config so that \"a report compares only results that match, and flags the rest\". With D13's key, two replays that differ in `tool_use` or `max_output_tokens` would be merged into one row silently, which is the outcome D13 itself rules out (\"Rows are never silently merged\"). Pick one key, state it once (preferably by referencing D6), and use it in both places.",
+      "file_ref": null,
+      "category": "integration",
+      "raw_category": null,
+      "location": "project-documents/user/slices/425-slice.grading-and-paired-report.md:263"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Reference grading is underspecified when a case's replays have different environment digests",
+      "description": "Planning (lines 108\u2013109) and D1 (line 162) require the reference's grade sandbox digest to equal \"the environment digest on the case's replays\". Nothing guarantees that all of a case's replays share one digest. Replays may run across sessions, and 424 resumes partial runs. The reference record id includes an environment digest (line 243), which suggests one reference per digest, but the data flow grades the reference \"once\" per case and writes one baseline that \"every replay of a case\" is compared to (D8, line 216).\n\nThe design does not say which digest the reference sandbox must match, whether a case with mixed-digest replays gets several references and floors, or whether such a case is dropped as `environment_changed`. Since a mismatch is a harness absence that drops the case, this decides case inclusion and needs an explicit rule.",
+      "file_ref": null,
+      "category": "under-specification",
+      "raw_category": null,
+      "location": "project-documents/user/slices/425-slice.grading-and-paired-report.md:107-114"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The persisted sample-size estimate and the 422 yield integration go beyond the slice plan",
+      "description": "The 425 slice-plan entry asks that \"the sample-count measurement from a small run is recorded and shown in the report\". D15 also writes a `SampleSizeEstimate` record per benchmark, adds `write_estimate` and `latest_estimate(case_set)` to the store, and changes 422's `sq benchmark yield` rendering (lines 42, 290, 466, 471).\n\nD15 itself says the estimate \"is a pure function of the grades, so it is recomputed, not appended\". `bench_report` can therefore compute it at report time from the grades it already loads. That meets the plan's requirement without a new record type, two store methods, or a change to another slice's output.\n\nCut the record type, the two store methods and the yield-line change. Defer them until a consumer needs the estimate without a benchmark id. The \"recorded\" requirement is met by the report and its `--json` output.",
+      "file_ref": null,
+      "category": "proportionality",
+      "raw_category": null,
+      "location": "project-documents/user/slices/425-slice.grading-and-paired-report.md:282-291"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Grading runs in a rebuilt sandbox, not \"the same sandbox\"",
+      "description": "The architecture's grader principle and the 425 plan entry both say the grade runs \"in the same sandbox\" after the producer finishes. D1 rebuilds the tree in a fresh sandbox from `start_sha` plus the stored diff, deferring to 424. Requiring the environment digest to match keeps what the architecture cares about (the same start environment), and the rebuild is what makes separate-command grading and resume possible.\n\nUnlike D9, though, the slice does not flag this as a departure. Add it to the same architecture update so the parent's wording matches.",
+      "file_ref": null,
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/425-slice.grading-and-paired-report.md:161-162"
+    },
+    {
+      "severity": "NOTE",
+      "title": "A separate grade lock allows grading to run while replays are still running",
+      "description": "Because the grade lock is separate from the run lock, `grade` can run while `sq benchmark run` is still producing replays. Two sandboxes then run test suites at the same time. That works against the architecture's non-goal of no concurrent replays, and machine contention can push suite runs into `grader_timeout`, a harness absence that drops the case for every config.\n\nIf following a run that is still active is intended, say so and state the expected effect on `benchmark.suite_timeout_s`. If the intent is only to grade after a partial run has stopped, `grade` could also check that the run lock is free.",
+      "file_ref": null,
+      "category": "concurrency",
+      "raw_category": null,
+      "location": "project-documents/user/slices/425-slice.grading-and-paired-report.md:148"
+    },
+    {
+      "severity": "PASS",
+      "title": "Grader independence and test-set handling match the architecture",
+      "description": "- D1's fixed order runs the review on the untouched commit, restores tool config before any check, and runs producer-new tests before test files are restored.\n- D2's regression selection uses `nodes(start ids \u2212 superseded \u2212 excluded)`, so producer tests never enter it.\n- D3 injects hidden tests as sibling modules and records clashes without overwriting anything.\n- D4's section restoration follows packaging tables.\n- D6 counts suppressions without honouring them.\n\nTogether these implement the \"grader is not the producer\" principle and the hidden and superseded test-set principles closely. Running the review with no tools keeps the reviewer away from the user's checkout, where the reference fix lives, which is consistent with \"the answer stays out of reach\".",
+      "file_ref": null,
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/425-slice.grading-and-paired-report.md:152-203"
+    },
+    {
+      "severity": "PASS",
+      "title": "Report structure, statistics and boundaries with 426 and 427",
+      "description": "- The report section order matches the architecture: objective grade, then paired comparison, then review findings against a floor measured for this reviewer, then cost, turns and time, all with n.\n- `bench_report` has no composite, and a test enforces that.\n- The paired bootstrap runs over cases with a seed derived from the benchmark and pair, so reports are reproducible.\n- `review_flag`, `review_tree_diff`, `bootstrap_mean_interval` and `grade_one` with an empty hidden set give 427 and 426 single, injected seams, with no copies.\n- `paired_stats` is pure and the dependencies point the right way: the runner reaches language details only through the adapter registry.",
+      "file_ref": null,
+      "category": "integration",
+      "raw_category": null,
+      "location": "project-documents/user/slices/425-slice.grading-and-paired-report.md:260-280"
+    },
+    {
+      "severity": "PASS",
+      "title": "Failure modes for new I/O paths are listed with observable handling",
+      "description": "Each I/O path has a named absence, an ERROR log with the stderr tail, and a test double (line 496):\n\n- the review call: a timeout under `benchmark.review_timeout_s`, an exception, or `UNKNOWN` with no findings\n- suite runs: timeout and `SuiteRunError`\n- `git apply`, and `git show` or `git diff` in the user's checkout\n- the snapshot measurement\n- a kill partway through a grade: no record is written, and a rerun regrades the subject\n\nCap handling restates the architecture's bound-and-overshoot rule for this command. The reinstall path is the exception, raised above.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/425-slice.grading-and-paired-report.md:293-312"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "summary": "Grading cap departs from the architecture's spend design goal",
+      "location": "project-documents/user/slices/425-slice.grading-and-paired-report.md:220-236",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "A failed reinstall is always charged to the config, including harness failures",
+      "location": "project-documents/user/slices/425-slice.grading-and-paired-report.md:193-197",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "integration",
+      "raw_category": null,
+      "summary": "The report's config-row identity contradicts itself",
+      "location": "project-documents/user/slices/425-slice.grading-and-paired-report.md:263",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "under-specification",
+      "raw_category": null,
+      "summary": "Reference grading is underspecified when a case's replays have different environment digests",
+      "location": "project-documents/user/slices/425-slice.grading-and-paired-report.md:107-114",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "proportionality",
+      "raw_category": null,
+      "summary": "The persisted sample-size estimate and the 422 yield integration go beyond the slice plan",
+      "location": "project-documents/user/slices/425-slice.grading-and-paired-report.md:282-291",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "summary": "Grading runs in a rebuilt sandbox, not \"the same sandbox\"",
+      "location": "project-documents/user/slices/425-slice.grading-and-paired-report.md:161-162",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "note",
+      "category": "concurrency",
+      "raw_category": null,
+      "summary": "A separate grade lock allows grading to run while replays are still running",
+      "location": "project-documents/user/slices/425-slice.grading-and-paired-report.md:148",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "pass",
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "summary": "Grader independence and test-set handling match the architecture",
+      "location": "project-documents/user/slices/425-slice.grading-and-paired-report.md:152-203",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "pass",
+      "category": "integration",
+      "raw_category": null,
+      "summary": "Report structure, statistics and boundaries with 426 and 427",
+      "location": "project-documents/user/slices/425-slice.grading-and-paired-report.md:260-280",
+      "location_verified": true
+    },
+    {
+      "id": "F010",
+      "severity": "pass",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "Failure modes for new I/O paths are listed with observable handling",
+      "location": "project-documents/user/slices/425-slice.grading-and-paired-report.md:293-312",
+      "location_verified": true
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/425-slice.grading-and-paired-report.md",
+    "against": "project-documents/user/architecture/420-arch.model-benchmark.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261115-design/wt/425-design"
+  },
+  "timestamp": "2026-11-16T06:59:11.141899",
+  "model": "claude-opus-5-5",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 4,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-opus-5-5",
+  "answering_models": [
+    "claude-opus-5-5"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 10,
+    "in_fences": 0,
+    "in_section": 10,
+    "surviving": 10
+  },
+  "effort": "medium",
+  "profile": "sdk",
+  "turns": 5,
+  "prompt_tokens": 367190,
+  "cached_tokens": 257200,
+  "cache_write_tokens": 109982,
+  "completion_tokens": 6990,
+  "reasoning_tokens": null,
+  "duration_seconds": 84.24517345777713,
+  "cost_usd": 1.0718958,
+  "cost_basis": "provider"
+}

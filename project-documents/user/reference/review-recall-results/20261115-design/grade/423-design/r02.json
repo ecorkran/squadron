@@ -1,0 +1,33 @@
+{
+ "review": "r02",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Prompt identity will not tell fix-prompt versions apart, and the dispatch records the wrong source",
+   "description": "The architecture's goal \"Results stay comparable over time\" (420-arch line 40) says every result names its prompt identity, so that a report compares only results that match. D8 (line 191) claims that \"the prompt's text is part of the dispatch's prompt identity, which `prompt_identity.py` already records.\" Slice 177 defines prompt identity differently. It is a `PromptSource` (`build_context`, `feedback`, `explicit`, `review_findings`) plus `cf_version` and `guide_version` (177 tasks line 69, 177 slice line 433). It is not a hash of the prompt text.\n\nD2 (line 139) also makes `fix-context` write its outputs under `cf-op(build_context)`'s keys (`operation: build_context`, `context`) so the dispatch fallback picks them up. As a result:\n- The fix dispatch is recorded with `source: build_context`, but no cf build happened.\n- `cf_version` and `guide_version` are either null or wrong, because the fix prompt doesn't come from cf.\n- Nothing identifies the version of `data/prompts/fix.md`. If someone edits the fix prompt, 424 and 425 can't separate results from before and after the edit, and that is the comparability the architecture requires.\n\nFix: give `fix-context` a prompt identity of its own and record it on the dispatch. One option is a new `PromptSource` value with a hash of `fix.md`, or the squadron version. Drop the claim that this is \"already recorded.\" If reusing the `build_context` output keys is still the right way to hook into the fallback, say in the design that this is deliberate coupling, and make sure the recorded source is correct.",
+   "location": "project-documents/user/slices/423-slice.fix-pipeline.md:139"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "The slice plan's MCP parity criterion is dropped",
+   "description": "The slice plan entry for 423 (420-slices line 87) includes the success criterion \"CLI, slash command and MCP give identical results.\" The design leaves out the MCP part, and D9 rejects an MCP `run` tool. The reasoning is sound: squadron has no MCP server for any pipeline, and building the first one just for `fix` would be a separate feature. It is still scope the slice plan assigns to this slice, so it counts as a CONCERN. Fix: amend the 423 entry in the slice plan so the criterion covers only the CLI and `/sq:run`. Then the plan and the design agree, and a later review won't flag the slice as incomplete.",
+   "location": "project-documents/user/slices/423-slice.fix-pipeline.md:43"
+  },
+  {
+   "i": 2,
+   "severity": "NOTE",
+   "title": "The new dependency on 422 conflicts with the slice plan's \"no dependencies\"",
+   "description": "The frontmatter lists `dependencies: [422]`. The slice plan (lines 88 and 166) says 423 has no dependencies in this initiative and \"can be built earlier.\" The dependency points the right way, since 422 comes before 423, and 422's design already provides a renderer with an optional cutoff for 423's use (422 slice line 139). File mode doesn't need 422 at all. Update the slice plan entry so it no longer says 423 can be built before 422. Alternatively, note that steps 1\u20133 and 5 of the development approach can run before 422 lands and step 4 cannot.",
+   "location": "project-documents/user/slices/423-slice.fix-pipeline.md:6"
+  },
+  {
+   "i": 3,
+   "severity": "NOTE",
+   "title": "The behavior when a commit hook fails is not stated",
+   "description": "The project runs its linter in a pre-commit hook. A hook can reject the fix commit, or rewrite files and then fail. D5 and D6 say what happens with report defects and when HEAD moves. They don't say what happens when `git commit` itself fails after staging. The existing `CommitAction` probably fails the action already. Add one line saying the step fails with the hook's output, and that the tree, now staged, is left for inspection just as it is after a report refusal. That keeps the failure visible.",
+   "location": "project-documents/user/slices/423-slice.fix-pipeline.md#d5--commit-destination-and-preconditions"
+  }
+ ]
+}

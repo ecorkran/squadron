@@ -1,0 +1,82 @@
+{
+ "review": "r11",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "FAIL",
+   "title": "The scrubbed environment is merged over the harness environment, so inherited credentials survive",
+   "description": "Interfaces Required says the process runner's `env` parameter \"already lets every child process get the scrubbed environment,\" and D7 (line 174) depends on that. The production runner merges `env` over the harness process's environment rather than replacing it. Every variable D7 deliberately leaves out would reach pytest, the auth probe and the producer: `GH_TOKEN`, `GITHUB_TOKEN`, `SSH_AUTH_SOCK`, `CLAUDE_CONFIG_DIR`, `CODEX_HOME`, `VIRTUAL_ENV`, and any `ANTHROPIC_API_KEY` or `ORCH_*` setting in the user's shell. The allowlist claim at line 165, the no-credentials guarantee in the architecture, and the success criterion at line 309 are therefore not met by the design as written. The existing merge is deliberate for current callers (the runner's own comment says `gh` needs its config), so the change belongs in the runner contract: a replace mode for scrubbed children, with merge kept as the default. The integration test at line 317 would catch this, but the document should name the runner change as a prerequisite of 421.",
+   "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:64"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "The benchmark sweep would treat live sibling directories as orphans",
+   "description": "D4 says the benchmark sweep \"handles directories only and also removes the `.home` and `.out` siblings.\" The existing directory sweep decides each directory's fate from its own `<name>.lock`, and a missing lock counts as an orphan. `<id>.home/` and `<id>.out/` have no lock of their own, so applying the replay rule to them would delete them while their owning benchmark run is still active. The document does not say that siblings are judged by the base id's lock, and it does not say where the benchmark sweep lives. If it lives in the replay module, replay learns benchmark naming, which conflicts with the one-way dependency stated at line 97. Specify that the owner lock is keyed by base id, and place the benchmark sweep under `benchmark/`, sharing only a generic helper with replay.",
+   "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:145-146"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Install failures have no reason for non-lock causes, and the classification rule is unstated",
+   "description": "`EnvironmentFailureReason` covers `no_lockfile`, `lockfile_unsupported`, `lock_stale_or_unresolvable`, `install_timeout` and `installer_missing`. A build failure in a source distribution, a Python download failure, a network outage, or any other non-zero `uv sync` exit has no reason. The document also does not say how uv's failure becomes a reason. Matching uv's stderr text would be the brittle parsing the project rules warn against, and the document does not establish that uv's exit codes separate these causes. A network outage would then be reported as a stale or unresolvable lock, and 422's per-reason yield report would count harness failures as lock failures. Check lock staleness in a separate step rather than inferring it from sync's output, and add an explicit reason for every other install failure, with a test for each.",
+   "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:150-153"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "An unrunnable probe is reported as a provider \"no\"",
+   "description": "D8 says \"anything else\" is a no. A missing `sq` binary, an import failure, or a crash caused by a harness bug is therefore reported as the provider refusing, and the remedy at line 186 targets the provider. Stderr is attached, but the classification is still wrong. Have the probe write a result the harness can parse, and report \"could not run the probe\" as a harness error with its own reason. A timeout can stay a no. Separately, the carryover row at line 179 says nothing about a missing `.codex/auth.json`, unlike the `sdk` row's \"when it exists.\" A dangling symlink should have a stated outcome.",
+   "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:183-185"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "CaseSet is keyed by name, contrary to the parent plan's ProjectId keying",
+   "description": "The slice plan's entry for 421 (line 40 of the plan) says case and case-set records are \"keyed on `ProjectId`.\" D2 keys `CaseSet` by name \"because 422 may pool cases from several projects.\" The architecture treats pooling as a fallback that \"is made on measured yield,\" and 422's yield report is where that measurement happens. Writing name-keying into the record id now fixes that choice before the measurement exists. Also, two projects that pick the same set name would share one version history. Either key by `ProjectId`, since each case already carries its own, or mark name-keying as provisional and state what a pooled set changes.",
+   "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:134"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Environment identity omits inputs the architecture requires",
+   "description": "The architecture's environment section names \"tool versions,\" and its \"results stay comparable\" goal requires results to name the identities that make them comparable. D6 records uv and the interpreter but not git, which is on the scrubbed `PATH` (line 168) and affects test behavior. Separately, the seeded `config.toml`, `models.toml` and `providers.toml` (line 171) change pipeline behavior, such as the cost cap and alias definitions. 424 records only which seed files were present (line 389), not their content, so runs under different seed contents would share an identity. Add git's version to D6, and add a content digest for each seed file, or state why either is excluded.",
+   "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:159"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "A missing credential variable has no stated outcome",
+   "description": "`CredentialGrant` \"adds each profile's `api_key_env` variable,\" but the document does not say what happens when that variable is unset in the harness environment. If the grant passes nothing silently, the producer fails inside the agent and 424 records a config failure, which the architecture's \"absent is not zero\" rule forbids. The value comes from the harness environment, which the CLI fills from a `.env` file in the working directory at startup. The document should say that the grant reads that same value, and that a missing value is an explicit error raised before any child process starts.",
+   "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:173"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "The install step's environment is ambiguous in the adapter contract",
+   "description": "`resolve_environment(ctx)` receives a `SandboxContext` that carries `env: ScrubbedEnvironment`, and Data Flow step 4 passes it the same context. D5 says install runs under the harness environment (the user's uv cache and network). The protocol does not say which environment `resolve_environment` must use. If an implementer uses `ctx.env`, the allowlist drops the redirected uv cache location and any proxy variables, which would break the install. State that `resolve_environment` runs under the harness environment, and that `ctx.env` is used only by `run_suite` and the producer. The protocol also has a temporal coupling that should be stated: `path_entries` is valid only after `resolve_environment` has run.",
+   "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:195-202"
+  },
+  {
+   "i": 8,
+   "severity": "CONCERN",
+   "title": "Python bytecode written into the tree is not kept out of diffs",
+   "description": "D5 keeps `.venv/` out of diffs \"even in a project that does not ignore it.\" The suite run writes `__pycache__/` bytecode into the tree, and D10 (line 206) prevents `.pytest_cache` only. Nothing prevents `.pyc` writes, so in projects that do not ignore them, the grader's and snapshot's view of the tree, and any diff taken after a run, includes harness output. Apply the same exclusion to `__pycache__`, or set `PYTHONDONTWRITEBYTECODE=1` in the scrubbed variables.",
+   "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:154"
+  },
+  {
+   "i": 9,
+   "severity": "NOTE",
+   "title": "Mock-target detection depends on private `unittest.mock` state",
+   "description": "The classifier reads the `_patch` object and its target from the innermost frame (line 207), and D11 pins the behavior to Python 3.13 (line 215). If mock internals change, such failures fall to `other_exception`, which 422 excludes, so the failure direction is safe. The document does not state that fallback, and the fixture test covers only the Python version in use. Name the fallback, and run the mock fixture test on every Python version the project supports.",
+   "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:207"
+  },
+  {
+   "i": 10,
+   "severity": "NOTE",
+   "title": "The rejected-alternatives list omits pytest's built-in report log",
+   "description": "D10 rejects `--junitxml` but not pytest's `--report-log`. The need for exception objects, mock targets and innermost frames probably justifies a plugin, but the rejection should say which fields the built-in log cannot carry.",
+   "location": "project-documents/user/slices/421-slice.benchmark-sandbox-and-case-record.md:208"
+  }
+ ]
+}

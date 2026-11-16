@@ -1,0 +1,650 @@
+{
+ "420-design/r01": {
+  "alias": "fable-medium",
+  "run": 2
+ },
+ "420-design/r02": {
+  "alias": "sonnet-medium",
+  "run": 2
+ },
+ "420-design/r03": {
+  "alias": "opus-high",
+  "run": 2
+ },
+ "420-design/r04": {
+  "alias": "fable-medium",
+  "run": 3
+ },
+ "420-design/r05": {
+  "alias": "haiku-xhigh",
+  "run": 2
+ },
+ "420-design/r06": {
+  "alias": "sonnet-medium",
+  "run": 1
+ },
+ "420-design/r07": {
+  "alias": "opus-medium",
+  "run": 3
+ },
+ "420-design/r08": {
+  "alias": "haiku-xhigh",
+  "run": 1
+ },
+ "420-design/r09": {
+  "alias": "fable-medium",
+  "run": 1
+ },
+ "420-design/r10": {
+  "alias": "opus-medium",
+  "run": 1
+ },
+ "420-design/r11": {
+  "alias": "sonnet-high",
+  "run": 3
+ },
+ "420-design/r12": {
+  "alias": "opus-medium",
+  "run": 2
+ },
+ "420-design/r13": {
+  "alias": "opus-high",
+  "run": 3
+ },
+ "420-design/r14": {
+  "alias": "haiku-xhigh",
+  "run": 3
+ },
+ "420-design/r15": {
+  "alias": "sonnet-high",
+  "run": 2
+ },
+ "420-design/r16": {
+  "alias": "sonnet-high",
+  "run": 1
+ },
+ "420-design/r17": {
+  "alias": "sonnet-medium",
+  "run": 3
+ },
+ "420-design/r18": {
+  "alias": "opus-high",
+  "run": 1
+ },
+ "421-design/r01": {
+  "alias": "fable-medium",
+  "run": 2
+ },
+ "421-design/r02": {
+  "alias": "fable-medium",
+  "run": 3
+ },
+ "421-design/r03": {
+  "alias": "sonnet-medium",
+  "run": 3
+ },
+ "421-design/r04": {
+  "alias": "opus-high",
+  "run": 2
+ },
+ "421-design/r05": {
+  "alias": "sonnet-high",
+  "run": 1
+ },
+ "421-design/r06": {
+  "alias": "haiku-xhigh",
+  "run": 3
+ },
+ "421-design/r07": {
+  "alias": "opus-medium",
+  "run": 2
+ },
+ "421-design/r08": {
+  "alias": "sonnet-high",
+  "run": 3
+ },
+ "421-design/r09": {
+  "alias": "opus-high",
+  "run": 1
+ },
+ "421-design/r10": {
+  "alias": "opus-medium",
+  "run": 1
+ },
+ "421-design/r11": {
+  "alias": "haiku-xhigh",
+  "run": 1
+ },
+ "421-design/r12": {
+  "alias": "fable-medium",
+  "run": 1
+ },
+ "421-design/r13": {
+  "alias": "sonnet-medium",
+  "run": 1
+ },
+ "421-design/r14": {
+  "alias": "haiku-xhigh",
+  "run": 2
+ },
+ "421-design/r15": {
+  "alias": "opus-high",
+  "run": 3
+ },
+ "421-design/r16": {
+  "alias": "opus-medium",
+  "run": 3
+ },
+ "421-design/r17": {
+  "alias": "sonnet-high",
+  "run": 2
+ },
+ "421-design/r18": {
+  "alias": "sonnet-medium",
+  "run": 2
+ },
+ "422-design/r01": {
+  "alias": "opus-high",
+  "run": 3
+ },
+ "422-design/r02": {
+  "alias": "sonnet-medium",
+  "run": 1
+ },
+ "422-design/r03": {
+  "alias": "sonnet-high",
+  "run": 1
+ },
+ "422-design/r04": {
+  "alias": "fable-medium",
+  "run": 2
+ },
+ "422-design/r05": {
+  "alias": "sonnet-high",
+  "run": 2
+ },
+ "422-design/r06": {
+  "alias": "haiku-xhigh",
+  "run": 2
+ },
+ "422-design/r07": {
+  "alias": "haiku-xhigh",
+  "run": 3
+ },
+ "422-design/r08": {
+  "alias": "opus-medium",
+  "run": 1
+ },
+ "422-design/r09": {
+  "alias": "opus-medium",
+  "run": 2
+ },
+ "422-design/r10": {
+  "alias": "sonnet-high",
+  "run": 3
+ },
+ "422-design/r11": {
+  "alias": "fable-medium",
+  "run": 3
+ },
+ "422-design/r12": {
+  "alias": "opus-medium",
+  "run": 3
+ },
+ "422-design/r13": {
+  "alias": "sonnet-medium",
+  "run": 3
+ },
+ "422-design/r14": {
+  "alias": "opus-high",
+  "run": 1
+ },
+ "422-design/r15": {
+  "alias": "haiku-xhigh",
+  "run": 1
+ },
+ "422-design/r16": {
+  "alias": "sonnet-medium",
+  "run": 2
+ },
+ "422-design/r17": {
+  "alias": "fable-medium",
+  "run": 1
+ },
+ "422-design/r18": {
+  "alias": "opus-high",
+  "run": 2
+ },
+ "423-design/r01": {
+  "alias": "opus-medium",
+  "run": 3
+ },
+ "423-design/r02": {
+  "alias": "opus-high",
+  "run": 3
+ },
+ "423-design/r03": {
+  "alias": "sonnet-high",
+  "run": 2
+ },
+ "423-design/r04": {
+  "alias": "opus-medium",
+  "run": 1
+ },
+ "423-design/r05": {
+  "alias": "sonnet-high",
+  "run": 1
+ },
+ "423-design/r06": {
+  "alias": "haiku-xhigh",
+  "run": 2
+ },
+ "423-design/r07": {
+  "alias": "sonnet-medium",
+  "run": 3
+ },
+ "423-design/r08": {
+  "alias": "sonnet-medium",
+  "run": 2
+ },
+ "423-design/r09": {
+  "alias": "fable-medium",
+  "run": 2
+ },
+ "423-design/r10": {
+  "alias": "sonnet-medium",
+  "run": 1
+ },
+ "423-design/r11": {
+  "alias": "fable-medium",
+  "run": 1
+ },
+ "423-design/r12": {
+  "alias": "opus-medium",
+  "run": 2
+ },
+ "423-design/r13": {
+  "alias": "sonnet-high",
+  "run": 3
+ },
+ "423-design/r14": {
+  "alias": "haiku-xhigh",
+  "run": 1
+ },
+ "423-design/r15": {
+  "alias": "opus-high",
+  "run": 2
+ },
+ "423-design/r16": {
+  "alias": "opus-high",
+  "run": 1
+ },
+ "423-design/r17": {
+  "alias": "fable-medium",
+  "run": 3
+ },
+ "423-design/r18": {
+  "alias": "haiku-xhigh",
+  "run": 3
+ },
+ "425-design/r01": {
+  "alias": "fable-medium",
+  "run": 3
+ },
+ "425-design/r02": {
+  "alias": "fable-medium",
+  "run": 1
+ },
+ "425-design/r03": {
+  "alias": "sonnet-high",
+  "run": 3
+ },
+ "425-design/r04": {
+  "alias": "opus-medium",
+  "run": 1
+ },
+ "425-design/r05": {
+  "alias": "opus-medium",
+  "run": 3
+ },
+ "425-design/r06": {
+  "alias": "haiku-xhigh",
+  "run": 3
+ },
+ "425-design/r07": {
+  "alias": "haiku-xhigh",
+  "run": 1
+ },
+ "425-design/r08": {
+  "alias": "opus-high",
+  "run": 1
+ },
+ "425-design/r09": {
+  "alias": "haiku-xhigh",
+  "run": 2
+ },
+ "425-design/r10": {
+  "alias": "sonnet-high",
+  "run": 2
+ },
+ "425-design/r11": {
+  "alias": "opus-medium",
+  "run": 2
+ },
+ "425-design/r12": {
+  "alias": "opus-high",
+  "run": 3
+ },
+ "425-design/r13": {
+  "alias": "sonnet-medium",
+  "run": 3
+ },
+ "425-design/r14": {
+  "alias": "fable-medium",
+  "run": 2
+ },
+ "425-design/r15": {
+  "alias": "sonnet-medium",
+  "run": 1
+ },
+ "425-design/r16": {
+  "alias": "sonnet-medium",
+  "run": 2
+ },
+ "425-design/r17": {
+  "alias": "sonnet-high",
+  "run": 1
+ },
+ "425-design/r18": {
+  "alias": "opus-high",
+  "run": 2
+ },
+ "426-design/r01": {
+  "alias": "haiku-xhigh",
+  "run": 2
+ },
+ "426-design/r02": {
+  "alias": "opus-medium",
+  "run": 1
+ },
+ "426-design/r03": {
+  "alias": "opus-high",
+  "run": 3
+ },
+ "426-design/r04": {
+  "alias": "sonnet-high",
+  "run": 3
+ },
+ "426-design/r05": {
+  "alias": "sonnet-medium",
+  "run": 3
+ },
+ "426-design/r06": {
+  "alias": "opus-high",
+  "run": 2
+ },
+ "426-design/r07": {
+  "alias": "opus-medium",
+  "run": 2
+ },
+ "426-design/r08": {
+  "alias": "haiku-xhigh",
+  "run": 3
+ },
+ "426-design/r09": {
+  "alias": "sonnet-high",
+  "run": 1
+ },
+ "426-design/r10": {
+  "alias": "sonnet-high",
+  "run": 2
+ },
+ "426-design/r11": {
+  "alias": "sonnet-medium",
+  "run": 1
+ },
+ "426-design/r12": {
+  "alias": "sonnet-medium",
+  "run": 2
+ },
+ "426-design/r13": {
+  "alias": "haiku-xhigh",
+  "run": 1
+ },
+ "426-design/r14": {
+  "alias": "opus-medium",
+  "run": 3
+ },
+ "426-design/r15": {
+  "alias": "opus-high",
+  "run": 1
+ },
+ "426-design/r16": {
+  "alias": "fable-medium",
+  "run": 3
+ },
+ "426-design/r17": {
+  "alias": "fable-medium",
+  "run": 1
+ },
+ "426-design/r18": {
+  "alias": "fable-medium",
+  "run": 2
+ },
+ "426-tasks/r01": {
+  "alias": "haiku-xhigh",
+  "run": 1
+ },
+ "426-tasks/r02": {
+  "alias": "sonnet-medium",
+  "run": 1
+ },
+ "426-tasks/r03": {
+  "alias": "fable-medium",
+  "run": 3
+ },
+ "426-tasks/r04": {
+  "alias": "sonnet-high",
+  "run": 3
+ },
+ "426-tasks/r05": {
+  "alias": "haiku-xhigh",
+  "run": 3
+ },
+ "426-tasks/r06": {
+  "alias": "opus-high",
+  "run": 2
+ },
+ "426-tasks/r07": {
+  "alias": "opus-high",
+  "run": 3
+ },
+ "426-tasks/r08": {
+  "alias": "opus-medium",
+  "run": 2
+ },
+ "426-tasks/r09": {
+  "alias": "haiku-xhigh",
+  "run": 2
+ },
+ "426-tasks/r10": {
+  "alias": "sonnet-medium",
+  "run": 2
+ },
+ "426-tasks/r11": {
+  "alias": "fable-medium",
+  "run": 1
+ },
+ "426-tasks/r12": {
+  "alias": "fable-medium",
+  "run": 2
+ },
+ "426-tasks/r13": {
+  "alias": "sonnet-high",
+  "run": 2
+ },
+ "426-tasks/r14": {
+  "alias": "opus-medium",
+  "run": 3
+ },
+ "426-tasks/r15": {
+  "alias": "opus-high",
+  "run": 1
+ },
+ "426-tasks/r16": {
+  "alias": "sonnet-medium",
+  "run": 3
+ },
+ "426-tasks/r17": {
+  "alias": "opus-medium",
+  "run": 1
+ },
+ "426-tasks/r18": {
+  "alias": "sonnet-high",
+  "run": 1
+ },
+ "915-design/r01": {
+  "alias": "sonnet-medium",
+  "run": 2
+ },
+ "915-design/r02": {
+  "alias": "haiku-xhigh",
+  "run": 2
+ },
+ "915-design/r03": {
+  "alias": "sonnet-high",
+  "run": 3
+ },
+ "915-design/r04": {
+  "alias": "sonnet-high",
+  "run": 1
+ },
+ "915-design/r05": {
+  "alias": "sonnet-medium",
+  "run": 3
+ },
+ "915-design/r06": {
+  "alias": "sonnet-medium",
+  "run": 1
+ },
+ "915-design/r07": {
+  "alias": "opus-medium",
+  "run": 3
+ },
+ "915-design/r08": {
+  "alias": "haiku-xhigh",
+  "run": 3
+ },
+ "915-design/r09": {
+  "alias": "opus-high",
+  "run": 3
+ },
+ "915-design/r10": {
+  "alias": "haiku-xhigh",
+  "run": 1
+ },
+ "915-design/r11": {
+  "alias": "opus-high",
+  "run": 2
+ },
+ "915-design/r12": {
+  "alias": "opus-medium",
+  "run": 2
+ },
+ "915-design/r13": {
+  "alias": "opus-high",
+  "run": 1
+ },
+ "915-design/r14": {
+  "alias": "opus-medium",
+  "run": 1
+ },
+ "915-design/r15": {
+  "alias": "fable-medium",
+  "run": 2
+ },
+ "915-design/r16": {
+  "alias": "fable-medium",
+  "run": 1
+ },
+ "915-design/r17": {
+  "alias": "sonnet-high",
+  "run": 2
+ },
+ "915-design/r18": {
+  "alias": "fable-medium",
+  "run": 3
+ },
+ "302-design/r01": {
+  "alias": "haiku-xhigh",
+  "run": 2
+ },
+ "302-design/r02": {
+  "alias": "opus-high",
+  "run": 3
+ },
+ "302-design/r03": {
+  "alias": "sonnet-medium",
+  "run": 2
+ },
+ "302-design/r04": {
+  "alias": "opus-medium",
+  "run": 1
+ },
+ "302-design/r05": {
+  "alias": "sonnet-medium",
+  "run": 3
+ },
+ "302-design/r06": {
+  "alias": "sonnet-high",
+  "run": 3
+ },
+ "302-design/r07": {
+  "alias": "sonnet-high",
+  "run": 2
+ },
+ "302-design/r08": {
+  "alias": "sonnet-high",
+  "run": 1
+ },
+ "302-design/r09": {
+  "alias": "fable-medium",
+  "run": 1
+ },
+ "302-design/r10": {
+  "alias": "fable-medium",
+  "run": 3
+ },
+ "302-design/r11": {
+  "alias": "haiku-xhigh",
+  "run": 3
+ },
+ "302-design/r12": {
+  "alias": "opus-medium",
+  "run": 2
+ },
+ "302-design/r13": {
+  "alias": "sonnet-medium",
+  "run": 1
+ },
+ "302-design/r14": {
+  "alias": "opus-high",
+  "run": 2
+ },
+ "302-design/r15": {
+  "alias": "opus-medium",
+  "run": 3
+ },
+ "302-design/r16": {
+  "alias": "haiku-xhigh",
+  "run": 1
+ },
+ "302-design/r17": {
+  "alias": "opus-high",
+  "run": 1
+ },
+ "302-design/r18": {
+  "alias": "fable-medium",
+  "run": 2
+ }
+}

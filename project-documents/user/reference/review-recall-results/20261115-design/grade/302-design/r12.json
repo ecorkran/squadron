@@ -1,0 +1,33 @@
+{
+ "review": "r12",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Structured-output requirement for score-with-rationale is dropped and replaced by prompt text",
+   "description": "The slice plan assigns this slice the success criterion \"The score-with-rationale shape is enforced by the template's structured output.\" The architecture says the same thing (Technical Considerations, mitigation (b)): \"the judge template uses a structured-output constraint for the score field and a *score-with-rationale* prompt shape.\" The design only *asks* for the shape in the system prompt. It says outright that `## Rationale` is \"prose scaffolding for the model, not a new parser target.\" Nothing enforces that a rationale comes before each criterion's number, and nothing constrains the `score:` field beyond the parser's lenient extraction. So assigned scope has been dropped without saying so. Fix it one of two ways:\n- Name the structured-output mechanism the templates will use for `score` and the per-criterion rationale, or say which existing template field carries it.\n- Or state explicitly that this criterion is deferred and why, and record it in the slice plan's Future Work.",
+   "location": "project-documents/user/slices/302-slice.design-phase-judge-templates.md:152-183"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "The CLI path claimed for judge templates does not exist",
+   "description": "The Value section says \"a pipeline step (or the `sq review` CLI) can run `template: judge.slice-vs-arch`.\" Functional Requirement 3 (lines 277-282) and walkthrough step 3 (lines 361-379) depend on the same thing: `sq review slice-vs-arch \u2026 --template judge.slice-vs-arch`. But the `sq review` CLI has only fixed subcommands (`slice`, `arch`, `tasks`, `code`, `list`). Each one hardcodes its template name, and none accepts a template override. The CLI also calls the review runner directly, so it never reaches the action-layer `enforce_judge()`. Even with a template flag, the CLI would return no threshold-derived verdict and no `provenance == \"judge\"`. The note at lines 376-379 calls this a matter of invocation shape, but it is a missing integration surface. Pick one:\n- **Recommended (lighter):** drop the CLI claims. Have FR3 and walkthrough step 3 run the judges through a pipeline `review` step, which is the path the architecture defines (\"How a step selects a judge\").\n- Or add CLI support, with the enforcement hook, to this slice's scope and to the Component Structure table. That breaks the \"one required code change\" claim.",
+   "location": "project-documents/user/slices/302-slice.design-phase-judge-templates.md:31-35"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Failure-mode table leaves out modes the architecture enumerates",
+   "description": "The architecture's failure-mode list covers: unparseable response; score absent or out of range; missing or unreadable ground-truth file; provider unavailable; injected ground truth over the cap. The table says it makes the mapping \"explicit for these specific paths,\" but it leaves out three of these:\n- **Missing or unreadable ground-truth file.** This one is new to this slice. `TEMPLATE_INPUTS` can resolve an `arch_file`/`design_file` path that is non-empty but does not exist on disk. That is different from the \"SliceInfo missing a field\" row.\n- **Injection cap exceeded.** For `judge.slice-vs-arch`, the architecture doc is the injected ground truth, and architecture docs can be large.\n- **Unparseable response,** as opposed to a missing score.\n\nAdd a row for each giving its handling and its verdict (`UNKNOWN` with a WARNING+ log, or whatever the existing path actually does). This holds even where the answer is \"inherited unchanged from the review subsystem.\" Without these rows, the no-silent-pass restatement at lines 402-408 is not backed for these paths.",
+   "location": "project-documents/user/slices/302-slice.design-phase-judge-templates.md:394-400"
+  },
+  {
+   "i": 7,
+   "severity": "NOTE",
+   "title": "Live-provider verification is correctly planned",
+   "description": "The design is honest that unit tests can't check prompt quality, and it plans one live run per template. Once the CLI finding is resolved, that run should go through the pipeline `review` path so it also checks the derived verdict and provenance.",
+   "location": "project-documents/user/slices/302-slice.design-phase-judge-templates.md:419-424"
+  }
+ ]
+}

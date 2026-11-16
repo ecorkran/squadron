@@ -1,0 +1,33 @@
+{
+ "review": "r17",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "D6 widens the slice plan's identity requirement and overrides the architecture without updating it",
+   "description": "The slice plan's criterion is narrow: runs that differ only in the alias's effort label but sent the same effort count as one config. The architecture defines config identity as \"(alias, model, profile, effort sent)\". D6 goes further:\n- It removes the alias from identity.\n- It adds `tool_use` and `max_output_tokens` to identity.\n- It adds two new optional `ProducerConfigRef` fields, plus a `config_identity` grouping function in the report.\n\nD6 says this \"narrows\" the architecture. It actually changes the architecture's rule, and it extends the plan's criterion to alias-name merging and two extra identity dimensions. Nothing in the plan or architecture asks for `tool_use` or `max_output_tokens` in identity. Integration Points also say the new rule \"supersedes the architecture\" for grouping, but the architecture is left unchanged. Slices 424\u2013427 and the architecture's \"Results stay comparable\" goal still reference the old tuple.\n\nDo one of these:\n- Cut D6 to the plan's requirement. Group replay rows by `effort_sent` rather than the alias's effort label, keep the alias in the key, and defer `tool_use`/`max_output_tokens`.\n- Keep D6, and amend the architecture's identity wording in the same change so downstream slices don't read two definitions.",
+   "location": "project-documents/user/slices/420-slice.effort-audit-across-dispatch-paths.md#D6 \u2014 Config identity is what went on the wire; the alias is display"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "\"Every alias-resolving path records effort\" contradicts the inventory",
+   "description": "Integration Points promise that \"every alias-resolving dispatch path, including the grading review and the judge, sends and records effort.\" The inventory says otherwise:\n- Path 7, the findings-addressed judge, writes no record and is deferred to a separate issue.\n- Paths 10 and 11, the prompt-only runs, write no record because the harness runs them.\n\nConsumers (424, 425, and 427, which uses the grading reviewer) could rely on the stated guarantee. Restate it as \"sends on every alias-resolving path; records on paths that produce a `UsageRecord` or action metadata\", and name path 7 as the exception.",
+   "location": "project-documents/user/slices/420-slice.effort-audit-across-dispatch-paths.md#Provides to Other Slices"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "The slice is heavy for a 2/5 audit",
+   "description": "The design touches about 14 modules across the pipeline, replay, stats, metrology and CLI layers. It adds:\n- A second source of truth for effort (`metadata[\"effort_sent\"]` alongside `UsageRecord.effort`).\n- A new reader and a stamping helper.\n- A new report grouping function.\n- An AST enumeration test.\n\nThe stamp and reader (D5) are justified, because failed runs otherwise land in the wrong row. The report regrouping (D6) is the part that can be cut or deferred; see the first finding. Without D6, the slice shrinks to four path fixes, D5 and the guard test, which fits 2/5.",
+   "location": "project-documents/user/slices/420-slice.effort-audit-across-dispatch-paths.md#Component Structure"
+  },
+  {
+   "i": 3,
+   "severity": "NOTE",
+   "title": "The reader raises on an unrecognised stored effort, and the failure is not stated as observable",
+   "description": "`action_effort_sent` raises on an unrecognised value, which follows the project's fail-explicit rule. It is called from `replay/outcome.py` and `stats/producer_units.py`, so one bad record could abort a whole report. The design does not say whether that is intended, or whether the error names the run. Add a line saying the error identifies the run id, plus a test for it. This does not block.",
+   "location": "project-documents/user/slices/420-slice.effort-audit-across-dispatch-paths.md#D5 \u2014 Effort sent is stamped on the action, not only on the usage record"
+  }
+ ]
+}
