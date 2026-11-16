@@ -1,0 +1,61 @@
+{
+ "review": "r02",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Default threshold never selects the grid in the reference scenario",
+   "description": "The design computes about 132 mean neighbors for N=3100 spread uniformly over the 300\u00d7300 world at radius 35. It then says the same uniform spread \"can drop below 10\" during expansion. Uniform spread is the lowest density a bounded world allows; clustering only raises the mean. The perf journal's Entry 4 addendum places the grid's win when agents are \"maximally spread\", which is the ~132 regime.\n\n- **Effect on the default:** with `grid_threshold_mean_neighbors: 10.0`, `hysteresis_band: 2.0` and a brute start, the dispatcher never leaves brute. The default `adaptive` mode behaves as brute-only and the slice's stated value is not delivered.\n- **Effect on verification:** at N=2500 the uniform figure is about 107. The step 4 sweep (2, 5, 10, 20, 50) sits entirely below that, so it cannot bracket the crossover. Step 5's expectation that grid selection is high during expansion cannot be met.\n- **Portability:** brute cost scales with n\u00b2 and grid cost with n\u00b7m, so the crossover in absolute mean neighbors moves with N. A fraction of population (m / n) would carry across deployments better.\n\nFix: derive the default from a measured crossover, or state it as a fraction of n, and re-range the sweep to straddle it.",
+   "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:206-213"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Backend choice changes numeric output; determinism contract missing and criteria contradict",
+   "description": "The architecture lists tick determinism as a design goal and describes the engine as stateless between ticks. The slice doc itself acknowledges that grid rows are ordered differently from brute rows (line 431, and \"determinism caveats\" at line 359). Different row order gives different floating-point summation order in the forces, and can change tie-breaking in the slice 112 cap.\n\n- **Contradictory criteria:** step 5 (line 421) requires bit-exact position equality against brute-only while exercising both backends. Line 431 compares only as sets.\n- **Overstated non-risk:** \"it can only pick the wrong one for performance\" (line 408) and \"no new correctness surface\" (line 19) do not hold. The threshold and band become inputs that affect trajectories.\n- **Hidden state:** the selected backend is history-dependent state held outside the agent arrays. A run resumed from a mid-run state starts on brute and can diverge from the original.\n- **Default change:** moving the default from brute to adaptive changes trajectories for existing configs, but line 298 claims only tick-1 parity.\n\nFix: state the contract explicitly. Either canonicalize row order in the wrapper so backends are bit-identical, or declare determinism as holding per (state, config, dispatcher state) and relax line 421 to match.",
+   "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:406-421"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Engine change and `hasattr` hook are unnecessary",
+   "description": "The architecture's pluggable-spatial-queries principle says strategies must be replaceable \"without changing the engine\". This design edits `tick.py` to call a method that is not on the protocol, found by duck-typing on its name. That is a hidden second contract between the engine and one concrete backend.\n\nThe hook is not needed. `AdaptiveSpatial.query_radius_batch` already returns `counts` from its delegate. The pre-`exclude_self` mean differs from the specified signal by a constant (the self-match, one per evaluated agent). The wrapper can record density itself on the way out and apply the switch at the next `build()`.\n\nCut: the `tick.py` change, the public `record_density` method, the `hasattr` guard and its test, and the \"Special Considerations\" note about it. This also makes the \"invisible upstream\" claim on line 53 true.",
+   "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:145-164"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Density signal undefined for empty or partial active subsets",
+   "description": "The architecture's subset-evaluable tick principle requires the spatial interfaces to work correctly when only a subset is evaluated. The signal is `counts.sum() / n_active`.\n\n- **Empty subset:** with a non-empty population and an empty active subset this divides by zero. The design lists \"empty\" as a parity-test input but defines no behavior for it.\n- **Partial subset:** the mean reflects only the evaluated agents, while brute cost depends on n_active \u00d7 n. The design does not say whether that bias is acceptable.\n\nFix: specify that an empty reading leaves the selection unchanged, and state the intended semantics under partial evaluation.",
+   "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:116"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Switch observability is assumed by verification but never designed",
+   "description": "Walkthrough steps 4 and 5 rely on \"`grid_selected` count in the dispatcher's log output\", `brute_selected`, a grid-to-brute tick ratio, and \"flips at least once\". Nothing in the Architecture section specifies logging or counters on `AdaptiveSpatial`.\n\nWithout them the verification steps cannot be run. A dispatcher pinned to one backend, as in the threshold finding above, would also go unnoticed.\n\nFix: specify a log line on each switch with the density value and direction, plus per-backend tick counters.",
+   "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:377-379"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "`initial_backend` is inconsistent and unused; defaults and backend names are duplicated",
+   "description": "- **`initial_backend`:** lines 37, 301 and 400 say an operator can choose grid-first. `SpatialConfig` has no such field and `_build_spatial` hard-codes `\"brute\"` (line 238). The parameter governs exactly one tick. Cut it, along with its risk entry and test, and always start on brute.\n- **Duplicate defaults:** the constructor defaults `hysteresis_band` to `0.0` while the config defaults it to `2.0`. Line 136 says defaults belong in the config layer. Remove the constructor defaults.\n- **Bare strings:** backend names appear as string literals in validation, `_build_spatial` and the constructor. Project convention calls for one enum definition.\n- **Undefined env var:** `MIGRATORY_SPATIAL_BACKEND` (lines 356-357) is a second config source that is never defined. Use the parametrized fixture already named on line 432.",
+   "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:82-90"
+  },
+  {
+   "i": 6,
+   "severity": "NOTE",
+   "title": "\"Live\" tuning in the slice plan vs load-time config",
+   "description": "The slice plan says the operator can \"tweak the crossover live while experimenting\". The design delivers a frozen dataclass read at startup, so a change requires a restart. If restart-time tuning is what was meant, say so; otherwise this is dropped scope.",
+   "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:314"
+  },
+  {
+   "i": 7,
+   "severity": "NOTE",
+   "title": "Cell-size helper is new server wiring, not a move",
+   "description": "Slice 105 was deferred, so its server wiring is not in place. The helper described as \"moves from `server.py`\" is reintroduced code, which is at odds with \"No code is reintroduced\" on line 29. The conversion from the server's width/height bounds config to the grid's bounds argument is also unstated. The empty-profile fallback to `max(width, height)` now sits on the default path and should be logged rather than applied silently.",
+   "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:215-219"
+  }
+ ]
+}

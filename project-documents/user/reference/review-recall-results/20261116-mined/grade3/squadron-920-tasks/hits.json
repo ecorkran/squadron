@@ -1,0 +1,11 @@
+{
+ "case": "squadron-920-tasks",
+ "flaws": [
+  {
+   "id": "F1",
+   "text": "Task 15 (live `sq metrology audit run -v`; \"Confirm: the audit runs to completion\") could not be completed as written. At `b5939ca4`, `metrology/audit",
+   "hits": {}
+  }
+ ],
+ "note": "No finding names the Claude-native _AUDIT_ALLOWED_TOOLS vs translate_tool_names failure that blocks Task 15; r01 i9 and r02 i6 concern running inside a Claude session, not this defect."
+}

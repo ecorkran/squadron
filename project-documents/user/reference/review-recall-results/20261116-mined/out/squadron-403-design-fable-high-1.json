@@ -1,0 +1,225 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Fast-forward landings record a stale `before_sha` after a rebase or sync merge",
+      "description": "D3 sets a fast-forward's `before` to the reflog \"Created from\" commit and claims this equals the target just before the landing. That holds only if the branch never took in newer target work.\n\n- **Rebase onto a newer target:** the original fork is still an ancestor of the rebased tip, so `FORK_NOT_ANCESTOR` (line 120) does not fire. `fork..tip` then includes every other slice merged in between.\n- **Sync merge then fast-forward:** same result. Line 191 notes squadron has such sync merges.\n- **Test fixture:** the \"rebased branch (`FORK_NOT_ANCESTOR`)\" fixture at line 347 will not produce that reason for an ordinary rebase onto the target.\n\nThis is the \"other work counted\" error D3 and the architecture's Envisioned State say is avoided. The landing is append-only (D1), so the wrong range is kept permanently; the slice plan's risk entry says persistence \"has to be right the first time\".\n\nA related gap sits at lines 111-114: the fast-forward path runs only when no merge landing is found. A slice that fast-forwarded first and later got a follow-up merge never has its original landing recorded, which is the outcome D1 set out to prevent.\n\nFix: derive the fast-forward `before` from the branch's last rebase or sync point, or return an unresolved reason when the branch reflog shows one after creation. Evaluate the fast-forward path independently of whether merges were found.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:197-201"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "A git failure during resolution is reported as an ordinary unresolved slice",
+      "description": "A `None` from the merge search is treated as \"this path can't answer\" and falls through to the fast-forward path, ending in an INFO line. This conflicts with three other statements:\n\n- **Line 327:** \"a `None` from `run_git` is never an answer\".\n- **Line 275:** `slice-ranges` \"exits 1 on a git or store error\".\n- **Project failure-mode rule:** failures must be observable at WARNING or above.\n\n`RangeUnresolvedReason` has no git-failure member. A timed-out `git log --merges` on a merge-landed slice will therefore surface as `landed_elsewhere` or `no_landing` with exit 0.\n\nFix: separate \"git answered: none\" from \"git could not answer\". The latter should raise or carry its own reason at WARNING and exit 1, as 400 does for every git call.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:164"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "The audit section relies on a per-commit baseline the 323/324 interfaces do not expose",
+      "description": "D8 computes the delta from \"the latest run at `before_sha`\" against \"the latest at `after_sha`\", using `baseline_report` and `compute_delta` \"unchanged\" (line 326). As documented in the 323 and 324 slice designs:\n\n- `baseline_report(store, *, project_filter=None)` groups by project and has no commit selector.\n- `compute_delta(baseline: ProjectBaseline, new_run: AuditRun)` takes a project baseline, not a run at a chosen commit.\n- `AuditNoiseFloor` is keyed on `(project_id, commit_sha, audit_prompt_hash)`. The design does not say which commit's floor applies to a before/after pair.\n\n`compute_delta` is also 324's, not 323's as line 73 states, and neither 323 nor 324 appears in the frontmatter dependencies.\n\nFix: state how a `ProjectBaseline` is built for `before_sha` (a new helper, or a change to 323) and which floor is used. Correct the dependency attribution.",
+      "file_ref": null,
+      "category": "integration",
+      "raw_category": null,
+      "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:236"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Report selection rules are undefined for backfilled snapshots and cross-target landings",
+      "description": "- **\"Latest snapshot\" in `report project`:** 400's `list_snapshots` is \"newest first\". `report slice` backfills boundary snapshots of old commits, so after walkthrough step 5 the most recently measured snapshot is an old boundary, not the project's current state. \"Latest\" needs a key, such as position on the target's first-parent line, which `report history` already uses.\n- **Landings on another target:** D2 tells users to resolve landed-elsewhere slices from a checkout whose target is that branch. This puts landings with a different `target_ref` into the same per-project record. The design does not say whether `report slice` on main shows them (the header reads \"N landings on main\"). In `report history`, such a slice's `after_sha` is off the first-parent line. Its reviews then match neither \"row of the landing\" nor \"no resolved landing\", so they can drop out of the report.\n- **\"Oldest first\" (lines 185, 305):** no ordering key is given when stored and newly resolved landings are merged.",
+      "file_ref": null,
+      "category": "under-specification",
+      "raw_category": null,
+      "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:297-298"
+    },
+    {
+      "severity": "NOTE",
+      "title": "The editable-install mitigation cannot detect the risk it names",
+      "description": "The in-place-equals-export check runs at HEAD, where the live source and the exported source are identical. If pyright resolved `import squadron` through the editable install, the counts would still match. Walkthrough step 4 has no ground truth for the older commit.\n\nA check that would catch it: with an unchanged `uv.lock`, compare an export of an older commit against an in-place snapshot of that commit in a scratch worktree. This matters because the architecture's first design goal is the same value on the same commit.",
+      "file_ref": null,
+      "category": "testing",
+      "raw_category": null,
+      "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:380"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Walkthrough step 2 likely does not exercise store durability",
+      "description": "`git clone . /tmp/sq-clone` gives the clone a local-path origin, so its `ProjectId` probably differs from squadron's. I did not confirm this against `derive_project_id`. If so, the step proves topology resolution only, and it adds a second `sliceranges-*` file, contradicting step 1's \"one file\". The claim at line 176 that a fresh clone of the same remote reads the stored range is left unverified by the walkthrough.",
+      "file_ref": null,
+      "category": "verification",
+      "raw_category": null,
+      "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:364"
+    },
+    {
+      "severity": "PASS",
+      "title": "Alignment with architectural principles and boundaries",
+      "description": "- **Store:** `slice_ranges` is an optional sibling payload keyed on `ProjectId`, one coarse record per project, with no migration.\n- **Export:** non-HEAD commits go through `git archive` into a temp directory, with rule sets read from the exported tree and the lockfile gate applied to type counts.\n- **Comparability:** rows are diffed only on full identity match, with named breaks otherwise.\n- **Non-goals respected:** no composite score (with a test), no pipeline hook, no audits or reviews run from reports.\n- **Attribution:** unresolved slices appear at project level only.\n- **Dependency direction:** report modules take the store, resolver and `ensure_snapshot` as arguments and import no concrete adapter.\n- **D3's refinement of \"fork against merge\":** already acknowledged in the architecture's Envisioned State.",
+      "file_ref": null,
+      "category": "architecture",
+      "raw_category": null,
+      "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md"
+    },
+    {
+      "severity": "PASS",
+      "title": "Scope and proportionality match the slice plan entry",
+      "description": "All five plan criteria map to numbered success criteria, and nothing assigned is deferred. The additions beyond the plan's wording are each justified by a criterion or a named consumer: the `slice-ranges` command, the `environment_root` field, the `read_snapshot_config` split, and `fork_sha`/`tip_sha` for 420. The design also cuts unused scope, such as the slice table in `report project`. The parent architecture states no numeric NFR for these paths.",
+      "file_ref": null,
+      "category": "scope",
+      "raw_category": null,
+      "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md#technical-scope"
+    },
+    {
+      "severity": "PASS",
+      "title": "Failure modes for the export path are enumerated with signals and tests",
+      "description": "Each export failure has explicit handling, a log level, temp-directory cleanup and a `caplog` assertion. The table covers `git archive` hang and timeout, unknown revision, extraction `OSError`, refused archive members, tool failure, missing boundary commits and store write failure. The resolver row is the exception, covered in the second finding above.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:153-167"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Fast-forward landings record a stale `before_sha` after a rebase or sync merge",
+      "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:197-201",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "A git failure during resolution is reported as an ordinary unresolved slice",
+      "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:164",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "integration",
+      "raw_category": null,
+      "summary": "The audit section relies on a per-commit baseline the 323/324 interfaces do not expose",
+      "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:236",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "under-specification",
+      "raw_category": null,
+      "summary": "Report selection rules are undefined for backfilled snapshots and cross-target landings",
+      "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:297-298",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "testing",
+      "raw_category": null,
+      "summary": "The editable-install mitigation cannot detect the risk it names",
+      "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:380",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "verification",
+      "raw_category": null,
+      "summary": "Walkthrough step 2 likely does not exercise store durability",
+      "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:364",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "pass",
+      "category": "architecture",
+      "raw_category": null,
+      "summary": "Alignment with architectural principles and boundaries",
+      "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md",
+      "location_verified": null
+    },
+    {
+      "id": "F008",
+      "severity": "pass",
+      "category": "scope",
+      "raw_category": null,
+      "summary": "Scope and proportionality match the slice plan entry",
+      "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md#technical-scope",
+      "location_verified": null
+    },
+    {
+      "id": "F009",
+      "severity": "pass",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "Failure modes for the export path are enumerated with signals and tests",
+      "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:153-167",
+      "location_verified": true
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md",
+    "against": "project-documents/user/architecture/400-slices.code-quality-measurement.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/squadron-403-design"
+  },
+  "timestamp": "2026-11-16T16:13:05.806349",
+  "model": "claude-fable-5-2",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 10,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-fable-5-2",
+  "answering_models": [
+    "claude-fable-5-2"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 9,
+    "in_fences": 0,
+    "in_section": 9,
+    "surviving": 9
+  },
+  "effort": "high",
+  "profile": "sdk",
+  "turns": 11,
+  "prompt_tokens": 541065,
+  "cached_tokens": 362253,
+  "cache_write_tokens": 178802,
+  "completion_tokens": 16031,
+  "reasoning_tokens": null,
+  "duration_seconds": 165.44604291720316,
+  "cost_usd": 3.5753328,
+  "cost_basis": "provider"
+}

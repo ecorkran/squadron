@@ -1,0 +1,75 @@
+{
+ "review": "r02",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "SC5 round-trip has a test but no implementation task for `config_to_yaml`",
+   "description": "Task 1.4 adds `test_bounds_policy_yaml_round_trip`, but no task touches `config_to_yaml`, and \"Files touched\" lists only the enum, field and loader validation for `config.py`. The plan inherits the slice design's claim that `yaml.dump` serializes a `StrEnum` as a plain string automatically. That claim does not hold for this code path:\n\n- **Serialization:** `config_to_yaml` runs `dataclasses.asdict` then `yaml.dump`, and PyYAML's default dumper emits a `!!python/object/apply` tag for a `str`-subclass enum.\n- **Loading:** the loader uses `yaml.safe_load` (`src/migratory_server/config.py:630`), which rejects that tag.\n- **Evidence:** the current source has a `_serialize_for_yaml` enum-to-value pass (`src/migratory_server/config.py:664-680`) that the plan never calls for.\n\nA junior implementer will hit a failing round-trip test with no task telling them what to change. Add a step to Task 1.3, or a new Task 1.3b, to convert enum values to `.value` before `yaml.dump`. Also strengthen the test to match SC5's wording: assert the emitted YAML contains a plain `policy: wrap` and that the reloaded `ServerConfig` equals the original, not just that the policy matches.",
+   "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:88"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Integration test parameters ignore `dt` and speed clamping",
+   "description": "`test_reflect_policy_flips_velocities_at_edges` places an agent at `(99, 50)` with velocity `(10, 0)` and steps once, expecting `vx < 0`. Task 3.4 never specifies `dt` or the profile's `max_speed`:\n\n- **`dt`:** at the values used elsewhere (`1/20` in `tests/test_repulsor_integration.py:58`, `1/30` in `tests/test_force_builder.py:206`) the agent moves at most 0.5 units and never crosses `x = 100`, so the assertion fails.\n- **`max_speed`:** the integrator clamps velocity to it (`src/migratory/engine/integration.py:39-43`), so the seeded velocity may not survive the tick.\n- **50-step tests:** \"near the edges\" and 50 steps only guarantee the SC11 `OPEN` drift assertion if `distance < speed \u00d7 dt \u00d7 50`.\n\nState the `dt`, `max_speed` and start positions explicitly, or express the positions as a function of `speed * dt`.",
+   "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:226-231"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Task file is overweight for a 2/5 slice",
+   "description": "The file has 20 numbered tasks, 5 commits and about 32 named tests for one enum, one field, one roughly 40-line module and one call site. Specific cuts and merges:\n\n- **Merge 1.1 and 1.2:** one enum and one field in the same file, with a combined three lines of code.\n- **Merge 4.1 and 4.2:** the same one-line YAML edit in two files.\n- **Drop Task 5.1:** it repeats Task 3.5 and step 2 of Task 5.2.\n- **Trim Task 2.3:**\n  - Merge `test_open_is_noop_positions` and `test_open_is_noop_velocities`.\n  - Parametrize the four reflect edge tests.\n  - Drop the \"parametrized dispatch \u2026 does not raise\" test at line 171, which the per-policy tests already cover.\n- **Fold commit 4.3 into 3.6:** the YAML default does not need its own commit.",
+   "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Commit markers are written as checkbox tasks",
+   "description": "Every commit is a standalone \"Task N.x: Commit\" whose marker is a checkbox item (`- [ ] **Commit:** \u2026`), at lines 96, 179, 249, 286 and 325. Markers should be plain `**Commit**:` lines after the task they close, not checkable tasks with `git add` sub-steps. Placement is otherwise good: each sits after its section's tests run.",
+   "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:93-96"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Walkthrough can leave `config/test.yaml` off `wrap` after SC12 is committed",
+   "description": "Steps 6 and 7 of Task 5.2 edit `config/test.yaml` to `reflect` and then `open`, after Task 4.3 has committed `wrap`. Step 8 says to restore \"whichever policy you want to keep (recommend `wrap`)\". SC12 requires `wrap`, so that step should be unconditional and followed by a check that the working tree is clean. As written, Task 5.5's `git add` of \"all updated docs\" could ship a non-`wrap` test config or leave a dirty tree.",
+   "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:304-306"
+  },
+  {
+   "i": 5,
+   "severity": "NOTE",
+   "title": "Viewer steps of the manual walkthrough are not agent-verifiable",
+   "description": "Steps 5\u20137 of Task 5.2 need a Three.js viewer and visual judgement (\"agents wrap around edges\", \"bounce behavior\"). SC14 does call for this, so the task traces correctly, but an AI implementer cannot check these boxes on its own evidence. A headless WebSocket client asserting snapshot positions stay in bounds for N seconds would make the criterion objectively checkable.",
+   "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:303-305"
+  },
+  {
+   "i": 6,
+   "severity": "NOTE",
+   "title": "Unverifiable or self-contradictory step in Task 3.2",
+   "description": "\"Confirm the `OPEN` path has zero import-time \u2026 overhead\" contradicts both the module-level import added in the same task and the Notes section at line 329 (\"No import of `apply_bounds_policy` is avoided\"). The property that matters, that the function is not called under `OPEN`, is already tested by `test_open_policy_does_not_call_enforcement`. Drop the checkbox.",
+   "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:209"
+  },
+  {
+   "i": 7,
+   "severity": "NOTE",
+   "title": "Task 1.3 offers a \"literal tuple\" for the valid-options message",
+   "description": "Offering \"a literal tuple\" as an alternative to `sorted(p.value for p in BoundsPolicy)` invites a second copy of the enum values, against the project rule that comparison values are defined once. Specify the enum-derived form only.",
+   "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:73"
+  },
+  {
+   "i": 8,
+   "severity": "NOTE",
+   "title": "Frontmatter says `status: complete` with every checkbox unchecked",
+   "description": "The task file's status is `complete` while no item is checked, and Task 5.3 is the step that is supposed to set it. The status should read not-started or in-progress until then.",
+   "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:9"
+  },
+  {
+   "i": 9,
+   "severity": "NOTE",
+   "title": "Required `world_bounds` kwarg breaks about 22 test call sites, handled inside the commit boundary",
+   "description": "Task 3.1 makes `world_bounds` required, which breaks 20 constructions in `tests/test_simulation.py` plus one each in `tests/test_force_builder.py` and `tests/test_repulsor_integration.py`. Tasks 3.4 and 3.5 cover the fix before commit 3.6, so no broken commit results. Task 3.5 names `test_clients.py`, which has no such construction, and omits `test_repulsor_integration.py`; the \"any other file\" clause covers it.",
+   "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:233-241"
+  }
+ ]
+}

@@ -1,0 +1,40 @@
+{
+ "review": "r01",
+ "findings": [
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "\"Guide without profile\" criterion is not tested at the `cf build` / `context_build` surface",
+   "description": "The criterion reads: \"`cf build` exits non-zero with the `AdoptionError` message; `context_build` returns it as an error.\"\n\n- **What exists:** Task 12 fixture 12 only asserts that the pipeline rejects. The `cf build` half is checked by hand in walkthrough step 4.\n- **What is missing:** nothing checks the `context_build` half; walkthrough step 5 covers parity and `template_preview` only. No CLI or MCP test references `AdoptionError` or `PermissivenessFragmentError` today, so no existing test covers this path either.\n- **Fix:** Task 11 already edits `build.test.ts` and `contextTools.test.ts`. Add one case to each where the mocked `generateContextFromProject` rejects with `AdoptionError`: `cf build` reaches `handleError` with a non-zero exit, and `context_build` returns an error result carrying the message.",
+   "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:217-223"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Two unit-test items named in the Technical Requirements are missing",
+   "description": "- **Renderer, \"every outcome\":** Task 8T covers `brownfield`, `adoption-in-progress` and `NOT_EVALUATED`. Task 8 requires an exhaustive switch over `AdoptionOutcome`, so `greenfield`, `already-planned` and `adoption-closed` must also render. No step says what their outcome bullet reads and no test covers them, so the implementer has to invent text for three untested branches. Add the three bullet texts to Task 8 and an `it.each` over them in 8T.\n- **Write failure, \"state unchanged\":** the Task 9T write-failure case (line 199) asserts only the error message. Add the state assertion the design names.",
+   "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:163-176"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Commit points are checkbox tasks, not `**Commit**:` marker lines",
+   "description": "- **Format:** the commits are written as `- [ ] **Task 2C: Commit** \u2014 \u2026` (also 3C, 5C, 6C, 8C, 9C, 11C, 13C, 14C, 15C). The implementation prompt tells the agent to look for lines starting with `**Commit**:` (`project-documents/ai-project-guide/project-guides/prompt.ai-project.system.md:366`) and to commit after every task when none are found. These lines do not match, so the intended grouping is lost.\n- **Check-off drift:** a commit written as a checkbox can only be ticked after the commit it describes, so the tick always lands in the next commit.\n- **Placement is fine:** each commit sits after an implementation-plus-test group at a building state. Convert each to a plain `**Commit**: \\`message\\`` line in the same position.\n- **Task 15C:** it commits only recorded walkthrough notes. Move the README marker (14C) to after Task 15 so one commit carries both.",
+   "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:78"
+  },
+  {
+   "i": 7,
+   "severity": "NOTE",
+   "title": "Task 15 says \"Run format\" but the repo has no formatter",
+   "description": "The root `package.json` defines only `build`, `test`, `lint` and `typecheck`, and there is no Prettier or Biome config. Drop \"format\" from the step, or name the command, so the implementer does not guess one and reformat unrelated files.",
+   "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:260"
+  },
+  {
+   "i": 8,
+   "severity": "NOTE",
+   "title": "A render-fact failure after the state write gets the generic error stub",
+   "description": "`pathPresent` rethrows everything but `ENOENT`, and Task 4T pins \"`ENOTDIR` throws\". A repo with a regular file named `doc`, `docs`, `.cursor` or `.claude` makes a nested candidate such as `docs/adr` throw a plain `Error` in resolver step 6, after step 5 has already written `in_progress`. The task follows the design here (D9: only `AdoptionError` is rethrown), so no task change is needed; this is something to raise against the design if the behaviour is unwanted.",
+   "location": "packages/core/src/detection/pathPresent.ts:19-26"
+  }
+ ]
+}

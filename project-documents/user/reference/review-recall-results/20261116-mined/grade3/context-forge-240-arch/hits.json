@@ -1,0 +1,75 @@
+{
+ "case": "context-forge-240-arch",
+ "flaws": [
+  {
+   "id": "F1",
+   "text": "Related Work says 180 \"Established worktree-scoped config resolution\" and that `workflow.review_*` should resolve at worktree scope \"using the resolut",
+   "hits": {
+    "r02": [
+     2
+    ],
+    "r03": [
+     8
+    ]
+   }
+  },
+  {
+   "id": "F2",
+   "text": "Renumbering of the `getNext()` cascade is assigned to two different slices: Anticipated Slices bullet 1 (discovery and config keys) \"Includes renumber",
+   "hits": {
+    "r01": [
+     9
+    ],
+    "r02": [
+     8
+    ],
+    "r03": [
+     11
+    ]
+   }
+  },
+  {
+   "id": "F3",
+   "text": "The `review_unknown_as` value set is inconsistent: the config block gives `\"fail\"`; Technical Considerations uses `review_unknown_as = \"concern\"` (sin",
+   "hits": {
+    "r01": [
+     2
+    ],
+    "r02": [
+     3
+    ],
+    "r03": [
+     6
+    ]
+   }
+  },
+  {
+   "id": "F4",
+   "text": "\"V1 implements only the four slice-level transitions\", but the four configured gates are `pre-slice-plan` (initiative-level, stated deferred in the sa",
+   "hits": {
+    "r01": [
+     0
+    ],
+    "r02": [
+     0
+    ],
+    "r03": [
+     0
+    ]
+   }
+  },
+  {
+   "id": "F5",
+   "text": "Technical Considerations: \"`getNext()` uses integer comments (Priority 1-7)\" and renumbering is needed \"to avoid fractional priorities\". `WorkflowNavi",
+   "hits": {
+    "r01": [
+     9
+    ],
+    "r03": [
+     11
+    ]
+   }
+  }
+ ],
+ "note": "F1 in r02 is one bullet of a multi-bullet finding. F5: r01#9 and r03#11 note the existing Priority 2.5 branch while addressing renumbering; counted as hits, but they do not state that the doc claim is false. F4 is a bullet inside r01#0."
+}

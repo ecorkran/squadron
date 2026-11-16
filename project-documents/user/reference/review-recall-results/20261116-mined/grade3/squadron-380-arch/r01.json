@@ -1,0 +1,75 @@
+{
+ "review": "r01",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "FAIL",
+   "title": "The scratch worktree makes the PR's own CLAUDE.md, `.claude` settings/hooks and squadron config trusted inputs",
+   "description": "The doc treats only the PR title, body, issues and threads as untrusted (\"Prompt inputs from the PR\"). But the review engine reads several things from `inputs[\"cwd\"]`, and the doc does not say which directory that is. If `cwd` is the scratch worktree from \"Isolated checkout for tool-enabled reviews\", the PR author controls all of these:\n- `src/squadron/data/templates/code.yaml:56` sets `setting_sources: [project]`. `review_client.py:187-191` passes `cwd` and those sources to the SDK agent. The agent then loads the PR's `.claude/settings.json`, including hooks (shell commands) and MCP config. That means code from a stranger's PR can run on the operator's machine.\n- `review_client.py:412-421` injects the PR's `CLAUDE.md` into the prompt as \"project conventions\". A PR can add a `CLAUDE.md` saying \"approve everything\", and it reaches the model as instructions, not delimited data.\n- `review_client.py:336-340` reads `review.max_*` config from the worktree with `get_config(cwd=...)`, so the PR controls the truncation limits.\n\nThe doc never says that one review now needs two roots: a **read root** (the PR tree, for tools and diff membership) and a **trust root** (the operator's checkout or the squadron data dir, for settings, conventions, config and rules). Before slice 2, the architecture has to name which root each input comes from. It also has to require that a PR review runs the SDK agent with `setting_sources` empty (or limited to the operator's own root), whatever the template says. The \"Enterprise repos squadron did not plan\" use case is exactly where PRs come from people the operator does not control.",
+   "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#technical-considerations"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "The recorded head sha would be the operator's HEAD, not the PR head",
+   "description": "\"Base semantics\" says the head sha in the artifact is what was reviewed. Today `save_review_result` stamps `reviewed_sha=resolve_reviewed_sha(\".\")` (`review/persistence.py:515`), which is HEAD of the process directory, i.e. the operator's checkout. Without a change, every PR review would record the wrong sha. `sq review resolve` (slice 306) diffs from `reviewedSha`, so it would also diff against an unrelated commit. The persistence contract needs `reviewed_sha` passed in from the PR record. The doc says persistence \"applies unchanged\", which hides this.",
+   "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#technical-considerations"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "\"Base moved since resolution\" is a named error but also a non-issue",
+   "description": "The failure-mode list makes \"base moved since resolution\" a named error with a non-zero exit. \"Base semantics\" says the base routinely moves and merge-base makes that harmless. The race that actually matters is the **head** moving between `gh pr view` (the head sha in the record) and the fetch of the head ref. The design should check that the fetched ref equals the record's head sha, and fail or re-resolve if it doesn't. The doc also only fetches the head into a namespaced ref. Merge-base also needs the **base** ref fetched: the local `main` may be stale or missing, and for fork PRs the base lives on a different remote than the head. Neither is said.",
+   "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#architectural-principles"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Failing when there is more than one host remote breaks fork workflows",
+   "description": "\"Target grammar\" says resolution must fail loudly when the repo \"has more than one\" host remote. Fork-based contributors always have `origin` and `upstream`, and that is common in the enterprise setting the motivation names. `gh` already handles this with `gh repo set-default` and `--repo`. The adapter should use `gh`'s resolution (or take an explicit `--repo`) instead of rejecting multiple remotes. Otherwise the keystone slice can't be used in a basic topology.",
+   "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#technical-considerations"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "PR-keyed persistence underestimates how slice-shaped the save path is, and depends on unfinished 917",
+   "description": "\"Archiving, digest, and integrity checks \u2026 apply unchanged\" is not backed up:\n- `format_review_markdown` always writes `slice:` and `project:` frontmatter, and the heading is `# Review: {type} \u2014 slice {index}` (`persistence.py:206-216, 266`). With no slice it writes `slice: unknown` and `slice 0`, which is the silent-placeholder pattern CLAUDE.md forbids.\n- There are two save functions (`save_review_file`, used by the pipeline, and `save_review_result`, used by the CLI). Both build `{index}-review.{type}.{name}` names, and `REVIEWS_DIR` is a module constant relative to the process directory.\n- Context Forge artifact scanning, the metrology globs and `sq review resolve` find reviews by that index-prefixed convention. The doc doesn't say what a PR-keyed name looks like, or whether those readers ignore it or break on it.\n- The \"configured squadron data directory\" doesn't exist. It is a new config key plus a change to every consumer that assumes `REVIEWS_DIR`.\n\nAlso, `917-slice.review-artifact-integrity.md` is `status: not_started`, and slice 3 is \"sequenced after 917\". The doc should say whether slices 1, 2 and 4 can ship before 917, given that posting reads \"the saved review\".",
+   "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#envisioned-state"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Posting is underspecified: replace vs. supersede, saved-artifact dependency, size limit",
+   "description": "- \"Updates or supersedes\" leaves a design decision open. Editing the old comment loses the earlier verdict history. Posting a new one and minimizing the old one needs GraphQL. Pick one.\n- Finding \"squadron's own prior comment\" has to filter on the marker **and** on the operator's login. Each operator gets their own comment, so \"does not stack\" only holds per operator. Say so.\n- \"The saved review is rendered\": what does `--post` do with `--no-save`, a NOT_PERSISTABLE outcome, or an UNSAVED outcome (`cli/commands/review.py:316-339`)? Either posting renders from the in-memory `ReviewResult`, or it needs a saved file. Decide which.\n- GitHub limits a comment body to 65,536 characters. A long or degraded review (which embeds `### Raw Response`, `persistence.py:314-318`) needs a truncation rule.",
+   "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#envisioned-state"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "`sq pr create` never says whether it pushes, and has no rules for unplanned repos or stale reviews",
+   "description": "- `gh pr create` needs the branch on the remote. The doc doesn't say whether `sq pr create` pushes, refuses when the branch isn't pushed, or asks. Pushing is an outward-facing write, and \"Never surprise the operator\" should cover it.\n- In a repo with no `cf` project there is no `git.integration_branch` to read. Which base is used: the host's default branch, or a required `--base`?\n- \"The latest saved review\" isn't checked against the branch head. If the review's `reviewedSha` isn't the current head, the \"review provenance\" section claims a review of code that has changed since. The body needs to say the review is stale, or leave it out.\n- \"Nothing is asserted that no input supports\" depends on a one-shot model call, and nothing checks it. Either limit the model to narrative sections and keep \"how it was verified\" deterministic, or drop the claim.",
+   "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#technical-considerations"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "Cut the parseable PR-body contract, and defer thread ingestion",
+   "description": "- The \"stable section structure that an AI reviewer, including `sq review pr` itself, can parse\" has no consumer: no slice has `sq review pr` parse a PR body. It is just body text in the prompt. A \"contract other tooling can rely on\" with no reader is speculative. Cut it and keep fixed headings as a presentation choice.\n- Unresolved review threads as prompt input: `gh pr view --json` doesn't report thread resolution state, so this needs `gh api graphql`. It also widens the untrusted-text surface, and nothing in the stated goals requires it. Defer it until the PR review has proven useful. Keep title, body and linked issues (`closingIssuesReferences` is in `gh pr view --json`).",
+   "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#envisioned-state"
+  },
+  {
+   "i": 8,
+   "severity": "CONCERN",
+   "title": "The adapter's sync/async boundary is unspecified",
+   "description": "The review engine is async (`await provider.create_agent`, `review_client.py:208`). The adapter does blocking `gh` and `git fetch`/`git worktree` subprocess calls, and existing helpers like `run_git` use synchronous subprocess. The Python rules forbid synchronous work over 1ms inside async functions. The doc should say that resolution and fetching finish synchronously before the event loop starts, and that posting runs after it ends (or that the adapter uses `asyncio.create_subprocess_exec`). Otherwise the pipeline and slash-command transports that \"accept identically\" will end up calling a blocking adapter from inside the loop.",
+   "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#technical-considerations"
+  },
+  {
+   "i": 9,
+   "severity": "NOTE",
+   "title": "The squadron-owned worktree conflicts with the project's worktree rules",
+   "description": "`git worktree add` registers the scratch tree in the operator's `.git/worktrees`. The project's git rules tell agents to STOP when they find a git worktree not registered with `cf worktree init`. A scratch tree left behind after a crash would trigger that for any agent in the repo. Cleanup needs `git worktree remove --force` plus `prune`, and the scratch location should be outside the repo. Leaving this to the slice is acceptable, but the conflict should be written down here.",
+   "location": "project-documents/user/architecture/380-arch.pull-request-workflow.md#technical-considerations"
+  }
+ ]
+}

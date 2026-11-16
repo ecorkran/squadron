@@ -1,0 +1,40 @@
+{
+ "review": "r02",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Criterion 5 (\"export equals in place\") stops holding once 401's coverage metric exists",
+   "description": "D5 (line 216), criterion 5 (line 336) and walkthrough step 3 (line 365) all say an export of a clean HEAD gives the same JSON as an in-place snapshot, apart from `measured_at`. But D6 (line 224) says coverage is always absent at an export, because the export has no coverage report. 401 says the same (401 lines 253 and 279). So on any project with a coverage report, the in-place snapshot has coverage and the export has `report_missing` or `coverage_not_configured`. The equality test and the `jq` diff then fail.\n\nThe Prerequisites line about 401 (line 74) is also incomplete. 401 resolves its coverage config key with `get_config(key, cwd=repo_root)` (401 line 216). At an export, `repo_root` is the export directory. That conflicts with D5's rule (line 214) that squadron settings come from the live checkout through `read_snapshot_config`.\n\n**Fix:** have criterion 5, its test and walkthrough step 3 exclude coverage measurements, or state the exact expected difference. Also add 401's config-key read to the D5 rule, so it uses `read_snapshot_config` or the environment root.",
+   "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:216"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "A git failure during the merge search produces a misleading unresolved reason and exit 0",
+   "description": "The failure table (line 164) says a merge search that returns `None` counts as \"this path can't answer\", and the fast-forward path is tried next. Take a `--no-ff` slice in a fresh clone when the `git log --merges` call times out. The fast-forward path then gives `NO_LANDING` (there is no local branch) or `LANDED_ELSEWHERE` (the tip is not on the first-parent line). Both say something false about the slice's history. And because the slice is \"unresolved for a stated reason\", `slice-ranges` exits 0 (line 275), even though that line says a git error exits 1.\n\nThis contradicts the slice's own rule that \"a `None` from `run_git` is never an answer\" (line 327), and the project rule against silent fallbacks. Nothing wrong gets persisted, but the output is misleading, and criterion 1 can't be relied on under load.\n\n**Fix:** treat `None` from the merge search as a git error (ERROR, exit 1). If it should stay per-slice, add a `GIT_UNAVAILABLE` value to `RangeUnresolvedReason`. Only an empty merge result should fall through to the fast-forward path.",
+   "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:164"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Losing a landing to concurrent writes is silent, and some losses can't be recovered",
+   "description": "When two commands write `slice_ranges` at once, the table lists the signal as \"None\". A fast-forward landing lost this way is gone for good once its reflog expires. That is the one case the record exists to protect: the slice plan says \"the persistence has to be right the first time\". `.claude/rules/review-code.md` also requires every listed failure mode to be observable.\n\nLandings are append-only unions keyed on `after_sha`, so the fix is cheap: re-read the record just before `_write_atomic` and merge it with the new landings. Optionally, log a WARNING if the record changed since this command first read it. This shrinks the loss window to almost nothing, with no locking needed.",
+   "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:166"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "No automated check covers the editable self-install risk",
+   "description": "The risk is that pyright resolves `import squadron` through the live editable install instead of the exported tree. The mitigation names criterion 5's export-equals-in-place test. But at HEAD the export and the live `src` are byte-identical, so that test passes whichever tree pyright reads. The only other check is a manual walkthrough step.\n\nThe fallback is also conditional: \"If they differ, type counts become absent\". It doesn't say how the code would detect the difference at runtime. Wrong type counts would then be stored for good, keyed on old commits.\n\n**Fix:** either\n- add a throwaway-repo test: export a commit whose `src/<pkg>` contains a type error that the live tree doesn't have, with the live venv holding an editable install of `<pkg>`, and assert pyright counts the error; or\n- decide now how pyright finds the export's sources (for example, pass the export's source root explicitly) and test that.",
+   "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:375-380"
+  },
+  {
+   "i": 4,
+   "severity": "NOTE",
+   "title": "`git archive` uses the 30 s timeout meant for short git queries",
+   "description": "Exporting a whole tree is a much bigger job than the reflog and log queries `GIT_COMMAND_TIMEOUT_SECONDS` was set for. The failure is explicit (ERROR, exit 1), so it's handled correctly. But the architecture's \"works on code squadron didn't write\" goal means large brownfield repos are in scope, and on one of those `report slice` could fail every time. Consider recording a separate export timeout in config. Squadron's own 2,127 files are well within the limit.",
+   "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:158"
+  }
+ ]
+}

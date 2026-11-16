@@ -1,0 +1,40 @@
+{
+ "review": "r01",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "WorkflowNavigator's three \"sweep\" sites are all `SliceStatus.status` sites that TD-3 excludes",
+   "description": "The scope table (line 36), component table (line 75) and migration step 4 (line 90) schedule 3 `=== 'complete'` sites in `WorkflowNavigator.ts` for sweeping. All three remaining bare literals in that file operate on the `SliceStatus` workflow-position union: two `slice.status === 'complete'` guards next to a `'review-failed'` check on the same variable, and one `{ ...base, status: 'complete' }` return (an assignment, not a comparison) where `base` is a `SliceStatus`. The file's genuine `NormalizedStatus` sites already use `STATUS.*` from slice 241.\n\nThe \"Explicitly excluded\" entry (line 49), TD-3 (line 106) and the functional requirement \"`SliceStatus.status` remain untouched\" (line 136) forbid touching exactly these sites. As written, step 4 cannot be done without violating TD-3, and following TD-3 leaves the \"zero matches in the six swept files\" criterion unmet.\n\nFix: drop `WorkflowNavigator.ts` from the sweep (0 sites, like `ProjectModelBuilder.ts`) and list its three literals under the `SliceStatus` exclusion. The total and the verification counts change accordingly.",
+   "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md:36"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "ConsistencyChecker's 36 \"comparisons\" include 12 fix-payload values and a comment",
+   "description": "The design describes all 36 sites as \"`=== 'complete'` / `'in-progress'` comparisons\". The 36 occurrences break down as:\n\n- **Comparisons:** about 21 real ones.\n- **Fix payloads:** 12 `detail: { key: 'status', value: 'complete' | 'in-progress' }` literals, which are the values the checker's fix path writes into document frontmatter.\n- **Comment:** 3 literals inside a code comment.\n\nThe fix payloads are on-disk frontmatter tokens. TD-2 (line 102) argues that raw frontmatter vocabulary and `NormalizedStatus` are \"two intentionally distinct vocabularies\" that must not be conflated. Sweeping the payloads to `STATUS.*` ties the written file format to the internal constant; leaving them fails the zero-literal criterion. The design does not acknowledge the category, so the choice falls to the implementer.\n\nFix: add a TD that decides the payloads explicitly (sweep with rationale, or exclude like the `STATUS_MAP` keys), say what happens to the comment, and correct the count and pattern description.",
+   "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md:33"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Verification grep and expected counts cannot pass as written",
+   "description": "The architecture requires each maintenance slice to have \"clear success criteria\". Three problems with the ones given:\n\n- **Dead filter:** line 135 uses `grep -roE ...` without `-n`, so output has no line numbers and `grep -v 'introspection/types.ts:[3-6]:'` never matches. The four `STATUS` definition lines always appear.\n- **Unsatisfiable target:** \"zero matches in the six swept files\" cannot hold, because `types.ts` keeps the `STATUS` definition and the `SliceStatus` `'complete'` member, and the two findings above leave further literals behind.\n- **Counts do not reconcile:** the walkthrough (lines 150\u2013151) says \"~75\" before, but 65 + 4 + 8 is 77. It says 8 out-of-scope sites, then lists 3 + 4. It gives `SliceStatus.status` 4 sites, where the union has one matching member plus the three `WorkflowNavigator.ts` uses.\n\nFix: state one command with `-n` and an explicit expected residual list (file plus reason) after resolving the two findings above.",
+   "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md:135"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "One `NormalizedStatus` comparison outside `packages/core` is left bare and unmentioned",
+   "description": "The design limits the sweep to `packages/core/src` (line 29) and says no consumer updates are needed outside core (line 84). The CLI's arch-listing command still has one bare `s.status === 'complete'` comparison on slice model entries, which appear to be `NormalizedStatus`-typed. Other CLI modules already import `STATUS` from core.\n\nThe slice plan entry's goal is to \"sweep all literal sites\", and the Value section (line 23) claims \"every reference is a compiler-checked property access\". This site would survive the slice and pass its core-scoped grep. It is a one-line addition.\n\nFix: add the site and widen the verification grep to `packages/*/src`, or list it as an explicit exclusion and soften the Value claim.",
+   "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md:84"
+  },
+  {
+   "i": 4,
+   "severity": "NOTE",
+   "title": "The premise for excluding test files is factually wrong",
+   "description": "Line 51 says \"grep confirms zero `.test.ts` files assert against these literals directly\". The test suites contain well over 200 such literals across about 20 files, roughly 100 in the ConsistencyChecker tests alone. The conclusion still holds: the values are identical, so no test needs to change. Tests that pin the literal values are also the stronger guard for the architecture's \"no behavior changes without tests\" principle. Restate the exclusion as a deliberate decision, not as an absence of sites.",
+   "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md:51"
+  }
+ ]
+}

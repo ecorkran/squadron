@@ -1,0 +1,61 @@
+{
+ "review": "r01",
+ "findings": [
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "The two `step()` listings contradict each other; one skips `post_tick`",
+   "description": "The Technical Decisions listing (lines 176-190) wraps only `engine.tick()` in `if count > 0`, so `post_tick()` always runs. The Implementation Details listing (lines 276-277) keeps `if self._entity_manager.count == 0: return`, which exits before `post_tick()`. The note directly beneath it (line 291) and Special Considerations (line 408) both say the early return must not skip the lifecycle calls. An implementer following the \"Implementation Details\" section builds the behaviour the design prohibits. Keep one listing, the lines 176-190 form, and delete the other; this also removes a duplicated section.",
+   "location": "project-documents/user/slices/304-slice.environment-layer-integration.md:272-291"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Post-tick write path is not delivered, and its rationale contradicts the 500 contract",
+   "description": "The slice plan assigns \"Handle post-tick environment writes (e.g., stigmergic trail deposits)\" to 304. The design calls `environment.post_tick()` with no arguments. Under the 500 contract, `post_tick(trail_deposits, threat_mutations)` only acts on non-`None` arguments, so this call is a no-op now and stays one after layers 505/506 exist. Three statements in the design are wrong against 500:\n- **Trail decay (lines 291, 408):** the design says `post_tick` must run with zero entities so trail decay advances. 500-arch puts decay in `pre_tick`; `post_tick` applies only agent-originated writes.\n- **\"Plug in without server changes\" (line 19):** writable layers need a server-side path that collects deposits and mutations from behaviour evaluation and passes them to `post_tick`. The design defines none.\n- **\"Layers register themselves\" (line 329):** 500 composes layers statically at construction and has no registry. With `layers={}` fixed in `Server.run()`, every layer slice must edit server startup.\n\nEither specify the write path (where deposits come from and how `step()` forwards them) or state explicitly that this slice delivers only the call site and name the slice that owns the rest. Correct the three claims either way.",
+   "location": "project-documents/user/slices/304-slice.environment-layer-integration.md:291"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Environment context is not passed to `engine.tick()`, and the deviation is unacknowledged",
+   "description": "Three parent documents say the environment is passed to the engine at tick time:\n- The slice plan entry: \"Pass environment context to `SimulationManager` and `engine.tick()`.\"\n- 300-arch step 3: \"Pass current entity state and environment context to the behavior engine.\"\n- 500-arch: the server passes the environment or its query method to `engine.tick()` as the environmental-context parameter.\n\nThe design instead injects the environment into force constructors and leaves `engine.tick()` unchanged. That is a defensible, lighter choice, since it avoids changing the `BulkForce` protocol. But it is presented as the plan, not as a departure from it. Initiative 100/500 slices coding against the documented `engine.tick()` parameter will find it absent. Record this as an explicit deviation with rationale and note that the slice plan and 500-arch wording need aligning.",
+   "location": "project-documents/user/slices/304-slice.environment-layer-integration.md:200-216"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Assigned scope is deferred without a named owner",
+   "description": "Two items the slice plan assigns to 304 are excluded:\n- **Grid resolution and layer selection.** The plan entry lists \"seed, grid resolution, layer selection\" as server-side YAML config; only `seed` is delivered. The reasoning is sound (no layers exist, and 500 makes cell size per-layer), but the design only guesses at a destination (\"likely under `simulation.environment.layers.*` or \u2026 slice 507\").\n- **Environment data in client snapshots.** The plan's 305 entry says \"Terrain summary in snapshots deferred to (304)\", and the 305 design excludes it as \"slice 304\". This design pushes it to unnamed \"future work\", leaving it with no owner.\n\nDeferral is proportionate for an empty environment. Name the receiving slice for each item, or flag that the slice plan needs updating.",
+   "location": "project-documents/user/slices/304-slice.environment-layer-integration.md:42-48"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "`Environment | None` contradicts \"always present\" and adds unused surface",
+   "description": "The design says the environment is infrastructure and always created, specifically to avoid `if environment is not None:` checks. It then types the parameter and property as `Environment | None` and puts two such checks in `step()`. The stated reason is compatibility with existing tests, but line 407 already says every `step()` call site must be updated for the required `tick_number`. The Optional also leaks to consumers: force-construction code reading `SimulationManager.environment` must handle `None`. Suggested cuts:\n- Make `environment` a required constructor argument and drop both guards.\n- Drop the `_seasonal_parameter` state field (line 119); `step()` takes it as a parameter and never reads the field.\n- Drop the illustrative `TerrainResistance` class (lines 204-214), which belongs to an excluded initiative.",
+   "location": "project-documents/user/slices/304-slice.environment-layer-integration.md:218-220"
+  },
+  {
+   "i": 6,
+   "severity": "NOTE",
+   "title": "Seed default is hard-coded and has no delivery path to layers",
+   "description": "300-arch's \"Configuration over convention\" names environment seed as explicit configuration. Here `42` appears in the dataclass default, `default.yaml`, and the validation rules, and is applied silently when the section is omitted. Slice 303 set the opposite precedent by making an omitted `profiles` section a validation error. Separately, line 332 says layer slices will use the seed, but nothing passes `EnvironmentConfig` to where layers will be constructed. Neither blocks this slice, since nothing consumes the seed yet.",
+   "location": "project-documents/user/slices/304-slice.environment-layer-integration.md:149-151"
+  },
+  {
+   "i": 7,
+   "severity": "NOTE",
+   "title": "Tick-budget target and failure behaviour of the new calls are not stated",
+   "description": "- **Tick budget:** the environment calls now run inside the tick body, which 300-arch bounds at `1/tick_rate` (50 ms at the configured 20 Hz) with an overrun warning. The existing whole-body measurement in the unchanged tick loop still covers this, and cost is nil with empty layers. One sentence restating the budget would close the gap.\n- **Exceptions:** `pre_tick` raises `ValueError` for a seasonal parameter outside [0, 1], and `query` fails the whole batch if any position is out of bounds. The design does not say what the tick body does when these raise. That matters once 308 supplies real values and environment-aware forces query entities that may have drifted past world bounds.",
+   "location": "project-documents/user/slices/304-slice.environment-layer-integration.md#success-criteria"
+  },
+  {
+   "i": 8,
+   "severity": "NOTE",
+   "title": "Minor inconsistencies",
+   "description": "- Walkthrough step 2 tests the omitted-section case with `config/default.yaml`, which this slice modifies to include the section.\n- Line 198 calls `seasonal_parameter=0.0` \"mid-season\"; on a 0\u20131 cycle it is the start.\n- Line 113 says `WorldBounds` is \"shared with entity manager\", but the entity manager takes `WorldBoundsConfig`.",
+   "location": "project-documents/user/slices/304-slice.environment-layer-integration.md:368-373"
+  }
+ ]
+}

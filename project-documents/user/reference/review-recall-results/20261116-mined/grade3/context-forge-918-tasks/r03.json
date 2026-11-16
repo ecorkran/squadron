@@ -1,0 +1,54 @@
+{
+ "review": "r03",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "FAIL",
+   "title": "Task 1's fixture plan won't parse and breaks existing tests",
+   "description": "There are two separate problems.\n\n1. **The unindexed example line won't match.** The example is `7. [~] Feature Epsilon without explicit index \u2014 cut for scope.` and it has no bold markers. `PLAN_UNINDEXED_RE` requires the name in bold (`\\*\\*([^(].*?)\\*\\*`, at `packages/core/src/introspection/parsers/slicePlanParser.ts:9`). So even after Task 2 adds `~` to the regex, this line is still silently dropped. The slice design's own criterion uses the bold form: `N. [~] **Name** \u2014 rationale`. Task 1's success line makes this worse by asking for the bold wrapper only \"for the indexed form\". A junior AI following the task exactly would see Task 5 fail. It might then loosen the regex, which is out of scope.\n\n2. **Changing the shared fixture breaks tests the task file doesn't list.** Even with a correctly bolded unindexed line, these existing tests would fail:\n   - `packages/core/tests/introspection/ArtifactIntrospector.test.ts:52` checks `totalSlices` is 5. No task updates it.\n   - `packages/core/tests/introspection/slicePlanParser.test.ts:126-129` checks every entry in this fixture is `indexSource: 'explicit'`. An unindexed entry breaks that.\n   - An unindexed entry gets index `unindexedCounter = 1`. The parser sorts by index (`slicePlanParser.ts:91`), so the new entry moves to `entries[0]`. That breaks the `entries[0]` and `entries[2]` checks at lines 12 and 22 and the description checks at lines 166-167.\n\n   This also contradicts the slice design's last success criterion: regression safety is \"proven by the existing `sample-slice-plan.md` fixture tests continuing to pass unchanged.\"\n\n**Fix:** use the alternative the design already allows (\"or add a sibling fixture\"). Create a new fixture such as `deprecated-slice-plan.md` holding one indexed and one bolded unindexed `[~]` line, and leave `sample-slice-plan.md` untouched. Then:\n- Task 5 no longer edits the existing `totalSlices`/`completedSlices` test.\n- Task 5's extra \"byte-identical regression test\" can be deleted, because the unchanged existing tests already prove there's no regression.",
+   "location": "packages/core/tests/fixtures/introspection/sample-slice-plan.md"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Task 8 wrongly claims `resolveEntryStatus` gets a full `SlicePlanEntry`",
+   "description": "Task 8 says the only caller of `resolveEntryStatus` \"passes a full `SlicePlanEntry`\". In fact the only caller is `resolveEntryStatusSafe`, and it declares its own parameter as `Pick<SlicePlanEntry, 'index' | 'isChecked'>` (line 736) before passing it on. If only `resolveEntryStatus`'s `Pick` is widened, the build fails. Task 8 should say to add `'status'` to both `Pick` types.",
+   "location": "packages/core/src/introspection/WorkflowNavigator.ts:734-740"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Task 9's fallback-initializer step does nothing, and its reasoning is wrong",
+   "description": "Task 9 changes the `derivedStatus` initializer at line 91, saying it's the fallback \"if `detectDocuments` throws\". It isn't. Every path overwrites it:\n- the `try` block assigns it at line 122;\n- the `catch` block sets it to `'degraded'` at line 126.\n\nSo the change has no effect, and its stated goal (report `deprecated` instead of `not-started` on a filesystem error) doesn't happen. Remove the step. The design only asks for one added line in the `deriveEntryStatus({...})` call.\n\nRelated NOTE: if a `[~]` entry has an unreadable task file or an unrecognised frontmatter status, it still shows as `degraded` in both `slice.ts` and `resolveEntryStatusSafe`. `findFirstNotCompleteEntry` treats `degraded` as not complete, so that entry could be offered as next. The design doesn't cover this case. Leaving it is acceptable, but it's worth knowing.",
+   "location": "packages/cli/src/commands/slice.ts:91-127"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "`arch-status-vs-plans` has no test, though the success criterion names it",
+   "description": "The success criterion covers both `plan-status-vs-entries` and `arch-status-vs-plans`. Task 12 tests only the first. Both rules use the same `completedSlices === totalSlices` check, so one extra case in Task 12 would cover it: architecture `status: complete`, with a plan whose entries are all `[x]` or `[~]`, and no finding produced.",
+   "location": "packages/core/src/introspection/ConsistencyChecker.ts:828-853"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Commit markers are written as checkboxes",
+   "description": "The commit markers at Tasks 5, 7, 10, 11, 12 and 13 are written as `- [ ] Commit: ...`. They should be plain `**Commit**:` lines, not checklist items. Where they sit is fine. The parser, derivation and wiring commits each fall at a tested point.",
+   "location": "project-documents/user/tasks/918-tasks.sliceplanparser-deprecated-entry-handling.md"
+  },
+  {
+   "i": 5,
+   "severity": "NOTE",
+   "title": "Task 11 tests Task 8 but comes after the CLI work",
+   "description": "Task 11 is the test for Task 8's change to `WorkflowNavigator`, but Tasks 9 and 10 (the CLI work) sit between them. Moving Task 11 directly after Task 8 matches the pattern of putting each test right after its code. Task 8 could then commit on its own, and Task 10 would cover only the CLI.",
+   "location": "project-documents/user/tasks/918-tasks.sliceplanparser-deprecated-entry-handling.md"
+  },
+  {
+   "i": 6,
+   "severity": "NOTE",
+   "title": "The task file is heavier than about ten lines of production code needs",
+   "description": "Thirteen tasks and six commits is a lot for this change. Three ways to trim it:\n- Merge Tasks 2\u20134 into one parser task. Each one changes only a line or two in the same function.\n- Merge the test-only commits for Tasks 11 and 12.\n- The manual walkthrough in Task 13 repeats what the automated tests already check. Running `pnpm -r build` and `pnpm -r test` is enough.",
+   "location": "project-documents/user/tasks/918-tasks.sliceplanparser-deprecated-entry-handling.md"
+  }
+ ]
+}

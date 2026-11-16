@@ -1,0 +1,21 @@
+{
+ "case": "squadron-264-tasks",
+ "flaws": [
+  {
+   "id": "F1",
+   "text": "Slice design Result mapping: \"Non-text blocks are noted by type in the content, not dropped silently\" (design line 138), part of SC2 \"maps results per",
+   "hits": {
+    "r01": [
+     1
+    ],
+    "r02": [
+     2
+    ],
+    "r03": [
+     1
+    ]
+   }
+  }
+ ],
+ "note": "Findings naming the non-text-block rule as untested (with a fixture-tool fix) were counted; r01 [1] bundles it with the transport-error gap but names it explicitly."
+}

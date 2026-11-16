@@ -1,0 +1,61 @@
+{
+ "review": "r03",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "FAIL",
+   "title": "Overwrite guard lands in a function `sq review code` never calls",
+   "description": "T12 and T13 put the archive-and-verify guard in `save_review_file` and test it only there. `save_review_result` does not call `save_review_file`; it writes directly with `path.write_text` at lines 300 and 303.\n\n- **CLI path bypasses the guard:** all four CLI call sites use `save_review_result` (`src/squadron/cli/commands/review.py:451,523,610,746`).\n- **Pipeline path mostly bypasses it:** `src/squadron/pipeline/actions/review.py:255` uses `save_review_result` whenever `slice_info` is present; only the no-slice fallback at line 272 reaches `save_review_file`.\n- **Criteria left unmet:** \"Re-running `sq review code <N>` over an edited review file archives the prior content and warns\" and the F003 fail-closed criterion. T13 would pass green while the hazard remains, and it would only surface at T40's walkthrough step 7 in file 2.\n\nFix: rework T12 so the guard is one shared helper invoked by both writers, or have `save_review_result` delegate its write to the guarded path. T12 must also define the abort contract for `save_review_result`, which returns `Path`, not `Path | None`, so the four CLI callers and the pipeline caller need a stated behaviour. T13 needs at least one test through `save_review_result`.",
+   "location": "src/squadron/review/persistence.py:300-311"
+  },
+  {
+   "i": 1,
+   "severity": "FAIL",
+   "title": "T3 introduces the review\u2192pipeline import that Part 0 exists to remove",
+   "description": "T3 tells the implementer to keep `verification.py`'s import of `RoundDiff` from `pipeline.actions.findings_addressed.screens` after the move, calling it \"the pipeline\u2192review direction\". Once `verification.py` lives in `review/addressed/`, that import runs review\u2192pipeline.\n\n- **Contradicts the design:** the \"Dependency direction (review F002)\" section says the core moves precisely so `review/` never imports `pipeline/actions/` internals.\n- **First such import:** `src/squadron/review/` currently has zero imports of `squadron.pipeline`.\n- **Creates a cycle:** `screens.py:15` imports the moved models, so the packages become mutually dependent and import-order sensitive once T7 populates `review/addressed/__init__.py`.\n- **T5 has the same problem:** `judge_residue_core(..., diff, ...)` takes a `RoundDiff` (`judge.py:21`).\n- **File 2 inherits it:** T21 imports `RoundDiff` and `screen_byte_identical` from the pipeline package into `review/resolution.py`.\n\nFix: in T3, relocate the `RoundDiff` dataclass into `review/addressed/` and have `screens.py` import it from there. T7's export list then needs `RoundDiff` added.",
+   "location": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-1.md:109-113"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "T6's \"no test needed rewriting, else stop\" will always trip",
+   "description": "Both judge test files patch the transport at `squadron.pipeline.actions.findings_addressed.judge.run_review_with_profile` (also `tests/pipeline/test_findings_addressed_e2e.py:27`). After T5 the call is made from `review/addressed/judge.py`, so the old patch target either fails to resolve or no longer intercepts the call.\n\nT6 instructs the implementer to stop and reconcile with the design if any test needs rewriting. That stop is guaranteed. T5 or T6 should name the `_JUDGE_TRANSPORT` constant update as an expected mechanical path change, the same class as the import-path edits T1 already allows, and reserve the stop for assertion or fixture changes.",
+   "location": "tests/pipeline/test_findings_addressed_judge.py:32"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "T5's extraction boundary does not match the code's ordering",
+   "description": "T5 describes the core as \"the body of today's `judge_residue` from `_resolve_model` onward (template load, \u2026)\". In the code the order is the reverse, and two things are left undecided:\n\n- **Template load comes first:** it happens at lines 106-113, before `_resolve_model`, and `_resolve_model` needs `template.model` as its fallback (line 116). The core's signature has no template parameter, so the wrapper must either load the template itself (duplicating the not-registered fail-closed branch) or the core must expose it. T5 does not say which.\n- **Empty-residue short-circuit is unassigned:** the `if not residue` return at lines 103-104 runs before model resolution today. If it moves only into the core, an empty residue with an unresolvable model changes from an empty result to `failed=True`.\n\nT5 should state where each of these lives so \"no behavior change\" is checkable.",
+   "location": "src/squadron/pipeline/actions/findings_addressed/judge.py:103-119"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "T14 is sequenced after Part D commits, and carries a hallucination trap",
+   "description": "The design's Phase 5 note requires the cf archive-scanning check to be \"sequenced before Part D lands\". Here it is T14, after T13's commit marker, with prose saying it \"gates T12 in practice\".\n\n- **Ordering:** Part D is committed before the go/no-go is known. T12 cannot be checked off until T14, which leaves a later check-off with no code change to commit alongside it in the non-recursive case. Moving T14 ahead of T12 removes the workaround text in both tasks.\n- **Empty source:** T14 sends the implementer to `ai-project-guide/tool-guides/context-forge/`, and `project-documents/ai-project-guide/tool-guides/` has no files in this checkout.\n- **Trap:** the task labels the non-recursive answer \"(expected, matching squadron's own pattern)\". With an empty source and a suggested answer beside it, this is the pattern the project's \"Hallucination traps in prompts\" rule prohibits. Drop the \"expected\" label and state what evidence counts as an answer.",
+   "location": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-1.md:275-296"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "T10 leaves the location and `cwd` of HEAD resolution open",
+   "description": "T10 says both `save_review_result` and `pipeline/actions/review.py` resolve HEAD. Three things are unspecified:\n\n- **Double resolution:** the pipeline action calls `save_review_result` when `slice_info` is present (line 255) and `format_review_markdown` directly only in the fallback (line 265). As written, the slice path resolves twice or the implementer guesses.\n- **Which repo:** `run_git` requires `cwd: str` (`src/squadron/review/git_utils.py:19`), but `save_review_result` has no `cwd` parameter and T10 writes `cwd=...`. The pipeline action has its own `cwd` that may differ from the process directory.\n- **Failure modes:** `run_git` returns `None` when git cannot be invoked and a non-zero `returncode` when git refuses. T11 tests only `None`.\n\nT10 should name the single resolution point, the `cwd` each path passes, and add the non-zero case to T11.",
+   "location": "src/squadron/pipeline/actions/review.py:253-278"
+  },
+  {
+   "i": 6,
+   "severity": "NOTE",
+   "title": "Archived copy is itself overwritten on a second re-review",
+   "description": "T12 copies to `archive/{original filename}` as the design specifies. A second overwrite of the same review replaces the earlier archived copy with no check. T12 and T13 do not state or test what happens when the archive target already exists, which sits awkwardly with \"nothing is silently destroyed\". Worth one line in T12 and one test in T13.",
+   "location": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-1.md:233-237"
+  },
+  {
+   "i": 7,
+   "severity": "NOTE",
+   "title": "Commit marker format and Part 0 granularity",
+   "description": "Markers are written as `- Commit:` sub-bullets, not plain `**Commit**:` lines. Apart from T13's (see the T14 concern), they sit at tested points. T1/T2 and T3/T4 are two verbatim-move pairs with the same verification command and separate commits. Once `RoundDiff` joins the move, one move task plus one verify task and a single commit would do.",
+   "location": "project-documents/user/tasks/306-tasks.review-resolution-recording-that-findings-were-addressed-1.md:94-122"
+  }
+ ]
+}

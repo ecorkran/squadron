@@ -1,0 +1,21 @@
+{
+ "case": "context-forge-915-slice",
+ "flaws": [
+  {
+   "id": "F1",
+   "text": "Data Flow says \"Delete: mirrors write, deletes from whichever project file the key's scope maps to\", so `cf config unset git.integration_branch --proj",
+   "hits": {
+    "r01": [
+     0
+    ],
+    "r02": [
+     0
+    ],
+    "r03": [
+     0
+    ]
+   }
+  }
+ ],
+ "note": "All three reviews name the unset-routing contradiction directly."
+}

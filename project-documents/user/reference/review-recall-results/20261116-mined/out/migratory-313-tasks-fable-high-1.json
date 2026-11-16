@@ -1,0 +1,189 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "PASS",
+      "title": "Every success criterion traces to a task, in dependency order",
+      "description": "- **Criteria 1\u20132:** Tasks 1.1 and 1.2.\n- **Criteria 3\u20134:** Tasks 1.3 and 1.4.\n- **Criterion 5:** Task 1.4 round-trip (see the first concern).\n- **Criteria 6\u20139:** Tasks 2.1\u20132.3.\n- **Criterion 10:** Tasks 3.1, 3.2 and the mock test in 3.4.\n- **Criterion 11:** Task 3.4.\n- **Criterion 12:** Tasks 4.1 and 4.2.\n- **Criterion 13:** Tasks 3.5 and 5.1.\n- **Criterion 14:** Task 5.2.\n\nConfig comes before the enforcement module, then wiring, then shipped defaults, with no circular dependencies. Each implementation group is followed directly by its test task. The startup log line in Task 3.3 traces to walkthrough step 4 of the slice, so it is not scope creep.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:42-325"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Criterion 5 has a test but no implementation task, and the test is weaker than the criterion",
+      "description": "Task 1.4 adds `test_bounds_policy_yaml_round_trip`, but no task touches `config_to_yaml`. The file list at line 31 scopes `config.py` to \"enum + field + loader validation\" only.\n\nThe slice assumes `yaml.dump` emits a `StrEnum` as a plain string. From my knowledge of PyYAML (not run here), it does not: `yaml.dump` writes a Python object tag and `safe_dump` raises. The shipped code supports this, since it needed a dedicated `_serialize_for_yaml` converter at `src/migratory_server/config.py:657-681`. A junior implementer would hit a failing round-trip test with no task telling them what to change.\n\nFix: add a step to Section 1 that makes `config_to_yaml` emit enum values as plain strings, placed before Task 1.4.\n\nSeparately, criterion 5 requires that reloading \"produces an equal `ServerConfig`\". The task only asserts that the policy matches. Change the assertion to compare the whole config.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:88"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Task 3.4's reflect test cannot pass with the values given, and the drift tests leave the deciding parameters open",
+      "description": "`test_reflect_policy_flips_velocities_at_edges` puts an agent at `(99, 50)` with velocity `(10, 0)` in a 100-wide world, steps once, and asserts `vx < 0`. The task never states `dt` or the profile's `max_speed`.\n\nEvery existing bounds-agnostic test in `tests/test_simulation.py` uses `dt=0.05`, and the helper profile has `max_speed=5.0` (lines 89, 105, 142 onward). Under those values the agent moves at most 0.5 units, never exceeds `width`, and the assertion fails. Even `dt=0.1` lands exactly on 100.0, which the `x > width` mask does not catch.\n\nThe three 50-step tests have the same gap. \"Near the edges\" and \"outward-pointing velocities\" only guarantee a crossing for specific combinations of `dt`, speed and start distance.\n\nFix: state `dt`, `max_speed` and start positions in the shared setup so that a crossing is arithmetically certain (for example `dt=1.0` with `max_speed >= 10`).",
+      "file_ref": null,
+      "category": "testability",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:226-231"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Task 5.2 is not completable by an agent and leaves `config/test.yaml` in an undefined state",
+      "description": "- **Visual steps:** Steps 5\u20137 require watching a Three.js viewer for wrap, bounce and drift. The task gives no agent-executable equivalent and has no success-criteria line. Fix: add a scripted substitute, such as a short WebSocket client that reads snapshots for N seconds and asserts the position range per policy, and keep the viewer check as the human-facing part of criterion 14.\n- **Config state:** Steps 6\u20138 edit `config/test.yaml` after it was committed in Task 4.3, then say to restore it to \"whichever policy you want to keep (recommend `wrap`)\". Criterion 12 requires `wrap`. Fix: make step 8 say \"restore `policy: wrap` and confirm `git diff config/test.yaml` is empty\".",
+      "file_ref": null,
+      "category": "task-scoping",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:295-308"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Commit markers are checkboxes inside dedicated commit tasks, and one sits at an untested point",
+      "description": "All five markers are written as `- [ ] **Commit:** \u2026` inside their own tasks (1.5, 2.4, 3.6, 4.3, 5.5), each with a `git add` checkbox. Markers must be plain lines, not checklist items. Fix: replace each commit task with one plain `**Commit**: <message>` line after the preceding test task.\n\nPlacement is otherwise good for Sections 1\u20133, where each commit follows a passing test run. Task 4.3 (line 283) is the exception. It commits the `default.yaml` and `test.yaml` policy change after only a `python -c` load check; the first `pytest` run after that change is Task 5.1. Fix: move the full-suite run ahead of the Section 4 commit.",
+      "file_ref": null,
+      "category": "commit-markers",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:93-96"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Task count and step detail exceed what a 2/5 slice needs",
+      "description": "The file has 21 tasks and about 335 lines for four small source edits. Specific cuts and merges:\n- **Merge 1.1 and 1.2:** a three-line enum and a one-field addition in the same file.\n- **Merge 4.1 and 4.2:** the same one-line YAML edit and the same verify command, twice.\n- **Fold 5.1 into 5.2:** walkthrough step 2 at line 300 is the same `pytest` run.\n- **Drop the parametrized dispatch test (line 171):** \"dispatches correctly and does not raise\" is already proven by the per-policy tests.\n- **Combine the two `OPEN` no-op tests:** one test can check positions and velocities.\n- **Parametrize the four reflect edge tests:** one test over four edges.\n- **Drop `test_reflect_policy_flips_velocities_at_edges`:** it repeats the unit coverage of criterion 9, and criterion 11 only asks for position containment.\n- **Trim dictated detail:** \"alphabetically correct placement\" of an import (line 47), and the full `step()` code block (lines 198-207) that copies the slice's pseudocode.",
+      "file_ref": null,
+      "category": "proportionality",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Three small instruction issues in Tasks 1.3 and 3.2",
+      "description": "- **Literal tuple option:** Line 73 allows \"a literal tuple\" of valid options. That duplicates the enum's values, against the project rule to define comparison values once. Keep only the `sorted(p.value for p in BoundsPolicy)` form.\n- **Explicit null:** Lines 70-71 read the key with `data.get(\"policy\", None)` and treat `None` as absent. An explicit `policy: null` then silently becomes `OPEN`, although the slice says a present value must be a string. Test key presence instead.\n- **Unverifiable checkbox:** Line 209 asks the implementer to confirm \"zero import-time \u2026 overhead\" on the `OPEN` path. The same task adds a module-level import, and the note at line 329 concedes the import is not avoided. Reword it to \"no call on the `OPEN` path\", which the mock test in 3.4 already verifies.",
+      "file_ref": null,
+      "category": "clarity",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:70-73"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "pass",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "Every success criterion traces to a task, in dependency order",
+      "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:42-325",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "Criterion 5 has a test but no implementation task, and the test is weaker than the criterion",
+      "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:88",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "testability",
+      "raw_category": null,
+      "summary": "Task 3.4's reflect test cannot pass with the values given, and the drift tests leave the deciding parameters open",
+      "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:226-231",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "task-scoping",
+      "raw_category": null,
+      "summary": "Task 5.2 is not completable by an agent and leaves `config/test.yaml` in an undefined state",
+      "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:295-308",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "commit-markers",
+      "raw_category": null,
+      "summary": "Commit markers are checkboxes inside dedicated commit tasks, and one sits at an untested point",
+      "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:93-96",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "proportionality",
+      "raw_category": null,
+      "summary": "Task count and step detail exceed what a 2/5 slice needs",
+      "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md",
+      "location_verified": null
+    },
+    {
+      "id": "F007",
+      "severity": "note",
+      "category": "clarity",
+      "raw_category": null,
+      "summary": "Three small instruction issues in Tasks 1.3 and 3.2",
+      "location": "project-documents/user/tasks/313-tasks.world-bounds-policy.md:70-73",
+      "location_verified": true
+    }
+  ],
+  "template_name": "tasks",
+  "input_files": {
+    "input": "project-documents/user/tasks/313-tasks.world-bounds-policy.md",
+    "against": "project-documents/user/slices/313-slice.world-bounds-policy.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/migratory-313-tasks"
+  },
+  "timestamp": "2026-11-16T16:33:02.913843",
+  "model": "claude-fable-5-2",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 14,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-fable-5-2",
+  "answering_models": [
+    "claude-fable-5-2"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 7,
+    "in_fences": 0,
+    "in_section": 7,
+    "surviving": 7
+  },
+  "effort": "high",
+  "profile": "sdk",
+  "turns": 15,
+  "prompt_tokens": 424505,
+  "cached_tokens": 307108,
+  "cache_write_tokens": 117385,
+  "completion_tokens": 10207,
+  "reasoning_tokens": null,
+  "duration_seconds": 100.18770554102957,
+  "cost_usd": 2.3483035999999995,
+  "cost_basis": "provider"
+}

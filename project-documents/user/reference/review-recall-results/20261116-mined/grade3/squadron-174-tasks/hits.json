@@ -1,0 +1,21 @@
+{
+ "case": "squadron-174-tasks",
+ "flaws": [
+  {
+   "id": "F1",
+   "text": "Task 22a asserts wall-clock `MAX_LISTING_S = 1.0` for `list_run_summaries`, while the parent design says \"The I/O-bounds test enforces the counts, and",
+   "hits": {
+    "r01": [
+     5
+    ],
+    "r02": [
+     3
+    ],
+    "r03": [
+     3
+    ]
+   }
+  }
+ ],
+ "note": "r02 i3 is mainly about the prune collision but also names the Task 22a vs design 'no time assertion' contradiction; counted. All three propose updating the design rather than deleting 22a, but name the same contradiction."
+}

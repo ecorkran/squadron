@@ -1,0 +1,35 @@
+{
+ "case": "migratory-109-slice",
+ "flaws": [
+  {
+   "id": "F1",
+   "text": "Architecture, Vectorized Force Patterns, Cohesion sketch: `center_of_mass = np.sum(neighbor_pos, axis=1) / np.maximum(counts, 1)` then `cohesion = (ce",
+   "hits": {}
+  },
+  {
+   "id": "F2",
+   "text": "Verification Walkthrough step 4 runs `grep -n \"for.*agent_idx\\|for.*eval_indices\\|for.*list_idx\"` on the force modules and expects no matches, while t",
+   "hits": {
+    "r01": [
+     0
+    ],
+    "r03": [
+     0
+    ]
+   }
+  },
+  {
+   "id": "F3",
+   "text": "Technical Scope and Success Criteria call all five forces \"neighbor-dependent\" and include `MomentumForce`, which the document later says \"does not us",
+   "hits": {
+    "r01": [
+     7
+    ],
+    "r03": [
+     5
+    ]
+   }
+  }
+ ],
+ "note": "F1 not hit: r01 #1 and r03 #3 discuss zero-sum leadership, not cohesion's -self_position force for zero neighbors. r02 #1 claims the grep would NOT match the comprehension (wrong), so not counted for F2; r01 #7 hits F3 via its second bullet."
+}

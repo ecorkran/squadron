@@ -1,0 +1,26 @@
+{
+ "case": "migratory-146-slice",
+ "kind": "slice",
+ "flaws": [
+  {
+   "id": "F1",
+   "text": "Scope and A7: \"falls back to CPU with a logged warning if neither [Metal nor CUDA] is detected\", \"A host with no Metal and no CUDA starts successfully with `backend: quadrants`\". The `_select_arch()` listing returns `qd.cuda` for every Linux host and `qd.metal` for every Darwin host and falls back only for other platforms; Open Notes say a failing `qd.init()` propagates and the server exits. A Linux box without CUDA is the case A7 names, and it crashes. **VALID**: self-contradiction. Needs: doc alone. Raised by the original review (F001, quoting this text)."
+  },
+  {
+   "id": "F2",
+   "text": "GpuAgentState Changes: \"`export_positions()` and `export_velocities()` return f64 arrays (Quadrants upcasts on download). The `TickResult` therefore carries f64\"; A3 requires the same dtype contract as the CPU path. At `1f0521c`, `quadrants_fused_state.py` declares `export_positions() -> NDArray[np.float32]` and returns `.astype(np.float32)`, and `TickResult.from_quadrants_fields` passes arrays through with no dtype change (its docstring says f32 stays f32). The design lists no change to the export methods. **VALID**: contradicts code. Needs: code. Still f32 at `a6abc41`."
+  },
+  {
+   "id": "F3",
+   "text": "Files Changed and Task text name `src/migratory_server/entity_manager.py`; the module is `entities.py` and no `entity_manager.py` exists. **VALID** (minor): contradicts repo. Needs: code (file list)."
+  },
+  {
+   "id": "F4",
+   "text": "Walkthrough \"Regression: `uv run pytest tests/server/ tests/bench/`\" and the new `tests/server/test_gpu_driver.py`: the test tree is flat (`tests/test_server.py`, `tests/test_simulation.py`, ...; subfolders are `bench`, `forces`, `load`, `manual`, `spatial`), so `tests/server/` holds only the new file and the run does not cover the existing server tests that `SimulationManager` changes can break. **VALID** (minor): contradicts repo. Needs: code. At close the author replaced the command with the flat test files."
+  },
+  {
+   "id": "F5",
+   "text": "Walkthrough step 2: `uv run python -m migratory_server config/default.yaml`. `__main__.py` accepts `--config`, `--replay`, `--world` and no positional argument. **VALID** (minor): the step fails as written. Needs: code. The same text stayed in the closed walkthrough."
+  }
+ ]
+}

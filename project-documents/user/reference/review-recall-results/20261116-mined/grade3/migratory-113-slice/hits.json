@@ -1,0 +1,11 @@
+{
+ "case": "migratory-113-slice",
+ "flaws": [
+  {
+   "id": "F1",
+   "text": "The density signal is described three times as \"the CSR's raw `counts` output ... pre-cap\", \"`filtered_counts` (post-`exclude_self`, pre-cap)\", and `r",
+   "hits": {}
+  }
+ ],
+ "note": "No review identified that record_density(filtered_counts) at step 8 sees the capped count; r03 f2 only suggests a wrapper-side signal that is pre-cap by construction without naming the defect."
+}

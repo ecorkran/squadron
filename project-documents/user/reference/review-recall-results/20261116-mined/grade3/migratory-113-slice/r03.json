@@ -1,0 +1,47 @@
+{
+ "review": "r03",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Default threshold can never select the grid under the design's own numbers",
+   "description": "Line 210 computes about 132 mean neighbors for N=3100 spread uniformly (radius \u2248 35, 300\u00d7300 world). Line 211 then claims the same uniform spread \"can drop below 10\". Uniform spread is the lowest-density arrangement, so about 132 is roughly the floor (about 107 at N=2500); clustering only raises it.\n\nWith `grid_threshold_mean_neighbors = 10.0` and `initial_backend=\"brute\"`, the brute\u2192grid condition `m < t - h = 8` is never met. Consequences:\n- The default `adaptive` mode behaves as brute-only, so the slice's stated value (capturing the expansion-phase grid win) is not delivered.\n- Walkthrough step 4 (sweep 2\u201350, \"optimum in the 5\u201320 range\") and step 5 (\"`grid_selected` high during expansion\") cannot pass as written.\n\nDerive the default and sweep range from the measured crossover in the perf journal Entry 4 addendum. By this arithmetic it sits above the uniform-spread value, in the hundreds, not near 10. Alternatively, normalise the signal (for example against the uniform-density expectation) so the threshold carries across N, radius and world size.",
+   "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:206-213"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Determinism claims are internally contradictory and the \"no new correctness surface\" claim is unsupported",
+   "description": "Tick determinism is a stated architectural design goal, and the slice changes the default backend. The document makes incompatible statements:\n- **Bit-exact:** implementation step 5 (line 421) requires \"bit-exact position equality against brute-force-only\" across a run that exercises both backends.\n- **Not bit-exact:** line 431 says grid row order may differ, so parity is asserted on neighbor sets only; line 359 allows \"documented determinism caveats in the hash grid\".\n\nRow order matters downstream, so set-equality at the query does not guarantee identical positions:\n- CSR force reductions sum floats in row order.\n- `apply_neighbor_cap` (slice 112) uses `np.argpartition`, whose tie-breaking can depend on input order.\n\nThe backend in use also depends on dispatcher history through hysteresis. If the backends are not order-identical, the same agent state can produce different output depending on which side of the band the run came from, which undermines replay and the non-risk claim at line 408.\n\nThe design should either require canonical output (for example sorted neighbor indices per row from the dispatcher) and keep the bit-exact criterion, or state the weakened guarantee and reconcile lines 329, 359, 421 and 431.",
+   "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:406-409"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "`hasattr`-guarded `record_density` hook is a hidden contract and is not needed",
+   "description": "`tick.py` gains a duck-typed call outside the `SpatialQuery` protocol. This is a type-checking dispatch on the concrete backend, invisible to the type checker, and it makes the engine tick push state into a spatial index the architecture says the caller owns.\n\nA lighter option meets the requirement. `AdaptiveSpatial.query_radius_batch` already returns the raw `counts`, so the wrapper can record the signal itself (`counts.sum() / len(counts)`, less the constant self-count). That removes the `tick.py` change, the `hasattr` guard, its dedicated test and the \"Tick Integration\" section. It also keeps the signal pre-cap by construction.\n\nTwo gaps apply whichever mechanism is used:\n- **Empty active subset:** the architecture's subset-evaluable tick allows zero active agents. `float(counts.sum()) / len(counts)` (line 25) then divides by zero; the handling is unspecified.\n- **Pending versus active backend:** line 110 says `record_density` \"changes the selected backend\", while line 138 says the switch takes effect on the next `build()`. If the selection flips immediately, any query between ticks hits a never-built or stale grid. Specify a pending selection applied only inside `build()`.",
+   "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:145-164"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Config surface is inconsistent with the constructor and the stated decisions",
+   "description": "- **`initial_backend`:** line 301 says \"Make it configurable\" and the risk at line 400 discusses an operator setting `initial_backend: grid`. `SpatialConfig` (lines 171-175) has no such field and `_build_spatial` hardcodes `\"brute\"` (line 238).\n- **Duplicated defaults:** the constructor defaults `hysteresis_band = 0.0` and `initial_backend = \"brute\"` (lines 88-89) sit alongside config defaults of `2.0` and `10.0`. This is two sources of defaults with different values, against the project rule to centralise defaults at config level. Make the constructor arguments required.\n- **Backend literals:** `\"adaptive\" | \"grid\" | \"brute\"` appear in the dataclass, validation, `_build_spatial` and the `initial_backend: str` parameter. Define them once as an enum.\n- **Test pinning:** walkthrough step 2 relies on a `MIGRATORY_SPATIAL_BACKEND` env var that the design does not define. It also does not say how engine-level tests that construct their own spatial object become backend-parametrised, so \"652 tests pass under all three backends\" (line 335) is not verifiable as specified.",
+   "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:166-204"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Backend switches have no specified observable signal",
+   "description": "Walkthrough step 5 depends on `grid_selected` / `brute_selected` counts \"in the dispatcher's log output\". No logging, counters or accessor are designed anywhere in the Architecture section.\n\nWithout them, the flip-flop risk (line 398) and the phase-transition verification cannot be observed. Specify one mechanism, such as a log line per switch with the triggering `m` plus per-backend tick counters, and include it in the unit-test list.",
+   "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:372-380"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Design is overweight for a wrapper, a config section and a wiring change",
+   "description": "About 440 lines for a delegating class and three config fields. Cuts:\n- **Technical Decisions restates Architecture.** Signal rationale appears at lines 118-127 and again at 268-278. Initial backend appears at 140-143 and again at 294-301. Hysteresis appears at 129-136 and again at 280-284. Keep one of each.\n- **`initial_backend` as a parameter.** The slice plan does not ask for it and the config does not expose it. Fix it to brute and drop the parameter, its test and its risk entry.\n- **\"Pluggable dispatcher pattern\" for KD-tree or GPU backends (line 313).** The class is hard-wired to two named backends and a binary rule, so the claim is not delivered. Remove it, not generalise.\n- **Speculative handling.** The discussion of a future brute-force `build()` that caches state (lines 108, 404) covers a case that does not exist.\n- **Full-suite \u00d73 run (line 335).** Parametrising the three end-to-end test files named at line 432 already meets the parity requirement.",
+   "location": "project-documents/user/slices/113-slice.adaptive-spatial-dispatch.md:256-307"
+  }
+ ]
+}

@@ -336,3 +336,53 @@ Notes:
 - 4 of the 43 cases come from response-edit pairs where the original review raised the flaws; the other 39 are flaws the original reviewer did not raise.
 - Slice designs are the weakest case for every config (best union 66%).
 - Recommendation from this data: haiku-xhigh as the cheap default review, fable-medium as a heavier second pass. Opus did not earn a place here.
+
+## 17. Writers, and fable-high as reviewer (2026-11-17)
+
+### Writers (design and tasks, `sq replay`)
+
+**Method:** `sq replay run` regenerates a slice's design or task breakdown in a sandbox under each producer config; reviewer fixed at haiku-xhigh, `--max-revisions 1`; `sq replay judge` with opus-high judges each pair of first drafts and the original in both orders. Scripts, logs, jobs and the saved report: `20261117-writers/` (`run.sh`, `stagger.sh`, `report-2026-11-17.txt`). The replay records themselves are in `~/.config/squadron/runs/replay-*.json`. Design: slices 924, 926, 929, 930, 931. Tasks: slices 924, 929, 930, 934. Slices were chosen from finished slices outside the review cases. Cost is API-equivalent on subscription.
+
+Design (19 pairs per config):
+
+| Writer | W-L-T | Strength | Cost/draft | Time |
+|---|---|---|---|---|
+| fable-medium | 14-2-3 | 4.57 | $4.88 | 16 min |
+| opus-high | 12-4-3 | 2.77 | $3.47 | 19 min |
+| original | 9-7-3 | 1.38 | | |
+| sonnet-high | 2-14-3 | 0.25 | $1.99 | 17 min |
+| haiku-xhigh | 2-12-2 | 0.23 | $0.95 | 21 min |
+
+Tasks (11 pairs for opus-high and original; fewer for the rest):
+
+| Writer | W-L-T | Notes |
+|---|---|---|
+| opus-high | 8-1-2 | 4 of 4 accepted |
+| fable-medium | 5-0-2 | only 2 drafts finished |
+| haiku-xhigh | 4-3-2 | 1 of 3 accepted |
+| sonnet-high | 1-5-0 | 1 of 3 failed outright |
+| original | 1-10-0 | |
+
+Notes:
+- Position consistency 84% on design (39 of 46) and 86% on tasks (19 of 22).
+- The judge model (opus-high) is also a contestant, so its own wins may be inflated; fable-medium still wins design.
+- Tasks: the strength fit did not converge (several configs won nearly every pair); use the W-L-T column.
+- Design: haiku-xhigh and sonnet-high lose to nearly everything and to the original. Haiku-xhigh is a good cheap reviewer (section 16) and a poor writer.
+- Tasks: every Claude writer except sonnet-high beat the original.
+- Parallel `sq replay run` calls collide in context-forge's project registry (`cf init` ENOENT on rename); starting jobs 20 s apart avoids it. Replay refuses slices whose start commit has a non-empty `.gitmodules` (slices before 2026-09-24).
+- A writer that ends its single revision round at FAIL is recorded as paused and counts against it.
+- Small sample: 5 design slices and 4 task slices, one judge.
+
+### fable-high as reviewer
+
+**Method:** the 43 mined cases of section 16, `sq review` with read tools, fable-high, 1 run. Graded blind with fable-medium and opus-high run 1 in the same batches as anchors (`20261116-mined/grade3/`, `score_fable_high.py`); 15 Sonnet agents, 3 cases each.
+
+| Config | Flaws found (of 82) | Arch (19) | Slice (32) | Tasks (31) |
+|---|---|---|---|---|
+| fable-high | 52 | 13 | 18 | 21 |
+| fable-medium | 49 | 14 | 14 | 21 |
+| opus-high | 43 | 12 | 14 | 17 |
+
+- Anchor check: grading the same fable-medium run again gave 49 (identical hits); opus-high 43 against 44 earlier.
+- fable-high found 3 more than fable-medium on one run, all of them slice flaws (18 against 14). The per-run spread of fable-medium over 3 runs was 43-49, so this is inside run-to-run noise.
+- One run only.

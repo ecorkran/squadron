@@ -1,0 +1,225 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "Unindexed `[~]` fixture line in Task 1 cannot match the parser",
+      "description": "Task 1 specifies the unindexed line as `7. [~] Feature Epsilon without explicit index \u2014 cut for scope.`, with no `**` around the name. `PLAN_UNINDEXED_RE` (`packages/core/src/introspection/parsers/slicePlanParser.ts:9`) requires `\\*\\*([^(].*?)\\*\\*`, and Task 2 forbids changing anything but the checkbox class.\n\n- **Effect:** the line stays silently dropped after the fix, so Task 5's unindexed assertions and its 7-entry / `completedSlices: 5` counts cannot pass.\n- **Cause:** Task 1's success text limits the bold wrap to \"the indexed form\", while the slice design defines the unindexed form as `N. [~] **Name** \u2014 rationale`.\n- **Fix:** write the line as `N. [~] **Feature Epsilon** \u2014 cut for scope.`",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/918-tasks.sliceplanparser-deprecated-entry-handling.md:40-41"
+    },
+    {
+      "severity": "FAIL",
+      "title": "Extending the shared fixture breaks existing tests that no task updates",
+      "description": "Once the unindexed line is corrected, it takes fallback index 1 (`slicePlanParser.ts:73-77`) and sorts ahead of 101 (`slicePlanParser.ts:91`). Adding both entries to `sample-slice-plan.md` then breaks these existing assertions:\n\n- `slicePlanParser.test.ts:10` \u2014 `toHaveLength(5)`.\n- `slicePlanParser.test.ts:12` and `:22` \u2014 `entries[0]` and `entries[2]` shift by one.\n- `slicePlanParser.test.ts:128` \u2014 \"every entry `indexSource: explicit`\" for this fixture.\n- `slicePlanParser.test.ts:166-167` \u2014 description assertions on `entries[0]` and `entries[1]`.\n- `packages/core/tests/introspection/ArtifactIntrospector.test.ts:52` \u2014 `totalSlices` `toBe(5)`.\n\nTask 5 updates only the counts at `:44-45`. Its success check runs only `-- slicePlanParser`, so its commit lands with `ArtifactIntrospector.test.ts` red, and nothing surfaces that until Task 13.\n\nThis also contradicts the slice design's last success criterion, that `[ ]`/`[x]`/`[X]` behaviour is \"proven by the existing `sample-slice-plan.md` fixture tests continuing to pass unchanged\".\n\n**Fix:** use the sibling-fixture option the design already allows, following the precedent of `mixed-index-slice-plan.md`. Leave `sample-slice-plan.md` untouched, then drop Task 5's count-update step and its added regression test.",
+      "file_ref": null,
+      "category": "sequencing",
+      "raw_category": null,
+      "location": "packages/core/tests/fixtures/introspection/sample-slice-plan.md"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Task 8's \"only caller passes a full SlicePlanEntry\" claim is wrong",
+      "description": "The only caller of `resolveEntryStatus` is `resolveEntryStatusSafe` (line 740), whose `entry` parameter is itself `Pick<SlicePlanEntry, 'index' | 'isChecked'>`. Widening only line 694 fails `tsc`, which contradicts Task 8's \"builds clean\". Add a sub-step to widen the `Pick` at line 736 as well, and correct the success note.",
+      "file_ref": null,
+      "category": "correctness",
+      "raw_category": null,
+      "location": "packages/core/src/introspection/WorkflowNavigator.ts:736"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Task 9's `derivedStatus` initializer change is unobservable scope creep",
+      "description": "Task 9 justifies the change by saying the initializer is \"the fallback used if `detectDocuments` throws\". It is not. The `try` either assigns at line 122 or the `catch` at lines 125-127 sets `'degraded'`, so the initial value never reaches output.\n\nThe step has no testable effect, and the design scopes `slice.ts` to \"the same one-line addition\". Cut the sub-step.",
+      "file_ref": null,
+      "category": "scope-creep",
+      "raw_category": null,
+      "location": "packages/cli/src/commands/slice.ts:91"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "MCP tool recomputes `completedSlices` from `isChecked`, with no task covering it",
+      "description": "The design assumes `completedSlices` is \"computed once, in the parser\". `introspection_slice_plan` recomputes it with `e.isChecked` whenever a worktree index range applies.\n\nAfter Task 4, worktree-filtered MCP results still exclude `[~]` entries from the count. That leaves the criterion \"`completedSlices` counts it as resolved (Decision 3)\" unmet on that path. Add a sub-step to Task 4 applying the same predicate there, ideally through one shared helper so the rule lives in one place, plus one assertion in `packages/mcp-server/tests/introspectionTools.test.ts`.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "packages/mcp-server/src/tools/introspectionTools.ts:117-120"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`arch-status-vs-plans` half of the ConsistencyChecker criterion has no test",
+      "description": "The success criterion names both `plan-status-vs-entries` and `arch-status-vs-plans`. Task 12 covers only the first.\n\nTask 12's \"complementary case\" (rule still fires when status is `in-progress`) traces to no criterion. Replace it with an `arch-status-vs-plans` no-false-positive case, modelled on the existing tests at `ConsistencyChecker.test.ts:879,912`.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/918-tasks.sliceplanparser-deprecated-entry-handling.md:199-212"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Commit markers are checkboxes, too frequent, and one is not at a green point",
+      "description": "- **Format:** all six markers (lines 105, 135, 179, 197, 212, 224-225) are `- [ ] Commit:` sub-items. They should be plain `**Commit**:` lines.\n- **Count:** six commits is heavy for roughly ten lines of production change. Three are enough: after Task 5, after Task 10 (covering Tasks 6-10), and after Task 12 (covering Tasks 11-12).\n- **Task 13:** the conditional \"if any uncommitted changes remain\" commit is not a defined point. Drop it.\n- **Test ordering:** Task 8's only test is Task 11, which runs after the Task 10 commit. Move Task 11 directly after Task 8 so the core wiring is tested before it is committed.",
+      "file_ref": null,
+      "category": "commit-markers",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/918-tasks.sliceplanparser-deprecated-entry-handling.md:105"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Task file is overweight for the slice",
+      "description": "Thirteen tasks cover four small production edits.\n\n- **Merge:** Tasks 2, 3 and 4 are three edits to one function in one file, sharing one test task. Make them one task.\n- **Cut:** Task 5's \"explicit regression test\" duplicates `slicePlanParser.test.ts:8-31`; the design says the existing tests are the proof.\n- **Cut:** Task 1's \"Note\" checkbox is not a checkable action, and its claim that a CLAUDE.md rule requires fixture-first ordering is not what that rule says.\n- **Cut:** Task 13's manual walkthrough repeats what Tasks 5, 10, 11 and 12 automate. Keep the build and full-test steps.",
+      "file_ref": null,
+      "category": "proportionality",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/918-tasks.sliceplanparser-deprecated-entry-handling.md:52-83"
+    },
+    {
+      "severity": "PASS",
+      "title": "Remaining success criteria trace to tasks, and code references check out",
+      "description": "- **Indexed and unindexed parsing:** Tasks 2, 3 and 5.\n- **Count arithmetic:** Tasks 4 and 5.\n- **`cf list slices` rendering and `isNext`:** Tasks 6, 7, 9 and 10.\n- **`cf next` skip:** Tasks 8 and 11.\n- **Dependency order:** parser, then derivation, then wiring; no cycles.\n- **Cited anchors exist:** `statusDerivation.test.ts:6-22`, `WorkflowNavigator.test.ts:1073`, the `writeSlicePlan` / `writeSliceDesign` helpers in `list-derived-status.test.ts`, and `slice.ts:124`.\n- **Load test:** the slice restates no NFR, so no load-test or CI-gating task is needed.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/918-tasks.sliceplanparser-deprecated-entry-handling.md"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Unindexed `[~]` fixture line in Task 1 cannot match the parser",
+      "location": "project-documents/user/tasks/918-tasks.sliceplanparser-deprecated-entry-handling.md:40-41",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "fail",
+      "category": "sequencing",
+      "raw_category": null,
+      "summary": "Extending the shared fixture breaks existing tests that no task updates",
+      "location": "packages/core/tests/fixtures/introspection/sample-slice-plan.md",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "correctness",
+      "raw_category": null,
+      "summary": "Task 8's \"only caller passes a full SlicePlanEntry\" claim is wrong",
+      "location": "packages/core/src/introspection/WorkflowNavigator.ts:736",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "scope-creep",
+      "raw_category": null,
+      "summary": "Task 9's `derivedStatus` initializer change is unobservable scope creep",
+      "location": "packages/cli/src/commands/slice.ts:91",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "MCP tool recomputes `completedSlices` from `isChecked`, with no task covering it",
+      "location": "packages/mcp-server/src/tools/introspectionTools.ts:117-120",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "`arch-status-vs-plans` half of the ConsistencyChecker criterion has no test",
+      "location": "project-documents/user/tasks/918-tasks.sliceplanparser-deprecated-entry-handling.md:199-212",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "concern",
+      "category": "commit-markers",
+      "raw_category": null,
+      "summary": "Commit markers are checkboxes, too frequent, and one is not at a green point",
+      "location": "project-documents/user/tasks/918-tasks.sliceplanparser-deprecated-entry-handling.md:105",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "concern",
+      "category": "proportionality",
+      "raw_category": null,
+      "summary": "Task file is overweight for the slice",
+      "location": "project-documents/user/tasks/918-tasks.sliceplanparser-deprecated-entry-handling.md:52-83",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "pass",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "Remaining success criteria trace to tasks, and code references check out",
+      "location": "project-documents/user/tasks/918-tasks.sliceplanparser-deprecated-entry-handling.md",
+      "location_verified": null
+    }
+  ],
+  "template_name": "tasks",
+  "input_files": {
+    "input": "project-documents/user/tasks/918-tasks.sliceplanparser-deprecated-entry-handling.md",
+    "against": "project-documents/user/slices/918-slice.sliceplanparser-deprecated-entry-handling.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/context-forge-918-tasks"
+  },
+  "timestamp": "2026-11-16T16:23:20.654779",
+  "model": "claude-fable-5-2",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 22,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-fable-5-2",
+  "answering_models": [
+    "claude-fable-5-2"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 9,
+    "in_fences": 0,
+    "in_section": 9,
+    "surviving": 9
+  },
+  "effort": "high",
+  "profile": "sdk",
+  "turns": 23,
+  "prompt_tokens": 460794,
+  "cached_tokens": 327191,
+  "cache_write_tokens": 133589,
+  "completion_tokens": 13718,
+  "reasoning_tokens": null,
+  "duration_seconds": 127.23195229214616,
+  "cost_usd": 2.7523220999999998,
+  "cost_basis": "provider"
+}

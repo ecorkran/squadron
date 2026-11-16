@@ -1,0 +1,189 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "PASS",
+      "title": "All slice success criteria trace to tasks",
+      "description": "- **Functional:**\n  - PASS on existing designs: Task 4T and the Task 5 parity sweep.\n  - FAIL with `missing:` lines and exit 1: Tasks 3T and 4T.\n  - Doctype failure: Tasks 3T and 4T.\n  - Multi-file ordering and exit 1: Tasks 3T and 4T.\n  - Exit 2 with empty stdout in both modes, including valid-before-missing and the `cf guides update` message: Tasks 3, 3T, 4 and 4T.\n  - `--json` contract: Tasks 4 and 4T.\n  - Worktree-scoped template: Tasks 4 and 4T.\n- **Technical:**\n  - The normalization unit-test list (case, whitespace, comments, parentheticals, placeholder prefix, level mismatch, fenced block, CRLF) is all in Task 2T.\n  - The real-template test asserting `## Overview` and `### Verification Walkthrough` is in Task 3T; both headings carry the marker in the installed template.\n  - The real-design command test including the 214 design is in Task 4T.\n  - Build, lint, full suite and the ~300-line limit are in Task 6.\n- **Integration:** the guide-repoint criterion is met by the command plus the Task 5 walkthrough and parity sweep.\n- **Scope creep:** none. The design's exclusions (`cf check` wiring, env override, guide-side edits) are restated as do-not-do items in the Context Summary.",
+      "file_ref": null,
+      "category": "coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md:41-134"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Commit steps are checkbox tasks, not plain `**Commit**:` markers",
+      "description": "Tasks 2C, 3C, 4C, 5C and 6C (lines 71, 94, 117, 126, 134) are written as `- [ ] **Task NC: Commit** \u2014 \u2026` checklist items. A commit checkbox can only be ticked after the commit it describes, which leaves either a dirty tree or a follow-up commit that only checks a box. Task 6's own success line (\"working tree clean after commit\", line 132) cannot hold once 6C is ticked.\n\nFix: replace each with a plain line, for example `**Commit**: feat(core): add slice design heading validator`, at the same five positions. The placement itself is right: each sits after an implementation and test pair, at a working, tested point.",
+      "file_ref": null,
+      "category": "commit-markers",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md:71"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Task 4T's setup pointer conflicts with its real-design tests",
+      "description": "Line 107 says to follow the setup in `validate.test.ts`. That file mocks the core validator and uses a fake project root (`projectPath: '/tmp/test'`, `packages/cli/tests/commands/validate.test.ts:18-29`). The real-design bullet on line 108 needs the opposite: the real core function, and a project whose resolved root is the repo root so the real template is found. A junior implementer following line 107 either mocks core, which makes the test meaningless against the slice's \"command test running real slice designs\" requirement, or gets exit 2 for a missing template under `/tmp/test`.\n\nTwo fixes, both one line each:\n- **Setup:** point the whole file at the `validate-worktree-scope.test.ts` pattern (real core, only `FileProjectStore` mocked), and state that the mocked project's `projectPath` is the repo root for the real-design cases. Line 114 already cites that file, but only for the worktree bullet.\n- **File selection:** line 108 says \"several files \u2026 that pass the bash script today\" without saying how to pick them. Add a step: run `project-documents/ai-project-guide/scripts/validate-slice-design` over `project-documents/user/slices/*-slice.*.md`, pick a few that print `PASS`, and hard-code those names. Otherwise a wrong pick fails the test before Task 5's sweep exists to explain it, and the implementer may loosen the validator to make it pass.",
+      "file_ref": null,
+      "category": "task-clarity",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md:107-108"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Task 5C's commit message does not fit a code fix",
+      "description": "Task 5 says an unexplained `DIFF` is a bug to fix with an added test, but the only commit message offered is `docs: record slice 214 parity sweep results`. Add a second message for the fix case, such as `fix(core): \u2026`, or say the type follows what changed.",
+      "file_ref": null,
+      "category": "commit-markers",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md:122-126"
+    },
+    {
+      "severity": "NOTE",
+      "title": "No test covers an unreadable file or unreadable template",
+      "description": "Task 3 implements the readable check, and Task 3T covers missing file, directory, missing template and no-marker template, but nothing exercises the unreadable case. The slice mandates only the valid-before-missing test, and permission tests are unreliable when CI runs as root, so this is acceptable as written.",
+      "file_ref": null,
+      "category": "test-coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md:91"
+    },
+    {
+      "severity": "PASS",
+      "title": "Sequencing and test-with pattern",
+      "description": "- **Order:** constant, pure validator, file layer, CLI, walkthrough, final validation. This matches the design's Development Approach and has no forward or circular dependencies.\n- **Test-with:** each of Tasks 2, 3 and 4 is immediately followed by its test task.\n- **Task 0:** it reads the integration target from config and does not assume it.\n- **Task 1:** its conditional \"add it there if the barrel lists names explicitly\" resolves cleanly, since `packages/core/src/guides/index.ts:24` does list names explicitly.\n- **Merge and push:** no merge or push appears as a task.",
+      "file_ref": null,
+      "category": "sequencing",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md:36-134"
+    },
+    {
+      "severity": "PASS",
+      "title": "Proportionality and NFR/load-test check",
+      "description": "- **Size:** one task file with six implementation or verification tasks and three test tasks, for three new source files and one constant. That fits the slice.\n- **Step detail:** the regex and normalization detail in Task 2 restates the design's contract and is not excess.\n- **Test tasks:** none go beyond what the success criteria need. The `#hashtag` and template-order cases in Task 2T trace to the design's heading-syntax decision and the \"written as in the template\" criterion.\n- **NFR:** the slice restates none, so no `tests/load/` task or CI gating task is required.",
+      "file_ref": null,
+      "category": "proportionality",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "pass",
+      "category": "coverage",
+      "raw_category": null,
+      "summary": "All slice success criteria trace to tasks",
+      "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md:41-134",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "commit-markers",
+      "raw_category": null,
+      "summary": "Commit steps are checkbox tasks, not plain `**Commit**:` markers",
+      "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md:71",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "task-clarity",
+      "raw_category": null,
+      "summary": "Task 4T's setup pointer conflicts with its real-design tests",
+      "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md:107-108",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "note",
+      "category": "commit-markers",
+      "raw_category": null,
+      "summary": "Task 5C's commit message does not fit a code fix",
+      "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md:122-126",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "test-coverage",
+      "raw_category": null,
+      "summary": "No test covers an unreadable file or unreadable template",
+      "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md:91",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "pass",
+      "category": "sequencing",
+      "raw_category": null,
+      "summary": "Sequencing and test-with pattern",
+      "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md:36-134",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "pass",
+      "category": "proportionality",
+      "raw_category": null,
+      "summary": "Proportionality and NFR/load-test check",
+      "location": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md",
+      "location_verified": null
+    }
+  ],
+  "template_name": "tasks",
+  "input_files": {
+    "input": "project-documents/user/tasks/214-tasks.native-slice-design-validation.md",
+    "against": "project-documents/user/slices/214-slice.native-slice-design-validation.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/context-forge-214-tasks"
+  },
+  "timestamp": "2026-11-16T16:21:11.819123",
+  "model": "claude-fable-5-2",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 26,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-fable-5-2",
+  "answering_models": [
+    "claude-fable-5-2"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 7,
+    "in_fences": 0,
+    "in_section": 7,
+    "surviving": 7
+  },
+  "effort": "high",
+  "profile": "sdk",
+  "turns": 27,
+  "prompt_tokens": 674013,
+  "cached_tokens": 537607,
+  "cache_write_tokens": 136386,
+  "completion_tokens": 12326,
+  "reasoning_tokens": null,
+  "duration_seconds": 118.11053283303045,
+  "cost_usd": 2.7835617,
+  "cost_basis": "provider"
+}

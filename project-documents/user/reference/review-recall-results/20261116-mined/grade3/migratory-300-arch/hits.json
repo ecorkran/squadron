@@ -1,0 +1,42 @@
+{
+ "case": "migratory-300-arch",
+ "flaws": [
+  {
+   "id": "F1",
+   "text": "100-arch (the parent) Scope lists \"the simulation tick loop\" and says \"the engine owns what happens between ticks\"; 300-arch Overview says the world s",
+   "hits": {
+    "r01": [
+     2
+    ]
+   }
+  },
+  {
+   "id": "F2",
+   "text": "Frontmatter `dependsOn: [001-concept.migratory, ...]` and Related Work link `../project-guides/001-concept.migratory.md`. At `ecd8f65^` the repo holds",
+   "hits": {
+    "r01": [
+     9
+    ],
+    "r02": [
+     12
+    ],
+    "r03": [
+     12
+    ]
+   }
+  },
+  {
+   "id": "F3",
+   "text": "Tick loop and asyncio coexistence: \"run the tick synchronously, then yield to the async event loop for I/O between ticks ... without the tick loop sta",
+   "hits": {
+    "r01": [
+     0
+    ],
+    "r02": [
+     1
+    ]
+   }
+  }
+ ],
+ "note": "F1: r02 #7 and r03 #9 cover only entity-lifecycle ownership, not the tick-loop ownership contradiction, so not counted; r03 #1/#10 touch tick/I-O but do not name the overrun-no-yield starvation."
+}

@@ -1,0 +1,26 @@
+{
+ "case": "migratory-140-arch",
+ "flaws": [
+  {
+   "id": "F1",
+   "text": "Current State: \"The wire protocol is currently uncompressed JSON over WebSocket ... 84 KB/tick (24 bytes x 3,500 agents)\", and Tier 2: \"Binary WebSock",
+   "hits": {
+    "r01": [
+     2
+    ],
+    "r02": [
+     2
+    ],
+    "r03": [
+     3
+    ]
+   }
+  },
+  {
+   "id": "F2",
+   "text": "Related Work says `100-arch.behavior-engine.md` \"Defines the `SpatialQuery` protocol, `BulkForce` interface, CSR edge representation, and profile-driv",
+   "hits": {}
+  }
+ ],
+ "note": "F2 (Related Work claims 100-arch defines SpatialQuery/BulkForce/CSR) is not named by any finding; findings on those interfaces concern GPU fit, not the doc-claim mismatch."
+}

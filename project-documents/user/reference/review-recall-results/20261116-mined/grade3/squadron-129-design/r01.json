@@ -1,0 +1,40 @@
+{
+ "review": "r01",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Logout and missing-extra paths for the auth commands have no failure handling",
+   "description": "`sq auth login`, `logout` and `status` each spawn the Codex runtime, but the failure table only covers the login wait and the `account()` call.\n- **Logout:** D7 defines turn, login and account timeouts, but nothing bounds runtime start plus `AsyncCodex.logout()`. There is no row for a hung or failed logout, and no stated exit code or message. A logout that fails quietly leaves the user believing credentials were removed.\n- **Extra missing on the auth commands:** the install-hint path is specified only for `create_agent` and `get_provider` (lines 76, 80, 122). The auth commands go strategy \u2192 `login.py`, which imports `openai_codex` inside the function. The criterion at line 190 (\"any `openai-oauth` use exits with an error containing the exact install command\") is therefore not shown to hold for `sq auth login` or `logout`.\n- **Status with a login but no extra:** a user with `~/.codex/auth.json` from the Codex CLI and no extra hits the `account()` path on every `sq auth status`. The row at line 126 handles \"timeout or SDK error\"; an `ImportError` is neither. The design should say whether this case skips the account lookup silently or shows the hint, rather than logging a WARNING on every run.\n- **Login runtime start failure:** the \"subprocess fails to start\" row is written for the turn path; say explicitly that it applies to login and logout too.\n\nAdd rows for these, and either a logout timeout key or a statement that `codex.account_timeout_s` covers logout.",
+   "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:116-135"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Version upper bound is both specified and declared undecided",
+   "description": "D1 gives the extra as `codex = [\"openai-codex>=0.159.3,<1\"]`, while the same sentence and line 231 say the upper bound \"is not decided here \u2026 PM to say whether to cap\". An implementer cannot tell which to write into `pyproject.toml`. An open Project Manager decision is also not a valid design step under the project rules. Pick one in the design: `<1` is defensible given the stated 0.x surface drift and the real-types drift test at line 200. Then delete the \"PM to say\" text.",
+   "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:97"
+  },
+  {
+   "i": 2,
+   "severity": "NOTE",
+   "title": "`--timeout` flag duplicates `codex.login_timeout_s`",
+   "description": "The slice plan entry asks for browser login and `--device-code`, not a per-invocation timeout. The config key already satisfies the no-magic-defaults rule, so `sq auth login --timeout` is a second control for the same value and can be cut along with its tests.",
+   "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:149"
+  },
+  {
+   "i": 3,
+   "severity": "NOTE",
+   "title": "Step 0 fallback check has no safe execution recipe",
+   "description": "Resolving the `OPENAI_API_KEY` fallback in this slice is justified by the no-silent-fallback principle, and both outcomes are specified. The procedure is the weak part: \"unset `~/.codex/auth.json`\" on the working machine logs the developer out, and the alternatives are \"a throwaway `CODEX_HOME`-style location only if the runtime supports one\" or \"a machine without a login\". State whether the runtime honors a relocated home directory, so the task breakdown gets a non-destructive step rather than a conditional.",
+   "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:232"
+  },
+  {
+   "i": 4,
+   "severity": "NOTE",
+   "title": "`sq model list` now loads every alias's provider",
+   "description": "D9 has `sq model list` call `ensure_provider_loaded` + `get_provider` for each alias's profile to test `isinstance(provider, ExtraRequirement)`. A listing command now depends on every provider module importing cleanly. The design should say what a row shows when a provider fails to load (for example, the row without a marker and a WARNING) so one broken provider does not abort the listing.",
+   "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:112"
+  }
+ ]
+}

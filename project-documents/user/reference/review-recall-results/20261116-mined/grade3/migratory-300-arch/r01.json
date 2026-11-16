@@ -1,0 +1,82 @@
+{
+ "review": "r01",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Tick loop starves the event loop exactly when overrunning",
+   "description": "Step 6 says \"Sleep for the remainder of the tick budget, or log an overrun warning\". The stated coexistence model (line 78) is \"run the tick synchronously, then yield to the async event loop for I/O between ticks\".\n\n- **Starvation on overrun:** the sleep is the only yield point. On an overrun there is no sleep, so a sustained overrun runs back-to-back synchronous ticks. WebSocket handshakes, pings, send-buffer drains and signal handling then never run. The \"simple\" degradation policy at line 88 (\"warn on overrun, continue at best effort\") turns this into a server that drops every client under load.\n- **Needed:** an unconditional yield per tick and a deadline-based schedule on a monotonic clock. Sleeping for a remainder accumulates drift.\n- **Step 5 inside a synchronous tick:** \"push the committed state to connected clients\" is an awaitable operation. The document does not say that distribution is enqueue-only, with per-client bounded queues drained by separate tasks.\n- **CPU cost on the loop thread:** serialization, and later per-client culling (line 108), is CPU-bound work that scales with client count. It is not counted in the tick budget.",
+   "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md:66"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Thread-offload \"upgrade path\" breaks tick-as-transaction and is not designed for",
+   "description": "\"Offloading the tick to a thread or process (NumPy releases the GIL)\" is presented as a drop-in upgrade. It is not one.\n\n- **Thread:** connection handlers that send \"the current world state on connection\" (line 68) would read arrays the tick thread is mutating. The \"between ticks, the world is consistent and queryable\" guarantee (line 39) then needs double-buffering or copy-on-commit, which the entity management design never mentions.\n- **GIL:** only NumPy's inner loops release it. The engine's Python-level orchestration, fancy indexing and allocation still contend with the event loop.\n- **Process:** this contradicts \"No inter-process communication\" (line 27). It needs shared-memory state arrays, which constrains how entity management allocates them from the first slice.\n\nIf this is the real escape hatch, the buffer-ownership model has to be decided now.",
+   "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md:78"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Entity lifecycle and tick ownership contradict the behavior engine architecture",
+   "description": "This document says the server \"assigns entity IDs, allocates space in the state arrays, and removes entities\" and that the engine \"does not manage the entity lifecycle itself\". The dependency `100-arch.behavior-engine.md` disagrees in three places:\n\n- Its narrow interface includes \"register/remove agents\" (line 81).\n- It puts \"the simulation tick loop\" in the engine's scope (line 21).\n- It claims the engine is \"stateless between ticks\" (line 70).\n\nTwo documents each claim the tick loop and lifecycle. Neither says who owns the spatial index, which is cross-tick state or a per-tick rebuild cost, or who rebuilds it after the server compacts arrays.\n\nAlso unspecified:\n\n- **Internal precision:** line 108 assumes 12 bytes per entity (float32 \u00d73) on the wire. The 24MB/500K figure implies 48 bytes per entity (float64 pos+vel). 100-arch leaves precision open. Who performs the conversion, and whether it happens per client per tick, is not stated.\n- **ID-to-index mapping:** removal either compacts arrays, so indices shift, or leaves holes, so the engine needs a liveness mask. The framing header (line 80: \"tick number, entity count, array layout descriptor\") carries no ID array. Clients cannot track identity across a removal, and the proposed deltas cannot be expressed.",
+   "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md:70"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Multi-resolution design contradicts \"state flows outward\", authoritative state, and replay",
+   "description": "Fidelity tiers are selected by observer proximity (\"entities near observers\", \"when an observer approaches\u2026 the aggregate disaggregates\").\n\n- **Client input drives simulation state:** which entities are evaluated, and so the trajectory of the world, depends on client viewports. This violates \"Nothing flows back from clients into simulation state\" (line 43). It also requires a client-to-server viewport message that the v1 protocol excludes.\n- **No single truth:** line 29 promises \"exactly one truth about where every entity is\". An aggregate has no per-entity positions. Disaggregation \"spawned from the statistical model\" fabricates them, so entity identity is destroyed and recreated.\n- **Replay breaks:** line 90 says logging \"initial state plus non-deterministic inputs\" is sufficient. That fails once observer positions are inputs, and they are not listed. Bitwise replay also does not survive the CuPy/CUDA tier or a change in thread count.\n- **Reduced-rate tier is underspecified:**\n  - \"1/4 or 1/16 rate with interpolated positions\" needs either a 4\u201316\u00d7 dt, which is an integration-stability problem that 100-arch flags at line 93, or extrapolation. Interpolation needs the next sample, which adds latency.\n  - The state arrays have no per-entity tier, last-evaluated tick or dt field.\n- **\"Region-aware entity management\"** (line 35) is claimed as a distribution enabler and never described anywhere.\n\nThe claim at line 112 that the design supports these \"from the start\" is not backed by any concrete extension point here. The only one is the subset mask in 100-arch.",
+   "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md:100-106"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Scaling section is disproportionate and out of this initiative's scope",
+   "description": "Lines 92\u2013112 cover multi-GPU partitioning, predictive partition rebalancing, 4M+ entities and murmuration merges across machines. The server they describe is \"single-process, full-resolution, and CPU-only\". The initiative plan assigns GPU, multi-resolution and distribution to initiative 620, and says it \"need not be designed proactively\".\n\nCut this section to a short constraints list: subset-evaluable tick, serializable SoA state, culling hook at distribution. Move the rest to 620.\n\nThe figures that remain are unvalidated and partly wrong for the stated stack:\n\n- **\"Memory is never the constraint\":** this counts only state arrays. At ~100 neighbors per entity, 500K entities give 50M neighbor pairs. NumPy pairwise temporaries (index pairs, 3-component float diffs) run to hundreds of MB to over 1GB per tick. Allocation and memory bandwidth become the first wall.\n- **\"2\u20134 cores saturated on spatial queries\":** NumPy elementwise ops, sorting and fancy-indexing are single-threaded. Using multiple cores needs explicit chunked threading or Numba/C, and neither is in the design.\n- **\"10K\u201350K comfortable on a single CPU\" at 20 tps:** that is 5M pair interactions in 50ms, in pure NumPy, with serialization sharing the budget. It needs a benchmark before it is called the \"initial operating range\".",
+   "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md:92-112"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "\"Persistent\" server has no persistence or recovery design",
+   "description": "The overview calls this \"the persistent backend process\", and the lifecycle principle says the server will \"persist state on shutdown\". Startup (line 57) only \"creates initial entity populations from configured profiles\". Gaps:\n\n- No load path and no snapshot format or location.\n- No crash-recovery story. Persisting on shutdown does not cover an unclean exit.\n- No anticipated slice. The slice plan puts save/load under Future Work.\n\nEither drop the persist-on-shutdown claim for v1, or define checkpoint cadence, format (shared with logging?) and resume semantics, including environment and seasonal state and the tick counter.",
+   "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md:45"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "Failure behavior is asserted but never defined",
+   "description": "\"No silent failures, no undefined states\" is stated, and no failure mode is specified. Undefined cases:\n\n- The engine raises mid-tick. Tick-as-transaction implies discarding the partial result. Does the server halt, skip, or retry?\n- NaN or inf in returned arrays.\n- Entities exiting world bounds. No boundary policy (wrap, clamp, reflect) is given, though bounds feed spatial hashing.\n- A spawn exceeds the pre-allocated capacity.\n- A log write fails or the disk fills.\n- A subsystem fails during ordered startup.\n- **Lifecycle event source:** line 64 mentions events \"queued during the tick\". With no client commands, no admin interface and an engine that does not own lifecycle, nothing in the design produces a runtime spawn or removal. \"Removes entities when appropriate\" (line 70) is undefined.",
+   "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md#architectural-principles"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "Load-bearing decisions are left as option lists",
+   "description": "Each of these shapes interfaces that other initiatives (600 client, 320 logging) depend on, and each ends without a decision:\n\n- Snapshots versus deltas: \"or full snapshots if the delta approach proves premature\".\n- Slow-client policy: \"buffering, dropping frames, or disconnecting\u2026 are all strategies to consider\".\n- Overrun policy: three options, of which \"reducing tick rate dynamically\" conflicts with fixed timestep unless dt stays fixed.\n- Log content: \"The right balance depends on actual usage patterns\".\n- Config format: \"YAML or similar\", with no validation mechanism.\n- WebSocket library: none named.\n- Spatial dimensionality: 2D or 3D is never stated, and only inferable from \"12 bytes each\".\n- Whether velocities are streamed.\n\nFor v1, pick full snapshots, drop-to-latest per client, and fixed dt with warning. Record them as decisions.",
+   "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md#technical-considerations"
+  },
+  {
+   "i": 8,
+   "severity": "CONCERN",
+   "title": "Scope overlaps initiatives 320 and 500, and contradicts the document's own orchestrator principle",
+   "description": "- **Internal contradiction:** line 41 says the server \"does not\u2026 generate terrain\" and line 33 says \"it does not duplicate their logic\". The slices then include \"Environment layer foundation \u2014 Terrain generation, resource placement, and the read-only query interface\" and \"Seasonal and temporal systems\".\n- **Overlap with the plan:** the initiative plan gives terrain, resources and seasonal logic to (500) Environment Layer, and logging and replay to (320).\n- **Missing boundary:** the document should say this architecture owns hosting and orchestration only (calling update, passing context, a world clock), plus a serialization hook for the logger. That is what the derived slice plan ended up doing in 304 and 308.\n\nThe slice list also has no serialization or wire-protocol slice, although the Technical Considerations treat it as central to both streaming and logging.",
+   "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md#anticipated-slices"
+  },
+  {
+   "i": 9,
+   "severity": "NOTE",
+   "title": "Broken concept reference in frontmatter and Related Work",
+   "description": "`dependsOn: [001-concept.migratory, \u2026]` and the link `../project-guides/001-concept.migratory.md` point at a file that does not exist. The concept is `000-concept.migratory.md`, and `001` is the initiative plan. In the other direction, 100-arch links to this document as `200-arch.world-server-foundation.md`. Fix both so the dependency chain resolves.",
+   "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md:132"
+  },
+  {
+   "i": 10,
+   "severity": "NOTE",
+   "title": "Wall-clock timestamp in the tick record",
+   "description": "\"Record tick number and timestamp\" is fine for metrics. The document should state that simulation time is derived only from tick number \u00d7 fixed dt, and that wall-clock time never reaches the engine or the environment's seasonal progression. Otherwise the determinism and replay claim at line 74 is unsupported.",
+   "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md:61"
+  }
+ ]
+}

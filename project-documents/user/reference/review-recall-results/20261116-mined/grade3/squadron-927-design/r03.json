@@ -1,0 +1,40 @@
+{
+ "review": "r03",
+ "findings": [
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "An imposed CONCERNS feeds a fix prompt that code changes cannot satisfy",
+   "description": "D4 (line 137) only looks at the `on-concerns` checkpoint. It does not look at `loop:` bodies. Under slice 910 Part A, a loop gating on `until: review.pass` hands the last review's findings to the next dispatch as a fix prompt. When the diff is truncated and the reviewer made no tool calls, that prompt will contain the synthetic `review-coverage` finding (\"Raise review.max_file_size_bytes, narrow the diff, or use a tool-enabled model\"). The implementing agent cannot fix that by editing code. The truncation condition stays true, or gets worse as fixes add lines to the diff, so the loop spends every iteration and then exhausts.\n\nIn the other direction, `until: review.concerns_or_better` exits successfully on the imposed CONCERNS. That fits what CONCERNS means, but the design should say so.\n\nIntegration Points should state what happens on both loop conditions. For the `review.pass` case, pick one:\n- keep the `review-coverage` finding out of the fix prompt, or\n- accept that the loop exhausts, and say that `on_exhaust: checkpoint` is the expected outcome.\n\nAdd a success criterion for whichever is chosen.",
+   "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md#integration-points"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "`model_substituted: false` states something nobody measured when the provider reports no model",
+   "description": "D10 says JSON always carries `model_substituted`, as `false` when it does not apply. D11 (lines 198-202) covers providers that report nothing, such as Codex. In that case `answering_models` is `[]` and nothing was measured, yet JSON would still say `model_substituted: false`. The design's own convention (line 216) is that \"`None` means 'not reported' and is never replaced by a plausible value\", and the project rule forbids silent fallback values. A program reading `--output json` cannot tell \"verified the same model\" from \"provider never said\".\n\nSet `model_substituted` to `null` when `answering_models == []`. That needs one extra branch in the property. Frontmatter has a similar gap: a missing `requestedModel` does not show the \"not reported\" case. D11 chose that deliberately and records it in the Run Digest, so it needs no change. JSON has no such reason to report a value nobody measured.",
+   "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:193"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "The `answering_models` metadata key is a bare string in three places",
+   "description": "Line 217 makes metadata keys \"string literals, matching the existing `stop_reason`/`tools_given` stamps\". The new key `answering_models` is written by two providers and read in `TurnCapture`'s folding loop (D8, line 174). That is a lookup value in three places, which the project rule forbids: \"define it once (enum, constant, or config) and reference that definition everywhere.\" If one copy is mistyped, `answering_models` comes back empty. D11 would then report \"not reported\", which is exactly the silent wrong answer this slice is meant to remove. Copying the existing pattern does not make it acceptable.\n\nDefine the new key as a module constant that both providers and `turn_capture` import, as the design already does for `<synthetic>` and the snapshot regex. Moving the existing keys over can be left for later.",
+   "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:217"
+  },
+  {
+   "i": 4,
+   "severity": "NOTE",
+   "title": "Any successful tool call turns off the cap; the Value statement claims more than that",
+   "description": "The Value section says a PASS will mean the model \"saw the whole diff or read files with its tools\". D4 (line 131) counts any successful tool call. A single Glob or Grep therefore turns off the cap even if no file was read. The plan's wording is \"did read files\". Count-only tool telemetry probably can't separate read tools from others, so the rule is a reasonable approximation. Restate the Value line as \"made at least one successful tool call\" so that context-forge and Amoeba are not told more than the slice guarantees.",
+   "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:27"
+  },
+  {
+   "i": 5,
+   "severity": "NOTE",
+   "title": "`impose_diff_coverage` is called \"pure\" but changes the result in place",
+   "description": "The component table calls it \"pure and unit-testable\". D4 has it set `verdict` and `verdict_source` and insert a finding at the front, all on `result` itself. Either return a new result, or describe it as a function that only touches `result` (no I/O, no other state). That avoids confusion in the tasks phase.",
+   "location": "project-documents/user/slices/927-slice.review-artifacts-state-what-happened-diff-truncation-and-the-model-that-answered.md:69"
+  }
+ ]
+}

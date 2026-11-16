@@ -1,0 +1,82 @@
+{
+ "review": "r02",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "FAIL",
+   "title": "Outer loop stays in spawn order, so warp coalescing will not happen",
+   "description": "The whole case for the slice is that coherent reads \"coalesce across warp threads\" (lines 17, 21, 130, 286). But the force kernel still gives one thread to each agent `i` in original spawn order (lines 123, 322). Adjacent threads in a warp are therefore agents that are unrelated in space, sitting in different cells. Each thread walks its own `[start, end)` range of the coherent arrays, so in a given iteration the warp reads from up to 32 unrelated addresses. That is better cache locality within each thread. It is not coalescing across the warp. The Hoetzlein / FRNN approach the slice cites works because threads are assigned in cell-sorted order.\n\nThe reason given for rejecting the coherent outer loop (line 165) is that a scattered writeback \"is just as bad as the original gather problem\". That doesn't hold. The writeback is 4 scattered writes per agent; the gather is ~1400 scattered reads per agent (line 138). The eviction-coalescing claim (line 169) has the same flaw: different threads evict different slots at different times.\n\nFix before task breakdown. Either iterate the outer loop over coherent slots and scatter the 4 writebacks through `_coherent_to_original`, or restate the expected gain as cache locality only and re-derive whether the N=200k gate is reachable. As written, the load-bearing gate (criterion 4) depends on a mechanism this design doesn't provide.",
+   "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md:159-165"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Slice changes its slice plan contract without updating the plan",
+   "description": "The slice plan entry (`140-slices.simulation-scaling.md:56`) sets these exit criteria:\n- \"k-nearest TPS at N=200k within 20% of **k-first** TPS\"\n- \"**no regression on k-first path**\"\n\nThe slice instead:\n- removes `k_first` entirely (scope item 7)\n- adds a new `radius_only` mode that the plan doesn't mention (scope item 8)\n- re-bases the gate on `radius_only` (criterion 4)\n\nThe rationale may be sound, but dropping a criterion the plan assigns and adding a user-visible mode are both contract changes. Update the slice plan entry in the same change so that the plan and the slice agree on the gate. The plan entry also says k-nearest \"via FRNN (collect-then-sort)\". The slice explicitly defers FRNN (line 75), and the plan text should say so too.",
+   "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md#technical-scope"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "`k_first` removal sequence contradicts itself",
+   "description": "The doc gives three incompatible accounts:\n- **Lines 67 and 199:** `k_first` raises `ConfigurationError` at parse time, with \"no silent migration\".\n- **Line 433:** `k_first` is \"still parsed, with a deprecation warning\" until the final commit.\n- **Development Approach step 2 (line 442) and the AFTER code block (line 283):** the kernel's `k_first` branch is removed before the default flip in step 4.\n\nBetween steps 2 and 4, the default config value (`k_first`) maps to a kernel mode that no longer exists. Nothing says what it runs. Pick one sequence. For example: remove the kernel branch and the config value together and raise the error, or keep the branch until the final commit.",
+   "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md:433"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "What ships if the N=200k gate fails is not defined",
+   "description": "The default flips to `k_nearest` only \"once the TPS gate is met\" (lines 67, 197, 349). If the gate fails because selection cost dominates, line 395 says the FRNN follow-up is \"the correct response, not a fix to this slice\". That implies the slice can land with the gate unmet. Meanwhile `k_first` is removed unconditionally (scope item 7). In that outcome the default value is unspecified: `k_first` no longer exists and `k_nearest` hasn't qualified.\n\nState the outcome for a failed gate. Either the slice does not merge, or it merges with an explicitly named default and the follow-up is recorded in the slice plan.",
+   "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md:395"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Parent TPS requirement not restated; tier N misquoted",
+   "description": "The architecture sets tier gates at 60 TPS on CUDA (`140-arch.simulation-scaling.md:28`) and defines Tier 3 as **250k** (`140-arch.simulation-scaling.md:74`). The slice calls Tier 3 \"N=200k\" (lines 17, 44). Its only gates are relative (`k_nearest` \u2265 0.8 \u00d7 `radius_only`, plus a sanity check at 10k), so it never states an absolute TPS target for this path.\n\nRestate the architecture's figure (60 TPS at the tier N on CUDA) and say how this slice relates to it. It can be a non-gating target for this slice, but it should be written down, so that a 200k result passing the relative gate at, say, 5 TPS isn't read as progress toward Tier 3.",
+   "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md:17"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "New `radius_only` mode has no behavioral check",
+   "description": "The architecture requires that \"every optimization must produce outputs verifiable against the current NumPy implementation\" (`140-arch.simulation-scaling.md:26`). `radius_only` is a new user-selectable mode in `ComputeConfig`, but criterion 3 measures only its TPS (\"no pass/fail\"). Parity (criterion 2) and the visual check (criterion 5) cover only `k_nearest`.\n\nAdd a parity check for `radius_only` against the NumPy reference run uncapped. Or, if the mode is meant only as a bench measurement, keep it out of the production `ComputeConfig`.",
+   "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md#functional-requirements"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "Headroom workloads are used but not in scope",
+   "description": "Criterion 4 (line 358) and Verification step 5 run `mid-flock-500k` and `mid-flock-1M`. The scope adds only `mid-flock-200k` (line 367, line 452). Either add the two workloads to scope or drop the 500k/1M runs. Separately, line 367 says `mid-flock-200k` is CUDA-only because of the \"memory budget\". That conflicts with the slice's own 5.6 MB figure (line 226) and the architecture's statement that memory is not a constraint (`140-arch.simulation-scaling.md:94`). Give the real reason, which is presumably the CUDA-only performance gates.",
+   "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md:397-402"
+  },
+  {
+   "i": 7,
+   "severity": "NOTE",
+   "title": "Extra per-tick host sync contradicts the State Management section",
+   "description": "Line 146 says synchronization is implicit at kernel boundaries in `graph=True` mode. The `build_spatial_hash` snippet then adds an explicit `qd.sync()` after the reindex, which costs a host round-trip every tick. Drop it, or explain why it's needed.",
+   "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md:344"
+  },
+  {
+   "i": 8,
+   "severity": "NOTE",
+   "title": "Minor internal inconsistencies",
+   "description": "- Line 93 says \"No file outside the GPU compute path is touched\", but lines 349 and 414 edit `migratory_server/config.py` and `bench/workload.py`.\n- Line 461 says writebacks \"scatter to `_px[i]`\"; line 331 says they are sequential and coalesced.\n- Risk 4 (line 427) says the new fields share the originals' `dense` group; the snippet (lines 216\u2013223) uses separate `qd.root.dense` calls.\n- Line 138 calls the reindex a \"scatter\"; it is a gather (scattered reads, sequential writes).\n- Line 67 says slice 150 has \"two modes\"; line 273 says \"three modes\".\n- The branch name on line 439 leaves out the `slice.` segment that the `{index}-slice.{name}` convention requires.",
+   "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md"
+  },
+  {
+   "i": 9,
+   "severity": "NOTE",
+   "title": "Slice plan shows slice 150 as incomplete",
+   "description": "The slice says slice 150 shipped on `main` on 2026-05-05, but the slice plan still lists (150) as `[ ]` (`140-slices.simulation-scaling.md:52`). Update the plan so the dependency status is unambiguous.",
+   "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md:81"
+  },
+  {
+   "i": 10,
+   "severity": "NOTE",
+   "title": "Background material could be trimmed",
+   "description": "The reference-point section (lines 36\u201344), the FRNN discussion (lines 187\u2013193) and the Future Work FRNN item repeat the same 16M-boid aspiration three times. One short paragraph would do; the rest belongs in the FRNN follow-up slice.",
+   "location": "project-documents/user/slices/152-slice.coherent-grid-for-k-nearest-neighbor-search.md:36-44"
+  }
+ ]
+}

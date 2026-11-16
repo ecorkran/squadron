@@ -1,0 +1,296 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "\"Tick as transaction\" has no commit mechanism, and the engine contract contradicts it",
+      "description": "The principle promises an atomic \"read current state, compute next state, commit\", and step 4 says \"Apply the updated entity state as the new canonical state\". The document never says how: double buffer, copy-on-commit, or in-place.\n\n- **Contract mismatch:** 100-arch says the engine \"Returns the updated state array\". The integrated code (`src/migratory/engine/tick.py`) mutates `state` in place and returns `None`, so there is no separate commit step.\n- **Failure mode:** an exception mid-tick leaves positions half-integrated, with no rollback.\n- **Ordering:** step 2 advances the environment before step 3 can fail, so even with a buffered entity commit the tick is not atomic across subsystems.\n\nThe document must pick a model (in-place with no atomicity claim, or front/back buffers swapped at commit) and state what a failed tick does. The asyncio upgrade path, new-client snapshots and logging all depend on that choice.",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md#architectural-principles"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Tick/asyncio coexistence is the central technical risk and its upgrade path is not valid as written",
+      "description": "\"Run the tick synchronously, then yield to the async event loop\" blocks the loop for the whole tick duration (up to 50 ms at 20 tps, unbounded on overrun). During that time no handshakes, pings, or send-buffer drains happen.\n\n- **Overrun starves I/O:** on overrun the document says \"log \u2026 and continue\", and `src/migratory_server/tick.py` skips `asyncio.sleep` entirely in that branch. Sustained overrun therefore gives the event loop zero time, the opposite of the stated goal that the tick loop not starve I/O.\n- **Thread offload premise is weak:** \"offloading the tick to a thread or process (NumPy releases the GIL)\" assumes the tick is mostly inside NumPy. The engine's neighbor query is a Python-level per-agent loop that holds the GIL, so a thread would not free the loop.\n- **Process offload is unspecified:** it needs shared-memory state arrays, which the document does not mention.\n- **Thread offload breaks a stated guarantee:** \"Between ticks, the world is consistent and queryable\" fails without the publication mechanism missing from the commit-model finding above; a connecting client would snapshot arrays mid-mutation.\n- **Step 5 placement is ambiguous:** \"State distribution\" is listed inside the tick cycle, but sends are awaitable and \"between ticks\" is where I/O is said to happen. The document should say whether distribution is inside the measured tick budget.",
+      "file_ref": null,
+      "category": "technology",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md#technical-considerations"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Client streaming design defers every load-bearing decision and the delta fallback does not work for this workload",
+      "description": "- **Slow clients:** \"buffering, dropping frames, or disconnecting unresponsive clients are all strategies to consider\" is not a decision. The policy (bounded per-client queue, latest-frame-wins, disconnect threshold) determines whether `send` can stall the tick. It must also be observable; the document names no log or metric for dropped frames.\n- **Deltas:** \"Ongoing clients may receive deltas for efficiency\" assumes most state is unchanged between ticks. In a flocking simulation every position changes every tick, so a delta is the same size as a snapshot unless quantized.\n- **Missing levers:** the document never decouples send rate from tick rate (for example 5\u201310 Hz with client-side extrapolation from velocities), and does not mention quantization or compression.\n- **No WebSocket library named:** \"well-served by asyncio\" overlooks that the stdlib has no WebSocket implementation, and `pyproject.toml` declares none. The library choice fixes the backpressure semantics the slow-client policy depends on.\n- **No access control:** there is no connection cap, origin check, or auth in the design or the configuration surface, although the concept anticipates public observers.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md#technical-considerations"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Network egress is a wall inside the stated initial operating range, not only at 500K",
+      "description": "The document ranks network egress second and illustrates it at 500K entities (120 MB/s). The same arithmetic (12 bytes \u00d7 20 tps) applied to the \"comfortable\" 10K\u201350K range gives 2.4\u201312 MB/s per client, about 19\u201396 Mbit/s, for positions only. That is already impractical for a few remote browser observers.\n\nThe only mitigation offered is per-client frustum culling, which the document frames as a 500K-scale concern. So the v1 design of \"push full snapshots each tick\" does not support the v1 entity range beyond localhost. The foundation needs a cheap answer here, which the send-rate and quantization levers in the streaming finding above would provide.",
+      "file_ref": null,
+      "category": "feasibility",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md#technical-considerations"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Scaling tiers rest on unvalidated and partly incorrect performance claims",
+      "description": "- **\"10K\u201350K: comfortable on a single CPU with NumPy-vectorized spatial hashing\"** at 20 tps with ~100 neighbors means 1\u20135M pair interactions per 50 ms tick. Gather, difference, norm and scatter-add over 5M pairs in NumPy is unlikely to fit that budget. The integrated implementation uses `BruteForceQuery` with a per-agent Python loop, so the stated initial range has no basis in what exists.\n- **\"50K\u2013500K: requires 2-4 cores saturated on spatial queries\"** has no mechanism. A single Python process cannot spread NumPy hashing and fancy indexing across cores, and this contradicts the \"Single-process simplicity\" goal.\n- **\"Memory is never the constraint\"** counts only state arrays (48 B/entity). Vectorized neighbor evaluation at 500K \u00d7 100 neighbors needs about 400 MB of index arrays and roughly 1 GB per pairwise float64 temporary. Memory bandwidth is the practical limit of the NumPy approach.\n\nThese numbers should be marked as hypotheses with a benchmark gate, or removed.",
+      "file_ref": null,
+      "category": "feasibility",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md#technical-considerations"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Multi-resolution simulation contradicts the document's own v1 principles",
+      "description": "The document says \"the key architectural decision now\" is that entity management and the tick loop \"support aggregation and variable-rate ticking from the start\". It specifies nothing that would do so: no fidelity-tier field, no aggregate entity representation, no observer concept. The strategy also conflicts with three stated commitments:\n\n- **Unidirectional flow:** fidelity is selected by \"entities near observers\", which makes client viewport an input to simulation state. That violates \"State flows outward \u2014 Nothing flows back from clients into simulation state\" and \"Clients receive state; they do not contribute to it\".\n- **Replay:** observer-dependent evaluation and disaggregation \"spawned from the statistical model\" make the simulation depend on who was watching. \"Given a log and the same configuration, the simulation can be reconstructed\" then fails unless observer positions and disaggregation RNG are logged inputs.\n- **Authoritative state:** \"exactly one truth about where every entity is\" is false for aggregated entities, which have no individual position.\n\n\"Region-aware entity management\" appears in Design Goals and nowhere else in the document.",
+      "file_ref": null,
+      "category": "extension-points",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md#technical-considerations"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Architecture is overweight on scaling and overlaps scope the initiative plan assigns to 320, 500 and 620",
+      "description": "The \"Entity scaling and multi-resolution simulation\" bullet is roughly a third of the document. It covers GPU kernels, multi-GPU partitioning, predictive partition rebalancing and merging 500K murmurations, for a foundation whose goal is \"Distribution-compatible without distribution machinery\". The initiative plan gives this to (620) and says it \"need not be designed proactively\".\n\n- **Cut:** the tier table, the GPU and multi-GPU path, and the group-encounter discussion. Replace them with the two actual constraints on 300: the tick accepts an active subset, and array layout does not preclude aggregation.\n- **Logging and replay** is an Anticipated Slice here but is initiative (320) in the plan. Reduce it to the hook 300 must expose (a post-commit tick observer).\n- **Environment and seasons:** the slices \"Environment layer foundation \u2014 Terrain generation, resource placement\" and \"Seasonal and temporal systems\" belong to (500). They also contradict this document's own principle that the server \"does not compute flocking forces or generate terrain\". 300 should own only environment hosting, the tick-order call, and the world clock.",
+      "file_ref": null,
+      "category": "antipattern",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md#technical-considerations"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Entity lifecycle and state-array ownership conflict with the behavior engine architecture",
+      "description": "- **Lifecycle interface:** this document says the server \"assigns entity IDs, allocates space in the state arrays\" and the engine \"does not manage the entity lifecycle itself\". 100-arch gives the engine \"Agent state representation\" and an interface to \"register/remove agents\", and promises that array layout is \"hidden behind these interfaces\".\n- **Leaked layout:** the server's raw-buffer serialization exposes the engine's layout and dtype to the wire and log formats. The code shows the leak: `EntityManager` imports `AgentState` and reassigns its arrays directly.\n- **Unstable indices:** removal shifts array indices (`np.delete`), and the framing protocol (\"tick number, entity count, array layout descriptor\") carries no entity IDs or profile indices. A client cannot track an entity across a removal or choose a render skin.\n- **No pre-allocation:** \"Entity capacity determines array pre-allocation sizes\" is not reflected in the code; arrays are reallocated on every spawn and removal.\n- **Undefined triggers:** \"removes entities when appropriate\" names no trigger. With no client commands in v1, the only plausible source is the engine (predation), which has no channel to emit lifecycle events back to the server.",
+      "file_ref": null,
+      "category": "abstraction",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md#envisioned-state"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Environment is \"read-only\" but required behaviors write to it",
+      "description": "The environment is exposed \"through a read-only query interface\", and the six-step tick has no agent-to-environment write step. The concept's swarm archetype (\"paths reinforced through use\") and any resource depletion by grazing require agents to modify the environment each tick.\n\nThe slice plan's (304) already adds \"post-tick environment writes (e.g., stigmergic trail deposits)\", so the architecture is behind its own plan. The tick cycle needs an explicit write-back step. Because the engine is pure, it also needs a defined return channel for deposit and consumption events.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md#envisioned-state"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Replay claim is missing its inputs: no simulation seed, no determinism boundary",
+      "description": "\"Given a log and the same configuration, the simulation can be reconstructed tick-by-tick\" depends on things the document does not provide.\n\n- **No simulation seed:** the configuration surface lists only a terrain/environment seed. Initial placement is random, and `spawn_population` defaults to an unseeded `default_rng()`.\n- **No determinism boundary:** bit-level reproducibility across NumPy versions, SIMD builds and platforms is not addressed.\n- **Simulated time is implicit:** the document should state that simulated time is `tick \u00d7 dt`, never wall-clock. This matters because \"reducing tick rate dynamically\" is listed as a degradation option, and the recorded tick \"timestamp\" is wall time.\n\n\"The right balance depends on actual usage patterns\" also leaves the choice between event log and snapshot log open. That choice decides whether determinism is a hard requirement.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md#technical-considerations"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "\"Explicit lifecycle\" asserts defined error and persistence behavior that the document never defines",
+      "description": "- **Persistence:** the principle claims the server knows how to \"persist state on shutdown\", and the Overview calls it \"the persistent backend process\". Startup always \"creates initial entity populations from configured profiles\". No load path, format, or slice exists; the slice plan lists save/load as Future Work.\n- **Error states:** \"No silent failures, no undefined states\" is stated, but no error state is enumerated. Unspecified cases include:\n  - the engine tick raising an exception;\n  - NaN or out-of-bounds positions;\n  - environment update failure;\n  - a queued spawn exceeding capacity mid-run;\n  - a log write failing.\n\nEither drop the persistence claim from v1 or design it. In both cases, list the tick-failure policy (halt, or skip and count).",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md#architectural-principles"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Configuration and logging terminology are underspecified against project rules",
+      "description": "- **Validation library:** \"File-based (YAML or similar) \u2026 validated\" names no mechanism. The project's Python rules require Pydantic at file-parsing boundaries, and `pyproject.toml` has only `pyyaml`.\n- **Config reach:** \"Configuration is loaded at startup and available to all subsystems\" reads as a global config object. The engine is a pure library and should receive narrow per-subsystem values, not depend on server configuration.\n- **\"Logging\" means two things:** the document uses the word for operational logs (overrun warnings) and for simulation state capture and replay. These have different sinks, formats and failure policies and should be named separately.",
+      "file_ref": null,
+      "category": "technology",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md#technical-considerations"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Concept reference is broken",
+      "description": "The frontmatter `dependsOn: [001-concept.migratory, \u2026]` and the link `../project-guides/001-concept.migratory.md` point to a file that does not exist. The concept is `000-concept.migratory.md`; index 001 is the initiative plan. In the other direction, 100-arch links to this document as `200-arch.world-server-foundation.md`.",
+      "file_ref": null,
+      "category": "other",
+      "raw_category": null,
+      "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md#related-work"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "\"Tick as transaction\" has no commit mechanism, and the engine contract contradicts it",
+      "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md#architectural-principles",
+      "location_verified": null
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "technology",
+      "raw_category": null,
+      "summary": "Tick/asyncio coexistence is the central technical risk and its upgrade path is not valid as written",
+      "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md#technical-considerations",
+      "location_verified": null
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "Client streaming design defers every load-bearing decision and the delta fallback does not work for this workload",
+      "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md#technical-considerations",
+      "location_verified": null
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "feasibility",
+      "raw_category": null,
+      "summary": "Network egress is a wall inside the stated initial operating range, not only at 500K",
+      "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md#technical-considerations",
+      "location_verified": null
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "feasibility",
+      "raw_category": null,
+      "summary": "Scaling tiers rest on unvalidated and partly incorrect performance claims",
+      "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md#technical-considerations",
+      "location_verified": null
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "extension-points",
+      "raw_category": null,
+      "summary": "Multi-resolution simulation contradicts the document's own v1 principles",
+      "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md#technical-considerations",
+      "location_verified": null
+    },
+    {
+      "id": "F007",
+      "severity": "concern",
+      "category": "antipattern",
+      "raw_category": null,
+      "summary": "Architecture is overweight on scaling and overlaps scope the initiative plan assigns to 320, 500 and 620",
+      "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md#technical-considerations",
+      "location_verified": null
+    },
+    {
+      "id": "F008",
+      "severity": "concern",
+      "category": "abstraction",
+      "raw_category": null,
+      "summary": "Entity lifecycle and state-array ownership conflict with the behavior engine architecture",
+      "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md#envisioned-state",
+      "location_verified": null
+    },
+    {
+      "id": "F009",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "Environment is \"read-only\" but required behaviors write to it",
+      "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md#envisioned-state",
+      "location_verified": null
+    },
+    {
+      "id": "F010",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "Replay claim is missing its inputs: no simulation seed, no determinism boundary",
+      "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md#technical-considerations",
+      "location_verified": null
+    },
+    {
+      "id": "F011",
+      "severity": "concern",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "\"Explicit lifecycle\" asserts defined error and persistence behavior that the document never defines",
+      "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md#architectural-principles",
+      "location_verified": null
+    },
+    {
+      "id": "F012",
+      "severity": "note",
+      "category": "technology",
+      "raw_category": null,
+      "summary": "Configuration and logging terminology are underspecified against project rules",
+      "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md#technical-considerations",
+      "location_verified": null
+    },
+    {
+      "id": "F013",
+      "severity": "note",
+      "category": "other",
+      "raw_category": null,
+      "summary": "Concept reference is broken",
+      "location": "project-documents/user/architecture/300-arch.worldserver-foundation.md#related-work",
+      "location_verified": null
+    }
+  ],
+  "template_name": "arch",
+  "input_files": {
+    "input": "project-documents/user/architecture/300-arch.worldserver-foundation.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/migratory-300-arch"
+  },
+  "timestamp": "2026-11-16T16:25:17.836061",
+  "model": "claude-fable-5-2",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 14,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-fable-5-2",
+  "answering_models": [
+    "claude-fable-5-2"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 13,
+    "in_fences": 0,
+    "in_section": 13,
+    "surviving": 13
+  },
+  "effort": "high",
+  "profile": "sdk",
+  "turns": 15,
+  "prompt_tokens": 320295,
+  "cached_tokens": 196948,
+  "cache_write_tokens": 123339,
+  "completion_tokens": 14703,
+  "reasoning_tokens": null,
+  "duration_seconds": 146.469942917116,
+  "cost_usd": 2.6014165999999994,
+  "cost_basis": "provider"
+}

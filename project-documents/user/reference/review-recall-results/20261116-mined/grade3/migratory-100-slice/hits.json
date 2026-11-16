@@ -1,0 +1,21 @@
+{
+ "case": "migratory-100-slice",
+ "flaws": [
+  {
+   "id": "F1",
+   "text": "Force Protocol: \"The tick loop prefers the bulk variant when available\", and Success Criteria: \"Placeholder forces exercise both the `Force` and `Bulk",
+   "hits": {
+    "r01": [
+     4
+    ],
+    "r02": [
+     7
+    ],
+    "r03": [
+     0
+    ]
+   }
+  }
+ ],
+ "note": "All three clearly name the Force/BulkForce dispatch gap; r02 finding 7 bundles it with accelerations but names it specifically."
+}

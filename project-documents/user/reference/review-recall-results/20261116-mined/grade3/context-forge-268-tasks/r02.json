@@ -1,0 +1,33 @@
+{
+ "review": "r02",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "FAIL",
+   "title": "Commit gates 3.2a and 3.7 require green suites while tests of the removed behavior still exist",
+   "description": "Two gates require a passing suite at a point where tests that assert the removed behavior are still present.\n\n- **3.2a** requires `pnpm --filter @context-forge/core test` to pass after 3.1\u20133.2 stop rendering `Comprehension:` and Adoption Facts. Two files still build through the real pipeline and assert that rendered text:\n  - `packages/core/tests/pipeline-integration.test.ts:124-184` (the `probeReturning` block) asserts the probe JSON, `- Squadron: unavailable\u2026` and `Comprehension: \u2026`. It is not deleted until 3.3.\n  - `packages/core/tests/adoption/adoptionBuild.integration.test.ts:99-103` (`expectBrownfield`) asserts `### Adoption Facts`; other cases assert `shallow clone`, `- CI: \u2026` and `not evaluated`. It is not deleted until 4.1.\n- **3.7** requires `pnpm -r test` to pass, but `adoptionBuild.integration.test.ts` is still present. With the hook gone, its brownfield, `in_progress` and `AdoptionError` cases all fail. Vitest does not typecheck, so its stale two-argument `createContextPipeline` call at line 68 runs and then fails on assertions.\n\n3.3's targeted test list omits that file, so the failure first appears at the 3.7 gate. The intro claim that 3.1\u20133.2 \"only stop rendering fields that still exist, so everything compiles\" holds for compilation but not for tests.\n\nFix: move the `adoptionBuild.integration.test.ts` deletion from 4.1 into 3.3, and drop the 3.2a commit so section 3 commits once at 3.7. Alternatively, keep 3.2a and move both deletions (that file and the `pipeline-integration` brownfield block) into 3.1\u20133.2.",
+   "location": "project-documents/user/tasks/268-tasks.pure-cf-build.md:99-101"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Commit steps are checkboxes, not plain `**Commit**:` marker lines",
+   "description": "Every commit is written as a checkbox item or a checkbox task: 2.3 (line 79), 3.2a (99-101), 3.7 (134), 4.1\u20134.4 (148, 155, 163, 169), 5.1 (186) and 6.3 (206). A commit checkbox can only be ticked after the commit it describes, so each one leaves the task file dirty. Task 1.1 (line 54) already has to work around this by allowing a dirty task file.\n\nFix: convert each to a plain `**Commit**: \\`type: summary\\`` line after the task it closes, and remove the 1.1 workaround.",
+   "location": "project-documents/user/tasks/268-tasks.pure-cf-build.md:79"
+  },
+  {
+   "i": 2,
+   "severity": "NOTE",
+   "title": "3.6 points at a production caller that needs no change",
+   "description": "3.6 says to update the `registerContextTools` caller \"in the server setup\". That call is already `registerContextTools(server)` with one argument. The only caller passing options is `packages/mcp-server/tests/helpers/integrationSetup.ts:41`, which the next sub-item already covers. Reword it so the implementer does not hunt for a production change.",
+   "location": "packages/mcp-server/src/index.ts:40"
+  },
+  {
+   "i": 3,
+   "severity": "NOTE",
+   "title": "6.3 scratch repo registers into the real project store",
+   "description": "The walkthrough's `cf init` on `/tmp/bf-scratch` writes to the developer's real data directory, and 6.3 only resets `adoption.state`. Running the walkthrough with `CONTEXT_FORGE_DATA_DIR` set to a temp directory, as the tests do, avoids a dangling project entry.",
+   "location": "project-documents/user/tasks/268-tasks.pure-cf-build.md:203-206"
+  }
+ ]
+}

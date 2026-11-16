@@ -1,0 +1,61 @@
+{
+ "review": "r03",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Protocol/transport failure row has no test",
+   "description": "The slice's failure-mode table says \"Each row above has a test asserting the observable signal\" (slice lines 141-150). Task 4.3 implements the `McpError` / closed-stream path, but Task 5.4 lists only timeout, server `isError` and spawn failure for `caplog` assertions. `test_unknown_tool_name` (5.1) does not reliably cover it: a python-SDK server normally answers an unknown tool with an `isError` result, not an `McpError`.\n\nFix: add a `crash` tool to the Task 3 fixture that exits the process mid-call, and a Task 5 test asserting `is_error is True` plus the WARNING.",
+   "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md:154-177"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Result-mapping rules only partly tested",
+   "description": "Success criterion 2 requires results mapped \"per the Result mapping rules\". Two of the four rules that Task 4.2 implements have no test:\n- **Multi-block join:** `echo` returns a single block, so the `\\n` join of several `TextContent` blocks is never exercised.\n- **Non-text blocks:** no fixture tool returns one, so \"noted by type, not dropped\" is never exercised.\n\nFix: add one fixture tool returning two text blocks plus one non-text block, and one Task 5 test covering both rules.",
+   "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md:98-111"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Live contract test's CI assumption is wrong",
+   "description": "Task 8.1 gates on \"launchable command\" and reasons that \"CI without node stays green\". CI installs node 22 and runs bare `uv run pytest`, so the default `npx -y @context-forge/mcp` will launch and the module will run on both matrix legs. That has two consequences the task does not address:\n- **Network dependency:** every CI run gains an npm fetch inside a 60s timeout. The existing `network` marker in `pyproject.toml` is not applied, and CI does not deselect it anyway.\n- **Round-trip in CI:** 8.2 asserts `cf_workflow_status` returns \"non-error content mentioning the project\". CI only runs `cf init --lite --no-ide`, and I could not confirm that is enough for a non-error status; if it is not, CI fails rather than skips.\n\nFix: have Task 8 state the intended CI behaviour (run or skip), apply the `network` marker, and replace \"mentioning the project\" with a concrete assertion.",
+   "location": ".github/workflows/ci.yml:20-32"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Slice marked complete with success criterion 6 half open",
+   "description": "Criterion 6 has two halves. The `cf_workflow_status` half is covered by 8.2 and 9.1. The non-SDK model dispatch calling `cf_build_context` (walkthrough step 4) is explicitly not run, yet 9.3 sets both the task file and the slice design to `status: complete`.\n\nThe CLAUDECODE-guard reason is legitimate, but the deferral should be a tracked item. Fix: add an unchecked step-4 item with a `BLOCKED:` line and leave the status short of complete, or narrow criterion 6 in the slice design.",
+   "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md:286-292"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Commit cadence and task granularity are overweight",
+   "description": "- **Commits as checkboxes:** each task's success criteria carries a \"committed: \u2026\" checkbox (nine in total) instead of plain `**Commit**:` markers.\n- **Commits at untested points:** Tasks 1, 4 and 6 commit implementation before their tests exist (Tasks 2, 5, 7). Markers belong after 2, 5, 7, 8 and 9.\n- **Task 2 too granular:** it is two default-value assertions with its own commit. Merge it into Task 1.\n- **Manual smokes redundant:** the by-hand `echo` checks in Task 3 and Task 4 success criteria duplicate `test_echo_round_trip`. Cut them.\n- **Repeated boilerplate:** the commit protocol is restated in every task. State it once.",
+   "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md:57-61"
+  },
+  {
+   "i": 5,
+   "severity": "NOTE",
+   "title": "Executor never tested against a real stdio peer without the gate",
+   "description": "Criterion 3 says \"an executor returns the server's text\" against the fake server. Task 5 exercises `call_mcp_tool` directly, and Task 7 mocks the transport. The executor \u2192 real spawn path (shlex split, `cwd`, env) runs only in the gated live test.\n\nA cheap fix is one Task 7 test that points `cf.mcp_command` at the fake server, which would need a `workflow_status` tool added.",
+   "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md:237-243"
+  },
+  {
+   "i": 6,
+   "severity": "NOTE",
+   "title": "Several steps are underspecified for a junior implementer",
+   "description": "- **Config `cwd`:** `get_config` and `get_typed_config` take a `cwd` that selects the project `.squadron.toml`. Task 6.3 does not say whether to pass the bound cwd or the process default.\n- **Setting config in tests:** 7.3 does not say how the test sets `cf.mcp_command`.\n- **Return type:** `get_config` returns `object`, so `shlex.split` needs explicit `str` narrowing under strict pyright.\n- **7.4 signature:** `validate_allowed_tools` takes `(StepConfig, action_type)` (`src/squadron/pipeline/steps/utils.py:32`), not a bare name list as 7.4 implies.\n- **Who sets `env`:** Task 4.1 tells the bridge to use `get_default_environment()` and in the same bullet says callers construct the params; 6.3 then sets it. Pick one owner.\n- **PID capture:** 5.2 offers two mechanisms; the PID-file one needs fixture support that Task 3 does not list. Choose one and add it to Task 3.",
+   "location": "src/squadron/config/manager.py:87-94"
+  },
+  {
+   "i": 7,
+   "severity": "NOTE",
+   "title": "Merge is written as a task",
+   "description": "Task 9.4 merges the slice branch into the target. That matches the worktree `CLAUDE.md` supplied with this review (\"merges into the target when its implementation is done\"). The current squadron root `CLAUDE.md` forbids merge tasks in task files and defers merging to Phase 7. If this file is executed under the current rules, drop 9.4 and the merge clause in the Task 9 success criteria.",
+   "location": "project-documents/user/tasks/264-tasks.context-forge-mcp-tool-bridge.md:293-300"
+  }
+ ]
+}

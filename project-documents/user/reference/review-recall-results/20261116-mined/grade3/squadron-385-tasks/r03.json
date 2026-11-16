@@ -1,0 +1,47 @@
+{
+ "review": "r03",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Real-file parser test asserts something neither named file can satisfy",
+   "description": "Task 2.2 requires the real-file test to assert \"both groups are non-empty\". The two files it names cannot meet that:\n- **`384-tasks.post-findings-to-the-pr.md`** has 166 checkboxes and none unchecked, so `unchecked` is empty.\n- **This task file** has 206 checkboxes, all unchecked, so `checked` is empty. It changes on every check-off and ends all-checked after Task 16.4's \"mark any dropped or skipped item `[x]`\".\n\nThe test fails at the start, passes mid-slice, and fails again at close.\n\nFix: point the test at a frozen copy under `tests/pr/fixtures/` taken from a real task file with mixed states. Assert exact counts against that copy. If a live-file test is kept, assert only that the counts sum to the file's checkbox count.",
+   "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:67"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Refusal exception types are unspecified, and one instruction conflicts with the import boundary",
+   "description": "- **Import conflict:** Task 3.1 puts `current_branch` in `src/squadron/review/git_utils.py` and says to match `github_cli._branch_for` on detached HEAD. That function raises `TargetUnresolvableError`, defined at `src/squadron/codehost/errors.py:95`. `tests/codehost/test_import_boundaries.py:27` forbids any `review/` module from importing `squadron.codehost`. An implementer who matches literally breaks the guard that Task 15.1 extends.\n- **Unnamed exceptions:** Tasks 3.1 (`commits_in_range` failure), 5.1 (base refusal) and 6.1 (missing/behind) all say \"raise\" with no type.\n- **No conversion step:** Task 13.1 never says how those become exit 1. The only statement of the `except CodeHostError` \u2192 `render_code_host_error` \u2192 `typer.Exit(code=1)` wiring is a bullet in Task 14.1, which is a test-only task.\n\nFix: name the exception type for each refusal, and say whether it is a `CodeHostError` subclass raised in `pr/` or a `git_utils` error translated in `pr/`. Move the wrapping requirement into 13.1.",
+   "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:79"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Provider-failure and non-host refusal criteria have no command-level test",
+   "description": "- **Provider failure:** the criterion \"a provider failure during composition exits non-zero, logs at ERROR, and creates nothing\" is asserted only in Task 10.2. That is a unit test of `pr/body.py`, where there is no exit code and no host. Task 13.2 has no composer-raises case, and Task 14's matrix covers only the five host call sites.\n- **Base and push refusals:** the absent-integration-branch refusal and both push refusals are tested at function level in 5.2 and 6.2. No `sq pr create` test asserts exit 1, zero writes, and the push command in the output. Task 13.2's one ordering assertion is generic.\n\nFix: add three cases to 13.2 \u2014 composer raises, base refusal, and missing/behind head \u2014 each asserting exit code, zero write calls, and the printed message. Drop the \"exits non-zero / creates nothing\" wording from 10.2. Task 12.2's \"no host call is made\" has the same problem and is already covered in 13.2.",
+   "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:308-311"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "No task supplies the slice design's text to the composer, and the model call shape is undefined",
+   "description": "- **Design text:** Task 7.1 reads and parses only the task file. Task 9.1's `PrFacts` carries the design *path*. Task 10a.1 needs the design's H1, and Task 11.1 needs the design as input for \"What changed\" and \"Why\". The model has no tools (Task 10.1) and is \"given PrFacts only\", so it cannot read the path. Nothing says who reads the file or where the text travels.\n- **Call shape:** Task 11.1 does not say whether `compose_body` makes one model call or one per section. The design says both (\"requests prose per section\" in D4; \"one-shot model call\" in the data flow). It also does not say how a single response would be split, and no task writes the prompt, which the design lists as in scope for `body.py`. This decides how the fake composer is scripted in 11.2 and 13.2.\n\nFix: add the design text (or its H1 plus body) to `PrInputs` in Task 7.1 and say how it reaches the prompt. State the call count and prompt contract in Task 11.1.",
+   "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:199"
+  },
+  {
+   "i": 4,
+   "severity": "NOTE",
+   "title": "Metadata lines written as checkboxes will appear in this slice's own PR body",
+   "description": "Each subtask carries `- [ ] Effort: n` (35 of them) plus several `- [ ] Success: \u2026` lines. Task 2.1's parser counts every checkbox at any depth. Walkthrough step 1 will therefore list \"Effort: 1\" under \"How it was verified\" or \"Known gaps\". Either make these plain lines or accept the noise knowingly.",
+   "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:44"
+  },
+  {
+   "i": 5,
+   "severity": "NOTE",
+   "title": "Small inaccuracies in task text",
+   "description": "- **Wrong consumers:** Task 1 says it is \"needed by Task 9\" and Task 2 \"by Tasks 9 and 10\". The actual consumer of both is Task 7.1.\n- **`resolve_locator` signature:** Task 4.1 fixes the return as `tuple[CodeHost, RepositoryLocator]`. `resolve_and_fetch_pull_request` still needs the parsed target for `host.resolve_pull_request` at `src/squadron/cli/commands/pr.py:56`. The signature forces a second `parse_target` call or a deviation.\n- **`check_head_pushed` return:** Task 6.1 returns `None`; the design's component table says \"refusal or HeadState\".\n- **Slice inconsistency:** Task 6.2 follows D2 (two different push commands). The slice's own success criterion says \"the same command\". The task is right; the slice should be corrected.\n- **Task 16.4 ordering:** it sets `status: complete` before the code-review bullet. That bullet also waits on a Project Manager answer, so the task cannot finish in one pass.",
+   "location": "project-documents/user/tasks/385-tasks.create-a-pr-with-a-good-message.md:97"
+  }
+ ]
+}

@@ -1,0 +1,15 @@
+{
+ "case": "squadron-928-design",
+ "flaws": [
+  {
+   "id": "F1",
+   "text": "Walkthrough step 7 runs bare `sq doctor` and expects \"all four rows present\" and `demo (codex): WARN`. `cli/commands/doctor.py:64` at `16194f3e` skips",
+   "hits": {
+    "r03": [
+     3
+    ]
+   }
+  }
+ ],
+ "note": "Only r03 #3 names the bare sq doctor hiding WARN rows without --verbose."
+}

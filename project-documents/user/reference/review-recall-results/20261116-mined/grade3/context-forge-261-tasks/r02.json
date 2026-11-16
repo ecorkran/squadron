@@ -1,0 +1,26 @@
+{
+ "review": "r02",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Commit markers are checkbox tasks instead of plain `**Commit**:` lines",
+   "description": "Each commit point is written as a checklist item: `- [ ] **Task 2C: Commit** \u2014 ...`. The same pattern appears at lines 105, 131, 148, 178, 202, 225, 251, 257 and 269. Commit markers should be plain lines (`**Commit**: feat(core): ...`), never checkboxes. Three problems follow:\n- The commit cadence keys on `**Commit**:` markers, so these may not be recognized as markers at all.\n- A checkbox commit item can only be ticked after the commit is made. That leaves it unchecked in the commit, or forces a commit that only checks a box, which the project rules forbid.\n- It counts as a task, so task-checker will try to tick it.\n\nThe placement itself is fine. Each marker sits after a tested implementation pair, and none follows an untested task. Only the format needs to change: turn each `- [ ] **Task NC: Commit** \u2014 msg` into a plain `**Commit**: msg` line.",
+   "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:78"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Renderer tests don't cover every outcome kind",
+   "description": "The slice's Technical Requirements ask for `renderAdoptionFacts` tests covering \"every outcome\". Task 8 requires an exhaustive `switch` on `outcome.kind` with a `never` check (line 168), so the renderer must contain branches for `greenfield`, `already-planned` and `adoption-closed`. Task 8T only tests brownfield (capped), adoption-in-progress and `NOT_EVALUATED`. The other three branches are written but never run by any test. Fix: add one `it.each` over those three kinds in Task 8T, asserting each outcome bullet's text. Brownfield below the cap (`capped: false`) is also untested; add it to the same table.",
+   "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:174"
+  },
+  {
+   "i": 2,
+   "severity": "NOTE",
+   "title": "`context_build` returning `AdoptionError` as an error result is only covered indirectly",
+   "description": "The success criterion \"`context_build` returns it as an error\" is covered in two places:\n- Task 10T checks that the integrator rethrows `AdoptionError`.\n- Task 12 #12 checks that the pipeline rejects.\n\nThe MCP handler already wraps `generateContext` in a `try` (`packages/mcp-server/src/tools/contextTools.ts:156`), so this most likely works without new code. Still, no task asserts the tool-level error result. One `contextTools.test.ts` case in Task 11 would close it: the mocked pipeline throws `AdoptionError`, and the test expects `isError` with the message. This is optional.",
+   "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:213"
+  }
+ ]
+}

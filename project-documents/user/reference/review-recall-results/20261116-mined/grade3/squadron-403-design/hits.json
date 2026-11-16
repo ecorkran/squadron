@@ -1,0 +1,11 @@
+{
+ "case": "squadron-403-design",
+ "flaws": [
+  {
+   "id": "F1",
+   "text": "D1 requires every landing of a slice (a slice can land twice; slices 172, 305 and 940 each have two merges on first-parent history), but D2 resolves t",
+   "hits": {}
+  }
+ ],
+ "note": "No finding mentions reuse of _search_merge_commit returning only the newest merge; the fast-forward-only-when-no-merge remark in r01 i0 and r03 i0 is a different defect."
+}

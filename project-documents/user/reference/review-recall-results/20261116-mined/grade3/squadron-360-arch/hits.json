@@ -1,0 +1,18 @@
+{
+ "case": "squadron-360-arch",
+ "flaws": [
+  {
+   "id": "F1",
+   "text": "Output Conventions: \"Both capabilities write to the existing `project-documents/user/analysis/` directory\" (line 243) and the settled list (lines 332-",
+   "hits": {
+    "r01": [
+     2
+    ],
+    "r02": [
+     7
+    ]
+   }
+  }
+ ],
+ "note": "r02 #7 names the line 243 vs line 148 contradiction as one bullet among several; counted as a hit. r03 #6 and r02 #3 discuss concept/location issues but not this contradiction."
+}

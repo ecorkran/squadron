@@ -1,0 +1,47 @@
+{
+ "review": "r03",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Doctor's \"pack ships no Codex content\" row has no defined source for GitHub packs",
+   "description": "D8 has doctor distinguish \"not installed\" from \"WARN \u2014 pack ships no Codex content\". Telling them apart requires looking inside the pack source for an `agents/` directory. For `bundled` and local-path sources that is a filesystem read. For `github:org/repo` sources the content exists only after a clone, which the 340 architecture describes as \"fetched on install\".\n\nThe design does not say what the agents row is for an uninstalled GitHub pack. The two possible readings both have a cost:\n- **Doctor clones:** this puts a network call in `sq doctor`, which the slice plan (entry 905) scopes as read-only inspection, and adds a new I/O path with no hang, timeout or offline handling.\n- **Doctor does not clone:** the three-state row is undefined for those packs.\n\nThe lighter option meets the requirement: drop the third state. Report `not installed` with the `sq skills install <pack> --ide codex` hint for every pack. D2 already makes that command fail with a message naming the missing `agents/` directory. That removes source resolution from doctor and from `installed_path`. If the third state is kept, state that it applies to locally resolvable sources only and what a GitHub pack shows.",
+   "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md:140"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Moving the analysis skills breaks the 925 drift invariant, which the design does not mention",
+   "description": "D4 moves `analysis-understand` and `analysis-tech-debt-audit` from `commands/agents/` to `commands/analysis/agents/`. Slice 925 provides, as a named integration point, a drift guard defined as a bijection `commands/<sub>/<name>.md` \u2194 `commands/agents/<sub>-<name>/SKILL.md` for each Claude subdirectory (925 design, Patterns and Conventions, and \"Provides to Other Slices\").\n\nAfter the move, the two `analysis` commands have no twin under `commands/agents/`, so the guard fails as defined. The Migration Plan lists only \"fixtures\" as test consumers and says existing tests pass \"without edits other than the moved fixture paths\". The guard's rule has to change, not a path. The design should state the new invariant (for example, twins are looked up across every AGENTS `bundle_subdirs` entry) and list the drift guard as a consumer.\n\n925 also added an amendment line to `340-arch.skill-pack-infrastructure.md` describing the agents tree as \"a sibling `commands/agents/` tree\". That line becomes partly wrong. The same document still says `sq skills install` writes to `~/.claude/commands/<prefix>/`. 925 carried its amendment lines as a success criterion; this slice changes the pack source format and should carry one too.",
+   "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md:182-184"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Approval-rule enumeration: the criterion is broader than the rule's stated purpose, and the hint list is fixed while the command list is open",
+   "description": "Slice plan Part B asks the design to enumerate every `sq` command that reaches a provider or the network. D10 defers the final list to an implementation-time probe. That is acceptable only if the rule for a \"yes\" row is unambiguous, and two things are not:\n\n- **Criterion mismatch.** D10 classifies by \"network or filesystem denial\". Commands that only write outside the workspace (`sq install-commands`, `sq setup`, `sq skills uninstall`, `sq auth login`) would fail on filesystem denial and become \"yes\" rows. D9's rule justification is \"squadron commands that call a model provider or GitHub\", and the docs must state what the rule authorizes. Decide whether filesystem-only failures and Unix-socket failures (the daemon-client row) qualify, and make the justification text follow from that.\n- **D12 and criterion 9 do not follow D10.** The hint is pinned to `sq-review`, `sq-run` and `sq-pr`. If the probe puts the daemon-client commands or `sq auth login` in the rule, the `sq-spawn`, `sq-task`, `sq-list`, `sq-shutdown` and `sq-auth` skills hit the same misleading failure with no hint. State that the hint goes into every agents skill whose command is a \"yes\" row.\n\nRelated: the pattern matches on the second token only, so a `skills` or `auth` alternative also allows `sq skills uninstall` and `sq auth status` unsandboxed. The \"what it authorizes\" text should say so if those rows land.",
+   "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md:155-170"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Walkthrough step 7 and criterion 5 expect WARN rows from a bare `sq doctor`",
+   "description": "Slice 925's walkthrough (steps 4 and 7) recorded that `sq doctor` hides every WARN row unless `--verbose`, and that this applies to all optional checks. This design repeats the wrong prediction.\n\nAt step 7, `demo` (Claude, never installed) and `demo (codex)` (uninstalled in step 5) are both WARN. A bare `sq doctor` therefore shows two of the \"all four rows\". The follow-up `rm -rf \u2026 && sq doctor` shows no \"pack ships no Codex content\" row at all. Both commands need `-v`. Criterion 5 (line 225) should say which rows appear with and without it.",
+   "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md:277-279"
+  },
+  {
+   "i": 4,
+   "severity": "NOTE",
+   "title": "Suffix-based receipt names can collide between distinct packs",
+   "description": "In 925 the suffix scheme applied to one fixed base name. D5 applies it to user-chosen pack names. Pack `team` installed with `--ide codex` and a separate pack `team-agents` installed for Claude both resolve to `team-agents.toml`; the same holds for `-local`. The second install overwrites the first receipt, and an uninstall then removes the other pack's files.\n\nThe exclusion at line 52 covers only collisions with squadron's own names and calls them pre-existing. This class is new. It is unlikely in practice. A one-line guard would close it: reject pack names ending in a reserved suffix, or check the receipt's recorded pack name on read.",
+   "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md:134"
+  },
+  {
+   "i": 5,
+   "severity": "NOTE",
+   "title": "Live step 10 depends on behaviour that issue #126 leaves broken",
+   "description": "Step 10 requires a full `$sq-review` inside a Codex session to finish and write the review file. 925's live run recorded that this pattern exhausted the session before completing (#126, excluded from this slice). The claim under test, that there is no approval prompt, is observable when the command starts. Stating the pass condition that way keeps the step from failing for a reason this slice does not own.",
+   "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md:292-295"
+  }
+ ]
+}

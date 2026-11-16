@@ -1,0 +1,89 @@
+{
+ "review": "r02",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Engine is declared stateless but also given a stateful register/remove/query interface",
+   "description": "Line 70 says \"The engine is stateless between ticks \u2014 all state lives in the arrays passed to it.\" Line 81 says the engine's interface is \"tick the simulation forward, query agent state, register/remove agents.\" These cannot both be true.\n- If the engine holds no state, there is nothing to register into or query.\n- 300-arch assigns entity lifecycle and array allocation to the server's `EntityManager` (\"the behavior engine \u2026 does not manage the entity lifecycle itself\"), so ownership of the arrays is contradicted across documents too.\n- Step 5, \"Returns the updated state array\", does not say whether the tick mutates in place or returns a new buffer. 300-arch's \"tick as transaction \u2026 commit\" depends on that answer, as does whether neighbors read pre-tick or partially updated state.\n\nPick one owner and state the tick signature and buffer semantics explicitly.",
+   "location": "project-documents/user/architecture/100-arch.behavior-engine.md:70-81"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Agent state of positions, velocities and profile indices cannot carry the listed archetypes",
+   "description": "\"Data-oriented agent state\" enumerates only positions, velocities and profile indices, and \"Forces, not decisions\" rules out per-agent state machines. The document's own archetypes need more per-agent state than that:\n- **Herding:** leadership by \"experienced individuals\" needs a per-agent leader or experience attribute.\n- **Pack hunting:** \"target selection\" and \"convergence-on-target\" need a persistent target id. Re-selecting the nearest prey each tick makes the pack split.\n- **Predator cycles:** prototype 1 validated a predator with hunt/rest cycles, which is a mode plus a timer.\n- **Territorial:** \"home-range attraction\" needs a per-agent home center.\n\nWith a stateless engine, all of this must live in caller-owned arrays, so the state schema is a public contract that grows with every slice. The document has no mechanism for extending it (named columns, schema descriptor, versioning), and \"Clean boundaries\" claims the array layout is hidden from consumers. The server allocates and serializes these arrays, so the layout cannot be both hidden and caller-owned.",
+   "location": "project-documents/user/architecture/100-arch.behavior-engine.md#architectural-principles"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Tick has no output channel besides the state array, and the environment is read-only",
+   "description": "The tick returns only \"the updated state array\" and the environment is a \"read-only interface\". Two committed capabilities need more than that:\n- **Swarm/stigmergy:** agents must deposit into the environment (\"reinforced paths\"). Nothing in the design lets the engine emit deposits.\n- **Predation and exhaustion:** 300-arch expects \"behavior-driven (predation, exhaustion)\" lifecycle events sourced from behavior evaluation. The engine has no way to report a kill or capture.\n\nSwarm is also inconsistent within the document. It appears in Design Goals, in Envisioned State, and in \"the initial parameter set should cover the five identified archetypes\", but Anticipated Slices omits it entirely. Either define a tick result structure (state plus events plus environment writes) or drop swarm from the goals and state the deferral.",
+   "location": "project-documents/user/architecture/100-arch.behavior-engine.md#envisioned-state"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Subset-evaluable tick conflicts with fixed-timestep integration and is not sufficient for variable-rate ticking",
+   "description": "\"Subset-evaluable tick\" is presented as the foundation for 1/4 and 1/16 rate ticking, while \"Tick rate and integration stability\" calls fixed-timestep integration \"essential for determinism and replay\". The interface passes only a mask or index array, which leaves three gaps:\n- **Timestep:** an agent evaluated every 4th tick with the global dt moves at a quarter speed. Correct behavior needs a per-agent or per-call dt, which is not in the interface.\n- **Stability:** a 4\u201316\u00d7 dt directly worsens the Euler stability problem the same section raises.\n- **Cost:** neighbors still span the full population, so index build stays O(N) per tick regardless of subset size. With a stateless engine the index is rebuilt on every call unless the caller owns and passes it, and that ownership is unstated.\n\nThe hook as specified does not deliver the capability it is justified by.",
+   "location": "project-documents/user/architecture/100-arch.behavior-engine.md:49"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Determinism goal lacks the decisions that determine whether it is achievable",
+   "description": "\"Tick determinism\" is required for replay and for regions that \"must agree on simulation results\", which means bitwise agreement. The document leaves these undecided:\n- **Update semantics:** synchronous (double-buffered) versus in-place is not stated.\n- **Neighbor ordering:** float sums are order-dependent. Brute force, spatial hash, KD-tree and GPU return neighbors in different orders, so swapping strategies changes results. The slice plan's 105 demands \"identical\" output across the swap, which needs a canonical ordering in the query contract.\n- **Precision:** float32 versus float64 is explicitly deferred (\"the engine should define its internal precision\").\n- **Randomness:** there is no RNG input. Any wander or noise term in a stateless engine needs a seed or counter passed per tick.\n- **GPU:** the GPU path will not reproduce CPU results bit-for-bit, and the document does not say whether determinism is scoped per backend.",
+   "location": "project-documents/user/architecture/100-arch.behavior-engine.md:31"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Neighbor-query abstraction is named but its contract is not, and the listed backends do not share a natural shape",
+   "description": "\"Pluggable spatial queries\" promises swapping among brute force, hash, KD-tree and GPU \"without changing the engine\", but no result format is given. The format is the whole contract:\n- **Shape:** neighbor sets are ragged. Vectorized force code needs padded (N, K) or CSR/pair-list arrays, and that choice shapes every force kernel.\n- **SciPy:** `cKDTree.query_ball_point` returns object arrays of Python lists, which violates \"no Python-level per-agent branching\".\n- **GPU:** a GPU backend returns device arrays, so force code must be array-module-agnostic or the swap leaks into the engine.\n- **Allocation:** \"no dynamic allocation\" (line 99) conflicts with variable-size neighbor results unless K is capped, and a cap is a behavioral decision.\n- **Radius:** profiles have different perception radii (territorial \"avoidance at range\"), so the query needs per-agent radii.\n- **Aggregates:** line 97 routes aggregates \"through the same neighbor query interface\", but aggregates are not rows in the agent arrays and carry count and dispersion. Index-returning queries cannot represent them.\n\nStep 2 (\"For each active agent, queries nearby neighbors\") also describes per-agent iteration, which contradicts the bulk requirement.",
+   "location": "project-documents/user/architecture/100-arch.behavior-engine.md:45"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "The real extension point is the force set, and it is undefined; \"new species = new profile\" overstates",
+   "description": "\"Profile-driven behavior\" claims no archetype-specific code. Yet the herding, predator-prey and territorial slices each \"extend the force model\" with new force terms, so new behavior does mean new code.\n- **Force-term contract:** there is no registry or stated inputs/outputs for a force term. \"The BulkForce pattern\" (line 99) is referenced as if defined and appears nowhere else.\n- **Interaction rules:** \"Inter-archetype interactions\" is acknowledged as a combinatorial dimension but left undecided. A P\u00d7P interaction matrix, per-pair force rules and profile categories are all possible and none is chosen. It is load-bearing for the predator-prey slice.\n- **Profile delivery:** profiles are \"swapped at runtime\", but the profile table is not among the tick inputs in step 1. A stateless engine must receive it somewhere.",
+   "location": "project-documents/user/architecture/100-arch.behavior-engine.md#design-goals"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "Performance target is asserted, not validated, for the chosen stack",
+   "description": "\"Tens of thousands of agents at full behavioral fidelity on a single CPU process\" has no tick rate and no neighbor count attached. The prototypes validated JS at about 2000 agents, not NumPy at 10K+.\n- **Brute force:** a vectorized O(n\u00b2) distance matrix at 10K agents is 10\u2078 pairs, roughly 800 MB in float64 per temporary. It is not viable without chunking.\n- **Pair-list kernels:** at 300-arch's stated ~100 neighbors and 20\u201360 Hz, 50K agents means about 5M pair gathers per force term per tick, with NumPy temporaries. My estimate is that this exceeds a 16\u201350 ms budget, but I have not measured it.\n\nState the target as N agents, K neighbors and a tick rate, and name the fallback (Numba or a compiled kernel) if NumPy misses. That choice affects the \"no callbacks, array-in/array-out\" interface.",
+   "location": "project-documents/user/architecture/100-arch.behavior-engine.md:33"
+  },
+  {
+   "i": 8,
+   "severity": "CONCERN",
+   "title": "Environment interface and world geometry are undefined, though three archetypes depend on them",
+   "description": "\"Environment as input surface\" gives no query shape. To satisfy line 99 it must be a bulk sample (positions array in, values out), not a per-agent call. The Environment Layer (initiative 500) does not exist and sits downstream of 300, yet herding corridors, home ranges and stigmergy all depend on it. No stub or null environment is specified.\n\nRelated decisions are missing:\n- **Dimensionality:** the document never says 2D or 3D. Starlings need 3D, elk need terrain-constrained 2.5D, and a ground constraint is not a force.\n- **Bounds:** whether the engine or the server enforces world bounds, and whether by wrap, clamp or reflect.\n- **Limits:** speed and force clamps.",
+   "location": "project-documents/user/architecture/100-arch.behavior-engine.md:47"
+  },
+  {
+   "i": 9,
+   "severity": "CONCERN",
+   "title": "No failure-mode strategy for the tick",
+   "description": "The whole document is silent on numerical and input failure:\n- **Co-located agents:** zero distance in separation gives a divide-by-zero, and NaN then spreads through neighbor sums to the whole population within a few ticks.\n- **Invalid input:** out-of-range profile indices, masks of the wrong length, non-finite input state.\n- **Force blow-up:** unbounded force magnitudes.\n\nThe project rule is \"never use silent fallback values; fail explicitly\". The document should say whether the tick validates at the boundary, raises on non-finite output, or clamps, and at what cost in the hot loop.",
+   "location": "unverified"
+  },
+  {
+   "i": 10,
+   "severity": "CONCERN",
+   "title": "Scaling machinery for a deliberately deferred initiative is carried in this architecture",
+   "description": "The initiative plan says Distribution & Scaling (620) \"need not be designed proactively\". This document nonetheless takes on:\n- an \"Aggregation interface support\" slice whose dependency (world-server multi-resolution) is unscheduled;\n- GPU-offload constraints (\"no dynamic allocation\") imposed on the v1 force interface;\n- two Technical Considerations paragraphs on the 1M\u20134M tiers.\n\nCut the aggregation slice from this architecture and reduce the GPU material to a single non-preclusion statement. Keep the subset mask only if the dt issue above is resolved; otherwise it is an unused parameter.",
+   "location": "project-documents/user/architecture/100-arch.behavior-engine.md#anticipated-slices"
+  },
+  {
+   "i": 11,
+   "severity": "NOTE",
+   "title": "Broken and inconsistent cross-references; slice ordering contradicts a principle",
+   "description": "- **Broken link:** Related Work links `200-arch.world-server-foundation.md`. The file is `300-arch.worldserver-foundation.md`, and the Scope paragraph already says \"300-arch\".\n- **Dependency direction:** this document takes interface requirements from the world-server architecture, while 300-arch declares `dependsOn: 100-arch` and the initiative plan lists 100 as having no dependencies.\n- **Slice order:** Anticipated Slices puts \"Spatial query abstraction\" third (\"Replace naive queries in the tick loop\"), after flocking. That contradicts the principle that the engine depends on the query interface from the start. The slice plan already moved the interface into slice 100.",
+   "location": "project-documents/user/architecture/100-arch.behavior-engine.md:122"
+  }
+ ]
+}

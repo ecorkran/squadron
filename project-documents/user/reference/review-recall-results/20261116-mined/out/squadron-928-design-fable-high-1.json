@@ -1,0 +1,225 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "CONCERN",
+      "title": "Doctor's \"pack ships no Codex content\" row has no defined source for GitHub packs",
+      "description": "D8 has doctor distinguish \"not installed\" from \"WARN \u2014 pack ships no Codex content\". Telling them apart requires looking inside the pack source for an `agents/` directory. For `bundled` and local-path sources that is a filesystem read. For `github:org/repo` sources the content exists only after a clone, which the 340 architecture describes as \"fetched on install\".\n\nThe design does not say what the agents row is for an uninstalled GitHub pack. The two possible readings both have a cost:\n- **Doctor clones:** this puts a network call in `sq doctor`, which the slice plan (entry 905) scopes as read-only inspection, and adds a new I/O path with no hang, timeout or offline handling.\n- **Doctor does not clone:** the three-state row is undefined for those packs.\n\nThe lighter option meets the requirement: drop the third state. Report `not installed` with the `sq skills install <pack> --ide codex` hint for every pack. D2 already makes that command fail with a message naming the missing `agents/` directory. That removes source resolution from doctor and from `installed_path`. If the third state is kept, state that it applies to locally resolvable sources only and what a GitHub pack shows.",
+      "file_ref": null,
+      "category": "under-specification",
+      "raw_category": null,
+      "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md:140"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Moving the analysis skills breaks the 925 drift invariant, which the design does not mention",
+      "description": "D4 moves `analysis-understand` and `analysis-tech-debt-audit` from `commands/agents/` to `commands/analysis/agents/`. Slice 925 provides, as a named integration point, a drift guard defined as a bijection `commands/<sub>/<name>.md` \u2194 `commands/agents/<sub>-<name>/SKILL.md` for each Claude subdirectory (925 design, Patterns and Conventions, and \"Provides to Other Slices\").\n\nAfter the move, the two `analysis` commands have no twin under `commands/agents/`, so the guard fails as defined. The Migration Plan lists only \"fixtures\" as test consumers and says existing tests pass \"without edits other than the moved fixture paths\". The guard's rule has to change, not a path. The design should state the new invariant (for example, twins are looked up across every AGENTS `bundle_subdirs` entry) and list the drift guard as a consumer.\n\n925 also added an amendment line to `340-arch.skill-pack-infrastructure.md` describing the agents tree as \"a sibling `commands/agents/` tree\". That line becomes partly wrong. The same document still says `sq skills install` writes to `~/.claude/commands/<prefix>/`. 925 carried its amendment lines as a success criterion; this slice changes the pack source format and should carry one too.",
+      "file_ref": null,
+      "category": "integration",
+      "raw_category": null,
+      "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md:182-184"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Approval-rule enumeration: the criterion is broader than the rule's stated purpose, and the hint list is fixed while the command list is open",
+      "description": "Slice plan Part B asks the design to enumerate every `sq` command that reaches a provider or the network. D10 defers the final list to an implementation-time probe. That is acceptable only if the rule for a \"yes\" row is unambiguous, and two things are not:\n\n- **Criterion mismatch.** D10 classifies by \"network or filesystem denial\". Commands that only write outside the workspace (`sq install-commands`, `sq setup`, `sq skills uninstall`, `sq auth login`) would fail on filesystem denial and become \"yes\" rows. D9's rule justification is \"squadron commands that call a model provider or GitHub\", and the docs must state what the rule authorizes. Decide whether filesystem-only failures and Unix-socket failures (the daemon-client row) qualify, and make the justification text follow from that.\n- **D12 and criterion 9 do not follow D10.** The hint is pinned to `sq-review`, `sq-run` and `sq-pr`. If the probe puts the daemon-client commands or `sq auth login` in the rule, the `sq-spawn`, `sq-task`, `sq-list`, `sq-shutdown` and `sq-auth` skills hit the same misleading failure with no hint. State that the hint goes into every agents skill whose command is a \"yes\" row.\n\nRelated: the pattern matches on the second token only, so a `skills` or `auth` alternative also allows `sq skills uninstall` and `sq auth status` unsandboxed. The \"what it authorizes\" text should say so if those rows land.",
+      "file_ref": null,
+      "category": "under-specification",
+      "raw_category": null,
+      "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md:155-170"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Walkthrough step 7 and criterion 5 expect WARN rows from a bare `sq doctor`",
+      "description": "Slice 925's walkthrough (steps 4 and 7) recorded that `sq doctor` hides every WARN row unless `--verbose`, and that this applies to all optional checks. This design repeats the wrong prediction.\n\nAt step 7, `demo` (Claude, never installed) and `demo (codex)` (uninstalled in step 5) are both WARN. A bare `sq doctor` therefore shows two of the \"all four rows\". The follow-up `rm -rf \u2026 && sq doctor` shows no \"pack ships no Codex content\" row at all. Both commands need `-v`. Criterion 5 (line 225) should say which rows appear with and without it.",
+      "file_ref": null,
+      "category": "verification",
+      "raw_category": null,
+      "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md:277-279"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Suffix-based receipt names can collide between distinct packs",
+      "description": "In 925 the suffix scheme applied to one fixed base name. D5 applies it to user-chosen pack names. Pack `team` installed with `--ide codex` and a separate pack `team-agents` installed for Claude both resolve to `team-agents.toml`; the same holds for `-local`. The second install overwrites the first receipt, and an uninstall then removes the other pack's files.\n\nThe exclusion at line 52 covers only collisions with squadron's own names and calls them pre-existing. This class is new. It is unlikely in practice. A one-line guard would close it: reject pack names ending in a reserved suffix, or check the receipt's recorded pack name on read.",
+      "file_ref": null,
+      "category": "state-management",
+      "raw_category": null,
+      "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md:134"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Live step 10 depends on behaviour that issue #126 leaves broken",
+      "description": "Step 10 requires a full `$sq-review` inside a Codex session to finish and write the review file. 925's live run recorded that this pattern exhausted the session before completing (#126, excluded from this slice). The claim under test, that there is no approval prompt, is observable when the command starts. Stating the pass condition that way keeps the step from failing for a reason this slice does not own.",
+      "file_ref": null,
+      "category": "verification",
+      "raw_category": null,
+      "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md:292-295"
+    },
+    {
+      "severity": "PASS",
+      "title": "Both open design questions from the slice plan are answered with recorded reasoning",
+      "description": "- **Part A:** D2 picks the pack-format declaration over `$ARGUMENTS` scanning and rules out unconverted installs, as the plan requires. D3 validates before writing, so a failed install writes nothing.\n- **Part B:** D11 answers the doctor-check question with reasons. D9's move from `default.rules` to a squadron-owned `squadron.rules` departs from the plan's wording, but it is justified and the plan entry already records it.",
+      "file_ref": null,
+      "category": "alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md:121"
+    },
+    {
+      "severity": "PASS",
+      "title": "Dependency direction and the unchanged Claude default",
+      "description": "The slice consumes 925's target vocabulary, delivery table and doctor target selection without redefining them. D1 keeps flag meaning identical to `install-commands`. D5 produces today's receipt names for today's inputs, so no migration is needed. Criterion 6 pins no-flag behaviour, including reading a pre-existing `analysis.toml`.",
+      "file_ref": null,
+      "category": "dependencies",
+      "raw_category": null,
+      "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md:119"
+    },
+    {
+      "severity": "PASS",
+      "title": "Scope and proportionality fit the maintenance initiative",
+      "description": "The work fixes two filed issues and adds no new capability, which fits the 900 architecture's scope. `skills list` and the doctor rows go beyond the plan's literal \"install/uninstall\" but close the same Claude-only defect. `PACK_LAYOUTS` and `remove_receipt_files` each replace logic that would otherwise be duplicated. The effort revision to 3/5 is stated and recorded in the plan. The one piece worth cutting is the doctor third state in the first finding. The parent architecture states no NFRs for this path.",
+      "file_ref": null,
+      "category": "proportionality",
+      "raw_category": null,
+      "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md#technical-scope"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "concern",
+      "category": "under-specification",
+      "raw_category": null,
+      "summary": "Doctor's \"pack ships no Codex content\" row has no defined source for GitHub packs",
+      "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md:140",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "integration",
+      "raw_category": null,
+      "summary": "Moving the analysis skills breaks the 925 drift invariant, which the design does not mention",
+      "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md:182-184",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "under-specification",
+      "raw_category": null,
+      "summary": "Approval-rule enumeration: the criterion is broader than the rule's stated purpose, and the hint list is fixed while the command list is open",
+      "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md:155-170",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "verification",
+      "raw_category": null,
+      "summary": "Walkthrough step 7 and criterion 5 expect WARN rows from a bare `sq doctor`",
+      "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md:277-279",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "note",
+      "category": "state-management",
+      "raw_category": null,
+      "summary": "Suffix-based receipt names can collide between distinct packs",
+      "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md:134",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "note",
+      "category": "verification",
+      "raw_category": null,
+      "summary": "Live step 10 depends on behaviour that issue #126 leaves broken",
+      "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md:292-295",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "pass",
+      "category": "alignment",
+      "raw_category": null,
+      "summary": "Both open design questions from the slice plan are answered with recorded reasoning",
+      "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md:121",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "pass",
+      "category": "dependencies",
+      "raw_category": null,
+      "summary": "Dependency direction and the unchanged Claude default",
+      "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md:119",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "pass",
+      "category": "proportionality",
+      "raw_category": null,
+      "summary": "Scope and proportionality fit the maintenance initiative",
+      "location": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md#technical-scope",
+      "location_verified": null
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/928-slice.codex-parity-for-skill-packs-and-provider-access.md",
+    "against": "project-documents/user/architecture/900-slices.maintenance-and-refactoring.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/squadron-928-design"
+  },
+  "timestamp": "2026-11-16T16:16:30.334560",
+  "model": "claude-fable-5-2",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 19,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-fable-5-2",
+  "answering_models": [
+    "claude-fable-5-2"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 9,
+    "in_fences": 0,
+    "in_section": 9,
+    "surviving": 9
+  },
+  "effort": "high",
+  "profile": "sdk",
+  "turns": 20,
+  "prompt_tokens": 694275,
+  "cached_tokens": 511991,
+  "cache_write_tokens": 182270,
+  "completion_tokens": 21414,
+  "reasoning_tokens": null,
+  "duration_seconds": 211.6354281657841,
+  "cost_usd": 3.8760583,
+  "cost_basis": "provider"
+}

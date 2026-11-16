@@ -1,0 +1,21 @@
+{
+ "case": "squadron-401-tasks",
+ "flaws": [
+  {
+   "id": "F1",
+   "text": "Design Success Criterion 10 says that when `DUPLICATION_MAX_TOKENS` is passed, `duplicated_lines` is `tool_failed` \"and its other metrics are unchange",
+   "hits": {
+    "r01": [
+     2
+    ],
+    "r02": [
+     5
+    ],
+    "r03": [
+     5
+    ]
+   }
+  }
+ ],
+ "note": "r01 i2 names it as the second bullet of a combined finding; r02 i5 and r03 i5 name it directly."
+}

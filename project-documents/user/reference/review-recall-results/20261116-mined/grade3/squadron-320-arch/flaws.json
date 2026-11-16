@@ -1,0 +1,10 @@
+{
+ "case": "squadron-320-arch",
+ "kind": "arch",
+ "flaws": [
+  {
+   "id": "F1",
+   "text": "Technical Considerations and Related Work say \"140's `fan_out`\" (lines 81, 110), but 140's own slice plan says fan-out was relocated to initiative 180 (`140-slices.pipeline-foundation.md:158`, \"Slice 159 (Fan-Out / Fan-In) relocated to initiative 180\"; `180-slices.pipeline-intelligence.md:39` slice 182 `fan_out`), while the parent initiative plan says 320 is \"Independent of 180\" (`001-initiative-plan.squadron.md:44`). **VALID**: contradicts the parent plan and 140's documents. Needs: doc (sibling documents). Raised by the original review (F004)."
+  }
+ ]
+}

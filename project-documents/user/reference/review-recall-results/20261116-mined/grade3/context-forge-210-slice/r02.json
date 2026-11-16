@@ -1,0 +1,54 @@
+{
+ "review": "r02",
+ "findings": [
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Translation source is unspecified and contradicts the Copilot-only use case",
+   "description": "The file layout says instruction files come \"from `.claude/rules/typescript.md`\" and prompts \"from `.claude/skills/commit.md`\". Those directories are outputs of `cf setup-ide claude`. The driving user (line 23) has no Claude setup, and the plan's success criterion requires `cf init --ide copilot` to work on a fresh directory where `.claude/` never exists.\n\nThe design never says whether the script reads the guide's own rule and skill sources or requires a prior Claude run, which is a hidden dependency. State the source directory for rules and skills explicitly, and correct the layout annotations to match.",
+   "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:36-49"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Unmanaged-content safety covers only two of the four output locations",
+   "description": "The marker check covers `.github/copilot-instructions.md` and `AGENTS.md` only. `.github/instructions/` and `.github/prompts/` are shared, user-authored locations in Copilot repos. A user file with a colliding name (for example `testing.instructions.md` or `commit.prompt.md`) is overwritten with no prompt or backup.\n\nThis leaves the plan requirement \"first-run warns before overwriting unmanaged user content\" unmet for those directories. The gaps to close:\n- **Per-file check:** specify the marker check, or a skip-and-warn, for the split instruction and prompt files.\n- **Marker placement:** say where the marker sits in files that open with YAML frontmatter.\n- **Worktree copy:** `propagateToWorktrees` (line 89) copies all four paths into each worktree with no managed check, so it can clobber a worktree's own unmanaged `AGENTS.md` or prompt files.\n- **Stale files:** say what happens to a generated file whose source rule was removed.",
+   "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:98-100"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Failure modes of the script execution path are not enumerated",
+   "description": "The Risks section asserts that an older submodule \"will fail at the script step with a clear error\". That depends on how the existing script treats an unknown argument, which the design does not establish. If the script exits 0 on an unrecognised target, step 7 prints `IDE setup complete for copilot.` with nothing generated, which is a silent failure.\n\nThe cases that need an explicit strategy:\n- **Old submodule:** the script has no `copilot` case; add a capability check or verify the expected outputs exist after the run.\n- **Non-zero exit mid-run:** some files are written and others are not.\n- **Failure after backup:** step 4 has already prompted and written `.bak` before step 5 fails; state what state the user's files are left in.\n- **Propagation failure:** one worktree fails to copy in step 6.\n\nEach needs an observable signal and at least one test. The Test Coverage section has none for script failure.",
+   "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:133"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "No verification for the translation success criteria",
+   "description": "The plan's success criteria include \"Path\u2192applyTo translation correctly converts Claude frontmatter to Copilot frontmatter\" and generation of the four output types. Every listed test exercises the CLI wrapper; none covers the guide script.\n\nAdd script-level tests that run on real rule files, per the project's parser-fixture rule:\n- multi-line and compact `paths` forms\n- absent `paths`\n- globs containing commas or quotes\n- routing of `alwaysApply` rules to the single compiled file\n\nThe skill-to-prompt frontmatter mapping (`name`, `description`, `argument-hint`, `agent`, `model`, `tools` in the plan) is not specified at all, so it cannot be tested yet.",
+   "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:121-129"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "Two slice-plan deliverables are dropped: tool-guide reference and agents mapping",
+   "description": "The plan's success criterion requires the tool guide (`project-documents/user/tool-guides/copilot-vscode/setup-ide.md`) to be \"referenced in slice design, promoted to a proper published tool guide if needed\". The design never references it and makes no promotion decision.\n\nThe plan's mapping table also says to \"document mapping\" for `.claude/agents/` \u2192 Copilot custom agents. The design repeats \"document the mapping but defer implementation\" but contains no mapping and names no document where it will live. Add the reference and either the mapping or a named deliverable for it.",
+   "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:54"
+  },
+  {
+   "i": 7,
+   "severity": "NOTE",
+   "title": "Helper naming is inconsistent within the document",
+   "description": "Technical Scope (line 29) names `isManagedCopilot(filePath)`; Files Changed names `isManagedCopilotFiles(projectPath)`, with a different name and parameter. The marker logic is the same as the Claude check, so one path-taking marker function reused for both targets would avoid replicating it (DRY).",
+   "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:109"
+  },
+  {
+   "i": 8,
+   "severity": "NOTE",
+   "title": "Identical content in two always-on files",
+   "description": "Writing the same compiled content to both `.github/copilot-instructions.md` and `AGENTS.md` follows the plan's mapping table. If VS Code loads both files, the rules are injected twice. The plan's ordering caveat says \"(or `AGENTS.md`)\", so it is worth confirming against the tool guide whether `AGENTS.md` should be a full copy or a pointer.",
+   "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:61"
+  }
+ ]
+}

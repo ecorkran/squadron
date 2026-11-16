@@ -1,0 +1,225 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "PASS",
+      "title": "Success criteria trace to tasks",
+      "description": "- **Functional requirements:** Task 12 fixtures 1\u201313 map one-to-one onto empty, scaffold-only, brownfield, shallow clone, monorepo, concept-only, planned, resume, overrides and re-detect, `--phase 2`, explicit `brownfield-adoption`, missing profile, and `template_preview` read-only.\n- **Other criteria:** \"no source walk on a planned project\" is asserted by the spy in Task 9T; invalid-value rejection is in Task 1T; parity is Task 13; byte-identical planned builds are Task 10T (\"not selected \u2192 identical output\") plus walkthrough step 1 in Task 15.\n- **Scope:** no task falls outside the design. The `INITIATIVE_PLAN_FILE_PATTERN` extraction in Task 6 is justified: `findProjectGuideFile` does swallow every `readdir` error (`packages/core/src/introspection/ArtifactIntrospector.ts:21-31`), which conflicts with D6.",
+      "file_ref": null,
+      "category": "completeness",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:229-245"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "\"Guide without profile\" criterion is not tested at the `cf build` / `context_build` surface",
+      "description": "The criterion reads: \"`cf build` exits non-zero with the `AdoptionError` message; `context_build` returns it as an error.\"\n\n- **What exists:** Task 12 fixture 12 only asserts that the pipeline rejects. The `cf build` half is checked by hand in walkthrough step 4.\n- **What is missing:** nothing checks the `context_build` half; walkthrough step 5 covers parity and `template_preview` only. No CLI or MCP test references `AdoptionError` or `PermissivenessFragmentError` today, so no existing test covers this path either.\n- **Fix:** Task 11 already edits `build.test.ts` and `contextTools.test.ts`. Add one case to each where the mocked `generateContextFromProject` rejects with `AdoptionError`: `cf build` reaches `handleError` with a non-zero exit, and `context_build` returns an error result carrying the message.",
+      "file_ref": null,
+      "category": "test-coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:217-223"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Two unit-test items named in the Technical Requirements are missing",
+      "description": "- **Renderer, \"every outcome\":** Task 8T covers `brownfield`, `adoption-in-progress` and `NOT_EVALUATED`. Task 8 requires an exhaustive switch over `AdoptionOutcome`, so `greenfield`, `already-planned` and `adoption-closed` must also render. No step says what their outcome bullet reads and no test covers them, so the implementer has to invent text for three untested branches. Add the three bullet texts to Task 8 and an `it.each` over them in 8T.\n- **Write failure, \"state unchanged\":** the Task 9T write-failure case (line 199) asserts only the error message. Add the state assertion the design names.",
+      "file_ref": null,
+      "category": "test-coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:163-176"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Commit points are checkbox tasks, not `**Commit**:` marker lines",
+      "description": "- **Format:** the commits are written as `- [ ] **Task 2C: Commit** \u2014 \u2026` (also 3C, 5C, 6C, 8C, 9C, 11C, 13C, 14C, 15C). The implementation prompt tells the agent to look for lines starting with `**Commit**:` (`project-documents/ai-project-guide/project-guides/prompt.ai-project.system.md:366`) and to commit after every task when none are found. These lines do not match, so the intended grouping is lost.\n- **Check-off drift:** a commit written as a checkbox can only be ticked after the commit it describes, so the tick always lands in the next commit.\n- **Placement is fine:** each commit sits after an implementation-plus-test group at a building state. Convert each to a plain `**Commit**: \\`message\\`` line in the same position.\n- **Task 15C:** it commits only recorded walkthrough notes. Move the README marker (14C) to after Task 15 so one commit carries both.",
+      "file_ref": null,
+      "category": "commit-markers",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:78"
+    },
+    {
+      "severity": "PASS",
+      "title": "Sequencing, test-with pattern and sizing",
+      "description": "- **Order:** dependencies run forward only: key and contracts, then facts, then outcome and renderer, then resolver, then integrator, then pipeline callers, then integration.\n- **Test-with:** every implementation task is followed directly by its test task; Task 11 carries its own test edits.\n- **Cycles:** the task file handles both import cycles explicitly \u2014 `ADOPTION_STATES` lives in `ConfigKeys.ts`, and `SourceVolume` is brought in with `import type`.\n- **Size:** 16 tasks for roughly ten new source files and four touched services is proportionate. Task 12 is the largest (13 fixtures, effort 3), but it is one file with one helper and the design names each fixture, so no split is needed.",
+      "file_ref": null,
+      "category": "sequencing",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:45-269"
+    },
+    {
+      "severity": "PASS",
+      "title": "Code references in the tasks match the repository",
+      "description": "- **Integrator:** the constructor has six parameters, so \"seventh\" is right. `checkoutPath` is computed after mapping (lines 134\u2013139), as Task 10 says.\n- **`gitExec`:** the signature is `gitExec(args, cwd, opts)` with `timeoutMs` and a \"timed out after Ns\" message (`packages/core/src/guides/gitExec.ts:73-97`).\n- **Legacy phase:** `'phase 1: concept'` is mapped (`packages/core/src/schema/projectSchema.ts:141`).\n- **Profile and prompt lookup:** `brownfield-adoption` resolves without a new mapping entry \u2014 unknown instructions normalise to themselves (`packages/core/src/services/ContextProfileParser.ts:178-181`), and the prompt key match is hyphenated.\n- **Write-failure test:** `ConfigManager` writes with plain `writeFile` (`packages/core/src/config/ConfigManager.ts:35`), so the `chmod 444` case will fail as intended.\n- **Callers:** every `createContextPipeline(` test caller sits under `packages/*/tests`, so Task 11's grep finds them all; the `build.test.ts` assertion is at line 227.\n- **README:** the config key table row is at `README.md:388`.",
+      "file_ref": null,
+      "category": "accuracy",
+      "raw_category": null,
+      "location": "packages/core/src/services/ContextIntegrator.ts:82-88"
+    },
+    {
+      "severity": "PASS",
+      "title": "No load test or CI gate is required",
+      "description": "D2 sets a sub-second target but says \"Tests assert the caps, not timings\", and Task 3T asserts both caps. The `tests/load/` tier is a Python rule (`project-documents/ai-project-guide/project-guides/rules/python.md:57`) and does not apply to this TypeScript repo, so no requirement is left unmet.",
+      "file_ref": null,
+      "category": "nfr",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:38"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Task 15 says \"Run format\" but the repo has no formatter",
+      "description": "The root `package.json` defines only `build`, `test`, `lint` and `typecheck`, and there is no Prettier or Biome config. Drop \"format\" from the step, or name the command, so the implementer does not guess one and reformat unrelated files.",
+      "file_ref": null,
+      "category": "clarity",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:260"
+    },
+    {
+      "severity": "NOTE",
+      "title": "A render-fact failure after the state write gets the generic error stub",
+      "description": "`pathPresent` rethrows everything but `ENOENT`, and Task 4T pins \"`ENOTDIR` throws\". A repo with a regular file named `doc`, `docs`, `.cursor` or `.claude` makes a nested candidate such as `docs/adr` throw a plain `Error` in resolver step 6, after step 5 has already written `in_progress`. The task follows the design here (D9: only `AdoptionError` is rethrown), so no task change is needed; this is something to raise against the design if the behaviour is unwanted.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "packages/core/src/detection/pathPresent.ts:19-26"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "pass",
+      "category": "completeness",
+      "raw_category": null,
+      "summary": "Success criteria trace to tasks",
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:229-245",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "test-coverage",
+      "raw_category": null,
+      "summary": "\"Guide without profile\" criterion is not tested at the `cf build` / `context_build` surface",
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:217-223",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "concern",
+      "category": "test-coverage",
+      "raw_category": null,
+      "summary": "Two unit-test items named in the Technical Requirements are missing",
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:163-176",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "commit-markers",
+      "raw_category": null,
+      "summary": "Commit points are checkbox tasks, not `**Commit**:` marker lines",
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:78",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "pass",
+      "category": "sequencing",
+      "raw_category": null,
+      "summary": "Sequencing, test-with pattern and sizing",
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:45-269",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "pass",
+      "category": "accuracy",
+      "raw_category": null,
+      "summary": "Code references in the tasks match the repository",
+      "location": "packages/core/src/services/ContextIntegrator.ts:82-88",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "pass",
+      "category": "nfr",
+      "raw_category": null,
+      "summary": "No load test or CI gate is required",
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:38",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "note",
+      "category": "clarity",
+      "raw_category": null,
+      "summary": "Task 15 says \"Run format\" but the repo has no formatter",
+      "location": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md:260",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "note",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "A render-fact failure after the state write gets the generic error stub",
+      "location": "packages/core/src/detection/pathPresent.ts:19-26",
+      "location_verified": true
+    }
+  ],
+  "template_name": "tasks",
+  "input_files": {
+    "input": "project-documents/user/tasks/261-tasks.detection-and-adoption-state.md",
+    "against": "project-documents/user/slices/261-slice.detection-and-adoption-state.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/context-forge-261-tasks"
+  },
+  "timestamp": "2026-11-16T16:23:18.489604",
+  "model": "claude-fable-5-2",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 33,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-fable-5-2",
+  "answering_models": [
+    "claude-fable-5-2"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 9,
+    "in_fences": 0,
+    "in_section": 9,
+    "surviving": 9
+  },
+  "effort": "high",
+  "profile": "sdk",
+  "turns": 34,
+  "prompt_tokens": 828796,
+  "cached_tokens": 663529,
+  "cache_write_tokens": 165251,
+  "completion_tokens": 23250,
+  "reasoning_tokens": null,
+  "duration_seconds": 219.49440541584045,
+  "cost_usd": 3.7075816999999995,
+  "cost_basis": "provider"
+}

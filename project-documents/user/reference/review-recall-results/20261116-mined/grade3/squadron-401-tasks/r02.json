@@ -1,0 +1,54 @@
+{
+ "review": "r02",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "FAIL",
+   "title": "Python Success Criterion 3 fixture scores 7 under Task 3's rules, not 6",
+   "description": "Task 3 (following D2) counts a comprehension as 1 per `for` plus 1 per `if`. A comprehension `if` cannot exist without its `for`, so the Task 4 fixture (`if`, `elif`, `and`, a comprehension `if`, an `except`) scores 1 + 1 + 1 + 1 + 2 + 1 = 7. Task 4 line 65 expects 6, copying Success Criterion 3 from the slice design (`401-slice\u2026md:266`), which contradicts D2 (`401-slice\u2026md:139`).\n\nThe same slip is in Task 4 line 63: \"one test per decision point \u2026 each scoring 2\" gives 3 for the comprehension-`if` case.\n\nAn implementer will either drop the comprehension `for` from the constant (violating D2) or change the expected value (violating Success Criterion 3). Decide which is right, fix the slice design, and restate the expected values in Task 4. The TypeScript fixture is correct at 6.",
+   "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:54-65"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "`MemoryError` is both a per-file token error and a whole-pass failure",
+   "description": "Task 10 puts any of `token_errors` into `unparsed_files` and separately treats a `MemoryError` during the pass as `tool_failed`. Task 11 line 139 expects a tokenizer that raises `MemoryError` to give `tool_failed`. Task 14 line 160 then lists `MemoryError` among the TypeScript token errors, mirroring `src/squadron/metrology/snapshot/typescript_length.py:151`.\n\nFor TypeScript the outcome therefore depends on `except` ordering, and the two languages can diverge. The failure-mode table says `MemoryError` gives `tool_failed`. Remove `MemoryError` from Task 14's token errors, or state the precedence in Task 10.",
+   "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:121-123"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Task 2's \"suite passes unchanged\" cannot hold",
+   "description": "That test asserts `adapter.metrics == set(SnapshotMetric)`. Once Task 2 adds four enum members and narrows `PythonAdapter.metrics` to the four slice-400 metrics, the assertion fails. It stays red until Task 25.\n\nTask 2 should name this test and say how to edit it (assert the explicit set). Its success line should read \"passes with that one edit\". `ALL_METRICS = frozenset(SnapshotMetric)` in `tests/metrology/snapshot/test_take.py:25` deserves the same check; I did not trace how its fake adapters use it.",
+   "location": "tests/metrology/snapshot/test_python_length.py:60"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "\"Marks every line under both windows\" does not define which lines count",
+   "description": "The `Tokenizer` type yields one line number per token. Task 10 does not say whether a confirmed window marks only the lines that carry its tokens, or the whole span from first to last token line.\n\n- **Span marking** counts the blank and comment-only lines inside a clone. That breaks D3's \"duplicated lines are always non-blank lines\" and the file-length denominator.\n- **Token-line marking** misses continuation lines of multi-line tokens (triple-quoted strings, template strings).\n\nTask 13's test (\"different comments and blank lines report the function's lines\") passes loosely under either reading. State the rule in Task 10 and add an exact-count assertion to Task 11.",
+   "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:125-126"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Commit steps are checkboxes, not plain `**Commit**:` markers",
+   "description": "All sixteen commit steps are written as `- [ ] Commit: \u2026` checklist items (Tasks 2, 4, 6, 7, 9, 11, 13, 15, 17, 18, 20, 22, 24, 26, 27, 28, 29). Checking the box after committing leaves an uncommitted check-off, which invites a box-only commit.\n\nPlacement is sound: every marker follows a passing test task, and Tasks 3, 5, 8, 10 and the other implementation-only tasks correctly have none. Convert them to plain `**Commit**: \\`\u2026\\`` lines. Task 30's \"Commit any remaining changes\" (line 290) should be dropped or converted the same way.",
+   "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:46"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Two success-criterion clauses have no asserting test",
+   "description": "- **Success Criterion 10, \"its other metrics are unchanged\":** Task 11 tests the ceiling only at module level with a test tokenizer. Add one adapter-level case to Task 13 or 15: lower the constant and assert the other metrics are still present.\n- **Success Criterion 1, duplication `counting` text:** Task 10 builds it from the constants, but no test asserts it names the window size and the ceiling. Task 9 does this for complexity only. One assertion in Task 11 closes it.",
+   "location": "project-documents/user/tasks/401-tasks.complexity-duplication-and-coverage.md:138"
+  },
+  {
+   "i": 6,
+   "severity": "NOTE",
+   "title": "`tool_support.tool_failed` requires a `command` argument and logs on its own",
+   "description": "Tasks 10 and 23 route failures through `tool_failed`, which takes a required `command=` keyword. Neither task says what to pass for an in-process pass or a report read.\n\nIt also logs a WARNING per call. With Task 21's own WARNING per failure, a bad report yields three WARNINGs per language (one from `read_coverage`, one per metric). Task 24's \"with a WARNING\" still passes, but stating the intended count would avoid a noisy result.",
+   "location": "src/squadron/metrology/snapshot/tool_support.py:42-54"
+  }
+ ]
+}

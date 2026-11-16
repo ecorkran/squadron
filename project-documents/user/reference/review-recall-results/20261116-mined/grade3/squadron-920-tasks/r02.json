@@ -1,0 +1,54 @@
+{
+ "review": "r02",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "FAIL",
+   "title": "Task 6 contradicts itself on informational events, and the agent-path consumers are not protected",
+   "description": "- **Contradiction:** Task 6 says to \"log at DEBUG and continue the loop without yielding it to the caller\" and, in the same sentence, to \"let it flow to translation as normal\". These are mutually exclusive, because `_skip_unparseable` either yields the event or does not. The slice design has the same split (D4 says skip; D6 and the Data Flow say it continues to translation), so the task file needed to resolve it and did not.\n- **Consequence if yielded:** Task 4's new system message reaches three agent-path consumers that do not exclude it and append it to prose:\n  - `src/squadron/review/review_client.py:263`\n  - `src/squadron/pipeline/summary_oneshot.py:139`\n  - `src/squadron/pipeline/actions/dispatch.py:165`\n- **Requirement left unmet:** Walkthrough step 3 (\"a `rate_limit_event` \u2026 must not appear in the artifact's prose\") and the issue #23 defect class that D6 warns about.\n- **Task 8 does not close it:** it only patches `sdk_session.py:173` and says to \"verify no other exclusion list exists\" by grep. The grep will find these three, and the task gives no instruction for them.\n- **Fix:** pick one behaviour explicitly.\n  - Either `_skip_unparseable` drops informational events (D4), so the translation branch only serves the pipeline `dispatch` path.\n  - Or it yields them, and a task adds the exclusion at all three consumers with a test.\n- Task 10's `allowed_warning` test should then assert whichever behaviour is chosen.",
+   "location": "src/squadron/review/review_client.py:263"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Commits land on a red suite; tests do not follow their implementation tasks",
+   "description": "- **Task 6 breaks an existing test:** it removes the `is_rate_limit_event` re-raise, so `test_a_rejected_rate_limit_event_reaches_the_backoff` (line 648) fails from that commit on.\n- **Task 9 breaks four more:** it deletes `install_rate_limit_parser_shim`, so the four shim tests (lines 684\u2013760) fail on import.\n- **Nothing repairs them until Task 10**, yet Tasks 6, 7, 8 and 9 each carry a commit. That is four commits at non-working points.\n- **Marker format:** the commits are written as `- [ ] Commit:` checkboxes after nearly every task, not plain `**Commit**:` lines at tested points.\n- **Fix:**\n  - Fold the `test_agent.py` rewrite and shim-test deletion into Task 6 and Task 9 (or place them immediately after).\n  - Fold Task 11 in after Tasks 7 and 8.\n  - Reduce to about four plain `**Commit**:` markers: pin; helpers, translation and their tests; re-key, shim removal and test rewrite; closeout.",
+   "location": "tests/providers/sdk/test_agent.py:648-760"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Task 3 and Task 10 conflict, and criterion 7 loses its loop-level test",
+   "description": "- **Direct conflict:** Task 3 adds `_is_throttle(ClaudeSDKError(\"rate_limit_event: slow down\"))` to `test_agent.py`. Task 10's success check requires that a grep for `ClaudeSDKError(\"rate_limit_event` in that file returns nothing. Both cannot pass.\n- **Coverage loss:** Task 10 converts every substring-driven backoff test (lines 526, 562, 612, 639) to typed events. Criterion 7 (a plain-text 429 still triggers backoff) is then covered only by a helper unit test, not through any retry loop.\n- **Fix:** keep one loop-level test that raises a plain `ClaudeSDKError` with non-event 429 text containing `rate_limit`, use the same wording in Task 3, and leave Task 10's grep as written.",
+   "location": "tests/providers/sdk/test_agent.py:526"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "`_is_throttle` imported across modules will likely fail strict pyright",
+   "description": "- Task 2 defines the underscore-private `_is_throttle` in `rate_limit.py`. Tasks 6 and 7 import it into `agent.py` and `sdk_session.py`.\n- `pyproject.toml:96` sets `typeCheckingMode = \"strict\"`, which should report `reportPrivateUsage` for that import. I did not run pyright to confirm; the repo already suppresses that rule inline for similar cross-module uses (e.g. `src/squadron/metrology/audit.py:43`).\n- This puts criterion 11 (zero pyright errors) at risk, and it would only surface at Task 13.\n- **Fix:** name it publicly in Task 2 (for example `is_throttle`), or state the required suppression explicitly.",
+   "location": "src/squadron/providers/sdk/rate_limit.py"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Task 8 is too granular, and Tasks 4 and 8 scatter the `\"rate_limit_event\"` literal",
+   "description": "- **Granularity:** Task 8 is a one-token edit in the same function Task 7 rewrites, with its own commit. Between the two commits, informational events leak into `dispatch` prose. Merge it into Task 7.\n- **Scattered literal:** Tasks 4 and 8 both hardcode `\"rate_limit_event\"`, although `RATE_LIMIT_EVENT_TYPE` already exists at `src/squadron/providers/sdk/rate_limit.py:46` and D1 retains it. The project rule requires one definition, so both tasks should reference the constant.",
+   "location": "src/squadron/pipeline/sdk_session.py:173"
+  },
+  {
+   "i": 5,
+   "severity": "NOTE",
+   "title": "Criterion 2 grep covers `src` only",
+   "description": "Criterion 2 and walkthrough step 1 require no `install_rate_limit_parser_shim` in `src` or `tests`. Task 9 greps `src` only, and Task 10 deletes the shim tests without a matching grep. Add `grep -rn install_rate_limit_parser_shim src tests` to Task 10 or Task 13.",
+   "location": "project-documents/user/tasks/920-tasks.claude-agent-sdk-upgrade-and-rate-limit-parser-shim-retirement.md:88"
+  },
+  {
+   "i": 6,
+   "severity": "NOTE",
+   "title": "Minor task hygiene",
+   "description": "- **Task 12:** verification-only, and could be two lines in Task 13.\n- **Task 13:** its `chore: format and lint pass` commit will be empty if nothing needed reformatting.\n- **Tasks 14 and 15:** they require a plain CLI terminal but do not say what an executor running inside a Claude Code session should do. Under project rules that would be a `BLOCKED:` line.\n- **Task 5:** \"create if it does not exist\" is unnecessary, since `tests/providers/sdk/test_translation.py` exists.",
+   "location": "project-documents/user/tasks/920-tasks.claude-agent-sdk-upgrade-and-rate-limit-parser-shim-retirement.md:110-138"
+  }
+ ]
+}

@@ -1,0 +1,73 @@
+Producer replay - design   reviewer: haiku-xhigh   judge: opus-high (prompt 
+1d37ac)
+  config                                               n  failed  accepted  rounds  cost (priced)            time    BT    W-L-T   pairs
+  ───────────────────────────────────────────────────  ─  ──────  ────────  ──────  ───────────────────────  ──────  ────  ──────  ───────────────────
+  fable-medium (claude-fable-5-2, sdk, effort medium)  5  0/5     4/5       2       $4.88 (24 of 24 priced)  15m55s  4.57  14-2-3  19 (3 inconsistent)
+  opus-high (claude-opus-5-5, sdk, effort high)        5  0/5     3/5       2       $3.47 (23 of 23 priced)  18m48s  2.77  12-4-3  19 (3 inconsistent)
+  sonnet-high (claude-sonnet-5-5, sdk, effort high)    5  0/5     5/5       2       $1.99 (25 of 25 priced)  17m20s  0.25  2-14-3  19 (3 inconsistent)
+  haiku-xhigh (claude-haiku-5-5, sdk, effort xhigh)    4  0/4     3/4       2       $0.95 (19 of 19 priced)  20m46s  0.23  2-12-2  16 (2 inconsistent)
+  original                                             —  —       —         —       —                        —       1.38  9-7-3   19 (3 inconsistent)
+slices: 924, 926, 929, 930, 931 · position consistency 84% (39 of 46) · prompt 
+identity: squadron 0.24.31, cf 0.19.28, guide v0.18.1; squadron 0.24.31, cf 
+0.19.28, guide v0.19.1
+warning: the judge's model (claude-opus-5-5) is also a contestant's model
+
+Producer replay - design   reviewer: opus   judge: none yet
+  config                                                       n  failed  accepted  rounds  cost (priced)          time   BT  W-L-T  pairs
+  ───────────────────────────────────────────────────────────  ─  ──────  ────────  ──────  ─────────────────────  ─────  ──  ─────  ─────
+  glm-flash (z-ai/glm-5.3-flash, openrouter, effort not sent)  1  1/1     —         —       $0.10 (1 of 1 priced)  3m01s  —   0-0-0  0      below floor
+  haiku (claude-haiku-4-5-20251001, sdk, effort not sent)      2  0/2     2/2       2       $2.59 (8 of 8 priced)  8m44s  —   0-0-0  0      below floor
+  sonnet (claude-sonnet-5-5, sdk, effort not sent)             1  0/1     1/1       2       $2.94 (4 of 4 priced)  6m17s  —   0-0-0  0      below floor
+slices: 176 · no judged pairs · prompt identity: squadron 0.22.0, cf 0.19.13, 
+guide v0.20.12
+
+Producer replay - design   reviewer: sonnet   judge: none yet
+  config                                                                              n  failed  accepted  rounds  cost (priced)           time   BT  W-L-T  pairs
+  ──────────────────────────────────────────────────────────────────────────────────  ─  ──────  ────────  ──────  ──────────────────────  ─────  ──  ─────  ─────
+  haiku-xhigh (claude-haiku-5-5, sdk, effort xhigh)                                   4  3/4     1/1       3       $1.83 (7 of 10 priced)  7s     —   0-0-0  0      below floor
+  mimo (xiaomi/mimo-v2.6-pro, openrouter, effort not sent, max 131072 output tokens)  4  4/4     —         —       $0.12 (4 of 4 priced)   8m48s  —   0-0-0  0      below floor
+slices: 946, 947, 949 · no judged pairs · prompt identity: squadron 0.24.24, cf 
+0.19.26, guide v0.20.12; squadron 0.24.24, cf 0.19.26, guide v0.21.5; squadron 
+0.24.24, cf 0.19.26, guide v0.22.15
+
+Bradley-Terry fit stopped at the 10000-iteration cap before converging
+Producer replay - tasks   reviewer: glm-flash   judge: none yet
+  config                                                                                 n  failed  accepted  rounds  cost (priced)          time    BT  W-L-T  pairs
+  ─────────────────────────────────────────────────────────────────────────────────────  ─  ──────  ────────  ──────  ─────────────────────  ──────  ──  ─────  ─────
+  glm-flash (z-ai/glm-5.3-flash, openrouter, effort not sent, max 128000 output tokens)  1  0/1     1/1       2       $0.22 (5 of 5 priced)  25m29s  —   0-0-0  0      below floor
+  glm-flash-low (z-ai/glm-5.3-flash, openrouter, effort low)                             1  0/1     1/1       2       $0.21 (2 of 5 priced)  31m16s  —   0-0-0  0      below floor
+slices: 176 · no judged pairs · prompt identity: squadron 0.24.22, cf 0.19.25, 
+guide v0.20.12
+
+Producer replay - tasks   reviewer: haiku-xhigh   judge: opus-high (prompt 
+1d37ac)
+  config                                                 n  failed  accepted  rounds  cost (priced)            time    BT      W-L-T   pairs
+  ─────────────────────────────────────────────────────  ─  ──────  ────────  ──────  ───────────────────────  ──────  ──────  ──────  ───────────────────
+  fable-medium (claude-fable-5-2, sdk, effort medium)    2  0/2     1/2       2       $3.02 (7 of 9 priced)    8m40s   214.37  5-0-2   7 (2 inconsistent)
+  opus-high (claude-opus-5-5, sdk, effort high)          4  0/4     4/4       2       $3.30 (19 of 20 priced)  18m38s  117.79  8-1-2   11 (2 inconsistent)
+  haiku-xhigh (claude-haiku-5-5, sdk, effort xhigh)      3  0/3     1/3       2       $0.79 (10 of 13 priced)  14m52s  36.47   4-3-2   9 (2 inconsistent)
+  sonnet-high (claude-sonnet-5-5, sdk, effort high)      3  1/3     0/2       —       $0.64 (6 of 9 priced)    2m49s   0.00    1-5-0   6
+  fable-medium (claude-fable-5-2, sdk, effort not sent)  1  1/1     —         —       —                        4s      —       0-0-0   0                    below floor
+  original                                               —  —       —         —       —                        —       0.00    1-10-0  11
+slices: 924, 929, 930, 934 · position consistency 86% (19 of 22) · prompt 
+identity: squadron 0.24.31, cf 0.19.28, guide v0.19.1; squadron 0.24.31, cf 
+0.19.28, guide v0.20.3
+warning: the judge's model (claude-opus-5-5) is also a contestant's model
+note: the Bradley-Terry fit stopped at its iteration cap before converging
+
+Producer replay - tasks   reviewer: luna   judge: none yet
+  config                                            n  failed  accepted  rounds  cost (priced)            time   BT  W-L-T  pairs
+  ────────────────────────────────────────────────  ─  ──────  ────────  ──────  ───────────────────────  ─────  ──  ─────  ─────
+  luna (gpt-6-luna, openai-oauth, effort not sent)  1  0/1     1/1       2       $0.0033 (5 of 5 priced)  5m09s  —   0-0-0  0      below floor
+slices: 400 · no judged pairs · prompt identity: squadron 0.24.23, cf 0.19.25, 
+guide v0.22.5
+
+Producer replay - tasks   reviewer: sonnet   judge: none yet
+  config                                                          n  failed  accepted  rounds  cost (priced)          time    BT  W-L-T  pairs
+  ──────────────────────────────────────────────────────────────  ─  ──────  ────────  ──────  ─────────────────────  ──────  ──  ─────  ─────
+  hy4 (tencent/hy4, openrouter, effort not sent)                  1  1/1     —         —       $0.88 (4 of 5 priced)  38m38s  —   0-0-0  0      below floor
+  kimi31 (moonshotai/kimi-k3.1-pro, openrouter, effort not sent)  1  0/1     1/1       2       $1.53 (4 of 5 priced)  5m55s   —   0-0-0  0      below floor
+  sonnet-high (claude-sonnet-5-5, sdk, effort high)               1  0/1     1/1       2       $1.42 (4 of 5 priced)  5m39s   —   0-0-0  0      below floor
+slices: 403 · no judged pairs · prompt identity: squadron 0.24.31, cf 0.19.28, 
+guide v0.22.10
+

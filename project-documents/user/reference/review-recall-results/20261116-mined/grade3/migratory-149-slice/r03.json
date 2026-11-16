@@ -1,0 +1,61 @@
+{
+ "review": "r03",
+ "findings": [
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Subdivision candidate counts are wrong, so the \"multiplicative\" claim is unsupported",
+   "description": "The slice says S=3 alone drops candidates to ~5000, and to ~555 with early exit. Those are per-cell figures, not scan totals.\n\n- **Actual scan total at S=3:** a 7\u00d77 scan is 49 cells \u00d7 ~555 \u2248 27,000 candidates. `148-notes.rediagnosis.md` (Intervention 2) states the same figure.\n- **Actual gain from subdivision alone:** scanned area goes from 9r\u00b2 to (7/3)\u00b2r\u00b2 \u2248 5.4r\u00b2, about 1.65\u00d7. The limit as S grows is 2.25\u00d7, not 9\u00d7.\n- **With early exit:** the scan stops after roughly `max_neighbors` \u00f7 acceptance-rate tests regardless of cell size, so subdivision's marginal effect on capped agents is small and unquantified.\n\nIntervention 2 carries most of the slice's new surface (config field, kernel parameter, CLI flag, validation). The plan assigns it here, so it stays. Correct the figures, and state what S is expected to buy: uncapped or sparse agents and a better acceptance rate. That way the A2/A3 gates are not read as depending on a 9\u00d7 candidate reduction, and the architecture's \"profile before you optimize\" principle is met by a prediction that can be checked.",
+   "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:56-58"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Break sits outside the seam, so \"A7 seam preserved\" is overstated",
+   "description": "Option A puts the termination test (`k_found >= max_neighbors and max_neighbors > 0`) in the kernel loop while `get_neighbors_first_k` keeps its own cap gate. That creates two problems:\n\n- **Duplication:** the cap rule, including the \"0 means uncapped\" sentinel, now lives in two places.\n- **Swap no longer local:** slice 145 defines the seam as the point where distance-ranked selection can replace first-k \"without changing the tick kernel structure\". Distance-ranked selection must keep scanning after k candidates are held, so the hard-coded break would have to be removed from the kernel at swap time. Line 112's claim that the swap point \"remains intact\" does not hold as written.\n\nA light fix is enough: put the stop predicate in a sibling function beside the seam (for example a `scan_complete(k_found, k_max)` func) that the loop consults for the break. Selection and termination policy then change together.",
+   "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:31-46"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Step 3 ablation cannot distinguish its four cases",
+   "description": "The four runs are two pairs of identical commands: \"baseline, counter-gating\" and \"early exit only\" are the same S=1 invocation, and likewise the two S=3 runs. Intervention 1 replaces counter-gating and defines no toggle, so the counter-gated runs cannot be produced from the slice's own build.\n\nCut the ablation to what the plan's exit criteria need:\n\n- Take the baseline from the recorded slice 145 measurement (or a run on the pre-slice commit).\n- Run S=1 and S=3 on the new build.\n\nKeeping the S=1 run matters. S=1 is the default that slice 146 inherits, while headroom is only gated at S=3 (line 128). Do not add an early-exit toggle just to serve the ablation.\n\nThe commands also use `python scripts/bench.py --config \u2026 --N \u2026 --parity-check numpy`. The slice 145 and 148 walkthroughs invoke `uv run python -m migratory.bench.cli --backend \u2026 --workload \u2026`. Align them, or name the new flags as scope.",
+   "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:158-176"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "A5 spill check names tooling the CUDA host does not have",
+   "description": "A5 is to be confirmed \"via `nvcc --ptxas-info` or benchmark log\". Step 4 (line 182) relies on \"`TI_PRINT_KERNEL_STATS=1` or equivalent\". `148-notes.envelope-measurement.md` \u00a72A records that `ptxas`, `cuobjdump` and `nvcc` are not installed on that host. The baseline \"local memory = 0\" was established there by counting `.local` declarations in the hot kernel's PTX from the Quadrants kernel cache.\n\nAs written, the gate has no runnable procedure and the environment variable is a guess. Specify the same PTX `.local` inspection used for the baseline, so the before and after figures are comparable.",
+   "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:124"
+  },
+  {
+   "i": 6,
+   "severity": "NOTE",
+   "title": "Break exits only the candidate loop; the cell loops keep running",
+   "description": "After the cap fires, the `drow`/`dcol` loops still visit every remaining cell. That is up to 48 more cell headers at S=3 and 288 at S=8, each computing a cell index and reading its bounds before breaking again. Finer subdivision therefore raises post-cap overhead. Repeating the cap check at the cell-loop level makes \"exits after ~32\" true.",
+   "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:60-65"
+  },
+  {
+   "i": 7,
+   "severity": "NOTE",
+   "title": "Rationale for the S \u2264 8 bound does not hold",
+   "description": "The scan covers the same physical radius at any S, so it cannot be \"larger than the physical neighborhood\". Cell-count arrays at S=8 are also tiny: about 121\u00d7121 cells for the 756-unit world against a 24 GB card. Either drop the upper bound or justify it by scan-cell count, and define it once as a named constant instead of the inline literal.\n\nSeparately, line 53 uses `query_radius` where slice 145 defines cell size from `max_query_radius`. State which applies for multi-profile workloads.",
+   "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:78"
+  },
+  {
+   "i": 8,
+   "severity": "NOTE",
+   "title": "Warp-coherence premise is not established by the referenced design",
+   "description": "The divergence argument assumes threads in a warp are spatially adjacent agents. Slice 145 iterates agents by index `i` and keeps spatial order only in the `sorted_agent_ids` indirection. Warp-mates are therefore not necessarily neighbours.\n\nThe conclusion still stands: a warp runs only as long as its slowest thread, which is far short of 45,000 iterations unless it contains an uncapped agent. The stated reason should be corrected.",
+   "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:27"
+  },
+  {
+   "i": 9,
+   "severity": "NOTE",
+   "title": "How slice 146 obtains S is not stated",
+   "description": "S is described as a `BenchConfig` field and `setup()` is declared unchanged. The slice does not say how a non-bench caller supplies S. Add one sentence: either S is a backend setup input, or 146 owns the choice. This keeps \"Slice 146 is unblocked\" accurate.",
+   "location": "project-documents/user/slices/149-slice.neighbor-scan-early-exit-and-cell-subdivision.md:108-112"
+  }
+ ]
+}

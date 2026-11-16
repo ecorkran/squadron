@@ -1,0 +1,47 @@
+{
+ "review": "r01",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "FAIL",
+   "title": "`unset` routing contradicts the collision remediation and walkthrough step 9",
+   "description": "Line 89 says delete \"mirrors write\" and that `migrate-personal` is \"the one exception that touches the *other* project file\". For a personal key, `cf config unset git.integration_branch --project` therefore deletes from `.context-forge.local.toml`.\n\nLines 146 and 259 rely on that same command to clear the stale copy in the shared file. Under the design's own routing, step 9 does the opposite:\n\n- It removes the personal value (`legacy/value`), which the collision rule exists to protect.\n- The read then falls through to the stale shared value (`another-legacy-value`).\n- The `cf check` warning stays, so \"confirm `cf check` is clean again\" cannot pass.\n\nThe CLI surface is frozen (line 37), so no command can remove a personal key from the shared file after a collision skip. The finding becomes permanent short of hand-editing.\n\nThe same root cause produces a silent no-op before migration. With the value only in the shared file, `unset --project` reports success and the value still resolves.\n\nLightest fix: on collision, have `migrate-personal` keep the personal value, delete the shared copy and report both values. The personal value already wins at read time, and the discarded one stays in git history. This drops the \"skipped\" state and the follow-up `unset` step. Separately, state what `delete` does for a personal key that exists only in the shared file: either remove it from both files or fail explicitly.",
+   "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:89"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Migration silently drops the value for every other checkout once committed",
+   "description": "`migrate-personal` moves the key into a gitignored file and deletes it from a committed one. When that developer commits the shared-file change, each teammate who pulls has no personal file and no shared value. `git.integration_branch` resolves to the empty default, and their work branches fork from and merge into `main`.\n\nNothing surfaces this. The new checker rule only looks for personal keys in the shared file, and there are none left. That breaks the design's own requirement at line 138 (\"Reads must not silently drop that value out from under the user\") and the claim at line 264 that \"nothing breaks silently\". The slice plan's \"defined migration/compat story\" is unmet for the multi-developer case.\n\nThe effect is inherent to the move, so the design need not prevent it, but it must make it visible. At minimum the `migrate-personal` report should state that committing the shared-file change removes the value for all other checkouts and that each developer must set their own. Add the effect to Risk Assessment.",
+   "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:138-144"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Gitignore coverage only reaches freshly initialized projects",
+   "description": "The only mechanism that ignores `.context-forge.local.toml` is `cf init`. Projects that already exist are the same population the Migration Plan targets, and they get the file created by `cf config set ... --project` or `migrate-personal` with no ignore entry. A routine `git add -A` then commits it, which is the leak this slice exists to close.\n\nThe Overview (line 19) promises `cf check` \"enough awareness to keep personal settings out of git\", but the one new rule does not look at whether the personal file is ignored.\n\nLightest fix: reuse the same ensure-ignored helper whenever `ConfigManager` or the CLI first creates the personal file, including in `migrate-personal`. Alternatively, add a `cf check` warning when the personal file exists and is not ignored.",
+   "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:157-159"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Listed tests omit the behaviours the design spends most words defining",
+   "description": "The new-test list covers classification completeness, routing and precedence, the checker rule, and `migrate-personal` happy and no-op paths. It has no automated test for:\n\n- delete routing;\n- the collision branches (different value, identical value);\n- the per-key `failed: <error>` path and the \"present in both files\" recovery state;\n- `cf init` gitignore handling (create, append, already present).\n\nThe parent architecture principle is \"No behavior changes without tests\". The failure modes at lines 149-151 are enumerated, but none has a test asserting its observable signal. Step 9 covers the collision manually only.",
+   "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:222"
+  },
+  {
+   "i": 4,
+   "severity": "NOTE",
+   "title": "Read path is classification-gated where a uniform chain would do",
+   "description": "The condition in step 2 is true in every case (a shared key, or a personal key not found in step 1), so it adds wording without behaviour. The slice plan asks to reuse \"the existing user-vs-project two-file-precedence merge pattern\". A uniform personal \u2192 shared \u2192 user \u2192 default lookup for every key does that, and the migration fallback follows from it with no special case.\n\nAs written, a shared key hand-placed in the local file is silently ignored. That is surprising given the design invokes the `.env.local` convention at line 113. Pick one behaviour and state it; if such keys are ignored, a symmetric checker finding would make it visible.",
+   "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:77-81"
+  },
+  {
+   "i": 5,
+   "severity": "NOTE",
+   "title": "Small under-specified details",
+   "description": "- **Exit status:** the design does not say whether `migrate-personal` exits non-zero when any key reports `failed:`. Exiting zero on partial failure hides it from scripts.\n- **Gitignore match:** line 159 allows a \"substring\" check, which would match a comment or a negation line (`!.context-forge.local.toml`). Use trimmed whole-line equality.\n- **MCP field name:** the API Contracts section does not name the new `config_get` `configPaths` field for the personal path, although it specifies every other contract.\n- **Per-key failure handling:** continue-past-failure across keys (line 149) is machinery for a registry with one personal key. Reading both files once and writing personal then shared gives the same safe ordering with less code.",
+   "location": "project-documents/user/slices/915-slice.config-key-scope-classification-shared-vs-personal.md:149-159"
+  }
+ ]
+}

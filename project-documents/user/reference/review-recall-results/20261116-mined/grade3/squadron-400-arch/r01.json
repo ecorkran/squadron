@@ -1,0 +1,82 @@
+{
+ "review": "r01",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Slice before/after picks the wrong comparison commits, and the snapshots it needs may never be taken",
+   "description": "The Envisioned State defines a slice's before/after as \"the snapshot at its fork point against the snapshot at its merge.\" That attributes the wrong changes to the slice. Fix commits land directly on the target, as Technical Considerations (\"Attributing measurements to slices\") admits, and so do other slices merged in the meantime. Everything that landed between the fork and the merge shows up in the \"after\" snapshot. The slice's own effect is the difference between the merge commit and its first parent. With fast-forward merges, which the project's plain `git merge {branch}` produces, there is no merge commit at all.\n\nThe design also never settles how those snapshots come to exist:\n- \"When snapshots are taken\" makes on-demand CLI the baseline and leaves automatic capture at fork and merge undecided.\n- Without automatic capture, the fork-point snapshot almost never exists, so the rollup has to measure old commits after the fact.\n- \"Taking a snapshot doesn't modify the measured repository\" then forces measuring from an extracted tree (`git archive` into a temp dir, or a throwaway worktree). Neither is mentioned.\n\nThe Rollup slice depends on this, so the architecture should decide three things:\n- Which commits are compared (first parent vs merge, and what happens on fast-forward).\n- Whether old commits are measured from an extracted tree.\n- Whether capture is required at slice boundaries.",
+   "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#envisioned-state"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "The category contract ignores the shared review prompt suffix, non-code review types, and squadron's synthetic findings",
+   "description": "\"Where review categorization happens\" proposes having \"review templates\" emit `AuditCategory`. In the code, category instructions don't live in templates:\n- **Shared suffix.** `_STRUCTURED_OUTPUT_INSTRUCTIONS` in `src/squadron/review/review_client.py:73-93` is appended to every review type. It uses `category: error-handling` as its example, which is not an `AuditCategory` value (the real value is `error-handling-observability`).\n- **Hallucination trap.** That example is the nearest plausible token a model will copy when unsure, exactly the trap CLAUDE.md warns about.\n- **Other review types.** Architecture, slice and task reviews already use their own closed vocabularies (consistency, feasibility, extension-points, antipattern\u2026). These don't map to tech-debt dimensions.\n- **Synthetic findings.** Squadron writes findings with fixed categories itself: `review-coverage` (`coverage.py:7`), `merge-step` (`task_gate.py:25`) and `tooling` (`git_utils.py:170`).\n\nThe document has to say:\n- That normalization applies to `review code` only, and how the shared suffix becomes type-specific.\n- That synthetic findings are left out of ingest. If they are mapped to `other`, they inflate the `other` share, which 323 treats as its signal that the vocabulary doesn't fit the codebase.\n\nThe design goal's own example, \"error-handling findings,\" shows the same name drift.",
+   "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#technical-considerations"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Ingest has no record identity, so findings are duplicated or lost",
+   "description": "\"An ingest step reads review files into the store\" doesn't define what makes an ingested finding unique. Two failure modes follow:\n- **Lost rounds.** Review files are overwritten when a review re-runs (`JudgeResultRef` in `metrology/models.py:41-48` exists because of this). In 303's review\u2192fix\u2192re-review cycles, a manual ingest only sees the last round, so earlier rounds' findings disappear.\n- **Duplicates.** Ingesting the same file twice duplicates every finding, because the store mints a uuid id per write.\n\nPer-slice review counts would then depend on when someone happened to run ingest. The design should do three things:\n- Key ingested records on file path plus a content hash, following 320's `JudgeResultRef` precedent.\n- Make ingest idempotent.\n- Decide whether ingest runs when the review is written, as part of persistence, rather than as a separate step.\n\nPre-306 reviews have no `reviewedSha`, so \"commit where known\" will often be unknown. The report should show that rather than drop those findings.",
+   "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#envisioned-state"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Lint and type counts on brownfield projects have the same environment problem as coverage, but aren't treated as optional",
+   "description": "Technical Considerations calls coverage optional because it \"needs the project's environment.\" Type-error counts have the same problem and are listed as core snapshot metrics:\n- Pyright without the project's venv reports every unresolved third-party import as an error.\n- tsc and eslint with project plugins need `node_modules` installed.\n\nA count taken without the environment measures the missing environment, not the code. It is also deterministic, so nothing flags it as garbage. The \"absent with reason\" rule and the security and environment decision deferred for coverage should cover lint and type counts too. \"Which rule set\" should also say whether the fixed reference rule set can run without installing anything.",
+   "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#technical-considerations"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "One adapter per language is heavier than needed; only lint and type counts are actually language-specific",
+   "description": "The design goal \"each language is a pluggable adapter\" and the anticipated \"Additional language adapters\" slice build a framework the metrics mostly don't need:\n- One multi-language tool (e.g. lizard) gives cyclomatic complexity and function length for many languages, with one definition of each metric. That removes the \"adapters disagree on what a metric means\" problem the document itself raises.\n- Duplication and line counts are language-agnostic, as the document says.\n- Only lint and type-error counts really differ per language.\n\nRecommendation:\n- Cut the per-language adapter contract down to one tool per metric, plus small lint and type adapters per language.\n- Count \"a second language\" as proven when the shared tools run on it.\n\nThe document also never says where tools come from: pinned Python dependencies in `pyproject.toml`, or whatever is on PATH. That decision carries the \"same value with the same tool versions\" goal. If tools come from PATH, most machines will produce snapshots that are mostly absent.",
+   "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#design-goals"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Project-declared limits have no defined home, so squadron's own keystone measures no violations",
+   "description": "\"Limits come from the project\" doesn't say where they are declared. The Overview's motivating gap is squadron's own ~300/~50-line rules, which exist only as prose in CLAUDE.md, with \"~\", \"where practical\" and \"excluding whitespace.\" So the keystone slice, \"proven \u2026 against squadron itself,\" will by its own rule report \"no limits set.\" The gap that motivated the component stays open.\n\nFor brownfield projects, \"without editing the project's config files\" (the design goal \"Cheap to start measuring\") means limits are never declared and violations are never counted.\n\nThe architecture should fix three things:\n- Where limits live, for example squadron or cf project config that sits outside the measured repo.\n- Whether \"lines\" means physical lines or lines excluding blanks and comments, since the project rule says \"excluding whitespace.\"\n- That the keystone declares squadron's limits.",
+   "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#architectural-principles"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "Counts can pool PASS findings and mix review-scoped with repo-scoped findings",
+   "description": "The design goal's example, \"error-handling findings: 4 from review, 2 from audit,\" has two problems:\n- **PASS findings.** Review severity includes `PASS`, which is an affirmation, not a problem. The document says severity is reported on each source's own scale but never says PASS (and probably NOTE) findings stay out of category counts. Without that, a reviewer who writes many PASS findings looks like a source of defects.\n- **Scope.** Review findings cover one diff or slice, while audit findings cover the whole repository. They can sit in the same buckets, but they aren't the same population, and the doc never says reports keep them apart.\n\nState the counting rule and the \"never summed across sources\" rule in Architectural Principles.",
+   "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#design-goals"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "\"No composite anywhere\" conflicts with 420's stated need for scores",
+   "description": "Non-Goals rules out a composite \"not as output, and not as an internal ranking signal.\" \"Breakdown, not a score\" says \"No weighted composite is computed anywhere.\" But Motivation says 420 needs \"objective, comparable scores for implementation output,\" and a model benchmark ranks models. Either 420 builds the composite from this component's records, in which case \"anywhere\" should say \"in this component,\" or 420 must also work from a breakdown, which 420 needs to agree to. As written, a reviewer of the 420 architecture could cite this document to block 420's core output.",
+   "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#non-goals"
+  },
+  {
+   "i": 8,
+   "severity": "CONCERN",
+   "title": "Store scans every record on each query; per-finding records and over-time reports will make reports slow",
+   "description": "\"Extend the 320 store, don't fork it\" inherits `MetrologyStore`'s query model. Every `list_*` call globs and loads every JSON file in the user-level directory (`metrology/store.py:176-189`), across all projects and record types. This component adds the largest record volume in the store:\n- One snapshot per measured commit, possibly carrying per-file length distributions.\n- Normalized review findings. If these are one record per finding, they are hundreds per project.\n\nA per-slice-over-time report would make several full scans. The design should set the record granularity:\n- One record per ingested review file with findings inline, as `AuditRun` does.\n- Summary-level snapshot payloads rather than per-file data.\n\nIt should also say whether the \"no new store\" non-goal still holds once scan cost is measured.",
+   "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#architectural-principles"
+  },
+  {
+   "i": 9,
+   "severity": "NOTE",
+   "title": "\"Doesn't modify the measured repository\" conflicts with most tools' default behaviour",
+   "description": "Coverage writes `.coverage`, pytest writes `.pytest_cache` and `__pycache__`, ruff writes `.ruff_cache`, and jscpd and others write report directories into the working directory. A snapshot run inside the repo dirties it. Under \"A snapshot measures a commit,\" the next snapshot would then be refused or marked dirty. The adapter contract should require output and cache directories outside the tree, or running against an extracted copy, which the first finding needs anyway. The dirty-tree policy, \"either refused or recorded,\" is also left open. Refusing is the simpler choice and keeps the commit key honest.",
+   "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md#envisioned-state"
+  },
+  {
+   "i": 10,
+   "severity": "NOTE",
+   "title": "The dependencies list is incomplete",
+   "description": "Frontmatter `dependencies: [100, 320]` leaves out three things the design builds on directly:\n- **323:** `AuditCategory`, the sync test being extended, and the audit harness the baseline calls.\n- **The review subsystem:** the prompt suffix, the parser at `parsers.py:116` and persistence, which the write-side category change touches.\n- **440's capability probe:** the baseline command must be \"consumable by\" it, but it doesn't exist yet and its contract isn't defined here. The Adoption baseline slice will need that interface before it can be built. At minimum, the baseline command's output should be specified here.",
+   "location": "project-documents/user/architecture/400-arch.code-quality-measurement.md"
+  }
+ ]
+}

@@ -1,0 +1,11 @@
+{
+ "case": "squadron-320-arch",
+ "flaws": [
+  {
+   "id": "F1",
+   "text": "Technical Considerations and Related Work say \"140's `fan_out`\" (lines 81, 110), but 140's own slice plan says fan-out was relocated to initiative 180",
+   "hits": {}
+  }
+ ],
+ "note": "r01 #2, r02 #1, r03 #3 all say fan_out exists but never note it was relocated to initiative 180 or conflicts with the plan; not counted as hits."
+}

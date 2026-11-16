@@ -1,0 +1,21 @@
+{
+ "case": "migratory-304-slice",
+ "flaws": [
+  {
+   "id": "F1",
+   "text": "\"SimulationManager Extension\" shows `step()` with `if self._entity_manager.count == 0: return` before `tick(...)`, so `post_tick()` is skipped when th",
+   "hits": {
+    "r01": [
+     1
+    ],
+    "r02": [
+     1
+    ],
+    "r03": [
+     2
+    ]
+   }
+  }
+ ],
+ "note": "All three identify the conflicting step() listings that skip post_tick on zero entities."
+}

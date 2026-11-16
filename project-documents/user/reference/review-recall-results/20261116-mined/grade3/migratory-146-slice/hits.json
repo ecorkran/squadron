@@ -1,0 +1,45 @@
+{
+ "case": "migratory-146-slice",
+ "flaws": [
+  {
+   "id": "F1",
+   "text": "Scope and A7: \"falls back to CPU with a logged warning if neither [Metal nor CUDA] is detected\", \"A host with no Metal and no CUDA starts successfully",
+   "hits": {
+    "r01": [
+     2
+    ],
+    "r02": [
+     2
+    ],
+    "r03": [
+     2
+    ]
+   }
+  },
+  {
+   "id": "F2",
+   "text": "GpuAgentState Changes: \"`export_positions()` and `export_velocities()` return f64 arrays (Quadrants upcasts on download). The `TickResult` therefore c",
+   "hits": {
+    "r02": [
+     3
+    ]
+   }
+  },
+  {
+   "id": "F3",
+   "text": "Files Changed and Task text name `src/migratory_server/entity_manager.py`; the module is `entities.py` and no `entity_manager.py` exists. **VALID** (m",
+   "hits": {}
+  },
+  {
+   "id": "F4",
+   "text": "Walkthrough \"Regression: `uv run pytest tests/server/ tests/bench/`\" and the new `tests/server/test_gpu_driver.py`: the test tree is flat (`tests/test",
+   "hits": {}
+  },
+  {
+   "id": "F5",
+   "text": "Walkthrough step 2: `uv run python -m migratory_server config/default.yaml`. `__main__.py` accepts `--config`, `--replay`, `--world` and no positional",
+   "hits": {}
+  }
+ ],
+ "note": "F2 hit by r02 f3 names the unverified f64 claim vs f32 fields and says to add astype(float64); it does not cite the code export signature but fixing it fixes the flaw."
+}

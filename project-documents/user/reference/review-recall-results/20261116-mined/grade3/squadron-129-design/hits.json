@@ -1,0 +1,11 @@
+{
+ "case": "squadron-129-design",
+ "flaws": [
+  {
+   "id": "F1",
+   "text": "The design names the command `sq model list` (summary, D9, Interfaces, Success Criteria, Walkthrough). The CLI registers the group as `models` (`cli/a",
+   "hits": {}
+  }
+ ],
+ "note": "r01 i4 and r02 i11 mention `sq model list` but only address provider loading, not the model/models command-name mismatch; not counted."
+}

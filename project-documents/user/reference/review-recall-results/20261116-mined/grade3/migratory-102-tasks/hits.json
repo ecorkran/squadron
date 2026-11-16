@@ -1,0 +1,33 @@
+{
+ "case": "migratory-102-tasks",
+ "flaws": [
+  {
+   "id": "F1",
+   "text": "Task 2.1 adds two required fields to `BehavioralProfile`, and Task 2.2 updates test call sites only (\"search for `BehavioralProfile(` across `tests/`\"",
+   "hits": {
+    "r01": [
+     0
+    ],
+    "r03": [
+     0
+    ]
+   }
+  },
+  {
+   "id": "F2",
+   "text": "Slice design Technical Requirement 1: \"both forces are vectorized within each agent's neighborhood\". No task checks or enforces it (the tasks' sketche",
+   "hits": {
+    "r01": [
+     4
+    ],
+    "r02": [
+     2
+    ],
+    "r03": [
+     2
+    ]
+   }
+  }
+ ],
+ "note": "r02 never mentions the production build_profiles call site, so no F1 hit. F2 hits all name the missing 'no nested loops' check in the tasks."
+}

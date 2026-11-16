@@ -1,0 +1,60 @@
+{
+ "case": "squadron-363-tasks",
+ "flaws": [
+  {
+   "id": "F1",
+   "text": "SC4: dropped topics (why-now, audience evolution, methodology preference) \"appear nowhere in the document, neither as content nor as gap markers\". Tas",
+   "hits": {
+    "r01": [
+     4
+    ],
+    "r02": [
+     2
+    ],
+    "r03": [
+     0
+    ]
+   }
+  },
+  {
+   "id": "F2",
+   "text": "SC7: with the guide \"absent, unreadable, or missing the expected section title\" the flow stops loudly (and names the setup step when the guide tree is",
+   "hits": {
+    "r01": [
+     6
+    ],
+    "r03": [
+     3
+    ]
+   }
+  },
+  {
+   "id": "F3",
+   "text": "SC8: \"mechanical refillability for augment\". Task 6.2 authors it; Task 8.4 checks default stop, the dated subheading and byte identity of populated se",
+   "hits": {
+    "r02": [
+     2
+    ],
+    "r03": [
+     3
+    ]
+   }
+  },
+  {
+   "id": "F4",
+   "text": "SC10: \"every `[INFERRED]` sentence satisfies the checkable rule\". Task 8.1 checks only that the provenance inferred-claims line exists; no task audits",
+   "hits": {
+    "r01": [
+     3
+    ],
+    "r02": [
+     2
+    ],
+    "r03": [
+     3
+    ]
+   }
+  }
+ ],
+ "note": "r02[2] and r03[3] are multi-point findings; counted only the bullets that name the SC in question. r01 has no finding on SC8 refillability; r02 has none on SC7."
+}

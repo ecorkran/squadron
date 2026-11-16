@@ -1,0 +1,61 @@
+{
+ "review": "r01",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "File-level selector is defined three incompatible ways",
+   "description": "Correction 2 gives three definitions that do not agree:\n- **Heading:** file-level means \"carries a `filePath`\".\n- **Fix sentence:** \"the file-level selector becomes an explicit type allow-list\".\n- **Next paragraph:** \"Stated as an exclusion rather than an allow-list deliberately\", with the selector `type != \"function\" and type != \"class\"`.\n\nThe architecture's read discipline enumerates nine file-level types as an allow-list. The deny-list inverts that default: any new upstream sub-file type (a `method` or `variable` node, say) is read automatically. The \"no `filePath` \u2192 drift\" guard only fires after the nodes have been selected, and only if the new type lacks `filePath`.\n\nPick one definition and delete the other two phrasings. If the deny-list stays, state that it deliberately departs from the architecture's enumerated list and why the context-blowup risk is acceptable.",
+   "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:143-161"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "Dependency section reads function/class nodes that the read discipline forbids",
+   "description": "Section 6 resolves \"function- and class-level edge endpoints \u2026 to their owning file's layer\". This conflicts with three statements:\n- The architecture: \"function- and class-level nodes are not read\".\n- Success Criterion 9 (line 333): \"no function- or class-level node is read\".\n- Walkthrough step 7.\n\nThe resolution mechanism is also unstated (parse the type-prefixed `id`, follow `contains` edges, or read the node). The same paragraph first limits inter-layer connections to `imports` and `depends_on`, then counts a `calls` edge as an inter-layer signal.\n\nRelated gaps in the same row:\n- \"Ties by `weight`\" (line 179) is undefined for an aggregated layer-pair count.\n- `edges[].direction` is listed as consumed (line 86) but appears in no rule.\n- `nodes[].tags` \"section grouping\" (line 84) is not used anywhere.\n\nLightest fix: restrict section 6 to edges whose endpoints are both file-level and drop the function/class resolution. Otherwise specify an id-only resolution and amend Criterion 9.",
+   "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:215-220"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Coverage reconciliation generalises a one-graph coincidence into an invariant",
+   "description": "The design says file-level node count equal to `analyzedFiles` \"is the expected case\", and that a mismatch \"means the graph is internally inconsistent\". That was measured on a graph containing only `file`, `config` and `pipeline` nodes. The six other file-level types (`service`, `endpoint`, `schema`, `table`, `document`, `resource`) are not known to be one-per-analysed-file.\n\nOn an unfamiliar codebase, which is this slice's stated purpose, the generated document could tell readers a healthy graph is inconsistent. The same applies to two other claims:\n- \"Every file-level node belongs to exactly one layer (verified)\" at line 218; the architecture guarantees this only for files.\n- Section 6 has no stated handling for an endpoint with no layer membership.\n\nThe Risk Assessment covers single-graph risk for Correction 1 only. Report both numbers and the type breakdown without asserting inconsistency, and add a fallback for layer-less nodes.",
+   "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:224-227"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Closing observations are an unmarked-inference path",
+   "description": "Each section carries a closing observation said to be \"mechanically derivable\" from the table above it. The design's own example fails that test: \"complexity concentrates in the seams where squadron meets an external SDK\" is not derivable from `complexity`, `filePath` and `summary`.\n\nCombined with Criterion 8 (zero `[INFERRED]` markers), interpretive claims would be emitted unmarked. That contradicts line 186 (\"the fallback column has no third option\") and the plan criterion that sections emit gap markers \"rather than inferred prose\". Cut the closing observations, or restrict them to restating counts from the table.",
+   "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:245-250"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Reading-order row drops `tour[].nodeIds`",
+   "description": "The plan assigns this slice \"`tour[]` ordering as the signal for which components matter most\". The architecture says squadron \"reads the tour as structured data with node IDs\", and slice 363 attempts \"`tour[]` node ordering\" for Solution Approach.\n\nRow 5 sources only `order`, `title` and `description`, so the section names no components. Slice 361's proving output did read `nodeIds`. Without them:\n- the reading order cannot be checked against the repo, which is plan criterion 5;\n- the mapping 363 reuses lacks the field it needs.\n\nAdd `nodeIds`, resolved to `filePath` for file-level members.",
+   "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:178"
+  },
+  {
+   "i": 5,
+   "severity": "NOTE",
+   "title": "`analyze-codebase-prompt.md` is \"retained unchanged\" and edited",
+   "description": "The design says the document \"stays \u2026 unchanged, as the architecture requires\" and then adds a cross-reference line to it. The Overview (line 22) also says everything is edits to `understand.md`. The plan asks only that the decision be recorded and the document remain in place. Drop the cross-reference line (and Criteria 7 and 11's mention of it), or stop saying \"unchanged\".",
+   "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:277-280"
+  },
+  {
+   "i": 6,
+   "severity": "NOTE",
+   "title": "Success criteria pin snapshot values",
+   "description": "Criteria 4 and 5 hardcode 34, 6 and 238. Walkthrough step 2 hardcodes index 944. The design itself notes \"the graph may have been refreshed\". State the criteria as relations (count equals `nodeIds | length`; selector count reconciles with `analyzedFiles`) and keep the numbers as walkthrough expectations only.",
+   "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:322-326"
+  },
+  {
+   "i": 7,
+   "severity": "NOTE",
+   "title": "Claims about the 361 skill text are not verifiable from the documents",
+   "description": "The corrections describe what the implemented 361 skill and the 943 sample say. The 361 slice design specifies `select(.type == \"file\" or ...)`, not a collapsed selector, and says nothing about mixed `nodeIds`; `commands/analysis/understand.md` is not present in this checkout and 361 is still `not_started`. Walkthrough step 1 re-measures the graph before implementing, which is adequate. The corrections sit in the comprehension flow that 362 \"deepens in place\", so they are in scope.",
+   "location": "project-documents/user/slices/362-slice.comprehension-analysis-and-graph-extraction.md:119-149"
+  }
+ ]
+}

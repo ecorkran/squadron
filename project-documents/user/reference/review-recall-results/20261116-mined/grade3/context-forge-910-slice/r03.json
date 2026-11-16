@@ -1,0 +1,33 @@
+{
+ "review": "r03",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Success-criteria grep and site counts are inconsistent and cannot pass as written",
+   "description": "The architecture requires each maintenance slice to have clear success criteria; the central functional criterion here fails on its own terms.\n\n- **Line-number filter is a no-op.** The command uses `grep -roE` without `-n`, so output is `path:match` with no line numbers. The filter `grep -v 'introspection/types.ts:[3-6]:'` therefore removes nothing, and the four `STATUS` definition literals always match. Even with `-n`, hard-coded lines 3-6 break on any edit above them.\n- **\"Zero matches in the six swept files\" contradicts the exclusions.** The design keeps the 3 quoted alias keys in `statusNormalizer.ts` (lines 34, 48) and the `'complete'` member of `SliceStatus.status` in `types.ts` (line 49). Both are in swept files and both still match.\n- **The \"After\" count omits survivors.** Line 151 lists 4 + 3 + 4 remaining literals but leaves out the 3 `statusNormalizer.ts` alias keys.\n- **The numbers do not add up.**\n  - Line 35 says `types.ts` has \"5 (of 8 total; 4 are the `STATUS` definition)\", but 8 \u2212 4 = 4, and the `inferredStatus` union at line 43 has only 3 literals.\n  - Line 150 says \"8 out-of-scope sites\" while line 151 itemises 3 + 4 = 7.\n  - Line 151 gives 4 `SliceStatus.status` sites, but the union at line 49 contains one overlapping literal.\n  - The \"~65\" total at line 41 inherits the `types.ts` error.\n\nFix: state the counts once, in the scope table, and have the other sections reference it. Replace the grep criterion with an explicit allow-list of expected survivors (file plus reason), matched on content rather than line number.",
+   "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md:135"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "No rule for distinguishing NormalizedStatus sites from SliceStatus.status sites that share the spelling 'complete'",
+   "description": "TD-3 excludes `SliceStatus.status` because sweeping it \"implies the two unions are related, which they aren't\". That exclusion is only stated for the type declaration in `types.ts`. The swept files `WorkflowNavigator.ts` and `ConsistencyChecker.ts` are consumers of slice workflow status, and the scope table (lines 33, 36) describes their sites only as `=== 'complete'` checks.\n\nThe compiler cannot catch a mis-sweep. `STATUS.Complete` has literal type `'complete'`, so `sliceStatus.status === STATUS.Complete` type-checks and behaves identically. The build, the test suite and the typo spot-check at line 153 all pass on a wrongly swept site.\n\nThe line-151 figure of 4 `SliceStatus.status` survivors suggests such comparison sites exist outside `types.ts`, but the design never says where.\n\nFix: add a per-site rule (sweep only where the operand's declared type is `NormalizedStatus`) and list the `SliceStatus.status` comparison sites that must stay literal, by file. This also resolves the count ambiguity above.",
+   "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md:104-106"
+  },
+  {
+   "i": 2,
+   "severity": "NOTE",
+   "title": "TD-1 widens an exported type while the Migration Plan says no public API signature changes",
+   "description": "Retyping `TaskFileResult.inferredStatus` to `NormalizedStatus` (lines 43, 98) adds `'deprecated'` to an exported field's type. Any exhaustive `switch` or `Record` keyed on that field in the cli or mcp packages would then fail to compile.\n\nStep 6 (`pnpm -r build`) would catch this, so it does not block. Either reword line 84 to acknowledge the widening, or use `Exclude<NormalizedStatus, typeof STATUS.Deprecated>`, which removes the duplicate definition without widening.",
+   "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md:84"
+  },
+  {
+   "i": 3,
+   "severity": "NOTE",
+   "title": "Repeated sections can be trimmed",
+   "description": "For a find-and-replace slice, the same content appears several times:\n\n- The Component Structure table (lines 70-78) repeats the scope table (lines 31-39).\n- TD-2 and TD-3 (lines 100-106) repeat the Excluded bullets (lines 47, 49).\n- \"Deferred to Other Slices\" (lines 128-129) repeats them a third time.\n- Walkthrough step 4 (lines 160-165) adds nothing beyond step 3 for a change that keeps values identical.\n\nThis duplication is how the counts drifted. Cut the Component Structure table, fold TD-2 and TD-3 into the Excluded bullets, and drop walkthrough step 4.",
+   "location": "project-documents/user/slices/910-slice.centralize-normalizedstatus-references.md:66-78"
+  }
+ ]
+}

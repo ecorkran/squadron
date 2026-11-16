@@ -1,0 +1,26 @@
+{
+ "case": "context-forge-925-tasks",
+ "flaws": [
+  {
+   "id": "F1",
+   "text": "The design's Success Criteria say \"A project whose shared config has `guide.git_strategy: manual` installs as tarball with the same warning\" (a `cf gu",
+   "hits": {
+    "r01": [
+     4
+    ],
+    "r02": [
+     8
+    ],
+    "r03": [
+     7
+    ]
+   }
+  },
+  {
+   "id": "F2",
+   "text": "Task 20 puts the CLI `ensureGuideReady` call for `prompt.ts` \"before the read\" at \"~lines 60 and 116\". In `prompt.ts` at `25ef4d74` the `get` action r",
+   "hits": {}
+  }
+ ],
+ "note": "F2 not hit: r02 #8 and r01 #8 note phaseShorthand.ts:22 is missing from Task 20 call sites but do not say the prompt.ts line-116 anchor sits after the read, so they were not counted. r01 #4 and r02 #8 hit F1 as one bullet among several."
+}

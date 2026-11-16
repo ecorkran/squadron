@@ -1,0 +1,18 @@
+{
+ "case": "squadron-385-tasks",
+ "flaws": [
+  {
+   "id": "F1",
+   "text": "Task 1's header says `parse_slice_branch` is \"needed by Task 9\". The only task that calls it is Task 7.1 (\"`parse_slice_branch(head)` from Task 1\"); T",
+   "hits": {
+    "r01": [
+     7
+    ],
+    "r03": [
+     5
+    ]
+   }
+  }
+ ],
+ "note": "r03[5] is a multi-item finding; the wrong-consumer item on Tasks 1 and 2 names the flaw. r02 has no finding on the Task 1 cross-reference."
+}

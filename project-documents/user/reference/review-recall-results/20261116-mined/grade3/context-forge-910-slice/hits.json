@@ -1,0 +1,11 @@
+{
+ "case": "context-forge-910-slice",
+ "flaws": [
+  {
+   "id": "F1",
+   "text": "Migration Plan step 1 says \"retyping alone would leave `taskFileParser.ts`'s still-bare-string assignments failing to compile\", and that steps 1 and 2",
+   "hits": {}
+  }
+ ],
+ "note": "No review identifies the false taskFileParser compile-error premise; r03[2] concerns type widening, a different point."
+}

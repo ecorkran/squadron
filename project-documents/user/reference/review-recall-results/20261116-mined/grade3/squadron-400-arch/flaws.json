@@ -1,0 +1,14 @@
+{
+ "case": "squadron-400-arch",
+ "kind": "arch",
+ "flaws": [
+  {
+   "id": "F1",
+   "text": "Design Goals: the headline report example \"error-handling findings: 4 from review, 2 from audit\". `AuditCategory` at `0c6c4898` (`metrology/models.py:135-144`) has `ERROR_HANDLING_OBSERVABILITY = \"error-handling-observability\"` and no `error-handling`. **VALID** (minor): contradicts code. Needs: code. Raised by the original review (F007)."
+  },
+  {
+   "id": "F2",
+   "text": "Current State: \"`category` is a free string the model chooses, and is `None` on many findings\", read by ingest from review frontmatter. `ReviewResult.structured_findings` (`review/models.py:~401`) writes `category=f.category or \"uncategorized\"`, so the frontmatter never holds `None`. **VALID**: contradicts code, and ingest would have to handle a sentinel string instead. Needs: code. Raised by the original review (F007)."
+  }
+ ]
+}

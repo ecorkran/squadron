@@ -1,0 +1,16 @@
+{
+ "case": "squadron-927-design",
+ "flaws": [
+  {
+   "id": "F1",
+   "text": "D6 and Success Criterion 7 assume a stated PASS with `fallback_used=True` (verdict read, findings not parsed) can reach the PASS-to-CONCERNS cap, and ",
+   "hits": {}
+  },
+  {
+   "id": "F2",
+   "text": "Walkthrough step 6 says \"one run per configured profile\" but the command pins `--model sonnet`, which exercises one profile only. The correction uses ",
+   "hits": {}
+  }
+ ],
+ "note": "No review addressed fallback_used semantics or the step 6 --model sonnet vs per-profile contradiction; r01 #4 only touches step 6 for a different issue."
+}

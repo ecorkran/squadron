@@ -1,0 +1,171 @@
+{
+  "verdict": "FAIL",
+  "findings": [
+    {
+      "severity": "FAIL",
+      "title": "Commit gates 3.2a and 3.7 require green suites while tests of the removed behavior still exist",
+      "description": "Two gates require a passing suite at a point where tests that assert the removed behavior are still present.\n\n- **3.2a** requires `pnpm --filter @context-forge/core test` to pass after 3.1\u20133.2 stop rendering `Comprehension:` and Adoption Facts. Two files still build through the real pipeline and assert that rendered text:\n  - `packages/core/tests/pipeline-integration.test.ts:124-184` (the `probeReturning` block) asserts the probe JSON, `- Squadron: unavailable\u2026` and `Comprehension: \u2026`. It is not deleted until 3.3.\n  - `packages/core/tests/adoption/adoptionBuild.integration.test.ts:99-103` (`expectBrownfield`) asserts `### Adoption Facts`; other cases assert `shallow clone`, `- CI: \u2026` and `not evaluated`. It is not deleted until 4.1.\n- **3.7** requires `pnpm -r test` to pass, but `adoptionBuild.integration.test.ts` is still present. With the hook gone, its brownfield, `in_progress` and `AdoptionError` cases all fail. Vitest does not typecheck, so its stale two-argument `createContextPipeline` call at line 68 runs and then fails on assertions.\n\n3.3's targeted test list omits that file, so the failure first appears at the 3.7 gate. The intro claim that 3.1\u20133.2 \"only stop rendering fields that still exist, so everything compiles\" holds for compilation but not for tests.\n\nFix: move the `adoptionBuild.integration.test.ts` deletion from 4.1 into 3.3, and drop the 3.2a commit so section 3 commits once at 3.7. Alternatively, keep 3.2a and move both deletions (that file and the `pipeline-integration` brownfield block) into 3.1\u20133.2.",
+      "file_ref": null,
+      "category": "sequencing",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/268-tasks.pure-cf-build.md:99-101"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Commit steps are checkboxes, not plain `**Commit**:` marker lines",
+      "description": "Every commit is written as a checkbox item or a checkbox task: 2.3 (line 79), 3.2a (99-101), 3.7 (134), 4.1\u20134.4 (148, 155, 163, 169), 5.1 (186) and 6.3 (206). A commit checkbox can only be ticked after the commit it describes, so each one leaves the task file dirty. Task 1.1 (line 54) already has to work around this by allowing a dirty task file.\n\nFix: convert each to a plain `**Commit**: \\`type: summary\\`` line after the task it closes, and remove the 1.1 workaround.",
+      "file_ref": null,
+      "category": "commit-markers",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/268-tasks.pure-cf-build.md:79"
+    },
+    {
+      "severity": "NOTE",
+      "title": "3.6 points at a production caller that needs no change",
+      "description": "3.6 says to update the `registerContextTools` caller \"in the server setup\". That call is already `registerContextTools(server)` with one argument. The only caller passing options is `packages/mcp-server/tests/helpers/integrationSetup.ts:41`, which the next sub-item already covers. Reword it so the implementer does not hunt for a production change.",
+      "file_ref": null,
+      "category": "clarity",
+      "raw_category": null,
+      "location": "packages/mcp-server/src/index.ts:40"
+    },
+    {
+      "severity": "NOTE",
+      "title": "6.3 scratch repo registers into the real project store",
+      "description": "The walkthrough's `cf init` on `/tmp/bf-scratch` writes to the developer's real data directory, and 6.3 only resets `adoption.state`. Running the walkthrough with `CONTEXT_FORGE_DATA_DIR` set to a temp directory, as the tests do, avoids a dangling project entry.",
+      "file_ref": null,
+      "category": "clarity",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/268-tasks.pure-cf-build.md:203-206"
+    },
+    {
+      "severity": "PASS",
+      "title": "Success criteria and Migration Plan are fully covered",
+      "description": "- **Functional requirements:** no state read/write, detection or `sq` spawn, and concept prompt on brownfield Phase 0 \u2192 5.1. Byte identity \u2192 2.1\u20132.3, re-checked at 3.7 and 6.1. CLI/MCP parity \u2192 5.1. Guide warning \u2192 6.1.\n- **Technical requirements:** `services/` imports \u2192 3.3 and 6.2. No orphan exports \u2192 the 4.2\u20134.4 greps and the 6.2 audit. Lint, typecheck and tests \u2192 6.1.\n- **Integration requirement and Walkthrough:** \u2192 6.2 and 6.3.\n- **Migration Plan:** every source row and every delete/edit test entry maps to a task. The `SectionBuilder.test.ts` edit in 3.1 is not in the design's list but is required by D4.\n- **Reference check:** the files, symbols and test names the tasks cite exist in the worktree, including the two guide-warning test titles in 6.1 and `createBrownfieldCheckout`.\n- **Load test:** the slice restates no NFR, so none is needed.",
+      "file_ref": null,
+      "category": "coverage",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/268-tasks.pure-cf-build.md"
+    },
+    {
+      "severity": "PASS",
+      "title": "Golden-before-cut ordering and scope are sound",
+      "description": "Section 2 captures and commits the golden files before any source edit, matching D6. The core-build step between 3.4 and 3.5 correctly reflects that `cli` and `mcp-server` resolve core through `dist/`. Task count and test weight fit the slice: each new test maps to D5 or D6, and nothing touches the 269\u2013272 exclusions.",
+      "file_ref": null,
+      "category": "sequencing",
+      "raw_category": null,
+      "location": "project-documents/user/tasks/268-tasks.pure-cf-build.md:60-79"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "fail",
+      "category": "sequencing",
+      "raw_category": null,
+      "summary": "Commit gates 3.2a and 3.7 require green suites while tests of the removed behavior still exist",
+      "location": "project-documents/user/tasks/268-tasks.pure-cf-build.md:99-101",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "concern",
+      "category": "commit-markers",
+      "raw_category": null,
+      "summary": "Commit steps are checkboxes, not plain `**Commit**:` marker lines",
+      "location": "project-documents/user/tasks/268-tasks.pure-cf-build.md:79",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "note",
+      "category": "clarity",
+      "raw_category": null,
+      "summary": "3.6 points at a production caller that needs no change",
+      "location": "packages/mcp-server/src/index.ts:40",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "note",
+      "category": "clarity",
+      "raw_category": null,
+      "summary": "6.3 scratch repo registers into the real project store",
+      "location": "project-documents/user/tasks/268-tasks.pure-cf-build.md:203-206",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "pass",
+      "category": "coverage",
+      "raw_category": null,
+      "summary": "Success criteria and Migration Plan are fully covered",
+      "location": "project-documents/user/tasks/268-tasks.pure-cf-build.md",
+      "location_verified": null
+    },
+    {
+      "id": "F006",
+      "severity": "pass",
+      "category": "sequencing",
+      "raw_category": null,
+      "summary": "Golden-before-cut ordering and scope are sound",
+      "location": "project-documents/user/tasks/268-tasks.pure-cf-build.md:60-79",
+      "location_verified": true
+    }
+  ],
+  "template_name": "tasks",
+  "input_files": {
+    "input": "project-documents/user/tasks/268-tasks.pure-cf-build.md",
+    "against": "project-documents/user/slices/268-slice.pure-cf-build.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/context-forge-268-tasks"
+  },
+  "timestamp": "2026-11-16T16:22:38.779095",
+  "model": "claude-fable-5-2",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 23,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-fable-5-2",
+  "answering_models": [
+    "claude-fable-5-2"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 6,
+    "in_fences": 0,
+    "in_section": 6,
+    "surviving": 6
+  },
+  "effort": "high",
+  "profile": "sdk",
+  "turns": 24,
+  "prompt_tokens": 711741,
+  "cached_tokens": 564320,
+  "cache_write_tokens": 147405,
+  "completion_tokens": 15270,
+  "reasoning_tokens": null,
+  "duration_seconds": 141.8339437500108,
+  "cost_usd": 3.0830047000000005,
+  "cost_basis": "provider"
+}

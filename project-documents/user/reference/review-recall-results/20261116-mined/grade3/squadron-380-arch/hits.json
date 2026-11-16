@@ -1,0 +1,18 @@
+{
+ "case": "squadron-380-arch",
+ "flaws": [
+  {
+   "id": "F1",
+   "text": "\"Rules outside a planned project\": \"In an unplanned repository the review runs with the template's rules and language auto-detection only, and says so",
+   "hits": {
+    "r02": [
+     3
+    ],
+    "r03": [
+     1
+    ]
+   }
+  }
+ ],
+ "note": "r03 #1 names the rules-resolution error only in its closing paragraph (lines 174-176 wrong about rules); counted as a hit. r01 #6 on unplanned repos is about base and push, not rules."
+}

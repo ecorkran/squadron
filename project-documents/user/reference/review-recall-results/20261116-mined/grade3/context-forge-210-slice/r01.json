@@ -1,0 +1,75 @@
+{
+ "review": "r01",
+ "findings": [
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "Overwrite safety covers two of the four output locations",
+   "description": "The marker check inspects only `.github/copilot-instructions.md` and `AGENTS.md` (also line 109). The script also writes `.github/instructions/*.instructions.md` and `.github/prompts/*.prompt.md`, with generic names such as `typescript.instructions.md` and `commit.prompt.md`.\n\n- **Requirement left unmet:** the plan requires that re-running with existing unmanaged files \"prompts before overwriting\", and the architecture says init is \"never destructive \u2014 if unsure, ask or skip\". An existing Copilot user adopting CF is the slice's stated driver and the most likely to already have such files.\n- **No prompt under init:** slice 202 calls `setupIdeAction` with `yes: true`, so under `cf init --ide copilot` only the backup protects user files. No backup is specified for these two directories.\n- **Worktrees:** propagation copies both directories into every worktree with no check.\n- **Also unspecified:** the mixed case (one file managed, one not), the \"`.bak` already exists\" case from slice 202's strategy, and whether stale generated files are removed when a source rule disappears.\n\nFix: apply the marker rule per generated file \u2014 overwrite only files carrying the marker, back up or prompt otherwise.",
+   "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:98-100"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Translation source and rule classification are undefined",
+   "description": "The layout says outputs come \"from `.claude/rules/typescript.md`\" and \"from `.claude/skills/commit.md`\". A Copilot-only project never has `.claude/`, and the design forbids writing it (line 17). That leaves two readings, and the design picks neither:\n\n- **Source is the guide's own rule files:** then the input frontmatter is the guide's format, not Claude `paths`.\n- **Source is `.claude/`:** then the copilot target silently depends on the claude target having run. That is a hidden dependency and contradicts the driver user, who cancelled Claude.\n\nThree further gaps:\n\n- **Classification key:** the split depends on `alwaysApply`, but the generated Claude rule files in this repo carry only `description` and `paths`.\n- **Unreachable default:** line 83 equates \"paths absent\" with alwaysApply and routes those rules to the compiled file. The `applyTo: \"**\"` default can then never be emitted, though line 32 and the plan both require it.\n- **Skill layout:** skills in this repo are directories (`.claude/skills/<name>/SKILL.md`), not the flat files the layout shows.\n\nFix: name the actual source directory, the frontmatter keys read, and the rule that decides compiled versus split.",
+   "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:42-47"
+  },
+  {
+   "i": 4,
+   "severity": "CONCERN",
+   "title": "Skill-to-prompt and instruction-file frontmatter mapping not specified",
+   "description": "\"Translate skills \u2192 `.github/prompts/`\" is the whole specification. The plan's mapping table names the prompt frontmatter fields (`name`, `description`, `argument-hint`, `agent`, `model`, `tools`). The design does not say which skill fields map to which, what happens to fields with no equivalent (such as `disable-model-invocation`), or what happens to a skill's supporting files. For instruction files only `applyTo` is specified, though the referenced tool guide lists `name` and `description` as well and the source rules carry `description`. This leaves the plan's criterion for generating `.prompt.md` files from skills to implementer guesswork.",
+   "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:114"
+  },
+  {
+   "i": 5,
+   "severity": "CONCERN",
+   "title": "Test coverage omits the translation, where the slice's risk sits",
+   "description": "All seven listed tests exercise the CLI wrapper. None covers the guide script's output, although the plan rates the slice Med risk for \"frontmatter translation correctness\".\n\n- **Unverified plan criteria:** \"Path\u2192applyTo translation correctly converts Claude frontmatter\u2026\" has no test. The four-artifact generation criterion is checked only as \"files created\".\n- **Fixture format:** real rule files in this repo use multi-line `paths:` with trailing whitespace and varying indent. The design shows only one clean layout.\n- **Missing manual check:** the plan's verification that a Copilot agent follows conventions from the generated files does not appear.\n\nFix: add script-level tests that run on real rule files and assert the emitted `applyTo`, the compiled/split routing and the prompt output.",
+   "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:121-129"
+  },
+  {
+   "i": 6,
+   "severity": "CONCERN",
+   "title": "Failure handling for the script step and propagation is asserted, not specified",
+   "description": "The design has no error-case list, unlike slice 177's.\n\n- **Version skew:** the Risks section says an older guide without a `copilot` case \"will fail \u2026 with a clear error\". That is a property of the existing script the design does not establish. Guides are installed per project, so skew is the normal case for existing projects.\n- **Ordering:** step 4 backs up and prompts before step 5 can fail.\n- **Script failure:** behaviour on non-zero exit or partial output is not stated.\n- **Empty categories:** the design does not say what propagation does when `.github/instructions/` or `.github/prompts/` does not exist because the project has no scoped rules or skills.\n- **Worktree copy failure:** abort or continue, and whether it is reported, is not stated.\n- **Observability:** under `cf init`, slice 202 downgrades IDE-step errors to warnings, so each of these needs a defined, visible outcome.",
+   "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:133"
+  },
+  {
+   "i": 7,
+   "severity": "CONCERN",
+   "title": "Tool guide not referenced",
+   "description": "The plan's success criteria require `project-documents/user/tool-guides/copilot-vscode/setup-ide.md` to be \"referenced in slice design, promoted to a proper published tool guide if needed\". The design never mentions it and makes no promotion decision. The file is currently a raw chat export without frontmatter, and it is the only source for the `applyTo`, ordering and prompt-frontmatter facts the design relies on.",
+   "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md"
+  },
+  {
+   "i": 8,
+   "severity": "NOTE",
+   "title": "Managed-marker helper is named two ways and duplicates the Claude check",
+   "description": "Line 29 specifies `isManagedCopilot(filePath)`; line 109 specifies `isManagedCopilotFiles(projectPath)`. The name and signature differ. The check is the same marker line in the first 20 lines as the existing Claude helper, so one file-level helper used by both targets is less code than a parallel copy. It also suits the \"pattern for future targets\" the Value section claims.",
+   "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:29"
+  },
+  {
+   "i": 9,
+   "severity": "NOTE",
+   "title": "Always-on content will be loaded more than once",
+   "description": "Writing identical content to `.github/copilot-instructions.md` and `AGENTS.md` follows the plan. Per the tool guide, both are always-on in VS Code, so Copilot receives the compiled rules twice. In the dual-write projects the design supports, the guide says VS Code also reads `CLAUDE.md` and `.claude/rules`, giving further copies. Worth stating as accepted, or giving `AGENTS.md` a thinner body.",
+   "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:61"
+  },
+  {
+   "i": 10,
+   "severity": "NOTE",
+   "title": "`cf init --ide copilot` still installs Claude slash commands",
+   "description": "With no `init.ts` changes, slice 202's command-install step still writes to `~/.claude/commands/cf/` for a Copilot-only user. The overview's \"never to `.claude/`\" claim holds for the project directory only. The plan's init criterion omits the command-install step, so the design should say whether this is intended.",
+   "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:117"
+  },
+  {
+   "i": 11,
+   "severity": "NOTE",
+   "title": "Custom-agent mapping is promised but not documented",
+   "description": "The plan row says \"document mapping\" and the design says \"document the mapping but defer implementation\", yet no mapping appears. \"Unless the instruction + prompt layer lands cleanly\" also leaves scope conditional. State it as deferred and either add the two-line mapping or point to the tool guide.",
+   "location": "project-documents/user/slices/210-slice.github-copilot-vs-code-ide-support.md:54"
+  }
+ ]
+}

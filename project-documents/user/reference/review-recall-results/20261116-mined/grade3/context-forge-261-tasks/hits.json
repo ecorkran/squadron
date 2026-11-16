@@ -1,0 +1,21 @@
+{
+ "case": "context-forge-261-tasks",
+ "flaws": [
+  {
+   "id": "F1",
+   "text": "The design's Technical Requirements say unit tests cover \"`renderAdoptionFacts` (every outcome, the state-set notice, ...)\". Task 8T covers `brownfiel",
+   "hits": {
+    "r01": [
+     2
+    ],
+    "r02": [
+     1
+    ],
+    "r03": [
+     2
+    ]
+   }
+  }
+ ],
+ "note": "r03 names the missing greenfield/already-planned/adoption-closed render tests as a bullet inside a broader finding; counted as a hit."
+}

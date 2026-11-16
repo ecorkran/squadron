@@ -1,0 +1,21 @@
+{
+ "case": "migratory-149-slice",
+ "flaws": [
+  {
+   "id": "F1",
+   "text": "Intervention 2: \"With S=3 alone: candidates loaded drops to ~5000\", beside the same section's \"(2S+1) x (2S+1) = 7 x 7 scan\" and \"agents/cell about 55",
+   "hits": {
+    "r01": [
+     1
+    ],
+    "r02": [
+     0
+    ],
+    "r03": [
+     2
+    ]
+   }
+  }
+ ],
+ "note": "All three name the 5000-vs-27000 candidate count error; none borderline."
+}

@@ -1,0 +1,13 @@
+design 931 opus-high
+design 931 haiku-xhigh
+design 931 sonnet-high
+design 926 fable-medium
+design 926 opus-high
+design 926 sonnet-high
+tasks 929 fable-medium
+tasks 929 haiku-xhigh
+tasks 929 sonnet-high
+design 924 fable-medium
+design 924 opus-high
+design 924 haiku-xhigh
+design 924 sonnet-high

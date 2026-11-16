@@ -1,0 +1,279 @@
+{
+  "verdict": "CONCERNS",
+  "findings": [
+    {
+      "severity": "PASS",
+      "title": "Slice plan scope for Parts A, B and C is fully covered",
+      "description": "Every item in plan entry (129) has a design element:\n- **Part A:** port to `openai_codex`, bundled-then-PATH resolution (D2), the `codex` extra (D1), effort via `ReasoningEffort` (D5, closes #171), per-turn usage (D6).\n- **Part B:** missing-package error, doctor row, model-list marker, README.\n- **Part C:** browser and `--device-code` login, logout, email and plan in status.\n- **Smoke test:** walkthrough step 6.\n\nNothing assigned is dropped or deferred, and the exclusions (no token store, no `login_api_key`) match the plan.",
+      "file_ref": null,
+      "category": "scope",
+      "raw_category": null,
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:30-44"
+    },
+    {
+      "severity": "PASS",
+      "title": "Provider-layer boundaries and dependency direction hold",
+      "description": "- **Lazy imports:** `openai_codex` is imported only inside functions, so the provider still registers at import time as the architecture's Provider Implementation Requirements demand.\n- **Self-contained credentials:** resolution stays in the provider and squadron stores nothing, consistent with \"Squadron does not attempt to unify authentication\" (lines 88-89 argue this explicitly).\n- **Capability dispatch:** `isinstance` on `InteractiveLogin` and `ExtraRequirement` keeps the CLI free of the profile-name dispatch slice 128 removed, and keeps `AuthStrategy` unchanged (D3).\n- **Direction:** CLI \u2192 provider abstractions \u2192 SDK is correct.",
+      "file_ref": null,
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:76"
+    },
+    {
+      "severity": "PASS",
+      "title": "Runtime startup cost is handled per the architecture's subprocess constraint",
+      "description": "The architecture requires instance reuse over per-message creation for subprocess-backed SDKs. The design spawns once per `CodexAgent`, lists the only three places a spawn can occur, and keeps `create_agent`, `validate_credentials`, `sq doctor` and `sq model list` spawn-free. The parent sets no numeric NFR for this path, so none needs restating.",
+      "file_ref": null,
+      "category": "performance",
+      "raw_category": null,
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:82"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Three I/O paths have no stated bound, and one claim contradicts D7",
+      "description": "The failure-mode table is thorough for `thread.run`, but hang handling is missing or inconsistent elsewhere:\n- **Logout:** `sq auth logout` starts the runtime and calls `AsyncCodex.logout()`, a new I/O path. No D7 key covers it (`codex.account_timeout_s` is scoped at line 109 to status and post-login confirmation) and no table row gives its hang or error behaviour.\n- **Turn startup:** line 82 says the startup hang \"is already bounded by `codex.turn_timeout_s`\". Lines 107 and 125 scope that timeout to \"one `thread.run`\", which leaves `AsyncCodex.__aenter__`/`initialize` and `thread_start` outside it.\n- **Login startup:** `codex.login_timeout_s` bounds `handle.wait()` only (line 108). Runtime start plus the `login_chatgpt()` / `login_chatgpt_device_code()` call that produces the handle is unbounded.\n\nFix: state which timeout wraps each of these (widening the existing scopes is enough, no new keys) and add the logout row.",
+      "file_ref": null,
+      "category": "error-handling",
+      "raw_category": null,
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:103-135"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "`sq auth status` behaviour is undefined when the extra is absent but `~/.codex/auth.json` exists",
+      "description": "Status calls `account()` whenever the strategy is `InteractiveLogin` and valid. `OAuthFileStrategy` always implements the Protocol, and validity is file presence. A default-install user who has used the Codex CLI therefore reaches `account_summary()` with `openai_codex` not importable.\n\nThe design does not say what happens. The nearest row (line 126) covers \"timeout or SDK error\" with a WARNING, which would fire on every `sq auth status` for a user who never asked for Codex.\n\nThis leaves two stated requirements unmet: \"Users who do not want Codex install nothing extra\" (line 26) and clean operation without the extra. The Integration Requirements (line 205) name only `sq doctor` and `sq model list`, and the test list (line 199) has no status-without-extra case.\n\nFix: define the outcome (for example, skip account details and show the `missing_extra_hint()` text with no WARNING) and add the test.",
+      "file_ref": null,
+      "category": "under-specification",
+      "raw_category": null,
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:86"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Login timeout has no clear owner, and `--timeout` duplicates the config key",
+      "description": "`InteractiveLogin.login` takes a required `timeout: float`, while the default lives in the Codex-specific key `codex.login_timeout_s` (line 108). The design never says who reads the key:\n- **If the generic CLI reads it** to fill the argument, `cli/commands/auth.py` gains Codex-specific knowledge, the coupling D3 exists to prevent.\n- **If the strategy reads it**, the Protocol parameter cannot be a required float.\n\n`account_summary()` and `logout()` take no timeout, so the strategy already owns its other bounds. Fix: make the strategy own the default, with the parameter as `float | None` or removed.\n\nScope to cut: `sq auth login --timeout` (lines 108, 149). The plan entry does not ask for it, and the config key already makes the value adjustable.",
+      "file_ref": null,
+      "category": "integration",
+      "raw_category": null,
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:163"
+    },
+    {
+      "severity": "CONCERN",
+      "title": "Usage handling diverges from the slice 931 contract it consumes",
+      "description": "- **Absent usage is logged at DEBUG.** Line 134 contradicts the table's own header (line 118: every row is WARNING or above with a test). It also departs from 931, where \"backend reported no token usage\" is one WARNING per `handle_message` and no count goes missing \"without saying so\".\n- **Failure-path telemetry is unaddressed.** 931 states that any `ProviderError` leaving `handle_message` carries a `RunTelemetry` snapshot in `telemetry`, which the provider-failure artifact reads. D8 and the failed, interrupted, timeout and transport-closed rows raise `ProviderError` without saying whether `TurnResult.usage` or the turn count is attached. A failed Codex turn would then render usage as not reported even when the SDK supplied it.\n- **`turns` is unspecified.** Line 55 says the agent stamps `metadata[\"turns\"]`, but D6 never says what value a Codex `handle_message` records.\n\nFix: align the absent-usage row with 931 (or remove it from the WARNING-header table and justify it), and state the `telemetry` and `turns` behaviour.",
+      "file_ref": null,
+      "category": "integration",
+      "raw_category": null,
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:134"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Line 76 says `get_provider` raises the install hint; D9 needs it to return the provider",
+      "description": "\"`get_provider(\"openai-oauth\")` can raise the install hint\" conflicts with lines 80, 122 and 184, where the raise happens at `create_agent`. It also conflicts with D9, where `sq model list` and `sq doctor` must obtain the provider instance to call `missing_extra_hint()`. Reword so an implementer does not put the raise in the registry lookup.",
+      "file_ref": null,
+      "category": "consistency",
+      "raw_category": null,
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:76"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Version upper bound is stated two ways and left as a Project Manager wait",
+      "description": "D1 (line 97) writes `>=0.159.3,<1`; Special Considerations says the cap \"is not decided here\". A design step waiting on Project Manager confirmation is not valid under the project rules, so state one value. D1's bound, combined with the real-types drift test at line 200, is a sufficient decision.",
+      "file_ref": null,
+      "category": "under-specification",
+      "raw_category": null,
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:231"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`OPENAI_API_KEY` fallback work is outside the plan entry and its ordering is unclear",
+      "description": "The silent-fallback argument justifies handling it in this slice. Three loose ends remain:\n- **Ordering:** step 0 runs \"before porting anything\", but the check is only meaningful against the `openai_codex` runtime that ships. Say which runtime it uses.\n- **Lighter option:** line 42 already sends API-key users to the `openai` profile. Removing the fallback outright meets that position with no experiment and no two-branch task, at the cost of dropping an env-key path that may currently work for some users.\n- **Kept-fallback case:** `account_summary()` is described only for a `ChatgptAccount` root (line 54). Its result for a key-only account is undefined.",
+      "file_ref": null,
+      "category": "proportionality",
+      "raw_category": null,
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:232"
+    },
+    {
+      "severity": "NOTE",
+      "title": "Interactive login re-binds the generically named `OAuthFileStrategy` to Codex",
+      "description": "Slice 128 renamed the strategy because \"auth type describes mechanism, not product\". Implementing `InteractiveLogin` on it via `login_chatgpt` and `codex.*` keys means any future profile with `auth_type = \"oauth\"` inherits a ChatGPT login. This is acceptable while Codex is the only user and the class lives under `providers/codex/`. Add the caveat to lines 88-89 next to the existing note about a second adopter.",
+      "file_ref": null,
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:99"
+    },
+    {
+      "severity": "NOTE",
+      "title": "`sq model list` now loads every alias's provider",
+      "description": "D9 resolves each alias through `ensure_provider_loaded` + `get_provider`, turning a data listing into one that imports every referenced provider package. The design does not say what the row shows if a profile's provider fails to load. One sentence would do (for example, render the row without a marker and log a WARNING) so one bad user profile cannot break the listing.",
+      "file_ref": null,
+      "category": "hidden-dependency",
+      "raw_category": null,
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:112"
+    }
+  ],
+  "structured_findings": [
+    {
+      "id": "F001",
+      "severity": "pass",
+      "category": "scope",
+      "raw_category": null,
+      "summary": "Slice plan scope for Parts A, B and C is fully covered",
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:30-44",
+      "location_verified": true
+    },
+    {
+      "id": "F002",
+      "severity": "pass",
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "summary": "Provider-layer boundaries and dependency direction hold",
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:76",
+      "location_verified": true
+    },
+    {
+      "id": "F003",
+      "severity": "pass",
+      "category": "performance",
+      "raw_category": null,
+      "summary": "Runtime startup cost is handled per the architecture's subprocess constraint",
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:82",
+      "location_verified": true
+    },
+    {
+      "id": "F004",
+      "severity": "concern",
+      "category": "error-handling",
+      "raw_category": null,
+      "summary": "Three I/O paths have no stated bound, and one claim contradicts D7",
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:103-135",
+      "location_verified": true
+    },
+    {
+      "id": "F005",
+      "severity": "concern",
+      "category": "under-specification",
+      "raw_category": null,
+      "summary": "`sq auth status` behaviour is undefined when the extra is absent but `~/.codex/auth.json` exists",
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:86",
+      "location_verified": true
+    },
+    {
+      "id": "F006",
+      "severity": "concern",
+      "category": "integration",
+      "raw_category": null,
+      "summary": "Login timeout has no clear owner, and `--timeout` duplicates the config key",
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:163",
+      "location_verified": true
+    },
+    {
+      "id": "F007",
+      "severity": "concern",
+      "category": "integration",
+      "raw_category": null,
+      "summary": "Usage handling diverges from the slice 931 contract it consumes",
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:134",
+      "location_verified": true
+    },
+    {
+      "id": "F008",
+      "severity": "note",
+      "category": "consistency",
+      "raw_category": null,
+      "summary": "Line 76 says `get_provider` raises the install hint; D9 needs it to return the provider",
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:76",
+      "location_verified": true
+    },
+    {
+      "id": "F009",
+      "severity": "note",
+      "category": "under-specification",
+      "raw_category": null,
+      "summary": "Version upper bound is stated two ways and left as a Project Manager wait",
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:231",
+      "location_verified": true
+    },
+    {
+      "id": "F010",
+      "severity": "note",
+      "category": "proportionality",
+      "raw_category": null,
+      "summary": "`OPENAI_API_KEY` fallback work is outside the plan entry and its ordering is unclear",
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:232",
+      "location_verified": true
+    },
+    {
+      "id": "F011",
+      "severity": "note",
+      "category": "architecture-alignment",
+      "raw_category": null,
+      "summary": "Interactive login re-binds the generically named `OAuthFileStrategy` to Codex",
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:99",
+      "location_verified": true
+    },
+    {
+      "id": "F012",
+      "severity": "note",
+      "category": "hidden-dependency",
+      "raw_category": null,
+      "summary": "`sq model list` now loads every alias's provider",
+      "location": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md:112",
+      "location_verified": true
+    }
+  ],
+  "template_name": "slice",
+  "input_files": {
+    "input": "project-documents/user/slices/129-slice.codex-provider-on-the-official-sdk-optional-extra-discoverability-subscription-login.md",
+    "against": "project-documents/user/architecture/100-slices.orchestration-v2.md",
+    "cwd": "/Users/manta/source/repos/manta/squadron/project-documents/user/reference/review-recall-results/20261116-mined/wt/squadron-129-design"
+  },
+  "timestamp": "2026-11-16T16:12:56.997598",
+  "model": "claude-fable-5-2",
+  "score": null,
+  "criteria": null,
+  "provenance": null,
+  "tools_given": [
+    "read_file",
+    "list_files",
+    "grep"
+  ],
+  "tool_calls_made": 12,
+  "categories_normalized": false,
+  "stop_reason": "end_turn",
+  "reasoning_chars": 0,
+  "failed_tool_calls": 0,
+  "recovery_turn_used": false,
+  "output_budget_exhausted": false,
+  "max_output_tokens": null,
+  "system_prompt_mode": "preset+append",
+  "setting_sources": "project",
+  "fallback_used": false,
+  "verdictSource": "stated",
+  "diff_chars": null,
+  "diff_chars_injected": null,
+  "diff_truncated": null,
+  "diff_cut_files": null,
+  "requested_model": "claude-fable-5-2",
+  "answering_models": [
+    "claude-fable-5-2"
+  ],
+  "model_substituted": false,
+  "run_id": null,
+  "squadron_version": "0.24.31",
+  "finding_scan": {
+    "total": 12,
+    "in_fences": 0,
+    "in_section": 12,
+    "surviving": 12
+  },
+  "effort": "high",
+  "profile": "sdk",
+  "turns": 13,
+  "prompt_tokens": 463385,
+  "cached_tokens": 322547,
+  "cache_write_tokens": 140828,
+  "completion_tokens": 16124,
+  "reasoning_tokens": null,
+  "duration_seconds": 156.67513341712765,
+  "cost_usd": 2.9634678,
+  "cost_basis": "provider"
+}

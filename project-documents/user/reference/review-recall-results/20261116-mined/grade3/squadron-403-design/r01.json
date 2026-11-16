@@ -1,0 +1,47 @@
+{
+ "review": "r01",
+ "findings": [
+  {
+   "i": 0,
+   "severity": "CONCERN",
+   "title": "Fast-forward landings record a stale `before_sha` after a rebase or sync merge",
+   "description": "D3 sets a fast-forward's `before` to the reflog \"Created from\" commit and claims this equals the target just before the landing. That holds only if the branch never took in newer target work.\n\n- **Rebase onto a newer target:** the original fork is still an ancestor of the rebased tip, so `FORK_NOT_ANCESTOR` (line 120) does not fire. `fork..tip` then includes every other slice merged in between.\n- **Sync merge then fast-forward:** same result. Line 191 notes squadron has such sync merges.\n- **Test fixture:** the \"rebased branch (`FORK_NOT_ANCESTOR`)\" fixture at line 347 will not produce that reason for an ordinary rebase onto the target.\n\nThis is the \"other work counted\" error D3 and the architecture's Envisioned State say is avoided. The landing is append-only (D1), so the wrong range is kept permanently; the slice plan's risk entry says persistence \"has to be right the first time\".\n\nA related gap sits at lines 111-114: the fast-forward path runs only when no merge landing is found. A slice that fast-forwarded first and later got a follow-up merge never has its original landing recorded, which is the outcome D1 set out to prevent.\n\nFix: derive the fast-forward `before` from the branch's last rebase or sync point, or return an unresolved reason when the branch reflog shows one after creation. Evaluate the fast-forward path independently of whether merges were found.",
+   "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:197-201"
+  },
+  {
+   "i": 1,
+   "severity": "CONCERN",
+   "title": "A git failure during resolution is reported as an ordinary unresolved slice",
+   "description": "A `None` from the merge search is treated as \"this path can't answer\" and falls through to the fast-forward path, ending in an INFO line. This conflicts with three other statements:\n\n- **Line 327:** \"a `None` from `run_git` is never an answer\".\n- **Line 275:** `slice-ranges` \"exits 1 on a git or store error\".\n- **Project failure-mode rule:** failures must be observable at WARNING or above.\n\n`RangeUnresolvedReason` has no git-failure member. A timed-out `git log --merges` on a merge-landed slice will therefore surface as `landed_elsewhere` or `no_landing` with exit 0.\n\nFix: separate \"git answered: none\" from \"git could not answer\". The latter should raise or carry its own reason at WARNING and exit 1, as 400 does for every git call.",
+   "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:164"
+  },
+  {
+   "i": 2,
+   "severity": "CONCERN",
+   "title": "The audit section relies on a per-commit baseline the 323/324 interfaces do not expose",
+   "description": "D8 computes the delta from \"the latest run at `before_sha`\" against \"the latest at `after_sha`\", using `baseline_report` and `compute_delta` \"unchanged\" (line 326). As documented in the 323 and 324 slice designs:\n\n- `baseline_report(store, *, project_filter=None)` groups by project and has no commit selector.\n- `compute_delta(baseline: ProjectBaseline, new_run: AuditRun)` takes a project baseline, not a run at a chosen commit.\n- `AuditNoiseFloor` is keyed on `(project_id, commit_sha, audit_prompt_hash)`. The design does not say which commit's floor applies to a before/after pair.\n\n`compute_delta` is also 324's, not 323's as line 73 states, and neither 323 nor 324 appears in the frontmatter dependencies.\n\nFix: state how a `ProjectBaseline` is built for `before_sha` (a new helper, or a change to 323) and which floor is used. Correct the dependency attribution.",
+   "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:236"
+  },
+  {
+   "i": 3,
+   "severity": "CONCERN",
+   "title": "Report selection rules are undefined for backfilled snapshots and cross-target landings",
+   "description": "- **\"Latest snapshot\" in `report project`:** 400's `list_snapshots` is \"newest first\". `report slice` backfills boundary snapshots of old commits, so after walkthrough step 5 the most recently measured snapshot is an old boundary, not the project's current state. \"Latest\" needs a key, such as position on the target's first-parent line, which `report history` already uses.\n- **Landings on another target:** D2 tells users to resolve landed-elsewhere slices from a checkout whose target is that branch. This puts landings with a different `target_ref` into the same per-project record. The design does not say whether `report slice` on main shows them (the header reads \"N landings on main\"). In `report history`, such a slice's `after_sha` is off the first-parent line. Its reviews then match neither \"row of the landing\" nor \"no resolved landing\", so they can drop out of the report.\n- **\"Oldest first\" (lines 185, 305):** no ordering key is given when stored and newly resolved landings are merged.",
+   "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:297-298"
+  },
+  {
+   "i": 4,
+   "severity": "NOTE",
+   "title": "The editable-install mitigation cannot detect the risk it names",
+   "description": "The in-place-equals-export check runs at HEAD, where the live source and the exported source are identical. If pyright resolved `import squadron` through the editable install, the counts would still match. Walkthrough step 4 has no ground truth for the older commit.\n\nA check that would catch it: with an unchanged `uv.lock`, compare an export of an older commit against an in-place snapshot of that commit in a scratch worktree. This matters because the architecture's first design goal is the same value on the same commit.",
+   "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:380"
+  },
+  {
+   "i": 5,
+   "severity": "NOTE",
+   "title": "Walkthrough step 2 likely does not exercise store durability",
+   "description": "`git clone . /tmp/sq-clone` gives the clone a local-path origin, so its `ProjectId` probably differs from squadron's. I did not confirm this against `derive_project_id`. If so, the step proves topology resolution only, and it adds a second `sliceranges-*` file, contradicting step 1's \"one file\". The claim at line 176 that a fresh clone of the same remote reads the stored range is left unverified by the walkthrough.",
+   "location": "project-documents/user/slices/403-slice.slice-ranges-and-rollup-reports.md:364"
+  }
+ ]
+}
