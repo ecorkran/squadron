@@ -318,7 +318,7 @@ def test_params_carry_slice_reviewer_and_rounds_without_a_reviser() -> None:
 
     params = execute.await_args.args[1]
     assert (params["slice"], params["review-model"], params["max-revisions"]) == ("941", "sol", "3")
-    assert params["model"] == "opus"  # P4's own default, untouched
+    assert params["model"] == "fable-medium"  # P4's own default, untouched
 
 
 def test_revise_model_overrides_the_pipeline_default() -> None:
@@ -345,7 +345,7 @@ def test_zero_rounds_prints_the_leading_verdict_and_zero_rounds(
     out = capsys.readouterr().out
     assert code == 0
     assert "final: PASS after 0 rounds" in out
-    assert "reviewer=sol  reviser=opus  max=3" in out
+    assert "reviewer=sol  reviser=fable-medium  max=3" in out
 
 
 def test_failed_round_commit_prints_the_error_on_stderr_and_exits_one(

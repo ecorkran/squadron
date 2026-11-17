@@ -3,7 +3,7 @@ description: Full slice lifecycle — design through implementation
 
 params:
   slice: required
-  review-model: minimax
+  review-model: minimax31-flash
 
 steps:
   - design:
@@ -24,7 +24,7 @@ steps:
 
   - summary:
       template: minimal-sdk
-      model: minimax
+      model: minimax31-flash
       emit: [file]
 
   - compact:
@@ -44,7 +44,7 @@ steps:
 
   - summary:
       template: minimal-sdk
-      model: minimax
+      model: minimax31-flash
       emit: [file]
 
   - compact:

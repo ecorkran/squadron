@@ -68,7 +68,7 @@ class TestPoolsShow:
     def test_list_pool_contains_at_least_one_member(self, cli_runner: CliRunner) -> None:
         result = _invoke(cli_runner, "list", "review")
         # At least one of the known review pool members must appear
-        assert any(m in result.output for m in ["minimax", "glm5", "kimi27", "grok-fast"])
+        assert any(m in result.output for m in ["minimax31-flash", "glm5", "kimi27", "grok-fast"])
 
     def test_list_unknown_pool_exits_nonzero(self, cli_runner: CliRunner) -> None:
         result = _invoke(cli_runner, "list", "nonexistent")

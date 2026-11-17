@@ -1541,7 +1541,7 @@ class TestExplainCommand:
                     classification=StepClass.NON_SDK,
                     resolved_model_id="minimax-01",
                     profile="openrouter",
-                    rationale="alias 'minimax' resolves to profile 'openrouter' (non-SDK)",
+                    rationale="alias 'minimax31-flash' resolves to profile 'openrouter' (non-SDK)",
                 )
             ]
         )
@@ -1581,7 +1581,7 @@ class TestExplainCommand:
         assert result.exit_code == 0
         assert "Claude-required (one-shot only)" in result.output
 
-    # T7d — --param model=minimax → ModelResolver constructed with cli_override="minimax"
+    # T7d — --param model=minimax31-flash → ModelResolver gets cli_override="minimax31-flash"
     def test_model_override_via_param(self) -> None:
         classification = _make_pipeline_classification()
         mock_resolver_cls = MagicMock()
@@ -1592,11 +1592,11 @@ class TestExplainCommand:
             patch("squadron.pipeline.run_session.ModelResolver", mock_resolver_cls),
             patch("squadron.pipeline.run_session.classify_pipeline", return_value=classification),
         ):
-            result = runner.invoke(app, ["run", "p", "--explain", "--param", "model=minimax"])
+            result = runner.invoke(app, ["run", "p", "--explain", "--param", "model=minimax31-flash"])
         assert result.exit_code == 0
         mock_resolver_cls.assert_called_once()
         call_kwargs = mock_resolver_cls.call_args.kwargs
-        assert call_kwargs.get("cli_override") == "minimax"
+        assert call_kwargs.get("cli_override") == "minimax31-flash"
 
     # T7e — --strict → classify_pipeline called with STRICT policy
     def test_strict_flag_passed_to_classify(self) -> None:

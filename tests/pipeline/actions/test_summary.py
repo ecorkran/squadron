@@ -464,7 +464,7 @@ async def test_execute_summary_routes_non_sdk_profile_via_oneshot() -> None:
             result = await _execute_summary(
                 context=ctx,
                 instructions="summarize",
-                summary_model_alias="minimax",
+                summary_model_alias="minimax31-flash",
                 emit_destinations=[EmitDestination(kind=EmitKind.STDOUT)],
                 action_type="summary",
             )
@@ -500,7 +500,7 @@ async def test_execute_summary_rotate_only_without_session_is_skipped() -> None:
         result = await _execute_summary(
             context=ctx,
             instructions="summarize",
-            summary_model_alias="minimax",
+            summary_model_alias="minimax31-flash",
             emit_destinations=[EmitDestination(kind=EmitKind.ROTATE)],
             action_type="summary",
         )
@@ -529,7 +529,7 @@ async def test_execute_summary_non_sdk_profile_with_rotate_and_file_fails() -> N
         result = await _execute_summary(
             context=ctx,
             instructions="summarize",
-            summary_model_alias="minimax",
+            summary_model_alias="minimax31-flash",
             emit_destinations=[
                 EmitDestination(kind=EmitKind.ROTATE),
                 EmitDestination(kind=EmitKind.FILE),
@@ -623,7 +623,7 @@ async def test_non_sdk_summary_injects_prior_context() -> None:
             result = await _execute_summary(
                 context=ctx,
                 instructions="Please summarize.",
-                summary_model_alias="minimax",
+                summary_model_alias="minimax31-flash",
                 emit_destinations=[EmitDestination(kind=EmitKind.STDOUT)],
                 action_type="summary",
             )
@@ -889,7 +889,7 @@ async def test_summary_passes_allowed_tools_to_agent_config() -> None:
             result = await _execute_summary(
                 context=ctx,
                 instructions="summarize",
-                summary_model_alias="minimax",
+                summary_model_alias="minimax31-flash",
                 emit_destinations=[EmitDestination(kind=EmitKind.STDOUT)],
                 action_type="summary",
             )
@@ -914,7 +914,7 @@ async def test_summary_without_allowed_tools_leaves_field_none() -> None:
             await _execute_summary(
                 context=ctx,
                 instructions="summarize",
-                summary_model_alias="minimax",
+                summary_model_alias="minimax31-flash",
                 emit_destinations=[EmitDestination(kind=EmitKind.STDOUT)],
                 action_type="summary",
             )
@@ -980,7 +980,7 @@ async def test_summary_result_metadata_carries_tools_given_and_calls_made() -> N
             result = await _execute_summary(
                 context=ctx,
                 instructions="summarize",
-                summary_model_alias="minimax",
+                summary_model_alias="minimax31-flash",
                 emit_destinations=[EmitDestination(kind=EmitKind.STDOUT)],
                 action_type="summary",
             )
@@ -1005,7 +1005,7 @@ async def test_summary_result_metadata_omits_tools_keys_when_no_tools_configured
             result = await _execute_summary(
                 context=ctx,
                 instructions="summarize",
-                summary_model_alias="minimax",
+                summary_model_alias="minimax31-flash",
                 emit_destinations=[EmitDestination(kind=EmitKind.STDOUT)],
                 action_type="summary",
             )
@@ -1118,7 +1118,7 @@ async def test_one_shot_summary_records_usage_and_passes_budget() -> None:
 
     ctx = _make_context(sdk_session=None)
     ctx.resolver.resolve_full.return_value = ResolvedModel(
-        "minimax-01", "openrouter", max_output_tokens=2048, effort=Effort.low, alias="minimax"
+        "minimax-01", "openrouter", max_output_tokens=2048, effort=Effort.low, alias="minimax31-flash"
     )
 
     async def _oneshot(**kwargs: object) -> tuple[str, dict[str, object]]:
@@ -1139,14 +1139,14 @@ async def test_one_shot_summary_records_usage_and_passes_budget() -> None:
         result = await _execute_summary(
             context=ctx,
             instructions="summarize",
-            summary_model_alias="minimax",
+            summary_model_alias="minimax31-flash",
             emit_destinations=[EmitDestination(kind=EmitKind.STDOUT)],
             action_type="summary",
         )
 
     assert oneshot.call_args.kwargs["max_output_tokens"] == 2048
     record = _summary_record(result)
-    assert (record.turns, record.effort, record.alias) == (1, "low", "minimax")
+    assert (record.turns, record.effort, record.alias) == (1, "low", "minimax31-flash")
     assert record.duration_seconds is not None
     assert result.metadata[EFFORT_SENT_KEY] == "low"
 
@@ -1197,7 +1197,7 @@ async def test_failed_summary_records_error_telemetry() -> None:
         result = await _execute_summary(
             context=ctx,
             instructions="summarize",
-            summary_model_alias="minimax",
+            summary_model_alias="minimax31-flash",
             emit_destinations=[],
             action_type="summary",
         )
@@ -1219,7 +1219,7 @@ async def test_summary_without_capture_is_a_clear_error() -> None:
         await _execute_summary(
             context=ctx,
             instructions="summarize",
-            summary_model_alias="minimax",
+            summary_model_alias="minimax31-flash",
             emit_destinations=[],
             action_type="summary",
         )
@@ -1248,7 +1248,7 @@ async def test_one_shot_failure_without_telemetry_still_stamps_effort() -> None:
         result = await _execute_summary(
             context=ctx,
             instructions="summarize",
-            summary_model_alias="minimax",
+            summary_model_alias="minimax31-flash",
             emit_destinations=[],
             action_type="summary",
         )
@@ -1333,7 +1333,7 @@ async def test_empty_allowed_tools_on_a_provider_that_cannot_drop_tools_fails() 
         result = await _execute_summary(
             context=ctx,
             instructions="summarize",
-            summary_model_alias="minimax",
+            summary_model_alias="minimax31-flash",
             emit_destinations=[EmitDestination(kind=EmitKind.STDOUT)],
             action_type="summary",
         )

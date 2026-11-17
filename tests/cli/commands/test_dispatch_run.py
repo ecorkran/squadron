@@ -72,7 +72,7 @@ def test_dispatch_run_resolves_profile_from_alias(tmp_path: Path) -> None:
                 "--prompt-file",
                 str(prompt_file),
                 "--model",
-                "minimax",
+                "minimax31-flash",
             ],
         )
 

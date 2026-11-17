@@ -10,7 +10,7 @@ steps:
       model: haiku
       review: 
         template: slice
-        model: minimax
+        model: minimax31-flash
       checkpoint: on-fail
 
   - tasks:
@@ -18,7 +18,7 @@ steps:
       model: haiku
       review: 
         template: tasks
-        model: minimax
+        model: minimax31-flash
       checkpoint: on-fail
 
   # summary with emit:rotate is equivalent to compact — preferred for new pipelines.

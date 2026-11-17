@@ -92,26 +92,10 @@ private = true
 cost_tier = "subscription"
 notes = "Max sub"
 
-[aliases.sonnet-medium]
-profile = "sdk"
-model = "claude-sonnet-5-5"
-effort = "medium"
-private = true
-cost_tier = "subscription"
-notes = "Max sub"
-
 [aliases.sonnet-high]
 profile = "sdk"
 model = "claude-sonnet-5-5"
 effort = "high"
-private = true
-cost_tier = "subscription"
-notes = "Max sub"
-
-[aliases.opus-medium]
-profile = "sdk"
-model = "claude-opus-5-5"
-effort = "medium"
 private = true
 cost_tier = "subscription"
 notes = "Max sub"
@@ -128,14 +112,6 @@ notes = "Max sub"
 profile = "sdk"
 model = "claude-fable-5-2"
 effort = "medium"
-private = true
-cost_tier = "subscription"
-notes = "Max sub"
-
-[aliases.fable-high]
-profile = "sdk"
-model = "claude-fable-5-2"
-effort = "high"
 private = true
 cost_tier = "subscription"
 notes = "Max sub"
@@ -180,6 +156,18 @@ input = 0.10
 output = 0.50
 cache_read = 0.01
 cache_write = 0.125
+
+[aliases.terra]
+profile = "openai-oauth"
+model = "gpt-6.1-terra"
+cost_tier = "subscription"
+private = true
+
+[aliases.terra.pricing]
+input = 1.00
+output = 5.00
+cache_read = 0.05
+cache_write = 1.25
 
 # OpenAI API
 
@@ -322,32 +310,6 @@ input = 0.00
 output = 0.00
 cache_read = 0.00
 cache_write = 0.00
-
-[aliases.minimax]
-profile = "openrouter"
-model = "minimax/minimax-m3"
-max_output_tokens = 512000
-private = true
-cost_tier = "cheap"
-
-[aliases.minimax.pricing]
-input = 0.30
-output = 1.20
-cache_read = 0.06
-cache_write = 1.20
-
-[aliases.glm52]
-profile = "openrouter"
-model = "z-ai/glm-5.2"
-max_output_tokens = 131072
-private = true
-cost_tier = "moderate"
-
-[aliases.glm52.pricing]
-input = 0.50
-output = 3.15
-cache_read = 0.115
-cache_write = 3.15
 
 [aliases.glm53]
 profile = "openrouter"

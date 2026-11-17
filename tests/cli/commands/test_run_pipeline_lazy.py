@@ -72,7 +72,7 @@ def _make_classification(
         action_type="dispatch",
         resolved_alias="sonnet",
         resolved_model_id="claude-sonnet-4-5",
-        profile="sdk" if step_class == StepClass.SDK_REQUIRED else "minimax",
+        profile="sdk" if step_class == StepClass.SDK_REQUIRED else "minimax31-flash",
         classification=step_class,
         rationale="test",
     )
@@ -122,7 +122,7 @@ class TestStepSdkCandidate:
         assert _step_sdk_candidate(step, resolver, {}) == "sonnet"
 
     def test_returns_none_for_non_sdk_alias(self) -> None:
-        step = StepConfig(step_type="dispatch", name="s", config={"model": "minimax"})
+        step = StepConfig(step_type="dispatch", name="s", config={"model": "minimax31-flash"})
         resolver = self._make_resolver()
         assert _step_sdk_candidate(step, resolver, {}) is None
 
@@ -174,7 +174,7 @@ class TestMidRunSessionHook:
     async def test_no_sdk_steps_no_session_constructed(self) -> None:
         """Pipeline with only non-SDK steps: _connect_lazy_session never called."""
         definition = _make_definition(
-            steps=[StepConfig(step_type="dispatch", name="s1", config={"model": "minimax"})]
+            steps=[StepConfig(step_type="dispatch", name="s1", config={"model": "minimax31-flash"})]
         )
         resolver = ModelResolver()
         action_registry = self._make_action_registry()
@@ -362,7 +362,7 @@ class TestDispatchActionGuard:
         """Non-SDK profile with no session routes to agent path (not blocked by guard)."""
         from squadron.pipeline.actions.dispatch import DispatchAction
 
-        ctx = self._make_context(sdk_session=None, model="minimax")
+        ctx = self._make_context(sdk_session=None, model="minimax31-flash")
         action = DispatchAction()
         with patch.object(action, "_dispatch_via_agent", new_callable=AsyncMock) as mock_agent:
             mock_agent.return_value = ActionResult(

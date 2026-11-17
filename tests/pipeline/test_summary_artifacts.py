@@ -172,7 +172,7 @@ async def test_non_sdk_summary_gets_read_file_and_the_review_path(tmp_path: Path
     (tmp_path / "r.md").write_text("review")
     ctx = _context(
         tmp_path,
-        {"model": "minimax", "emit": ["stdout"]},
+        {"model": "minimax31-flash", "emit": ["stdout"]},
         {"s:review-0": _review_result("r.md")},
     )
     ctx.resolver.resolve_full.return_value = ResolvedModel("mm-id", "openrouter")

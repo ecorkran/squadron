@@ -4,7 +4,7 @@ description: Compose a judge verdict and a standard review verdict into one chec
 params:
   slice: required
   model: sonnet
-  review-model: minimax
+  review-model: minimax31-flash
 
 steps:
   - review:

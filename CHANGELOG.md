@@ -21,11 +21,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `sq benchmark judge BENCHMARK_ID --max-cost USD` judges slice-case implementations pairwise from their diffs (bookkeeping files removed), each pair in both orders and each replay against the reference. It states its cost bound first, stops at the run cap, and skips pairs already judged. A case whose prompt is over `benchmark.judge_max_prompt_chars` is not judged and is counted.
 - `sq benchmark report` shows slice cases in their own table (headed `no regressions`) and, once judged, a pairwise section: a strength per config, the reference as a line that is never ranked, and a verdict per pair of configs.
 - Config keys `benchmark.judge_model` (the judge's alias, no default) and `benchmark.judge_max_prompt_chars` (default 400000).
-
-- Model aliases `hy4`, `hy4-flash` (Tencent Hy4) and `minimax31-flash` (MiniMax M3.1 Flash).
+- Model aliases `hy4`, `hy4-flash` (Tencent Hy4), `minimax31-flash` (MiniMax M3.1 Flash) and `terra` (GPT-6.1 Terra on your ChatGPT plan).
 
 ### Changed
 - Built-in pipeline defaults now follow the review benchmark: every review step uses `haiku-xhigh`; slice designs are written by `fable-medium`, architecture and task breakdowns by `opus-high`. `P56` and `P456` gain a `tasks-model` param. Override any of them with `-p`.
+- `judge-cycle`, `findings-addressed-cycle`, `compose-gate-example` and the review pools now use `minimax31-flash`, `hy4`, `mimo` and `glm-flash`, the cheap reviewers that found the most design flaws in the review benchmark.
+
+### Removed
+- Model aliases `minimax` (MiniMax M3, use `minimax31-flash`), `glm52` (use `glm-flash` or `glm53`), `sonnet-medium`, `opus-medium` and `fable-high`. The built-in effort variants are now `haiku-xhigh`, `sonnet-high`, `opus-high` and `fable-medium`; define any other in `~/.config/squadron/models.toml`. A pipeline that names a removed alias fails with an unknown-model error.
 
 ### Fixed
 - `sq benchmark grade`'s review now sees a producer's edits to `*.toml`, `*.yaml` and `*.yml` files (dependencies, tool settings). Lockfiles, docs, data and images are still left out. Grades made before this are a different grader version, so the report treats them as older (#335).

@@ -118,7 +118,7 @@ The cf calls follow Context Forge's switching rule: arch (which switches the ini
     model: opus
     review:
       template: slice
-      model: minimax
+      model: minimax31-flash
     checkpoint: on-concerns
 ```
 
@@ -158,7 +158,7 @@ The cf calls follow Context Forge's switching rule: arch (which switches the ini
 
 ```yaml
 - compact:
-    model: minimax
+    model: minimax31-flash
     instructions: Keep the most recent branch results verbatim; drop tool-use details.
 ```
 
@@ -201,7 +201,7 @@ A step whose only destination is `rotate` is skipped, with no model call, when t
 ```yaml
 - summary:
     template: minimal-sdk
-    model: minimax
+    model: minimax31-flash
     emit: [stdout, clipboard]
 ```
 
@@ -295,7 +295,7 @@ A `template` name that is not registered fails before the first step runs, namin
 ```yaml
 - review:
     template: code
-    model: minimax
+    model: minimax31-flash
 ```
 
 ---
@@ -360,7 +360,7 @@ Named steps must appear **earlier** than the `gate` step. At the top level the l
 ```yaml
 params:
   model: sonnet
-  review-model: minimax
+  review-model: minimax31-flash
 
 steps:
   - loop:
@@ -904,7 +904,7 @@ Squadron resolves the active model for each action through a 5-level cascade, hi
 
 If all levels are `None`, the run fails with an explicit error. There is no hidden global fallback.
 
-Model values are **aliases** (e.g. `opus`, `sonnet`, `minimax`, `glm5`, `haiku`), not raw model IDs. Alias resolution happens at execution time. Aliases are defined in `src/squadron/data/models.toml` (built-in) and can be extended or overridden in `~/.config/squadron/models.toml`.
+Model values are **aliases** (e.g. `opus`, `sonnet`, `minimax31-flash`, `glm5`, `haiku`), not raw model IDs. Alias resolution happens at execution time. Aliases are defined in `src/squadron/data/models.toml` (built-in) and can be extended or overridden in `~/.config/squadron/models.toml`.
 
 A name that is neither an alias nor a known model id is rejected **before step 1**, listing close matches, unless a profile is set to justify a literal id. That check also runs under `sq run <pipeline> --dry-run`, so a typo fails the preview instead of rendering a plan that cannot run. For a `review` step, the profile that justifies a literal id is the step's own: its `profile`, its template's `profile:`, or `default_review_profile`; for other steps it is `--param profile=…`.
 
@@ -993,7 +993,7 @@ The `example` pipeline (`src/squadron/data/pipelines/example.yaml`) is the prima
 ```bash
 sq run slices-plan 900                     # design + review every undesigned slice in plan 900
 sq run tasks-plan 900                      # break down every designed slice whose design review is acceptable
-sq run slices-plan 900 -p max-revisions=1 -p review-model=minimax
+sq run slices-plan 900 -p max-revisions=1 -p review-model=minimax31-flash
 ```
 
 Per slice, `slices-plan`:
@@ -1012,8 +1012,8 @@ A design step that writes no design, a provider failure, or any other step failu
 | Param | Default | Meaning |
 |---|---|---|
 | `plan` | required | Architecture index of the slice plan |
-| `model` | `sonnet` | Design / tasks and revise model |
-| `review-model` | `minimax` | Review model |
+| `model` | `fable-medium` (`slices-plan`), `opus-high` (`tasks-plan`) | Design / tasks and revise model |
+| `review-model` | `haiku-xhigh` | Review model |
 | `max-revisions` | `2` | Revise rounds **after** the first design, so a slice gets at most `max-revisions + 1` reviews |
 | `pass-threshold` | `review.pass` | Stops revising |
 | `accept-threshold` | `review.concerns_or_better` | Accepts a slice whose rounds ran out (and gates `tasks-plan` selection) |
@@ -1033,7 +1033,7 @@ A design step that writes no design, a provider failure, or any other step failu
 
 ```bash
 sq run implement-plan 180 --model sonnet
-sq run implement-plan 180 -p review-model=minimax -p max-revisions=1
+sq run implement-plan 180 -p review-model=minimax31-flash -p max-revisions=1
 ```
 
 Items come from `cf.slices_ready_to_implement`, in dependency order. Per slice: fresh session (`item-reset`) → `branch enter` (with `plan:`, and a catch-up if the branch exists) → implement (`existing: keep`) → code review → `revise-code` loop → devlog → `branch merge`. The run ends on the target with one `merge: slice N — …` commit per merged slice.
@@ -1042,7 +1042,7 @@ Items come from `cf.slices_ready_to_implement`, in dependency order. Per slice: 
 - A rerun keeps work: an implement step whose slice branch already has commits of its own skips the model call and goes straight to the code review. The only way to start a slice over is to delete or rename its branch yourself; squadron never deletes branches.
 - If you fix a flagged slice by hand on its branch and commit, a retry re-reviews it, and a passing review merges it.
 - An implement dispatch that commits nothing fails its code review (no diff to review), so the item is flagged `step_failed`, not merged.
-- Same params as the plan batches above, except `review-model` defaults to `minimax`, matching `P6`.
+- Same params as the plan batches above, except `model` defaults to `sonnet`. `review-model` defaults to `haiku-xhigh`, matching `P6`.
 - Git, not cf's checkboxes, says a slice is merged. A slice whose branch is merged into the target counts as complete even when cf still reports it open (its tasks were never checked off): it is skipped, its dependents are not flagged, and a WARNING names the slice, branch and target. Fast-forwarded branches and branches with no commits of their own are not treated as merged. If git cannot be read, the batch fails before any item runs.
 
 ### Recovering a batch
@@ -1283,7 +1283,7 @@ steps:
       model: "{model}"
       review:
         template: slice
-        model: minimax
+        model: minimax31-flash
       checkpoint: on-concerns
 
   - devlog: auto

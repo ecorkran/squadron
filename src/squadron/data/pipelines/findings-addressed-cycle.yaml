@@ -5,7 +5,7 @@ params:
   slice: required
   model: sonnet
   max-revisions: "2"
-  review-model: minimax
+  review-model: minimax31-flash
   judge-model: sonnet
 
 steps:

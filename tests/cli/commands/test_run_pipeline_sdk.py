@@ -64,7 +64,7 @@ def _make_classification(
         action_type="dispatch",
         resolved_alias="sonnet",
         resolved_model_id="claude-sonnet-4-5",
-        profile="sdk" if step_class == StepClass.SDK_REQUIRED else "minimax",
+        profile="sdk" if step_class == StepClass.SDK_REQUIRED else "minimax31-flash",
         classification=step_class,
         rationale="test",
     )

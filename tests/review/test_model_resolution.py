@@ -158,7 +158,7 @@ class TestModelCLIFlag:
         input_doc, against_doc = doc_files
         with patch(
             "squadron.cli.commands.review.get_config",
-            side_effect=lambda key: "minimax" if key == "default_model" else None,
+            side_effect=lambda key: "minimax31-flash" if key == "default_model" else None,
         ):
             result = cli_runner.invoke(
                 app,
@@ -166,11 +166,11 @@ class TestModelCLIFlag:
             )
         assert result.exit_code == 0
         call_kwargs = mock_run_review.call_args.kwargs
-        # "minimax" alias should resolve to full model ID, not bare "minimax".
+        # "minimax31-flash" alias should resolve to full model ID, not bare "minimax31-flash".
         # Read the expected target from the registry so retargeting the alias
         # to a newer model does not break this test.
-        expected_model, _ = resolve_model_alias("minimax")
+        expected_model, _ = resolve_model_alias("minimax31-flash")
         assert call_kwargs["model"] == expected_model
-        assert call_kwargs["model"] != "minimax"
+        assert call_kwargs["model"] != "minimax31-flash"
         # Profile should be inferred from alias
         assert call_kwargs["profile"] == "openrouter"

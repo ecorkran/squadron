@@ -338,7 +338,7 @@ class TestDiagnosticLogging:
         log_file = tmp_path / "review-debug.jsonl"
         monkeypatch.setattr("squadron.review.parsers._debug_log_path", lambda: log_file)
         text = "## Summary\nCONCERNS\n\nSome unstructured content.\n"
-        parse_review_output(text, "slice", {}, model="minimax")
+        parse_review_output(text, "slice", {}, model="minimax31-flash")
         assert log_file.exists()
         import json
 
@@ -346,7 +346,7 @@ class TestDiagnosticLogging:
         assert len(entries) >= 1
         assert entries[0]["verdict"] == "CONCERNS"
         assert entries[0]["template"] == "slice"
-        assert entries[0]["model"] == "minimax"
+        assert entries[0]["model"] == "minimax31-flash"
 
     def test_debug_log_written_on_unknown_verdict(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
@@ -360,7 +360,7 @@ class TestDiagnosticLogging:
         monkeypatch.setattr("squadron.review.parsers._debug_log_path", lambda: log_file)
         raw = "The model rambled without a summary section or any findings.\n"
 
-        parse_review_output(raw, "slice", {}, model="minimax")
+        parse_review_output(raw, "slice", {}, model="minimax31-flash")
 
         assert log_file.exists()
         import json

@@ -24,7 +24,7 @@ from squadron.pipeline.resolver import (
 _REVIEW_POOL = ModelPool(
     name="review",
     description="test pool",
-    models=["minimax", "glm5"],
+    models=["minimax31-flash", "glm5"],
     strategy="round-robin",
 )
 _HIGH_POOL = ModelPool(
@@ -88,9 +88,9 @@ def test_cli_pool_resolves_via_backend() -> None:
     backend = StubPoolBackend()
     resolver = ModelResolver(cli_override="pool:review", pool_backend=backend)
     model_id, _profile = resolver.resolve()
-    # minimax is the first member; verify it resolves to a real model id
+    # minimax31-flash is the first member; verify it resolves to a real model id
     assert model_id  # non-empty
-    assert "minimax" in model_id.lower() or model_id == "minimax"
+    assert model_id == "minimax/minimax-m3.1-flash"
 
 
 def test_pipeline_level_pool_resolves_via_backend() -> None:
@@ -134,7 +134,7 @@ def test_callback_fires_once_per_resolution() -> None:
     assert len(selections) == 1
     sel = selections[0]
     assert sel.pool_name == "review"
-    assert sel.selected_alias == "minimax"
+    assert sel.selected_alias == "minimax31-flash"
     assert sel.strategy == "round-robin"
     assert isinstance(sel.timestamp, datetime)
 

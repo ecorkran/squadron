@@ -398,7 +398,7 @@ class TestRenderSummary:
         result = _render_summary(
             {
                 "template": "minimal-sdk",
-                "model": "minimax",
+                "model": "minimax31-flash",
                 "emit": ["stdout", "clipboard"],
             },
             {"slice": "165"},
@@ -408,7 +408,7 @@ class TestRenderSummary:
         assert result.action_type == ActionType.SUMMARY
         assert result.template == "minimal-sdk"
         assert result.model == "minimax-resolved"
-        assert result.model_switch == "/model minimax"
+        assert result.model_switch == "/model minimax31-flash"
         assert result.resolved_instructions == "Summarize recent work"
         assert result.emit == ["stdout", "clipboard"]
         assert result.command is None  # no shell command
@@ -478,7 +478,7 @@ class TestRenderSummary:
         mock_render.return_value = "instructions"
         resolver = _make_resolver("minimax-01", "openrouter")
 
-        result = _render_summary({"model": "minimax", "template": "minimal-sdk"}, {}, resolver)
+        result = _render_summary({"model": "minimax31-flash", "template": "minimal-sdk"}, {}, resolver)
 
         assert result.model_switch is None
         assert result.command is not None
@@ -498,7 +498,7 @@ class TestRenderSummary:
         resolver = _make_resolver("minimax-01", "openrouter")
 
         result = _render_summary(
-            {"model": "minimax"},
+            {"model": "minimax31-flash"},
             {"slice": "a slice with spaces"},
             resolver,
         )

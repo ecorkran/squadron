@@ -5,7 +5,7 @@ params:
   slice: required
   model: sonnet
   max-revisions: "2"
-  review-model: minimax
+  review-model: minimax31-flash
 
 steps:
   # Judge first: the fix step needs findings to work from.

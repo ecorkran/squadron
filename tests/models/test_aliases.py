@@ -73,6 +73,11 @@ def test_resolve_luna() -> None:
     assert profile == "openai-oauth"
 
 
+def test_resolve_terra() -> None:
+    """terra resolves to gpt-6.1-terra on openai-oauth profile."""
+    assert resolve_model_alias("terra") == ("gpt-6.1-terra", "openai-oauth")
+
+
 @pytest.mark.parametrize(
     ("alias", "model_id"),
     [
@@ -305,12 +310,9 @@ def test_effort_is_none_when_unset_or_unknown(tmp_path: Path) -> None:
 # unset so the backend default applies; a new fixed-effort alias is added here.
 FIXED_EFFORT_BUILTINS = {
     "haiku-xhigh": "xhigh",
-    "sonnet-medium": "medium",
     "sonnet-high": "high",
-    "opus-medium": "medium",
     "opus-high": "high",
     "fable-medium": "medium",
-    "fable-high": "high",
 }
 
 

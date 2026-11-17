@@ -143,7 +143,10 @@ class TestPoolValidation:
         return _parse_pools_from_toml(Path("/fake/pools.toml"), toml_text)
 
     def test_unknown_strategy_raises(self) -> None:
-        toml = '[pools.test]\ndescription = "x"\nstrategy = "no-such-strategy"\nmodels = ["minimax"]\n'
+        toml = (
+            '[pools.test]\ndescription = "x"\nstrategy = "no-such-strategy"\n'
+            'models = ["minimax31-flash"]\n'
+        )
         with pytest.raises(PoolValidationError, match="no-such-strategy"):
             self._parse(toml)
 
@@ -157,7 +160,7 @@ class TestPoolValidation:
             "[pools.test]\n"
             'description = "x"\n'
             'strategy = "weighted-random"\n'
-            'models = ["minimax"]\n'
+            'models = ["minimax31-flash"]\n'
             "\n[pools.test.weights]\n"
             "nonmember = 2.0\n"
         )
@@ -165,7 +168,10 @@ class TestPoolValidation:
             self._parse(toml)
 
     def test_valid_pool_parses_ok(self) -> None:
-        toml = '[pools.test]\ndescription = "x"\nstrategy = "random"\nmodels = ["minimax", "glm5"]\n'
+        toml = (
+            '[pools.test]\ndescription = "x"\nstrategy = "random"\n'
+            'models = ["minimax31-flash", "glm5"]\n'
+        )
         pools = self._parse(toml)
         assert "test" in pools
 
@@ -177,7 +183,7 @@ class TestPoolValidation:
 
 class TestAliasValidation:
     def test_unknown_alias_raises(self) -> None:
-        known = {"minimax": {}, "glm5": {}}
+        known = {"minimax31-flash": {}, "glm5": {}}
         from squadron.pipeline.intelligence.pools.loader import _validate_pool_aliases
         from squadron.pipeline.intelligence.pools.models import ModelPool
 
@@ -191,14 +197,14 @@ class TestAliasValidation:
             _validate_pool_aliases("bad", pool, known)
 
     def test_valid_alias_no_error(self) -> None:
-        known = {"minimax": {}, "glm5": {}}
+        known = {"minimax31-flash": {}, "glm5": {}}
         from squadron.pipeline.intelligence.pools.loader import _validate_pool_aliases
         from squadron.pipeline.intelligence.pools.models import ModelPool
 
         pool = ModelPool(
             name="ok",
             description="",
-            models=["minimax"],
+            models=["minimax31-flash"],
             strategy="random",
         )
         _validate_pool_aliases("ok", pool, known)  # must not raise

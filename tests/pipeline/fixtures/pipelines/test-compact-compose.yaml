@@ -4,7 +4,7 @@ description: >
   Tests that the three actions are independent and compose correctly.
 
 params: {
-    model: minimax
+    model: minimax31-flash
 }
 
 steps:
@@ -13,7 +13,7 @@ steps:
       prompt: "Describe three key facts about async Python programming."
 
   - summary:
-      model: minimax
+      model: minimax31-flash
       emit: [file, rotate]
 
   - summary:

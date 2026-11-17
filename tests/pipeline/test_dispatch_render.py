@@ -54,7 +54,7 @@ def test_render_dispatch_sdk_none_profile_emits_in_session_instruction() -> None
 
 def test_render_dispatch_non_sdk_profile_emits_command() -> None:
     """Non-SDK profile: command starts with sq _dispatch-run, model_switch is None."""
-    config: dict[str, object] = {"model": "minimax"}
+    config: dict[str, object] = {"model": "minimax31-flash"}
     params: dict[str, object] = {}
     resolver = _mock_resolver("minimax-text-01", "openrouter")
 
@@ -67,7 +67,7 @@ def test_render_dispatch_non_sdk_profile_emits_command() -> None:
 
 def test_render_dispatch_command_contains_prompt_file_placeholder() -> None:
     """Non-SDK command includes the {tmp_path} placeholder."""
-    config: dict[str, object] = {"model": "minimax"}
+    config: dict[str, object] = {"model": "minimax31-flash"}
     params: dict[str, object] = {}
     resolver = _mock_resolver("minimax-text-01", "openrouter")
 
@@ -79,7 +79,7 @@ def test_render_dispatch_command_contains_prompt_file_placeholder() -> None:
 
 def test_render_dispatch_command_contains_model_and_profile() -> None:
     """Non-SDK command includes --model and --profile flags."""
-    config: dict[str, object] = {"model": "minimax"}
+    config: dict[str, object] = {"model": "minimax31-flash"}
     params: dict[str, object] = {}
     resolver = _mock_resolver("minimax-text-01", "openrouter")
 
@@ -92,8 +92,8 @@ def test_render_dispatch_command_contains_model_and_profile() -> None:
 
 def test_render_dispatch_extra_params_forwarded() -> None:
     """Non-internal params forwarded as --param flags."""
-    config: dict[str, object] = {"model": "minimax"}
-    params: dict[str, object] = {"step": "183", "model": "minimax"}
+    config: dict[str, object] = {"model": "minimax31-flash"}
+    params: dict[str, object] = {"step": "183", "model": "minimax31-flash"}
     resolver = _mock_resolver("minimax-text-01", "openrouter")
 
     result = _render_dispatch(config, params, resolver)
@@ -103,12 +103,12 @@ def test_render_dispatch_extra_params_forwarded() -> None:
     assert "step=183" in result.command
     # internal 'model' key excluded
     model_param_count = result.command.count("--param")
-    assert model_param_count == 1  # only step=183, not model=minimax
+    assert model_param_count == 1  # only step=183, not model=minimax31-flash
 
 
 def test_render_dispatch_internal_params_excluded() -> None:
     """Internal keys never appear as --param entries."""
-    config: dict[str, object] = {"model": "minimax"}
+    config: dict[str, object] = {"model": "minimax31-flash"}
     internal_keys = [
         "_fan_out_branch_index",
         "prompt",
@@ -164,7 +164,7 @@ def test_render_dispatch_command_carries_the_alias_effort() -> None:
 def test_render_dispatch_command_has_no_effort_when_the_alias_sets_none() -> None:
     resolver = _mock_resolver("minimax-text-01", "openrouter")
 
-    result = _render_dispatch({"model": "minimax"}, {}, resolver)
+    result = _render_dispatch({"model": "minimax31-flash"}, {}, resolver)
 
     assert result.command is not None
     assert "--effort" not in result.command
@@ -188,7 +188,7 @@ def test_render_dispatch_sdk_alias_with_effort_emits_no_command() -> None:
     [
         ("claude-opus-4", "sdk"),
         ("claude-opus-4", None),
-        ("minimax", "openrouter"),
+        ("minimax31-flash", "openrouter"),
     ],
 )
 def test_render_dispatch_never_emits_both_command_and_model_switch(

@@ -11,4 +11,4 @@ steps:
             model: haiku
         - review:
             template: code
-            model: minimax
+            model: minimax31-flash

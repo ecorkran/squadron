@@ -99,10 +99,16 @@ class TestPlainListing:
         assert not _BOX_DRAWING & set("\n".join(_render(self.PIPELINES, verbose=True)))
 
     def test_verbose_shows_three_params_and_counts_the_rest(self) -> None:
-        params = {"slice": "required", "model": "sonnet", "review-model": "minimax", "x": "1", "y": "2"}
+        params = {
+            "slice": "required",
+            "model": "sonnet",
+            "review-model": "minimax31-flash",
+            "x": "1",
+            "y": "2",
+        }
         lines = _render([_info("loop", PipelineSource.PROJECT, params)], verbose=True)
 
-        assert lines[1].endswith("slice=required model=sonnet review-model=minimax +2")
+        assert lines[1].endswith("slice=required model=sonnet review-model=minimax31-flash +2")
 
     def test_verbose_with_few_params_has_no_suffix(self) -> None:
         lines = _render([_info("loop", PipelineSource.PROJECT, {"slice": "required"})], verbose=True)

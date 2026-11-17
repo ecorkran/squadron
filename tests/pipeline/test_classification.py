@@ -122,7 +122,7 @@ def test_spy_pool_backend_initial_count() -> None:
 
 
 def test_spy_pool_backend_select_increments() -> None:
-    pool = ModelPool(name="p", description="", models=["minimax"], strategy="random")
+    pool = ModelPool(name="p", description="", models=["minimax31-flash"], strategy="random")
     spy = SpyPoolBackend({"p": pool})
     spy.select("p", SelectionContext(pool_name="p", action_type="dispatch"))
     assert spy.select_call_count == 1
@@ -289,9 +289,9 @@ def test_classifies_all_claude_pipeline_as_persistent() -> None:
 
 def test_classifies_all_minimax_pipeline_as_claude_free() -> None:
     steps = [
-        make_step("dispatch", "step-a", {"model": "minimax"}),
-        make_step("dispatch", "step-b", {"model": "minimax"}),
-        make_step("dispatch", "step-c", {"model": "minimax"}),
+        make_step("dispatch", "step-a", {"model": "minimax31-flash"}),
+        make_step("dispatch", "step-b", {"model": "minimax31-flash"}),
+        make_step("dispatch", "step-c", {"model": "minimax31-flash"}),
     ]
     pipeline = make_pipeline(steps)
     resolver = make_resolver()
@@ -318,7 +318,7 @@ def test_classifies_review_only_sdk_as_one_shot() -> None:
 def test_classifies_mixed_pipeline_per_step() -> None:
     steps = [
         make_step("dispatch", "claude-dispatch", {"model": "sonnet"}),
-        make_step("dispatch", "minimax-dispatch", {"model": "minimax"}),
+        make_step("dispatch", "minimax-dispatch", {"model": "minimax31-flash"}),
         make_step("review", "sonnet-review", {"template": "slice", "model": "sonnet"}),
     ]
     pipeline = make_pipeline(steps)
@@ -339,7 +339,7 @@ def test_cli_override_honored() -> None:
         make_step("dispatch", "step-b"),
     ]
     pipeline = make_pipeline(steps, model="sonnet")
-    resolver = make_resolver(cli_override="minimax")
+    resolver = make_resolver(cli_override="minimax31-flash")
     result = classify_pipeline(pipeline, resolver)
 
     assert all(s.classification == StepClass.NON_SDK for s in result.steps)
@@ -388,7 +388,7 @@ def test_one_shot_excludes_non_sdk_review() -> None:
     """SC4 third sub-case: non-SDK review does not contribute to one-shot."""
     steps = [
         make_step("dispatch", "claude-dispatch", {"model": "sonnet"}),
-        make_step("review", "minimax-review", {"template": "slice", "model": "minimax"}),
+        make_step("review", "minimax-review", {"template": "slice", "model": "minimax31-flash"}),
     ]
     pipeline = make_pipeline(steps)
     resolver = make_resolver()
@@ -412,14 +412,14 @@ _SDK_POOL = ModelPool(
 _NON_SDK_POOL = ModelPool(
     name="non-sdk-pool",
     description="all non-SDK",
-    models=["minimax", "glm52"],
+    models=["minimax31-flash", "glm-flash"],
     strategy="round-robin",
 )
 
 _MIXED_POOL = ModelPool(
     name="mixed-pool",
     description="mixed SDK/non-SDK",
-    models=["sonnet", "minimax"],
+    models=["sonnet", "minimax31-flash"],
     strategy="round-robin",
 )
 
@@ -660,7 +660,7 @@ def test_each_sdk_inner_classifies_as_persistent() -> None:
 
 
 def test_each_non_sdk_inner_classifies_as_claude_free() -> None:
-    pipeline = make_pipeline([_make_each_step("minimax", "each-0")])
+    pipeline = make_pipeline([_make_each_step("minimax31-flash", "each-0")])
     resolver = make_resolver()
     result = classify_pipeline(pipeline, resolver)
 
@@ -690,7 +690,7 @@ def test_fan_out_all_sdk_literal_list() -> None:
 
 
 def test_fan_out_all_non_sdk_literal_list() -> None:
-    pipeline = make_pipeline([_make_fan_out_step(["minimax", "minimax"])])
+    pipeline = make_pipeline([_make_fan_out_step(["minimax31-flash", "minimax31-flash"])])
     resolver = make_resolver()
     result = classify_pipeline(pipeline, resolver)
 
@@ -699,7 +699,7 @@ def test_fan_out_all_non_sdk_literal_list() -> None:
 
 
 def test_fan_out_mixed_literal_list_is_pool_uncertain() -> None:
-    pipeline = make_pipeline([_make_fan_out_step(["sonnet", "minimax"])])
+    pipeline = make_pipeline([_make_fan_out_step(["sonnet", "minimax31-flash"])])
     resolver = make_resolver()
     result = classify_pipeline(pipeline, resolver)
 
@@ -736,7 +736,7 @@ def test_container_with_unregistered_inner_step_type_returns_no_rows() -> None:
 def test_top_level_steps_still_classified_alongside_containers() -> None:
     steps = [
         _make_each_step("sonnet", "each-0"),
-        make_step("dispatch", "summary-0", {"model": "minimax"}),
+        make_step("dispatch", "summary-0", {"model": "minimax31-flash"}),
     ]
     pipeline = make_pipeline(steps)
     resolver = make_resolver()
@@ -782,7 +782,7 @@ def test_review_step_with_no_cascade_model_falls_back_to_template_model() -> Non
 
     with patch(
         "squadron.review.templates.get_template",
-        return_value=_make_template(model="minimax"),
+        return_value=_make_template(model="minimax31-flash"),
     ):
         result = classify_pipeline(pipeline, resolver)
 
@@ -824,7 +824,7 @@ def test_loop_container_review_inner_falls_back_to_template_model() -> None:
 
     with patch(
         "squadron.review.templates.get_template",
-        return_value=_make_template(model="minimax"),
+        return_value=_make_template(model="minimax31-flash"),
     ):
         result = classify_pipeline(pipeline, resolver)
 
@@ -990,7 +990,7 @@ def test_label_and_classifier_agree(
 
 
 def test_review_template_returns_a_known_template() -> None:
-    template = _make_template(model="minimax")
+    template = _make_template(model="minimax31-flash")
     with patch("squadron.review.templates.get_template", return_value=template):
         assert _review_template("review", {"template": "code"}) is template
 
@@ -1012,9 +1012,9 @@ def test_review_template_returns_none_when_there_is_no_template_to_read(
 def test_model_fallback_is_unchanged_for_known_and_unknown_templates() -> None:
     with patch(
         "squadron.review.templates.get_template",
-        return_value=_make_template(model="minimax"),
+        return_value=_make_template(model="minimax31-flash"),
     ):
-        assert _review_template_model_fallback("review", {"template": "code"}) == "minimax"
+        assert _review_template_model_fallback("review", {"template": "code"}) == "minimax31-flash"
     assert _review_template_model_fallback("review", {"template": "no-such-template-name"}) is None
 
 

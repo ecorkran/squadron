@@ -4,7 +4,7 @@ description: Design a slice (phase 4) with review and human checkpoint
 params:
   slice: required
   model: kimi27
-  review-model: minimax
+  review-model: minimax31-flash
 
 steps:
   - design:
@@ -17,6 +17,6 @@ steps:
 
   - summary:
       template: minimal-sdk
-      model: minimax
+      model: minimax31-flash
       emit: [stdout, clipboard, file]
 

@@ -1221,7 +1221,7 @@ def _make_pool_selection() -> object:
 
     return PoolSelection(
         pool_name="review",
-        selected_alias="minimax",
+        selected_alias="minimax31-flash",
         strategy="round-robin",
         step_name="design-0",
         action_type="dispatch",
@@ -1242,7 +1242,7 @@ class TestPoolSelectionLogging:
         assert len(state.pool_selections) == 1
         entry = state.pool_selections[0]
         assert entry["pool_name"] == "review"
-        assert entry["selected_alias"] == "minimax"
+        assert entry["selected_alias"] == "minimax31-flash"
         assert entry["strategy"] == "round-robin"
         assert entry["step_name"] == "design-0"
         assert entry["action_type"] == "dispatch"

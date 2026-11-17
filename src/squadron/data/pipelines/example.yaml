@@ -59,7 +59,7 @@ steps:
   #   review: slice                          # uses pipeline/step model
   #   review:
   #     template: slice                      # review template name
-  #     model: glm52                         # model for the review call
+  #     model: glm-flash                     # model for the review call
   #
   # Available review templates: arch, slice, tasks, code
   # -------------------------------------------------------------------------
@@ -69,7 +69,7 @@ steps:
       model: haiku
       review:
         template: slice
-        model: minimax
+        model: minimax31-flash
       checkpoint: on-concerns
 
   - tasks:
@@ -79,7 +79,7 @@ steps:
       allowed_tools: [read_file, write_file, list_files, grep]
       review:
         template: tasks
-        model: minimax
+        model: minimax31-flash
       checkpoint: on-fail
 
   # -------------------------------------------------------------------------
@@ -162,7 +162,7 @@ steps:
 
   # - review:
   #     template: code
-  #     model: minimax
+  #     model: minimax31-flash
 
   # -------------------------------------------------------------------------
   # devlog — generate a development log entry
@@ -228,7 +228,7 @@ steps:
   #           model: sonnet
   #       - review:
   #           template: code
-  #           model: minimax
+  #           model: minimax31-flash
   # -------------------------------------------------------------------------
 
   # -------------------------------------------------------------------------

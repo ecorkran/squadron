@@ -321,19 +321,19 @@ routes non-success subtypes as `MessageType.system` messages. The fix is in
 Run each scenario from the slice doc's Verification Walkthrough:
 
 - [x] **Step 1 — In-IDE non-SDK model routes through agent path.**
-  Inside Claude Code: `/sq:run P4 183 --param model=minimax`. Confirm the
+  Inside Claude Code: `/sq:run P4 183 --param model=minimax31-flash`. Confirm the
   dispatch JSON contains `command` starting with `sq _dispatch-run … --profile
   openrouter …` and no `model_switch`. The IDE session does not generate
   the design output.
 - [x] **Step 2 — Real-terminal non-SDK model.** `sq run P4 183 --param
-  model=minimax`. Same routing via `_dispatch_via_agent`.
+  model=minimax31-flash`. Same routing via `_dispatch_via_agent`.
 - [x] **Step 3 — Default model uses SDK session.** `sq run P4 183` (no
   `--param model`). `_dispatch_via_session` path, behavior identical to main.
 - [x] **Step 4 — SDK API error halts pipeline cleanly.** Integration test
   covers this; manual re-run optional. Confirm pipeline state shows
   `status=failed`, no design file written.
 - [x] **Step 5 — `sq _dispatch-run` standalone debug.**
-  `echo "Write a haiku." > /tmp/p.txt && sq _dispatch-run --prompt-file /tmp/p.txt --model minimax`.
+  `echo "Write a haiku." > /tmp/p.txt && sq _dispatch-run --prompt-file /tmp/p.txt --model minimax31-flash`.
   Confirm haiku on stdout, exit 0, `sq --help` does not list `_dispatch-run`.
   - [x] All 5 steps pass
 

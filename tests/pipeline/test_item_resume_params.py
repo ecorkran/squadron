@@ -9,7 +9,7 @@ import pytest
 from squadron.pipeline.batch_report import ItemDecision
 from squadron.pipeline.item_resume import ResumeRequest, item_params
 
-_STORED: dict[str, object] = {"plan": "400", "model": "haiku", "review-model": "minimax"}
+_STORED: dict[str, object] = {"plan": "400", "model": "haiku", "review-model": "minimax31-flash"}
 
 
 def _request(**kwargs: object) -> ResumeRequest:

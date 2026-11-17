@@ -17,13 +17,13 @@ def sample_aliases() -> dict[str, ModelAlias]:
     cheapest-strategy tests can verify tie-breaking.
     """
     return {
-        "minimax": ModelAlias(
+        "minimax31-flash": ModelAlias(
             profile="openrouter",
             model="minimax/minimax-m3",
             cost_tier="cheap",
             pricing={"input": 0.60, "output": 2.40},
         ),
-        "glm52": ModelAlias(
+        "glm-flash": ModelAlias(
             profile="openrouter",
             model="z-ai/glm-5.2",
             cost_tier="moderate",

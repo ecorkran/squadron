@@ -79,14 +79,14 @@ class TestCostTierRank:
 
 class TestRandomStrategy:
     def test_single_member_always_returns_it(self) -> None:
-        pool = _make_pool(["minimax"])
+        pool = _make_pool(["minimax31-flash"])
         strategy = RandomStrategy()
         ctx = _make_ctx()
         for _ in range(20):
-            assert strategy.select(pool, ctx) == "minimax"
+            assert strategy.select(pool, ctx) == "minimax31-flash"
 
     def test_uniform_distribution(self) -> None:
-        models = ["minimax", "glm5", "kimi27"]
+        models = ["minimax31-flash", "glm5", "kimi27"]
         pool = _make_pool(models)
         strategy = RandomStrategy()
         ctx = _make_ctx()
@@ -95,7 +95,7 @@ class TestRandomStrategy:
             assert counts[model] > 30, f"{model} appeared only {counts[model]} times"
 
     def test_returns_member_of_pool(self) -> None:
-        models = ["minimax", "glm5"]
+        models = ["minimax31-flash", "glm5"]
         pool = _make_pool(models)
         strategy = RandomStrategy()
         ctx = _make_ctx()
@@ -110,7 +110,7 @@ class TestRandomStrategy:
 
 class TestRoundRobinStrategy:
     def test_rotates_through_all_members(self) -> None:
-        models = ["minimax", "glm5", "kimi27"]
+        models = ["minimax31-flash", "glm5", "kimi27"]
         pool = _make_pool(models)
         strategy = RoundRobinStrategy()
         state = PoolState(last_index=0)
@@ -122,10 +122,10 @@ class TestRoundRobinStrategy:
         r3 = strategy.select(pool, ctx)
         assert r1 == "glm5"
         assert r2 == "kimi27"
-        assert r3 == "minimax"
+        assert r3 == "minimax31-flash"
 
     def test_wrap_around(self) -> None:
-        models = ["minimax", "glm5", "kimi27"]
+        models = ["minimax31-flash", "glm5", "kimi27"]
         pool = _make_pool(models)
         strategy = RoundRobinStrategy()
         state = PoolState(last_index=0)
@@ -138,15 +138,15 @@ class TestRoundRobinStrategy:
         assert strategy.select(pool, ctx) == "glm5"
 
     def test_single_member_pool(self) -> None:
-        pool = _make_pool(["minimax"])
+        pool = _make_pool(["minimax31-flash"])
         strategy = RoundRobinStrategy()
         state = PoolState(last_index=0)
         ctx = _make_ctx(pool_state=state)
         for _ in range(5):
-            assert strategy.select(pool, ctx) == "minimax"
+            assert strategy.select(pool, ctx) == "minimax31-flash"
 
     def test_none_pool_state_treated_as_zero(self) -> None:
-        models = ["minimax", "glm5", "kimi27"]
+        models = ["minimax31-flash", "glm5", "kimi27"]
         pool = _make_pool(models)
         strategy = RoundRobinStrategy()
         ctx = _make_ctx(pool_state=None)
@@ -173,14 +173,14 @@ class TestRoundRobinStrategy:
 class TestCheapestStrategy:
     def test_free_tier_wins(self, sample_aliases: dict) -> None:
         # qwen36-free is free tier, others are cheap
-        pool = _make_pool(["minimax", "glm5", "qwen36-free"])
+        pool = _make_pool(["minimax31-flash", "glm5", "qwen36-free"])
         strategy = CheapestStrategy()
         ctx = _make_ctx(aliases=sample_aliases)
         assert strategy.select(pool, ctx) == "qwen36-free"
 
     def test_same_tier_broken_by_price(self, sample_aliases: dict) -> None:
-        # All cheap: minimax(0.30), glm5(0.72), grok-fast(0.20)
-        pool = _make_pool(["minimax", "glm5", "grok-fast"])
+        # All cheap: minimax31-flash(0.30), glm5(0.72), grok-fast(0.20)
+        pool = _make_pool(["minimax31-flash", "glm5", "grok-fast"])
         strategy = CheapestStrategy()
         ctx = _make_ctx(aliases=sample_aliases)
         # grok-fast has lowest input price among cheap tier
@@ -200,12 +200,12 @@ class TestCheapestStrategy:
         assert strategy.select(pool, ctx) == "opus"
 
     def test_none_aliases_all_ranked_worst(self) -> None:
-        pool = _make_pool(["minimax", "glm5"])
+        pool = _make_pool(["minimax31-flash", "glm5"])
         strategy = CheapestStrategy()
         ctx = _make_ctx(aliases=None)
         # Both ranked worst — result is deterministic only in that it's one of the two
         result = strategy.select(pool, ctx)
-        assert result in ["minimax", "glm5"]
+        assert result in ["minimax31-flash", "glm5"]
 
 
 # ---------------------------------------------------------------------------
@@ -224,7 +224,7 @@ class TestWeightedRandomStrategy:
         assert 1.0 < ratio < 4.0, f"Expected ~2:1 ratio, got {ratio:.2f}"
 
     def test_absent_weights_uniform(self) -> None:
-        models = ["minimax", "glm5", "kimi27"]
+        models = ["minimax31-flash", "glm5", "kimi27"]
         pool = _make_pool(models, weights=None)
         strategy = WeightedRandomStrategy()
         ctx = _make_ctx()
@@ -233,11 +233,11 @@ class TestWeightedRandomStrategy:
             assert counts[m] > 100, f"{m} underrepresented: {counts[m]}"
 
     def test_single_member_pool(self) -> None:
-        pool = _make_pool(["minimax"], weights={"minimax": 5.0})
+        pool = _make_pool(["minimax31-flash"], weights={"minimax31-flash": 5.0})
         strategy = WeightedRandomStrategy()
         ctx = _make_ctx()
         for _ in range(20):
-            assert strategy.select(pool, ctx) == "minimax"
+            assert strategy.select(pool, ctx) == "minimax31-flash"
 
 
 # ---------------------------------------------------------------------------

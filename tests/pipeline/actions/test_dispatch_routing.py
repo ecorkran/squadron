@@ -77,7 +77,7 @@ async def test_dispatch_routes_to_agent_when_session_present_but_profile_non_sdk
     ctx = _make_context(
         resolver=resolver,
         sdk_session=fake_session,
-        params={"prompt": "test", "model": "minimax"},
+        params={"prompt": "test", "model": "minimax31-flash"},
     )
     expected = _agent_result("openrouter")
 
@@ -156,7 +156,7 @@ async def test_dispatch_routes_to_agent_when_no_session(
     ctx = _make_context(
         resolver=resolver,
         sdk_session=None,
-        params={"prompt": "test", "model": "minimax"},
+        params={"prompt": "test", "model": "minimax31-flash"},
     )
     expected = _agent_result("openrouter")
 
@@ -188,7 +188,7 @@ async def test_dispatch_mixed_pipeline_routes_per_step(
     ctx_minimax = _make_context(
         resolver=minimax_resolver,
         sdk_session=fake_session,
-        params={"prompt": "test", "model": "minimax"},
+        params={"prompt": "test", "model": "minimax31-flash"},
     )
 
     session_result = _session_result()

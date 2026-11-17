@@ -21,28 +21,28 @@ class TestModelPool:
         pool = ModelPool(
             name="test",
             description="A test pool",
-            models=["minimax", "glm5"],
+            models=["minimax31-flash", "glm5"],
             strategy="random",
         )
         assert pool.name == "test"
-        assert pool.models == ["minimax", "glm5"]
+        assert pool.models == ["minimax31-flash", "glm5"]
         assert pool.weights is None
 
     def test_instantiation_with_weights(self) -> None:
         pool = ModelPool(
             name="test",
             description="Weighted pool",
-            models=["minimax", "glm5"],
+            models=["minimax31-flash", "glm5"],
             strategy="weighted-random",
-            weights={"minimax": 2.0, "glm5": 1.0},
+            weights={"minimax31-flash": 2.0, "glm5": 1.0},
         )
-        assert pool.weights == {"minimax": 2.0, "glm5": 1.0}
+        assert pool.weights == {"minimax31-flash": 2.0, "glm5": 1.0}
 
     def test_frozen_raises_on_assignment(self) -> None:
         pool = ModelPool(
             name="test",
             description="desc",
-            models=["minimax"],
+            models=["minimax31-flash"],
             strategy="random",
         )
         with pytest.raises(dataclasses.FrozenInstanceError):
