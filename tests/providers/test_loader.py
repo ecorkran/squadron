@@ -4,7 +4,9 @@ from __future__ import annotations
 
 from unittest.mock import patch
 
-from squadron.providers.loader import _PROVIDER_MODULES, ensure_provider_loaded
+import pytest
+
+from squadron.providers.loader import PROVIDER_MODULES, ensure_provider_loaded
 
 
 class TestEnsureProviderLoaded:
@@ -30,26 +32,34 @@ class TestEnsureProviderLoaded:
             ensure_provider_loaded("custom-provider")
             mock_import.assert_called_once_with("squadron.providers.custom-provider")
 
-    def test_import_error_swallowed_silently(self) -> None:
-        with patch(
-            "squadron.providers.loader.importlib.import_module",
-            side_effect=ImportError("no such module"),
+    def test_unknown_provider_module_is_ignored(self) -> None:
+        missing = ModuleNotFoundError("no module", name="squadron.providers.nonexistent")
+        with patch("squadron.providers.loader.importlib.import_module", side_effect=missing):
+            ensure_provider_loaded("nonexistent")  # get_provider reports it later
+
+    def test_missing_dependency_of_known_provider_propagates(self) -> None:
+        missing = ModuleNotFoundError("no module", name="openai")
+        with (
+            patch("squadron.providers.loader.importlib.import_module", side_effect=missing),
+            pytest.raises(ModuleNotFoundError),
         ):
-            # Should not raise
-            ensure_provider_loaded("nonexistent")
+            ensure_provider_loaded("openai")
+
+    def test_real_unknown_provider_does_not_raise(self) -> None:
+        ensure_provider_loaded("definitely-not-a-provider")
 
 
 class TestProviderModulesMapping:
-    """Tests for the _PROVIDER_MODULES constant."""
+    """Tests for the PROVIDER_MODULES constant."""
 
     def test_contains_openai(self) -> None:
-        assert "openai" in _PROVIDER_MODULES
+        assert "openai" in PROVIDER_MODULES
 
     def test_contains_sdk(self) -> None:
-        assert "sdk" in _PROVIDER_MODULES
+        assert "sdk" in PROVIDER_MODULES
 
     def test_contains_openai_oauth(self) -> None:
-        assert "openai-oauth" in _PROVIDER_MODULES
+        assert "openai-oauth" in PROVIDER_MODULES
 
     def test_openai_oauth_maps_to_codex(self) -> None:
-        assert _PROVIDER_MODULES["openai-oauth"] == "codex"
+        assert PROVIDER_MODULES["openai-oauth"] == "codex"

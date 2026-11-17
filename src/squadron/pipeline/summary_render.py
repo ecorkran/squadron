@@ -7,7 +7,7 @@ CLI command and potentially other summary-producing entry points.
 
 from __future__ import annotations
 
-import os
+import logging
 from pathlib import Path
 
 from squadron.integrations.context_forge import (
@@ -17,6 +17,8 @@ from squadron.integrations.context_forge import (
 )
 from squadron.pipeline.compact_render import render_with_params
 from squadron.pipeline.compaction_templates import load_compaction_template, render_instructions
+
+_logger = logging.getLogger(__name__)
 
 
 def resolve_template_instructions(
@@ -72,26 +74,12 @@ def gather_cf_params(cwd: str) -> dict[str, object]:
     resolved_cwd = Path(cwd).resolve()
     project_name = resolved_cwd.name
 
-    original_cwd = os.getcwd()
     try:
-        try:
-            os.chdir(resolved_cwd)
-        except (FileNotFoundError, OSError):
-            return {}
-        try:
-            info = ContextForgeClient().get_project()
-        except (
-            ContextForgeError,
-            ContextForgeNotAvailable,
-            FileNotFoundError,
-            OSError,
-        ):
-            return {}
-    finally:
-        try:
-            os.chdir(original_cwd)
-        except OSError:
-            pass
+        info = ContextForgeClient(cwd=resolved_cwd).get_project()
+    except (ContextForgeError, ContextForgeNotAvailable, OSError) as exc:
+        # Best-effort by contract: the lenient renderer keeps placeholders.
+        _logger.debug("Context Forge params unavailable for %s: %s", resolved_cwd, exc)
+        return {}
 
     # Only include non-empty values so that LenientDict leaves placeholders
     # intact for params CF doesn't know about.

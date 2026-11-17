@@ -13,13 +13,14 @@ from squadron.server.engine import _load_provider
 
 class TestLoadProvider:
     def test_calls_import_module(self) -> None:
-        target = "squadron.server.engine.importlib.import_module"
+        target = "squadron.providers.loader.importlib.import_module"
         with patch(target) as mock_import:
             _load_provider("openai")
         mock_import.assert_called_once_with("squadron.providers.openai")
 
     def test_silences_import_error(self) -> None:
-        target = "squadron.server.engine.importlib.import_module"
-        with patch(target, side_effect=ImportError("no module")):
+        target = "squadron.providers.loader.importlib.import_module"
+        missing = ModuleNotFoundError("no module", name="squadron.providers.nonexistent-provider")
+        with patch(target, side_effect=missing):
             # Must not raise
             _load_provider("nonexistent-provider")

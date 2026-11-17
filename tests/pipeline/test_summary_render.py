@@ -115,6 +115,18 @@ class TestGatherCfParams:
         ):
             assert gather_cf_params(str(tmp_path)) == {}
 
+    def test_runs_cf_in_cwd_without_changing_process_cwd(self, tmp_path: Path) -> None:
+        """The client gets the project dir; the process cwd is never changed."""
+        info = ProjectInfo(arch_file="x.md", slice_plan="y.md", phase="", slice="", name="s")
+        with (
+            patch.object(mod, "ContextForgeClient") as client_cls,
+            patch("os.chdir") as chdir,
+        ):
+            client_cls.return_value.get_project.return_value = info
+            gather_cf_params(str(tmp_path))
+        client_cls.assert_called_once_with(cwd=tmp_path.resolve())
+        chdir.assert_not_called()
+
     def test_returns_empty_on_missing_cwd(self, tmp_path: Path) -> None:
         nonexistent = tmp_path / "nope"
         assert gather_cf_params(str(nonexistent)) == {}

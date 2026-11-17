@@ -856,3 +856,14 @@ def test_unpinned_model_is_recorded_as_none_not_the_provider_name() -> None:
     assert run.model is None
     # Round-trips through serialization rather than being coerced to a string.
     assert AuditRun.model_validate(run.model_dump()).model is None
+
+
+def test_preflight_reports_git_that_could_not_answer(tmp_path: Path) -> None:
+    """A hung or missing git must surface as a preflight refusal, not hang the audit."""
+    from squadron.metrology.audit import AuditPreflightError, preflight_project
+
+    with (
+        patch("squadron.metrology.audit.run_git", return_value=None),
+        pytest.raises(AuditPreflightError, match="could not run or timed out"),
+    ):
+        preflight_project(tmp_path, require_clean=False, expected_sha=None)

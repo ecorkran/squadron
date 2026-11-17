@@ -28,7 +28,6 @@ from pathlib import Path
 
 from squadron.config.manager import get_config, get_typed_config
 from squadron.core.models import TOOL_RESULT_TYPE, TOOL_USE_TYPE
-from squadron.core.subprocess_text import TEXT_DECODING
 from squadron.metrology.audit_parse import parse_audit_findings
 from squadron.metrology.errors import (
     AuditBlockMalformedError,
@@ -40,6 +39,7 @@ from squadron.metrology.models import AuditRun, ProjectId
 from squadron.metrology.store import MetrologyStore, generate_audit_run_id
 from squadron.models.aliases import model_allows_tools
 from squadron.providers.errors import ProviderRateLimitError
+from squadron.review.git_utils import run_git
 from squadron.skills.models import SkillSourceError
 from squadron.skills.resolver import _resolve_bundled  # pyright: ignore[reportPrivateUsage]
 from squadron.tools import resolve_effective_tools
@@ -254,15 +254,18 @@ class PreflightResult:
 
 
 def _run_git(args: list[str], *, cwd: Path) -> subprocess.CompletedProcess[str]:
-    """Run a git command in ``cwd``, capturing output. Never raises on exit code."""
-    return subprocess.run(
-        ["git", *args],
-        cwd=cwd,
-        capture_output=True,
-        text=True,
-        **TEXT_DECODING,
-        check=False,
-    )
+    """Run a bounded git command in ``cwd``. Never raises on exit code.
+
+    Raises:
+        AuditPreflightError: git could not run or did not finish within the timeout.
+    """
+    result = run_git(args, cwd=str(cwd))
+    if result is None:
+        raise AuditPreflightError(
+            f"git {' '.join(args)} could not run or timed out in {cwd}; "
+            "check that git is installed and the repository is reachable."
+        )
+    return result
 
 
 def find_audit_file(project_path: Path, *, newer_than: float | None = None) -> Path | None:
