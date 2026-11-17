@@ -401,4 +401,5 @@ Notes:
 - Per run, haiku-xhigh finds 42.3 flaws raw and 33.0 after the comb.
 - Cost $130 API-equivalent for 129 calls (about $1 each, 56 s mean), three times a haiku-xhigh review ($0.34). The section 5 code comb cost $0.26 per call; design combs read whole documents.
 - Section 5's opus-high comb on code reviews kept 91% of real findings; on design reviews it keeps 78%.
-- Not tested: fable-medium reviews combed, pooled reviews combed, a cheaper comb model.
+- Decision (PM, 2026-11-17): no comb on design reviews; the fable-medium and pooled combs were skipped as the haiku result gave no reason to expect a different answer. A cheaper comb model was not tried.
+- Recommended design-review recipe from sections 16-18: haiku-xhigh as the cheap default, fable-medium as a heavier second pass, no comb.
