@@ -428,6 +428,42 @@ output = 0.14
 cache_read = 0.007
 cache_write = 0.14
 
+[aliases.minimax31-flash]
+profile = "openrouter"
+model = "minimax/minimax-m3.1-flash"
+max_output_tokens = 524288
+private = true
+cost_tier = "cheap"
+
+[aliases.minimax31-flash.pricing]
+input = 0.15
+output = 0.60
+cache_read = 0.015
+
+[aliases.hy4]
+profile = "openrouter"
+model = "tencent/hy4"
+max_output_tokens = 65536
+private = true
+cost_tier = "cheap"
+
+[aliases.hy4.pricing]
+input = 0.417
+output = 1.25
+cache_read = 0.021
+
+[aliases.hy4-flash]
+profile = "openrouter"
+model = "tencent/hy4-flash"
+max_output_tokens = 65536
+private = true
+cost_tier = "cheap"
+
+[aliases.hy4-flash.pricing]
+input = 0.035
+output = 0.14
+cache_read = 0.0015
+
 [aliases.grok-code]
 profile = "openrouter"
 model = "x-ai/grok-build-0.1"

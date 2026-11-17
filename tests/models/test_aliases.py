@@ -73,6 +73,20 @@ def test_resolve_luna() -> None:
     assert profile == "openai-oauth"
 
 
+@pytest.mark.parametrize(
+    ("alias", "model_id"),
+    [
+        ("hy4", "tencent/hy4"),
+        ("hy4-flash", "tencent/hy4-flash"),
+        ("minimax31-flash", "minimax/minimax-m3.1-flash"),
+    ],
+)
+def test_resolve_cheap_openrouter_builtins(alias: str, model_id: str) -> None:
+    """The Tencent and MiniMax flash aliases ship in the packaged set."""
+    assert alias in load_builtin_aliases()
+    assert resolve_model_alias(alias) == (model_id, "openrouter")
+
+
 # ---------------------------------------------------------------------------
 # User alias overrides
 # ---------------------------------------------------------------------------
