@@ -3,8 +3,8 @@ description: Break down every designed slice in a plan whose design review is ac
 
 params:
   plan: required
-  model: sonnet
-  review-model: glm-flash
+  model: opus-high
+  review-model: haiku-xhigh
   max-revisions: "2"
   pass-threshold: review.pass
   accept-threshold: review.concerns_or_better

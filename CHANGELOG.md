@@ -22,6 +22,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `sq benchmark report` shows slice cases in their own table (headed `no regressions`) and, once judged, a pairwise section: a strength per config, the reference as a line that is never ranked, and a verdict per pair of configs.
 - Config keys `benchmark.judge_model` (the judge's alias, no default) and `benchmark.judge_max_prompt_chars` (default 400000).
 
+### Changed
+- Built-in pipeline defaults now follow the review benchmark: every review step uses `haiku-xhigh`; slice designs are written by `fable-medium`, architecture and task breakdowns by `opus-high`. `P56` and `P456` gain a `tasks-model` param. Override any of them with `-p`.
+
 ### Fixed
 - `sq benchmark grade`'s review now sees a producer's edits to `*.toml`, `*.yaml` and `*.yml` files (dependencies, tool settings). Lockfiles, docs, data and images are still left out. Grades made before this are a different grader version, so the report treats them as older (#335).
 - `sq run fix` with a Codex model can now change files. The fix step ran Codex read-only and ended "fix blocked: The workspace is read-only". A fix now gets the same project rules as an implementation (#330).

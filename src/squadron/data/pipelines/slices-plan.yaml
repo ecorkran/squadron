@@ -3,8 +3,8 @@ description: Design and review every undesigned slice in a plan; flag failures, 
 
 params:
   plan: required
-  model: opus
-  review-model: glm-flash
+  model: fable-medium
+  review-model: haiku-xhigh
   max-revisions: "2"
   pass-threshold: review.pass
   accept-threshold: review.concerns_or_better

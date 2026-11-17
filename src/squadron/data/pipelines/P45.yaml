@@ -4,9 +4,9 @@ description: Design and tasks (phases 4-5) — each revised until its review pas
 params:
   slice: required
   summary-model: sonnet
-  design-model: opus
-  model: sonnet
-  review-model: deepseek4-flash
+  design-model: fable-medium
+  model: opus-high
+  review-model: haiku-xhigh
   max-revisions: "2"
   pass-threshold: review.pass
   accept-threshold: review.concerns_or_better

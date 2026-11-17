@@ -47,7 +47,7 @@ def test_implement_plan_params_and_shape() -> None:
     assert definition.params == {
         "plan": "required",
         "model": "sonnet",
-        "review-model": "minimax",
+        "review-model": "haiku-xhigh",
         "max-revisions": "2",
         "pass-threshold": "review.pass",
         "accept-threshold": "review.concerns_or_better",

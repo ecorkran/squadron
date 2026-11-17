@@ -4,9 +4,11 @@ description: Full slice lifecycle (phases 4-6) — design and tasks each revised
 params:
   slice: required
   summary-model: sonnet
-  design-model: opus
+  design-model: fable-medium
+  tasks-model: opus-high
   model: sonnet
-  review-model: deepseek4-flash
+  # review-model: see the note in P6.yaml.
+  review-model: haiku-xhigh
   max-revisions: "2"
   pass-threshold: review.pass
   accept-threshold: review.concerns_or_better
@@ -33,7 +35,7 @@ steps:
 
   - tasks:
       phase: 5
-      model: "{model}"
+      model: "{tasks-model}"
       review: { template: tasks, model: "{review-model}" }
       checkpoint: never
   - loop:
@@ -43,10 +45,10 @@ steps:
       accept_if: "{accept-threshold}"
       skip_if_met: true
       commit_each_iteration: true
-      resolve: { model: "{model}" }
+      resolve: { model: "{tasks-model}" }
       on_exhaust: checkpoint
       steps:
-        - dispatch: { name: revise, model: "{model}", feedback: review, artifact: tasks }
+        - dispatch: { name: revise, model: "{tasks-model}", feedback: review, artifact: tasks }
         - review: { template: tasks, model: "{review-model}", slice: "{slice}" }
 
   - summary:

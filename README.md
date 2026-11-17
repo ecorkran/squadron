@@ -213,8 +213,8 @@ description: Design a slice (phase 4), then revise until the review passes; chec
 
 params:
   slice: required
-  model: sonnet
-  review-model: deepseek4-flash
+  model: fable-medium
+  review-model: haiku-xhigh
   max-revisions: "2"
 
 steps:

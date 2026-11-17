@@ -3,8 +3,8 @@ description: Design an architectural initiative (phase 2) with arch review
 
 params:
   plan: required
-  model: opus
-  review-model: glm52
+  model: opus-high
+  review-model: haiku-xhigh
   summary-model: sonnet
 
 steps:

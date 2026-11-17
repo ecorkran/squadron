@@ -165,6 +165,7 @@ PM decision after 426. The replay stack (421–426) stays as built and gets no f
      - The first recipe is committed and ready, and the PM runs it after the slice (it takes over an hour serially, so no task runs it): haiku-xhigh and sol in parallel, then a luna comb, then an opus-high comb (RESULTS.md section 5: opus-high combing haiku-xhigh kept all 6 of its known bugs at 86% real, and combing sol kept all 5 at 92%). The comb prompt is a first draft and is versioned with its records.
    - **Dependencies:** [420, 421, 424, 425] (effort sent, sandbox and scrubbed environment, leak scan, record store, cap and bound code); 402 normalized findings.
    - **Interfaces:** Provides stored real-bug cases, per-stage review and comb records, recipe scoring and the recall report. Consumed by 432 and 433.
+   - **Follow-up outside this slice (#369):** shipped code-review defaults (P6, implement, implement-plan) are haiku-xhigh alone, because a pipeline review step takes one model. Once the first recipe's live run holds up, #369 lets the step name a recipe (haiku-xhigh + sol, opus-high comb) and makes it the default.
    - **Risk Level:** Medium (the hit rule; the graded-real share is agent-graded and needs a human-checked sample)
    - **Relative Effort:** 3/5
 
