@@ -2012,5 +2012,5 @@ class TestCliModelScope:
         assert result.exit_code == 0, result.output
         aliases = {(s.action_type, s.resolved_alias) for s in captured[0].steps}
         assert ("dispatch", "haiku") in aliases
-        assert ("review", "deepseek4-flash") in aliases
+        assert ("review", "haiku-xhigh") in aliases
         assert ("review", "haiku") not in aliases
