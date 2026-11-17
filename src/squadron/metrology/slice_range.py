@@ -22,6 +22,8 @@ from squadron.metrology.slice_range_models import (
 )
 from squadron.metrology.store import MetrologyStore, slice_ranges_record_id
 from squadron.review.git_utils import (
+    AncestryUnknownError,
+    is_ancestor,
     parse_fork_point,
     parse_slice_branch,
     run_git,
@@ -29,9 +31,6 @@ from squadron.review.git_utils import (
 )
 
 _logger = logging.getLogger(__name__)
-
-#: ``git merge-base --is-ancestor`` answers "no" with exit 1; both exits are answers.
-_IS_ANCESTOR_EXIT_CODES = (0, 1)
 
 
 class _GitCallFailed(Exception):
@@ -42,25 +41,19 @@ class _GitCallFailed(Exception):
         self.call = call
 
 
-def _git(repo_root: str, call: str, *args: str, ok_codes: tuple[int, ...] = (0,)) -> tuple[int, str]:
-    """Run git; return ``(exit code, stdout)`` or raise ``_GitCallFailed`` naming *call*."""
+def _git(repo_root: str, call: str, *args: str) -> str:
+    """Run git; return its stdout or raise ``_GitCallFailed`` naming *call*."""
     result = run_git(list(args), cwd=repo_root)
-    if result is None or result.returncode not in ok_codes:
+    if result is None or result.returncode != 0:
         raise _GitCallFailed(call)
-    return result.returncode, result.stdout
+    return result.stdout
 
 
 def _is_ancestor(repo_root: str, ancestor: str, descendant: str) -> bool:
-    code, _ = _git(
-        repo_root,
-        "merge-base --is-ancestor",
-        "merge-base",
-        "--is-ancestor",
-        ancestor,
-        descendant,
-        ok_codes=_IS_ANCESTOR_EXIT_CODES,
-    )
-    return code == 0
+    try:
+        return is_ancestor(ancestor, descendant, cwd=repo_root)
+    except AncestryUnknownError as exc:
+        raise _GitCallFailed("merge-base --is-ancestor") from exc
 
 
 def resolve_slice_landings(
@@ -85,7 +78,7 @@ def resolve_slice_landings(
 
 
 def _resolve(index: int, repo_root: str, target: str) -> list[SliceLanding] | RangeUnresolvedReason:
-    _, listing = _git(
+    listing = _git(
         repo_root,
         "merge search",
         "log",
@@ -105,9 +98,9 @@ def _resolve(index: int, repo_root: str, target: str) -> list[SliceLanding] | Ra
 
 def _merge_landing(repo_root: str, target: str, merge: str) -> SliceLanding:
     """before = M^1, after = M, tip = M^2, fork = merge-base(M^1, M^2) (D3)."""
-    _, line = _git(repo_root, "merge parents", "rev-list", "--parents", "-n", "1", merge)
+    line = _git(repo_root, "merge parents", "rev-list", "--parents", "-n", "1", merge)
     _merge, before, tip, *_other_parents = line.split()
-    _, fork_out = _git(repo_root, "merge-base", "merge-base", before, tip)
+    fork_out = _git(repo_root, "merge-base", "merge-base", before, tip)
     return SliceLanding(
         method=LandingMethod.MERGE_COMMIT,
         target_ref=target,
@@ -124,18 +117,18 @@ def _fast_forward_landing(
     index: int, repo_root: str, target: str
 ) -> list[SliceLanding] | RangeUnresolvedReason:
     """The ladder for a slice with no merge commit: the branch, then its reflog."""
-    _, branches = _git(repo_root, "branch list", "branch", "--list", f"{index}-slice.*")
+    branches = _git(repo_root, "branch list", "branch", "--list", f"{index}-slice.*")
     branch = parse_slice_branch(branches)
     if branch is None:
         return RangeUnresolvedReason.NO_LANDING
-    _, tip_out = _git(repo_root, "rev-parse", "rev-parse", "--verify", f"{branch}^{{commit}}")
+    tip_out = _git(repo_root, "rev-parse", "rev-parse", "--verify", f"{branch}^{{commit}}")
     tip = tip_out.strip()
     if not _is_ancestor(repo_root, tip, target):
         return RangeUnresolvedReason.NOT_LANDED
-    _, first_parent = _git(repo_root, "first-parent history", "rev-list", "--first-parent", target)
+    first_parent = _git(repo_root, "first-parent history", "rev-list", "--first-parent", target)
     if tip not in first_parent.split():
         return RangeUnresolvedReason.LANDED_ELSEWHERE
-    _, reflog = _git(repo_root, "reflog", "reflog", "show", "--format=%H %gs", branch)
+    reflog = _git(repo_root, "reflog", "reflog", "show", "--format=%H %gs", branch)
     fork = parse_fork_point(reflog)
     if fork is None:
         return RangeUnresolvedReason.REFLOG_UNAVAILABLE

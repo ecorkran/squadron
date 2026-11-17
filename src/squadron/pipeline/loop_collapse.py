@@ -26,7 +26,7 @@ from squadron.pipeline.git_ops import (
     read_integration_target,
 )
 from squadron.pipeline.loop_ledger import LoopCommitLedger
-from squadron.review.git_utils import run_git
+from squadron.review.git_utils import AncestryUnknownError, is_ancestor, run_git
 from squadron.review.persistence import CfClientProtocol
 
 _logger = logging.getLogger(__name__)
@@ -138,10 +138,11 @@ def _range_problem(ledger: LoopCommitLedger, cwd: str) -> str | None:
 
 def _is_ancestor(commit: str, cwd: str) -> bool:
     """Whether ``commit`` is an ancestor of HEAD; git exits 1 for no, and anything else is a failure."""
-    result = run_git(["merge-base", "--is-ancestor", commit, "HEAD"], cwd=cwd)
-    if result is None or result.returncode not in (0, 1):
-        raise CollapseGitError(f"git merge-base --is-ancestor {commit} HEAD: {_failure_detail(result)}")
-    return result.returncode == 0
+    try:
+        return is_ancestor(commit, "HEAD", cwd=cwd)
+    except AncestryUnknownError as exc:
+        detail = _failure_detail(exc.result)
+        raise CollapseGitError(f"git merge-base --is-ancestor {commit} HEAD: {detail}") from exc
 
 
 def _refused(reason: str) -> CollapseResult:
